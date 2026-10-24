@@ -113,6 +113,10 @@ static func copy_selection(plugin: Object, root: Node) -> bool:
 ## because redo puts back the state this paste produced rather than reading the
 ## clipboard a second time and pasting whatever is on it by then.
 static func paste_clipboard(plugin: Object, root: Node) -> bool:
+	# `.map` text copied since the last Copy goes in through the importer, at the
+	# cursor, as the buffer holds no place for it (#1722).
+	if root.prefab_system.newer_map_text() != "":
+		return paste_at_cursor(plugin, root)
 	var selection = plugin.get_editor_interface().get_selection()
 	var before: Dictionary = root.capture_state()
 	var result: Dictionary = root.prefab_system.paste_from_clipboard()
@@ -138,6 +142,112 @@ static func paste_clipboard(plugin: Object, root: Node) -> bool:
 			plugin.hf_selection.append(entity)
 	plugin._apply_hf_selection(selection)
 	return true
+
+
+## Paste at Cursor (#1722): what is on the clipboard with the bottom centre of its
+## box on the snapped point under the cursor, on the surface there or on the
+## grid, as one undo step, and selected. Pasting into another level put a piece
+## at its old coordinates, inside a wall or far from the work. `.map` text on the
+## system clipboard newer than the buffer goes in through the importer, what it
+## could not read counted in the message; otherwise the buffer, with its paint,
+## sculpts and structures. `screen` is where the cursor was, or the last mouse
+## position.
+static func paste_at_cursor(plugin: Object, root: Node, screen: Variant = null) -> bool:
+	var camera = plugin.get("last_3d_camera")
+	if not (screen is Vector2):
+		screen = plugin.get("last_3d_mouse_pos")
+	var hit = root._raycast(camera, screen) if camera and screen is Vector2 else null
+	if not hit:
+		root.user_message.emit("Paste at Cursor: point at the level in the viewport", 1)
+		return false
+	var at: Vector3 = root._snap_point(hit.position)
+	var before: Dictionary = root.capture_state()
+	var brushes: Array = []
+	var entities: Array = []
+	var text: String = root.prefab_system.newer_map_text()
+	var dropped := 0
+	var first_dropped := ""
+	if text != "":
+		var made: Dictionary = root.file_system.paste_map_text(text, at)
+		brushes = made["brushes"]
+		entities = made["entities"]
+		dropped = int(made["dropped"])
+		first_dropped = str(made["first_dropped"])
+	else:
+		var result: Dictionary = root.prefab_system.paste_from_clipboard(at)
+		for brush_id in result.get("brush_ids", []):
+			var pasted = root.find_brush_by_id(str(brush_id))
+			if pasted:
+				brushes.append(pasted)
+		entities = result.get("entity_nodes", [])
+		_stand_on(brushes, entities, at)
+	if brushes.is_empty() and entities.is_empty():
+		root.user_message.emit("Paste at Cursor: the clipboard holds nothing to paste", 1)
+		return false
+	var brush_ids: Array = []
+	for brush in brushes:
+		brush_ids.append(str(brush.brush_id))
+	if root.visgroup_system:
+		root.visgroup_system.join_current_all(brush_ids, entities)
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(),
+		root,
+		"Paste at Cursor",
+		before,
+		Callable(plugin, "_record_history")
+	)
+	var said := (
+		"Pasted %d brush%s and %d entit%s"
+		% [
+			brushes.size(),
+			"" if brushes.size() == 1 else "es",
+			entities.size(),
+			"y" if entities.size() == 1 else "ies"
+		]
+	)
+	if text != "":
+		said += " from .map text"
+	if dropped > 0:
+		said += (
+			"; left out %d line%s it could not read (%s)"
+			% [dropped, "" if dropped == 1 else "s", first_dropped]
+		)
+	root.user_message.emit(said, 1 if dropped > 0 else 0)
+	var selection = plugin.get_editor_interface().get_selection()
+	plugin.hf_selection.clear()
+	for node in brushes + entities:
+		if is_instance_valid(node):
+			plugin.hf_selection.append(node)
+	plugin._apply_hf_selection(selection)
+	return true
+
+
+## Move `brushes` and `entities` together so the bottom centre of their box is at
+## `at`.
+static func _stand_on(brushes: Array, entities: Array, at: Vector3) -> void:
+	var bounds := AABB()
+	var first := true
+	for brush in brushes:
+		var place: Transform3D = (brush as Node3D).global_transform
+		for face in brush.faces:
+			if face == null:
+				continue
+			for corner in face.local_verts:
+				var point: Vector3 = place * corner
+				bounds = AABB(point, Vector3.ZERO) if first else bounds.expand(point)
+				first = false
+	for entity in entities:
+		if is_instance_valid(entity):
+			var point: Vector3 = (entity as Node3D).global_position
+			bounds = AABB(point, Vector3.ZERO) if first else bounds.expand(point)
+			first = false
+	if first:
+		return
+	var bottom := Vector3(bounds.get_center().x, bounds.position.y, bounds.get_center().z)
+	var shift := at - bottom
+	for node in brushes + entities:
+		if is_instance_valid(node):
+			(node as Node3D).global_position += shift
 
 
 ## Shift with an arrow: duplicate the selection and move the copy one step that

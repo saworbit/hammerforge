@@ -841,9 +841,15 @@ static func menu_level_state(plugin: Object, root: Node) -> Dictionary:
 		"tied": false,
 		"grouped": false,
 		"face_material": -1,
+		"can_paste": false,
 	}
 	if root == null or not is_instance_valid(root):
 		return state
+	# Paste Here (#1722): the buffer, or `.map` text copied since.
+	if root.prefab_system:
+		state["can_paste"] = (
+			not root.prefab_system.clipboard_is_empty() or root.prefab_system.newer_map_text() != ""
+		)
 	var points := {}
 	var brushes: Array = []
 	var definitions: Dictionary = root.get_entity_definitions()

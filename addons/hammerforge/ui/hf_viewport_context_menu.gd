@@ -68,6 +68,7 @@ const _ID_NEW_VISGROUP := 183
 const _ID_SHOW_MATERIAL := 184
 const _ID_DRAW_ADD := 185
 const _ID_DRAW_CUT := 186
+const _ID_PASTE_HERE := 187
 const _ID_QUICK_BAKE := 200
 const _ID_UNDO := 201
 const _ID_REDO := 202
@@ -273,8 +274,15 @@ func _build_context_items(ctx: Context) -> void:
 
 
 ## Place Entity Here, by category, when there is a level and a point under the
-## cursor to put it on.
+## cursor to put it on, and Paste Here when the clipboard holds something
+## (#1722).
 func _add_place_entity() -> void:
+	if (
+		_state.get("has_root", false)
+		and _state.get("can_paste", false)
+		and _state.get("cursor_screen") is Vector2
+	):
+		add_item("Paste Here", _ID_PASTE_HERE)
 	var classes: Dictionary = _state.get("entity_classes", {})
 	if not _state.get("has_root", false) or classes.is_empty():
 		return
@@ -405,6 +413,9 @@ func _on_id_pressed(id: int) -> void:
 			action = "selection_filter"
 		_ID_PLACE_PREFAB:
 			action = "place_prefab"
+		_ID_PASTE_HERE:
+			action = "paste_at_cursor"
+			args = [_state.get("cursor_screen")]
 		_ID_CONVERT_TO_BRUSHES:
 			action = "convert_to_brushes"
 		_ID_APPLY_TO_BRUSH:

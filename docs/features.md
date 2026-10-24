@@ -472,6 +472,7 @@ Shortcuts marked with **\*** are rebindable in the shortcut dialog (**?** on the
 | Ctrl+D * | Duplicate |
 | Ctrl+C * | Copy |
 | Ctrl+V * | Paste |
+| Ctrl+Alt+V * | Paste at Cursor |
 | Ctrl+G * | Group |
 | Ctrl+U * | Ungroup |
 | Ctrl+H * | Hollow |
