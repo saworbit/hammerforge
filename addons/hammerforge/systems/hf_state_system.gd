@@ -888,6 +888,7 @@ func capture_hflevel_settings() -> Dictionary:
 		"grid_visible": root.grid_visible,
 		"grid_follow_brush": root.grid_follow_brush,
 		"debug_logging": root.debug_logging,
+		"validate_warns_open_todos": root.validate_warns_open_todos,
 		"auto_spawn_player": root.auto_spawn_player,
 		"draft_pick_layer_index": root.draft_pick_layer_index,
 		"bake_merge_meshes": root.bake_merge_meshes,
@@ -1024,6 +1025,10 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.grid_follow_brush = bool(settings.get("grid_follow_brush", root.grid_follow_brush))
 	if settings.has("debug_logging"):
 		root.debug_logging = bool(settings.get("debug_logging", root.debug_logging))
+	if settings.has("validate_warns_open_todos"):
+		root.validate_warns_open_todos = bool(
+			settings.get("validate_warns_open_todos", root.validate_warns_open_todos)
+		)
 	if settings.has("auto_spawn_player"):
 		root.auto_spawn_player = bool(settings.get("auto_spawn_player", root.auto_spawn_player))
 	if settings.has("draft_pick_layer_index"):

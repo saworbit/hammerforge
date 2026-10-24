@@ -516,6 +516,9 @@ var _grid_visible: bool = false
 		return _grid_visible
 @export var grid_follow_brush: bool = false
 @export var debug_logging: bool = false
+## Validate lists each open To Do note (#1818). Kept in the level, so everyone's
+## ship check of it agrees. Off by default: a note is a reminder, not a fault.
+@export var validate_warns_open_todos: bool = false
 var _grid_plane_size: float = 500.0
 @export var grid_plane_size: float = 500.0:
 	set(value):
