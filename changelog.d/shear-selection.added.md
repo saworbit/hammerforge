@@ -1,0 +1,1 @@
+- Shear leans the whole selection, from a handle on a side of its box or typed in metres per metre or degrees, with no gap where brushes meet. (issue [#1718](https://github.com/saworbit/hammerforge/issues/1718))

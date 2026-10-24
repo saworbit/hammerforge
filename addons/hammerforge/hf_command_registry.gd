@@ -203,6 +203,16 @@ const COMMANDS := [
 		"palette": true
 	},
 	{
+		"id": "tool_shear",
+		"label": "Shear Tool",
+		"help":
+		"Start the Shear tool: drag a handle on a side of the selection's box to lean everything between.",
+		"category": "Tools",
+		"needs_level": false,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "tool_decal",
 		"label": "Decal Tool",
 		"help": "Start the Decal tool, which places a decal on the surface you click.",
@@ -543,6 +553,17 @@ const COMMANDS := [
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {},
+		"repeat": true
+	},
+	{
+		"id": "shear_selection",
+		"label": "Shear",
+		"help": "Lean the selection: one side moves along an axis and the opposite side stays put.",
+		"aliases": ["skew", "lean", "slant"],
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Shear"},
+		"palette": true,
 		"repeat": true
 	},
 	{

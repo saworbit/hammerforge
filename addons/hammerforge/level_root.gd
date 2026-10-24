@@ -2100,6 +2100,22 @@ func set_brush_rotation_by_id(brush_id: String, degrees: Vector3) -> HFOpResult:
 	return HFOpResult.success()
 
 
+## Shear (#1718): lean brushes and move entities along `along` by `amount` for
+## each unit past `pivot` on `over`. Returns the transform system's report.
+## Records no undo; the caller does.
+func shear_managed_nodes(
+	brush_ids: Array, entity_paths: Array, along: int, over: int, amount: float, pivot: float
+) -> Dictionary:
+	if not transform_system:
+		return {"changed": 0, "refused": [], "entities": 0}
+	begin_signal_batch()
+	var report: Dictionary = transform_system.shear(
+		brush_ids, entity_paths, along, over, amount, pivot
+	)
+	end_signal_batch()
+	return report
+
+
 func reset_managed_rotation(brush_ids: Array) -> void:
 	if not transform_system:
 		return

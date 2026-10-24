@@ -646,12 +646,114 @@ static func permuted_size(size: Vector3, mapping: PackedInt32Array) -> Vector3:
 # Apply Rotation and Scale
 # ---------------------------------------------------------------------------
 
-
 ## Fold each brush's rotation and scale into its shape and faces, leaving it in
 ## the world exactly where it stood with an identity basis (#1435). A brush
 ## stretched with Godot's gizmo kept its old `size`, so typed sizes, resize
 ## handles and Hollow's wall thickness all worked in units that were not metres.
 ##
+# ---------------------------------------------------------------------------
+# Shear
+# ---------------------------------------------------------------------------
+
+
+## The shear that moves every point along axis `along` by `amount` for each unit
+## it stands past `pivot` on axis `over`, so the plane at `pivot` stays put
+## (#1718). A leaning wall is `along` X `over` Y; 0.5 m over 3 m is 1/6.
+static func shear_transform(along: int, over: int, amount: float, pivot: float) -> Transform3D:
+	var basis := Basis.IDENTITY
+	basis[over] = axis_vector(over) + axis_vector(along) * amount
+	return Transform3D(basis, -axis_vector(along) * amount * pivot)
+
+
+## The shear amount, metres per metre, that leans by `degrees`.
+static func shear_amount_for_degrees(degrees: float) -> float:
+	return tan(deg_to_rad(degrees))
+
+
+## Why a shear `along` `over` by `amount` cannot be made, or "" when it can.
+static func shear_problem(along: int, over: int, amount: float) -> String:
+	if not is_valid_axis(along) or not is_valid_axis(over):
+		return "Shear: the axes are X, Y or Z"
+	if along == over:
+		return "Shear: the axis that moves and the axis it leans over must differ"
+	if not is_finite(amount):
+		return "Shear: the amount must be a number"
+	return ""
+
+
+## Lean `brush_ids` and move `entity_paths` by `shear_transform()` (#1718).
+##
+## Every corner of every brush moves by the one shear, so brushes that met still
+## meet, and a shear keeps a flat face flat and a convex brush convex. Each brush
+## keeps its turn, with the lean folded into its faces as Apply Rotation and Scale
+## folds a scale, so a box becomes custom. With Texture Lock on, each face keeps
+## the texture where it showed, written into its custom UVs; otherwise its
+## projection is laid on the new corners afresh. A brush with a sculpt is left
+## alone, since a lean would stretch it. A point entity moves with its origin and
+## keeps its turn. Returns `fold_report_text()`'s report: `changed`, `custom`,
+## `cylindrical`, `structure` and `refused`, plus `entities`, how many moved.
+func shear(
+	brush_ids: Array, entity_paths: Array, along: int, over: int, amount: float, pivot: float
+) -> Dictionary:
+	var report := {
+		"changed": 0,
+		"custom": [],
+		"cylindrical": [],
+		"structure": [],
+		"refused": [],
+		"entities": 0,
+	}
+	if shear_problem(along, over, amount) != "" or not is_finite(pivot):
+		return report
+	if is_zero_approx(amount):
+		return report
+	var lean := shear_transform(along, over, amount, pivot)
+	var lock_textures := _texture_lock_enabled()
+	for brush_id in brush_ids:
+		var draft := _brush_at_id(str(brush_id))
+		if draft == null:
+			continue
+		_ensure_faces(draft)
+		var label := str(draft.name)
+		if _has_sculpt(draft):
+			(report["refused"] as Array).append("%s (a lean would stretch its sculpt)" % label)
+			continue
+		var locked: Array = []
+		if lock_textures:
+			for face in draft.get_faces():
+				var data := face as FaceData
+				if data != null and not data.has_uv_layout() and data.local_verts.size() >= 3:
+					data.custom_uvs = data.shown_uvs()
+					locked.append(data)
+		var before := draft.global_transform
+		draft.global_transform = lean * before
+		var outcome := fold_basis(draft, before.basis)
+		if str(outcome["refused"]) != "":
+			# Left as it was, lean and locked UVs both.
+			draft.global_transform = before
+			for data in locked:
+				(data as FaceData).custom_uvs = PackedVector2Array()
+			(report["refused"] as Array).append("%s %s" % [label, outcome["refused"]])
+			continue
+		if not outcome["folded"]:
+			continue
+		report["changed"] = int(report["changed"]) + 1
+		if outcome["custom"]:
+			(report["custom"] as Array).append(label)
+		if int(outcome["cylindrical"]) > 0:
+			(report["cylindrical"] as Array).append(label)
+		if str(draft.get_meta(HFGeneratorSystem.GENERATOR_META, "")) != "":
+			(report["structure"] as Array).append(label)
+		_refit_texture_groups(draft)
+	for entity_path in entity_paths:
+		var entity := _entity_at_path(entity_path)
+		if entity == null:
+			continue
+		entity.global_position = lean * entity.global_position
+		report["entities"] = int(report["entities"]) + 1
+	return report
+
+
 ## Returns what happened, for the toast: `changed`, how many were folded, and the
 ## names of those that became custom (`custom`), had Cylindrical faces written into
 ## custom UVs (`cylindrical`), are structure pieces that now read as edited

@@ -1021,6 +1021,32 @@ of it.
 mirrored with the copy, so the copy shows the mirror image of the original. Off,
 the copy reads the level's texture where it lands, as Flip leaves a brush.
 
+### Shear
+
+Leaning walls, sloped buttresses, a parallelogram floor and a staircase rising
+along a slanted wall are all shears. **Shear** leans the whole selection at once:
+one side of its box moves along an axis and the opposite side stays put, so
+everything between leans by the same amount and brushes that met still meet.
+
+- **The Shear tool** (the command palette, or a key you give it in the Shortcuts
+  dialog) draws the selection's box with a handle in the middle of each side. Drag
+  a handle along its side: that side moves, held to the grid, and the opposite side
+  stays put. Hold **Ctrl** to drag off the grid, and press **Escape** to let the
+  drag go. A green outline shows each brush leaned before you let go.
+- **The Shear command** asks for it in numbers: the axis that moves, the axis it
+  leans over, the amount in metres per metre or in degrees, and which side stays
+  put. A wall leaned 0.5 m over 3 m is 0.167 metres per metre, or 9.46 degrees.
+  The dialog opens as you last left it.
+
+Every corner of every brush moves by the one shear, and a shear keeps a flat face
+flat, so a convex brush stays convex. Each brush keeps its turn, with the lean
+folded into its faces, so a box becomes custom, as Apply Rotation and Scale makes
+one. A point entity moves with its origin and is not turned. A brush with a sculpt
+is left alone, since a lean would stretch it, and the toast names it. With
+**Texture Lock** on, each face keeps its texture where it showed it; off, the
+face's projection is laid on its new corners afresh. It is one undo step, named
+Shear.
+
 ### Arrays
 
 **Duplicate Array** in Selection Tools has three layouts:
@@ -1918,6 +1944,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Rotate CW | Shift+R | Turn the selection clockwise |
 | Flip Selection | Shift+M | Flip the selection |
 | Mirror Copy | Alt+M | Keep the selection and add copies mirrored across the ticked axes |
+| Shear | (palette) | Lean the selection: one side moves along an axis, the opposite side stays put |
 | Reset Rotation | Alt+R | Return the selection to its unrotated orientation |
 | Offset | Alt+G | Move the selection, its vertices or its faces by a typed X, Y, Z |
 | Pick Pivot | Alt+P | Click a brush vertex, edge or face to turn and flip about |

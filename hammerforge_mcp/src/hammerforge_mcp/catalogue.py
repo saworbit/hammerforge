@@ -73,6 +73,7 @@ COMMAND_EXAMPLES = (
     "carve",
     "merge",
     "intersect",
+    "hull",
     "create_arch",
     "update_structure",
     "detach_structure",
@@ -630,7 +631,8 @@ _SPECS = [
             "The HammerForge palette commands hf_run_command runs: "
             + ", ".join(COMMAND_EXAMPLES)
             + ". They hollow, clip, clip to a face's plane, carve, merge, "
-            "intersect, snap to the grid, build a structure (stairs, arches, "
+            "intersect, wrap brushes in their hull, snap to the grid, build a "
+            "structure (stairs, arches, "
             "spiral stairs, domes, rings, door frames), change or detach one, "
             "place a prefab from the library, switch or propagate a placed one, "
             "and paint floor (a rectangle of cells on a paint layer, its walls "
