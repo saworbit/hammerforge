@@ -1,0 +1,1 @@
+- A structure made with nothing selected stands on the floor at y = 0; a staircase used to be centred there, with its lower half under the floor. (issue [#1821](https://github.com/saworbit/hammerforge/issues/1821))
