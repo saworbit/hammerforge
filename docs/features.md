@@ -127,7 +127,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Sculpting:** Raise, Lower, Smooth, Flatten brushes for interactive terrain editing with configurable strength, radius, and falloff
 - **Shapes:** Square, Circle with adjustable radius
 - **Heightmaps:** import PNG/EXR or generate procedural noise -- per-vertex displacement via SurfaceTool
-- **Displacement surfaces:** Source-style subdivided face grids (power 2-4) with Raise/Lower/Smooth/Noise/Alpha paint modes, sew adjacent displacements, elevation scale
+- **Displacement surfaces:** Source-style subdivided face grids (power 2-4) with Raise/Lower/Smooth/Noise paint modes, sew adjacent displacements, elevation scale
 - **Convert Selection to Heightmap:** select brushes → rasterize top faces → create sculptable terrain layer
 - **Material blending:** four-slot shader with per-cell blend weights painted directly on the grid
 - **Live connectors:** touched cross-layer boundaries show ramp/stair ghosts; Enter commits persistent definitions in one undo and Esc dismisses them

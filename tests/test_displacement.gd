@@ -5,6 +5,7 @@ const HFDisplacementSystem = preload("res://addons/hammerforge/systems/hf_displa
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+const DockScene = preload("res://addons/hammerforge/dock.tscn")
 
 var root: LevelRoot
 var sys: HFDisplacementSystem
@@ -491,6 +492,38 @@ func test_paint_outside_radius():
 		"test_brush", 0, Vector3(1000, 0, 1000), 1.0, 1.0, HFDisplacementSystem.PaintMode.RAISE
 	)
 	assert_false(ok, "Paint outside radius should not modify anything")
+
+
+## Every paint mode changes the surface the viewport draws and the bake builds.
+## Alpha was one once, and wrote values nothing read (#1863).
+func test_every_paint_mode_changes_the_built_surface():
+	for mode in HFDisplacementSystem.PaintMode.values():
+		var brush = _make_quad_brush("mode_%d" % mode)
+		sys.create_displacement(brush.brush_id, 0, 2)
+		# A spike, so Smooth has something to flatten.
+		brush.faces[0].displacement.set_distance(2, 2, 4.0)
+		var before: PackedVector3Array = brush.faces[0].triangulate()["verts"]
+		sys.paint(brush.brush_id, 0, Vector3(8, 0, 8), 10.0, 1.0, mode)
+		var after: PackedVector3Array = brush.faces[0].triangulate()["verts"]
+		assert_false(after == before, "%s changes the built surface" % _mode_name(mode))
+
+
+## The dock lists the system's paint modes, in their order, and no others.
+func test_dock_paint_list_is_the_system_paint_modes():
+	var dock = DockScene.instantiate()
+	add_child_autoqfree(dock)
+	var opt: OptionButton = dock._disp_paint_mode_opt
+	var ids: Array = []
+	var names: Array = []
+	for index in opt.item_count:
+		ids.append(opt.get_item_id(index))
+		names.append(opt.get_item_text(index))
+	assert_eq(ids, HFDisplacementSystem.PaintMode.values())
+	assert_eq(names, ["Raise", "Lower", "Smooth", "Noise"])
+
+
+func _mode_name(mode: int) -> String:
+	return HFDisplacementSystem.PaintMode.find_key(mode)
 
 
 func test_apply_noise_via_system():

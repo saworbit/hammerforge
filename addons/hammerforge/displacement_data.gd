@@ -16,7 +16,9 @@ class_name HFDisplacementData
 ## Per-vertex offset directions in local space. If empty, face normal is used.
 @export var offsets: PackedVector3Array = PackedVector3Array()
 
-## Per-vertex alpha for blending two materials on the displacement surface.
+## Per-vertex alpha, meant for blending two materials on the surface. Nothing
+## draws or bakes it yet, so no paint mode writes it (#1863). A level that has
+## values keeps them through load, save, resample and Power changes.
 @export var alphas: PackedFloat32Array = PackedFloat32Array()
 
 ## Sew group ID. Displacements sharing a sew group along an edge will have

@@ -2776,7 +2776,7 @@ Displacement surfaces turn a flat quad face into a subdivided terrain grid that 
 ### Painting (Sculpting)
 1. On the **Paint** tab, open **Face Tools** → **Displacement**.
 2. Turn **Paint** mode on in the toolbar. This closes Face Select; sculpting needs no picked face.
-3. Choose a **Paint Mode**: Raise, Lower, Smooth, Noise, or Alpha.
+3. Choose a **Paint Mode**: Raise, Lower, Smooth or Noise. There is no Alpha mode yet: a displaced face cannot blend two materials. Alpha values in a level saved before 25 October 2026 are kept.
 4. Set **Radius** and **Strength**.
 5. Click and drag on a displaced face in the viewport to sculpt. The stroke sculpts the face it starts on.
 

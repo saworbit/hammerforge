@@ -2097,7 +2097,6 @@ func _build_displacement_bevel_section() -> void:
 	_disp_paint_mode_opt.add_item("Lower", 1)
 	_disp_paint_mode_opt.add_item("Smooth", 2)
 	_disp_paint_mode_opt.add_item("Noise", 3)
-	_disp_paint_mode_opt.add_item("Alpha", 4)
 	_disp_paint_mode_opt.tooltip_text = "Displacement paint brush mode"
 	pm_row.add_child(_disp_paint_mode_opt)
 	dbox.add_child(pm_row)
