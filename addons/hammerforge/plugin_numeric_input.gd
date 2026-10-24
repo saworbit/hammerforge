@@ -3,6 +3,7 @@ extends RefCounted
 ## Owns numeric dimension entry for active draw and extrude gestures.
 
 const HFExtrudeToolType = preload("hf_extrude_tool.gd")
+const HFPluginPointerToolsType = preload("plugin_pointer_tools.gd")
 
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -121,9 +122,7 @@ static func apply_value(plugin: Object, root: Node) -> void:
 		# which the Extrude never reads, so it ended at the mouse's depth, and with
 		# the mouse not yet moved that was none and nothing was placed.
 		root.set_extrude_height(value)
-		var info = root.end_extrude_info()
-		if not info.is_empty():
-			plugin._commit_brush_placement(root, info)
+		HFPluginPointerToolsType.finish_extrude(plugin, root)
 		plugin._update_hud_context()
 
 

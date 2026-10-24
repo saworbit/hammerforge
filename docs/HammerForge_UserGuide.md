@@ -1816,7 +1816,7 @@ The contexts and what their full lists cover:
 | Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Hold Ctrl: Grid Snap Off/On, Click: Height stage, Right-click: Cancel. Live dimensions shown in banner |
 | Draw (adjusting height) | Mouse: Change height, Hold Ctrl: Grid Snap Off/On, Click: Confirm, Right-click: Cancel. Live dimensions shown in banner |
 | Select | Native click/Shift object selection; Face Select Shift-add/Ctrl-toggle; Escape, Delete, Ctrl+D, Arrow nudge, Ctrl+H Hollow, Shift+X Clip, Ctrl+Shift+F/C Floor/Ceiling |
-| Extrude Up/Down (idle) | Click face + drag, U/J tool switch, Right-click cancel |
+| Extrude Up/Down (idle) | Click face + drag, Shift+Click face + drag to move the face, U/J tool switch, Right-click cancel |
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
 | Floor Paint | LMB paint, Alt erase, Shift axis lock, Ctrl/Cmd pick, X/Z mirror, Y raise, H room, Enter connector, Esc cancel; live cells/metres and ghosts |
 | Surface Paint | Click+Drag paint, Alt+Drag erase, radius/strength info |
@@ -2431,6 +2431,8 @@ Notes
 - On a slope or a round side the box is turned to lie on the face, as wide and as long as the face and the height you drag off it ([#1107](https://github.com/saworbit/hammerforge/issues/1107)).
 - Any other face, such as a round cap or a triangle, makes a prism of its own outline, the way Hammer and TrenchBroom extrude ([#1123](https://github.com/saworbit/hammerforge/issues/1123)).
 - Right-click cancels the extrude in progress.
+
+**Move a face instead.** Hold **Shift** as you press on a face and the drag moves that face along its own normal rather than making a brush off it ([#1712](https://github.com/saworbit/hammerforge/issues/1712)). It works on any brush: a box grows or shrinks along that axis and stays a box with its resize handles, and a clipped, carved, vertex edited, merged, Polygon or Path brush is rebuilt with its neighbouring faces lengthened or shortened to meet the moved one, so it stays one convex solid. A sloped face moves along its slope. Dragging up moves the face out and down moves it in, with Extrude Down the other way round. The distance snaps to the grid along the normal, or to where a corner of the face lands on a grid plane, which is what puts a sloped face down cleanly; a typed depth moves it exactly that far. When other brushes are selected along with the one you press on, and a face of theirs lies in the same plane, they move together, so a wall of three brushes gets thicker as one. A drag that would turn a brush inside out, flatten it or squeeze one of its faces out stops at the last distance that holds, and the mode indicator says why. Each face keeps its material and how its texture lies. One undo step puts it all back, and Right-click or Escape cancels.
 
 ## Floor Paint
 

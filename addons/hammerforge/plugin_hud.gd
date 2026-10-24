@@ -116,6 +116,11 @@ static func update_hud_context(plugin: Object) -> void:
 					stage_hint += " — " + height_str
 			elif root.input_state.is_extruding():
 				stage_hint = "Extruding..."
+				var tool = root.get("extrude_tool")
+				if tool != null and tool.pushing:
+					stage_hint = "Moving the face"
+					if tool.push_note != "":
+						stage_hint += " — " + tool.push_note
 			elif root.input_state.is_surface_painting():
 				stage_hint = "Painting..."
 		if (
@@ -205,6 +210,8 @@ static func cursor_size_text(plugin: Object, root: Node) -> String:
 		text = HFInputStateType.format_dimensions(input_state.get_drag_dimensions(), root.grid_snap)
 	elif input_state.is_extruding() and root.get("extrude_tool") != null:
 		text = "Depth %s" % HFNumberFormat.number(root.extrude_tool.get_height(), root.grid_snap)
+		if root.extrude_tool.pushing:
+			text = "Face %s" % HFNumberFormat.number(root.extrude_tool.get_height(), root.grid_snap)
 	if text.is_empty():
 		return ""
 	var typed: String = plugin.get("numeric_buffer")
