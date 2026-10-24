@@ -39,6 +39,8 @@ const BY_DIRECTION := {
 const APPEARANCE := [
 	"material_idx",
 	"map_texture",
+	# Hidden goes with the texture (#1719).
+	"face_type",
 	"uv_projection",
 	"uv_scale",
 	"uv_offset",

@@ -21,6 +21,8 @@ static func fill(level: Node, tree: SceneTree) -> void:
 	var box = level.create_brush_from_info(
 		{"shape": 0, "size": Vector3(2, 2, 2), "center": Vector3(30, 1, 0)}
 	)
+	# A Hidden face (#1719).
+	box.faces[0].face_type = FaceData.FaceType.HIDDEN
 	if level.has_method("create_generator"):
 		level.create_generator(
 			"spiral_stairs",

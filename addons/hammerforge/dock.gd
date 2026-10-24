@@ -6130,6 +6130,42 @@ func _on_uv_smoothing_changed(value: float) -> void:
 	)
 
 
+## The Hidden swatch (#1719): the selected faces made Hidden, as one undo step.
+func _on_hidden_swatch_applied() -> void:
+	make_selected_faces_hidden(true)
+
+
+## Make the selected faces Hidden, or Normal again, as one undo step (#1719). A
+## Hidden face wears stripes in the editor, and the bake leaves it out of the mesh
+## and the lightmap while it still holds the brush.
+func make_selected_faces_hidden(make_hidden: bool) -> bool:
+	var action := "Make Faces Hidden" if make_hidden else "Make Faces Normal"
+	if not level_root:
+		return false
+	if not _guard_selection_action(action, DockSelectionRequirement.BRUSHES_ONLY):
+		return false
+	var count := _count_selected_faces()
+	if count == 0:
+		show_toast("Select the faces to make %s" % ("Hidden" if make_hidden else "Normal"), 1)
+		return false
+	var brush_ids: Array = []
+	for key in level_root.face_selection.keys():
+		brush_ids.append(str(key))
+	if not _commit_state_action_if_changed(
+		action, "set_selected_faces_hidden", [make_hidden], brush_ids
+	):
+		show_toast("Those faces are %s already" % ("Hidden" if make_hidden else "Normal"), 0)
+		return false
+	show_toast(
+		(
+			"%d face%s made %s"
+			% [count, "" if count == 1 else "s", "Hidden" if make_hidden else "Normal"]
+		),
+		0
+	)
+	return true
+
+
 ## Whether U and V are linked in the Scale row (#1418).
 func _uv_scale_linked() -> bool:
 	return uv_scale_link != null and uv_scale_link.button_pressed
@@ -7648,6 +7684,11 @@ func _on_apply_picked_look() -> void:
 	var face_count := _count_selected_faces()
 	if face_count == 0:
 		show_toast("Select the faces to give the picked look to", 1)
+		return
+	# A picked Hidden face's look is Hidden, and each face keeps its own slot under
+	# it for when it is shown again (#1719).
+	if _picked_look.is_hidden():
+		make_selected_faces_hidden(true)
 		return
 	if not level_root.is_usable_material_slot(_picked_look.material_idx):
 		show_toast("The picked material is no longer in the palette — pick it again with T", 1)

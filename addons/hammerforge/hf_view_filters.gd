@@ -2,7 +2,7 @@
 extends RefCounted
 ## Hide things by kind in the editor (#1720): world brushes, cuts, clip brushes,
 ## triggers and the other brush entities, point entities, structures, prefab
-## copies, decals, I/O wires and cordons, and each brush entity or point entity
+## copies, decals, I/O wires, cordons and Hidden faces, and each brush entity or point entity
 ## class on its own row.
 ##
 ## What got in the way was a kind, not a group: the triggers over a doorway, the
@@ -34,6 +34,7 @@ const KINDS := [
 	"decal",
 	"wires",
 	"cordons",
+	"hidden_faces",
 ]
 const LABELS := {
 	"world": "World brushes",
@@ -47,6 +48,7 @@ const LABELS := {
 	"decal": "Decals",
 	"wires": "I/O wires",
 	"cordons": "Cordons",
+	"hidden_faces": "Hidden faces",
 }
 ## A class row's key is its kind and the class: `brush_entity:func_door`.
 const CLASS_KINDS := ["brush_entity", "entity"]

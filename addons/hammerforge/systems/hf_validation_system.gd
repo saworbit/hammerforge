@@ -14,6 +14,7 @@ const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFVertexWeld = preload("../hf_vertex_weld.gd")
 const HFBakeSplit = preload("../hf_bake_split.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
+const HFHiddenFaceSearch = preload("../hf_hidden_face_search.gd")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFNotes = preload("../hf_notes.gd")
 const HFAcceptedFindings = preload("../hf_accepted_findings.gd")
@@ -27,6 +28,7 @@ const NEAR_DUPLICATE := 0.001
 const KIND_CUTS_NOTHING := "cut_cuts_nothing"
 const KIND_INSIDE := "solid_inside_solid"
 const KIND_NEAR_DUPLICATE := "near_duplicate"
+const KIND_HIDDEN_IN_THE_OPEN := "hidden_face_in_the_open"
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -211,6 +213,11 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			if is_instance_valid(brush) and root.brush_system:
 				root.brush_system.delete_brush(brush)
 				fixed += 1
+
+	# Hidden faces with open space in front of them (#1719): a hint that one may be
+	# seen, not a fault, so it is a row and not in the count.
+	if _runs("geometry"):
+		_hint_hidden_faces_in_the_open()
 
 	# Invalid face indices in selection
 	_check = "data"
@@ -549,6 +556,42 @@ func _found(issues: Array, message: String, node: Node = null, extra: Dictionary
 	}
 	finding.merge(extra)
 	_findings.append(finding)
+
+
+## One Info row for each brush with a Hidden face no brush is right in front of
+## (#1719). Such a face may be one somebody sees, and the bake leaves it out.
+func _hint_hidden_faces_in_the_open() -> void:
+	if _skipped.has(_check):
+		return
+	var counts: Dictionary = {}
+	var order: Array = []
+	for entry in HFHiddenFaceSearch.facing_open_space(root):
+		if not counts.has(entry[0]):
+			order.append(entry[0])
+		counts[entry[0]] = int(counts.get(entry[0], 0)) + 1
+	for brush in order:
+		var count := int(counts[brush])
+		(
+			_findings
+			. append(
+				{
+					"type": "validate",
+					"severity": 0,
+					"message":
+					(
+						"Hidden face%s on '%s' with open space in front: %s may be seen"
+						% [
+							"s" if count > 1 else "",
+							brush.name,
+							"they" if count > 1 else "it",
+						]
+					),
+					"node": brush,
+					"check": _check,
+					"kind": KIND_HIDDEN_IN_THE_OPEN,
+				}
+			)
+		)
 
 
 ## Two brushes in the same place.

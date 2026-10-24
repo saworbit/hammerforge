@@ -1729,7 +1729,10 @@ func assign_material_to_selected_faces(material_index: int) -> int:
 			if (
 				face_idx >= 0
 				and face_idx < brush.faces.size()
-				and brush.faces[face_idx].material_idx != material_index
+				and (
+					brush.faces[face_idx].material_idx != material_index
+					or brush.faces[face_idx].is_hidden()
+				)
 			):
 				changed = true
 		brush.assign_material_to_faces(material_index, typed)

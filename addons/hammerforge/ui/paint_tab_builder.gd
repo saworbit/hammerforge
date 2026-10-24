@@ -808,6 +808,7 @@ func connect_signals() -> void:
 		)
 		dock.material_browser.material_hovered.connect(dock._on_browser_material_hovered)
 		dock.material_browser.material_hover_ended.connect(dock._on_browser_material_hover_ended)
+		dock.material_browser.hidden_swatch_applied.connect(dock._on_hidden_swatch_applied)
 	if dock.materials_list:
 		dock.materials_list.item_selected.connect(dock._on_material_selected)
 	if dock.material_add:

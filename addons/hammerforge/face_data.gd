@@ -27,6 +27,8 @@ const MAP_AXIS_MATCH := 0.01
 ## degrees a texture is smeared into lines.
 const PROJECTION_ACROSS_FACE := 0.1
 enum PaintBlend { OVERLAY, MULTIPLY, ADD }
+## What a face is for (#1719). See `face_type`.
+enum FaceType { NORMAL, HIDDEN }
 ## The highest smoothing group a face holds. Far more than a level uses; the cap
 ## only keeps a hand-edited file from handing the bake a number it cannot key by.
 const MAX_SMOOTHING_GROUP := 65535
@@ -36,6 +38,7 @@ const MAX_SMOOTHING_GROUP := 65535
 ## type a `.tscn` can name: the scene wrote the layers and refused them on load,
 ## so a painted face reopened unpainted (#665). See `hf_face_paint_layer.gd`.
 const PaintLayer = preload("res://addons/hammerforge/paint/hf_face_paint_layer.gd")
+const HFHiddenFaces = preload("res://addons/hammerforge/hf_hidden_faces.gd")
 
 @export var material_idx: int = -1
 ## The texture this face was named in the `.map` it came from.
@@ -47,6 +50,13 @@ const PaintLayer = preload("res://addons/hammerforge/paint/hf_face_paint_layer.g
 ## ten brush map (#662). Kept whether or not the palette has a slot for it, so a
 ## round trip is lossless with no materials loaded at all.
 @export var map_texture: String = ""
+## A Hidden face is one nobody will see: the underside of a floor, the outside of
+## a sealed room, the back of a wall built against another (#1719). It still
+## bounds its brush, so the brush collides as it did, but the bake leaves it out
+## of the mesh and the lightmap. It goes with the texture, so Alt+T, a resize, a
+## clip and a duplicate carry it, and the slot under it is kept for when the face
+## is shown again.
+@export var face_type: int = FaceType.NORMAL
 ## PLANAR_Z maps (x, -y) -> (u, v), so on a face whose plane contains the Z axis,
 ## or one lying flat in Y, one UV axis is constant across the whole face and every
 ## point on it samples the same line of the texture: four of a box's six faces.
@@ -202,6 +212,18 @@ func projected_uvs() -> PackedVector2Array:
 func copy_texture_from(source: FaceData) -> void:
 	material_idx = source.material_idx
 	map_texture = source.map_texture
+	face_type = source.face_type
+
+
+func is_hidden() -> bool:
+	return face_type == FaceType.HIDDEN
+
+
+## A saved face type read as one this build knows, NORMAL for anything else: an
+## older build's file has none, and a newer one may name a type this one lacks.
+static func read_face_type(value: Variant) -> int:
+	var whole := _read_whole(value, FaceType.NORMAL)
+	return whole if FaceType.values().has(whole) else FaceType.NORMAL
 
 
 ## Give this face the look of `source`: its texture and how it is laid on. Every
@@ -270,6 +292,7 @@ func appearance_matches(other: FaceData) -> bool:
 	return (
 		material_idx == other.material_idx
 		and map_texture == other.map_texture
+		and face_type == other.face_type
 		and uv_projection == other.uv_projection
 		and uv_scale == other.uv_scale
 		and uv_offset == other.uv_offset
@@ -1001,6 +1024,10 @@ func to_dict() -> Dictionary:
 		"paint_layers": layer_data,
 		"displacement": displacement.to_dict() if displacement != null else null
 	}
+	# Only on a face that is not a plain one, so a level with none writes what it
+	# always did.
+	if face_type != FaceType.NORMAL:
+		out["face_type"] = face_type
 	# Only on a face in a group, so a level with none writes what it always did.
 	if uv_group != 0:
 		out["uv_group"] = uv_group
@@ -1015,6 +1042,7 @@ static func from_dict(data: Dictionary) -> FaceData:
 	var face = FaceData.new()
 	face.material_idx = _read_whole(data.get("material_idx", -1), -1)
 	face.map_texture = str(data.get("map_texture", ""))
+	face.face_type = read_face_type(data.get("face_type"))
 	# A record that does not say reads as Box UV, which is what a new face starts
 	# on (#463). PLANAR_Z flattened every floor and every east or west wall of a
 	# brush built from such a record, which is every non-box brush a `.map`
@@ -1558,6 +1586,10 @@ func resolved_material(
 	fallback: Material,
 	include_paint: bool = true
 ) -> Material:
+	# One look for every Hidden face of a level, whatever it is painted with: the
+	# preview draws its pattern and the bake knows it by it (#1719).
+	if is_hidden():
+		return HFHiddenFaces.material_for(material_manager)
 	var base: Material = null
 	if material_manager and material_idx >= 0:
 		base = material_manager.get_material(material_idx)
