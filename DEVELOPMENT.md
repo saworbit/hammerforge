@@ -802,6 +802,11 @@ demand from the Actions tab, for the checks too slow for every pull request
   `tests/test_save_interrupted.gd` is its quick form in the pull request suite.
   `test_chaos_long.gd` runs the three chaos scenarios at 300 steps over 64, 48
   and 96 seeds; see Chaos seeds below for the pull request form.
+  `test_mcp_random_runs_long.gd` makes 100 seeded runs of 80 bridge calls, each
+  undone all the way back to its starting level, redone all the way forward and
+  made again on a fresh level (#1646). The pull request suite has 16 runs of 40 in
+  `tests/test_mcp_random_runs.gd`. A failing seed writes its calls, one JSON line
+  each, to `user://hf_random_runs/seed_<n>.jsonl`.
 
 Run the slow tests locally with the same flags:
 ```

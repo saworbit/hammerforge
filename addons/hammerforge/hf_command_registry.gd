@@ -939,6 +939,44 @@ const COMMANDS := [
 		"repeat": true
 	},
 	{
+		"id": "align_texture_to_edge",
+		"label": "Align Texture to Edge",
+		"help":
+		"Turn the texture to run along an edge of each selected face, the next edge each time.",
+		"aliases": ["texture along edge", "rotate texture to edge"],
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Align to Edge", "allow_faces": true},
+		"palette": true,
+		"repeat": true
+	},
+	{
+		"id": "fit_texture_repeats",
+		"label": "Fit Texture Repeats",
+		"help": "Show the Paint tab's count of whole repeats across the selected faces.",
+		"aliases": ["fit repeats", "whole repeats"],
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Fit Repeats", "allow_faces": true},
+		"palette": true,
+		"repeat": true
+	},
+	{
+		"id": "fit_texture_strip",
+		"label": "Fit Trim Strip",
+		"help":
+		"Fit one strip of a trim sheet, as the Paint tab's Strip sets it, to the selected faces.",
+		"aliases": ["trim sheet", "fit strip"],
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Fit Strip", "allow_faces": true},
+		"palette": true,
+		"repeat": true
+	},
+	{
 		"id": "uv_rotate_90",
 		"label": "UV Rotate 90",
 		"help": "Turn the texture a quarter turn on the selected faces.",
@@ -1487,6 +1525,116 @@ const COMMANDS := [
 		"selection":
 		{"brushes_only": false, "minimum": 1, "label": "Select Similar", "allow_faces": true},
 		"repeat": true
+	},
+	{
+		"id": "view_filter_world",
+		"label": "Show or Hide World Brushes",
+		"help":
+		"Hide world brushes, the ones that are no cut, no clip brush and no brush entity in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "view_filter_cut",
+		"label": "Show or Hide Cut Brushes",
+		"help":
+		"Hide cut brushes, applied or waiting in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "view_filter_clip",
+		"label": "Show or Hide Clip Brushes",
+		"help":
+		"Hide clip brushes, the collision the player cannot see in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "view_filter_trigger",
+		"label": "Show or Hide Triggers",
+		"help":
+		"Hide triggers, every brush entity whose class starts with trigger in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "view_filter_brush_entity",
+		"label": "Show or Hide Brush Entities",
+		"help":
+		"Hide brush entities: doors, buttons, triggers and the rest in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "view_filter_entity",
+		"label": "Show or Hide Point Entities",
+		"help":
+		"Hide point entities: lights, sounds, props and logic in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "view_filter_structure",
+		"label": "Show or Hide Structures",
+		"help":
+		"Hide the pieces of stairs, arches and the other structures in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "view_filter_prefab",
+		"label": "Show or Hide Prefab Copies",
+		"help":
+		"Hide the brushes and entities of placed prefab copies in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "view_filter_decal",
+		"label": "Show or Hide Decals",
+		"help":
+		"Hide decals in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "view_filter_wires",
+		"label": "Show or Hide I/O Wires",
+		"help":
+		"Hide the I/O wires between entities in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "view_filter_cordons",
+		"label": "Show or Hide Cordons",
+		"help":
+		"Hide the cordon boxes in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
 	},
 	{
 		"id": "selection_filter",

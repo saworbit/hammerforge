@@ -621,6 +621,49 @@ func build(parent: Control) -> void:
 	dock.uv_align_world_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	align_row.add_child(dock.uv_align_world_btn)
 	uc.add_child(align_row)
+	# Turn to an edge, fit whole repeats, or one strip of a trim sheet (#1727)
+	var fit_row := HFUIFactoryType.make_wrap_row()
+	dock.uv_align_edge_btn = Button.new()
+	dock.uv_align_edge_btn.text = "Align to Edge"
+	dock.uv_align_edge_btn.tooltip_text = ("Turn the texture to run along an edge of each selected face. Press again for the next edge")
+	fit_row.add_child(dock.uv_align_edge_btn)
+	var repeats_label := Label.new()
+	repeats_label.text = "Repeats"
+	fit_row.add_child(repeats_label)
+	dock.fit_repeats_u = dock._make_spin(0, 64, 1, 3)
+	dock.fit_repeats_u.tooltip_text = "Whole repeats across; 0 keeps the texture's aspect"
+	fit_row.add_child(dock.fit_repeats_u)
+	dock.fit_repeats_v = dock._make_spin(0, 64, 1, 0)
+	dock.fit_repeats_v.tooltip_text = "Whole repeats down; 0 keeps the texture's aspect"
+	fit_row.add_child(dock.fit_repeats_v)
+	var repeats_btn := Button.new()
+	repeats_btn.name = "FitRepeats"
+	repeats_btn.text = "Fit"
+	repeats_btn.tooltip_text = "Show exactly that many repeats, ending at both edges"
+	repeats_btn.pressed.connect(dock._on_fit_repeats)
+	fit_row.add_child(repeats_btn)
+	uc.add_child(fit_row)
+	var strip_row := HFUIFactoryType.make_wrap_row()
+	var strip_label := Label.new()
+	strip_label.text = "Strip"
+	strip_row.add_child(strip_label)
+	dock.fit_strip_index = dock._make_spin(1, 4, 1, 1)
+	dock.fit_strip_index.tooltip_text = "Which strip of the trim sheet, counted down from the top"
+	strip_row.add_child(dock.fit_strip_index)
+	var of_label := Label.new()
+	of_label.text = "of"
+	strip_row.add_child(of_label)
+	dock.fit_strip_count = dock._make_spin(1, 64, 1, 4)
+	dock.fit_strip_count.tooltip_text = "How many equal strips the texture holds across V"
+	dock.fit_strip_count.value_changed.connect(dock._on_fit_strip_count_changed)
+	strip_row.add_child(dock.fit_strip_count)
+	var strip_btn := Button.new()
+	strip_btn.name = "FitStrip"
+	strip_btn.text = "Fit"
+	strip_btn.tooltip_text = "Fit that strip to each selected face, stretched along U"
+	strip_btn.pressed.connect(dock._on_fit_strip)
+	strip_row.add_child(strip_btn)
+	uc.add_child(strip_row)
 	# Treat as One, and the surfaces that stay one after edits
 	var surface_row := HFUIFactoryType.make_wrap_row()
 	dock.justify_treat_as_one = CheckBox.new()
@@ -863,6 +906,8 @@ func connect_signals() -> void:
 		dock.uv_align_world_btn.pressed.connect(
 			dock._on_uv_align.bind(FaceDataType.UVProjection.BOX_UV)
 		)
+	if dock.uv_align_edge_btn:
+		dock.uv_align_edge_btn.pressed.connect(dock._on_align_to_edge.bind(null))
 	if dock.uv_wrap_btn:
 		dock.uv_wrap_btn.pressed.connect(dock._on_uv_wrap)
 	if dock.uv_link_btn:
