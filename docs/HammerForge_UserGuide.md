@@ -2363,6 +2363,8 @@ When `path_extra` is set to a value other than None, additional geometry is auto
 - **Railings**: Top rail + posts on both sides of the path. Posts are spaced evenly along each segment. Both rails and posts share the group ID with path segments.
 - **Trim**: Edge strips run alongside both sides of the path. If `trim_material_idx >= 0`, all faces of trim brushes are assigned that material index.
 
+**Add Trim** builds the trim as well as the Stairs or the Railings, from one path, each with its own settings: a corridor with a skirting and a stair, or a balcony with a rail and a cornice ([#1629](https://github.com/saworbit/hammerforge/issues/1629)). With None it builds the trim alone, as Trim does. The treads run across the path and the trim along the outside of its edges; beside railings the trim stands out past the posts, which reach half their thickness over each edge, so nothing overlaps. The HUD says **Auto: Stairs and Trim**.
+
 All three follow Side and run round a closed loop's last segment. Trim is cut on the walls' own corner planes, so it turns each corner with them; a trim strip too short for its mitres refuses the path the same way a wall does. On a straight path, stairs and railings are still square-ended boxes per segment, not mitred. On a smooth path they follow the curve: each rail is swept along it on the walls' planes, posts are spaced evenly along its whole length, and each span that climbs is cut into steps of one rise at equal lengths along the curve, a tread crossing several pieces being one brush on each, cut where it starts and stops.
 
 **Trim Profile** shapes the trim's section, Trim Width out from the path's side by Trim Height up:
