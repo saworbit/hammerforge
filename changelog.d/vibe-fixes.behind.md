@@ -1,0 +1,2 @@
+- The reference map validates clean: pillars, stairs and skirting stand on the hall floor, and the corridor walls stop at its floor and ceiling. (issue [#1815](https://github.com/saworbit/hammerforge/issues/1815))
+- Pull request CI runs the five quick vibe scenarios, so a change that leaves Validate, a Controls switch or a documented key broken fails before it merges. (issue [#1819](https://github.com/saworbit/hammerforge/issues/1819))

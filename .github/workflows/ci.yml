@@ -402,6 +402,22 @@ jobs:
         if: matrix.shard == 1
         run: python3 tools/vibe/mcp/run_mcp_vibe.py --godot godot
 
+      # The five vibe scenarios that cover what a pull request most often
+      # changes: a Validate check, a Controls switch kept in the preferences, a
+      # shipped example or the reference map, and a key named in the docs. Four
+      # pull requests in one week each turned one of these red and nobody saw it
+      # until the nightly ran (#1819). About 25 seconds. A new finding fails; one
+      # already filed, with its number, passes. The nightly still runs them all.
+      # Shard 2, because shard 1 already carries the warning check and both MCP
+      # runs.
+      - name: Run the quick vibe scenarios
+        if: matrix.shard == 2
+        env:
+          GODOT: godot
+        run: >-
+          python3 tools/vibe/run_vibe.py --log-dir vibe-logs
+          validate-own-output examples-integrity reference-map console-controls docs-truth
+
   # Named exactly "GUT Unit Tests" because that is what the main ruleset requires.
   # The shard legs above report under their own names and are not required
   # checks; this job speaks for all four.
