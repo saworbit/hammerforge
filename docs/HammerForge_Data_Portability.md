@@ -4,7 +4,7 @@ description: "Moving level data in and out of HammerForge safely: the .hflevel s
 
 # HammerForge Data Portability
 
-Last updated: October 22, 2026
+Last updated: October 25, 2026
 
 This document describes how to move data in and out of HammerForge safely.
 
@@ -65,6 +65,8 @@ Changing the setting re-owns what is already in the level, so the next Ctrl+S wr
 Each setting's scene size and open time, as `.tscn` and as `.scn`, from 100 to 3,000 brushes, are measured on [Performance and Limits](HammerForge_Performance.md#files).
 
 Whichever setting is on, the scene also carries the records that describe the brushes without being brushes: visgroups and their visibility, groups, arrays, hollows, structures and prefab instances. They are not nodes, so they ride in a `live_registries` property on the `LevelRoot` rather than as children. Before September 2026 they did not ride anywhere, and a level reopened from its scene came back as loose geometry the structure panels could no longer edit. A scene saved back then is repaired on open as far as it can be: a visgroup is put back from the members that still name it, and comes back visible.
+
+Floor paint rides there too since October 2026: each paint layer's cells, heightmap, terrain slots and wall heights, and the layer in use (#1854). Before that the scene kept the layer nodes and none of their paint, so a level reopened from its scene had empty layers under floors nothing could edit. A streamed level carries the index of its region files, and its cells stay in those files. A scene saved before the change opens with what it has; **Load .hflevel** brings the paint back from a file saved after it was painted.
 
 A brush's faces go into the scene with everything on them: material, UV settings, custom UVs, paint layers and, since October 2026, the sculpt (#854). Before that the scene dropped every sculpt and only the `.hflevel` kept it; **Load .hflevel** brings one back from a file saved after the sculpt was made. A build from before the change still reads a sculpt from a newer scene, but drops it again the next time it saves.
 
