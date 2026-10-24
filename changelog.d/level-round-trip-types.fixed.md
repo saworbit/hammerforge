@@ -1,1 +1,0 @@
-- A level round trip keeps a Color exactly, even above 1, and an int entity property an int. (issue [#1787](https://github.com/saworbit/hammerforge/issues/1787))

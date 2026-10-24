@@ -1,1 +1,0 @@
-- The arrow keys move along the axis nearest their direction in the view, and Shift with an arrow duplicates and moves, so a row is a key a copy. (issue [#1716](https://github.com/saworbit/hammerforge/issues/1716))

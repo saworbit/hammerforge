@@ -1,1 +1,0 @@
-- The guide says which bake path is faster by level, measured on touching boxes and with cuts. (issue [#1624](https://github.com/saworbit/hammerforge/issues/1624))

@@ -1,1 +1,0 @@
-- A level file whose paint grid origin or basis is damaged loads with the defaults for them, where it raised a script error. (issue [#1697](https://github.com/saworbit/hammerforge/issues/1697))

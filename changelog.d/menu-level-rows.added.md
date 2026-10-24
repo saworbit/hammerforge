@@ -1,1 +1,0 @@
-- The viewport menu places an entity, makes a brush entity, adds to a visgroup, shows a face's material and switches Add or Cut. (issue [#1724](https://github.com/saworbit/hammerforge/issues/1724))

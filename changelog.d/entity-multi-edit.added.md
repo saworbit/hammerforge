@@ -1,1 +1,0 @@
-- The Entity panel edits several entities at once, shows which values are class defaults, and puts them back or writes missing ones. (issue [#1729](https://github.com/saworbit/hammerforge/issues/1729))

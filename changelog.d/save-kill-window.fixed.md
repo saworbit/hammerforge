@@ -1,1 +1,0 @@
-- A save killed after the old level file was taken away and before the new one took its name now loads the new save, not the one before it. (issue [#1642](https://github.com/saworbit/hammerforge/issues/1642))

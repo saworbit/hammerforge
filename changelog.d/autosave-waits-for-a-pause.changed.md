@@ -1,1 +1,0 @@
-- The timed autosave waits for a pause in editing, at most twice the interval, and skips a level that has not changed. (issue [#1736](https://github.com/saworbit/hammerforge/issues/1736))

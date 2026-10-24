@@ -1,1 +1,0 @@
-- A building guide for agents ships with the bridge, as a skill and as MCP resources, with a worked example CI builds in a real editor. (issue [#1650](https://github.com/saworbit/hammerforge/issues/1650))

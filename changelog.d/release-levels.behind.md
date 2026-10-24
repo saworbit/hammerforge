@@ -1,1 +1,0 @@
-- CI loads a level saved by each release with every build, and fails when a count it held, such as its cordons, does not come back. (issue [#1640](https://github.com/saworbit/hammerforge/issues/1640))

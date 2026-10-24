@@ -1,1 +1,0 @@
-- A prefab save, a `.map` export and Settings Export write the file whole, so one cut short leaves the old file, not an empty one every linked copy reads. (issue [#1758](https://github.com/saworbit/hammerforge/issues/1758))

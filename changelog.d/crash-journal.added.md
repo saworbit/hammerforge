@@ -1,1 +1,0 @@
-- After a crash, the next start turns that session's journal into a report folder, and the Console says so. (issue [#1654](https://github.com/saworbit/hammerforge/issues/1654))

@@ -1,1 +1,0 @@
-- Unlink a placed prefab copy into ordinary geometry, and select every copy of a prefab in the level. (issue [#1734](https://github.com/saworbit/hammerforge/issues/1734))

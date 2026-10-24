@@ -1,1 +1,0 @@
-- Repeat Last Command runs the last edit again on the current selection, and the palette lists it and the recent commands at its top. (issue [#1694](https://github.com/saworbit/hammerforge/issues/1694))
