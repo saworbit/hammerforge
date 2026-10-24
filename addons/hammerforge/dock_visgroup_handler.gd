@@ -10,6 +10,7 @@ const HFCollapsibleSection = preload("ui/collapsible_section.gd")
 const HFUIFactory = preload("ui/hf_ui_factory.gd")
 const HFBakeSplit = preload("hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFViewFiltersType = preload("hf_view_filters.gd")
 
 ## How far a cordon bound may sit from the origin.
 ##
@@ -21,6 +22,92 @@ const HFBakeSplit = preload("hf_bake_split.gd")
 ## the level - so the next bake produced an empty level and the control that
 ## caused it read 9999 as though that were the number the mapper chose.
 const CORDON_LIMIT := 131072.0
+
+
+## The View Filters section (#1720): a tick for each kind, ticked while it is
+## shown, and below them a row for each brush entity and point entity class in
+## the level. Unticking hides every one of that kind, made later or not.
+static func setup_view_filters_ui(dock: Object) -> void:
+	if dock == null or not dock.manage_tab:
+		return
+	var manage_vbox = dock.manage_tab.get_node_or_null("ManageMargin/ManageVBox")
+	if not manage_vbox:
+		return
+	var section = HFCollapsibleSection.create("View Filters", true)
+	manage_vbox.add_child(section)
+	manage_vbox.move_child(section, mini(3, manage_vbox.get_child_count() - 1))
+	dock._register_section(section, "View Filters")
+	var content = section.get_content()
+	var note := Label.new()
+	note.text = "Shown in the editor. The level and the bake are not changed."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.add_theme_font_size_override("font_size", 11)
+	note.modulate = Color(1, 1, 1, 0.6)
+	content.add_child(note)
+	dock.view_filters_box = VBoxContainer.new()
+	dock.view_filters_box.name = "ViewFilterRows"
+	content.add_child(dock.view_filters_box)
+	var show_all := Button.new()
+	show_all.text = "Show All"
+	show_all.tooltip_text = "Show every kind again"
+	show_all.pressed.connect(dock._on_view_filters_show_all)
+	content.add_child(show_all)
+	refresh_view_filters(dock)
+
+
+## Rebuild the View Filters rows from the level: the kinds, then the classes in
+## it, each ticked unless it is hidden. A hidden class with none left in the
+## level keeps its row, so it can be shown again.
+static func refresh_view_filters(dock: Object) -> void:
+	var box: VBoxContainer = dock.get("view_filters_box")
+	if box == null or not is_instance_valid(box):
+		return
+	for child in box.get_children():
+		box.remove_child(child)
+		child.queue_free()
+	var root = dock.level_root
+	var hidden: Dictionary = root.view_filters if root else {}
+	for kind in HFViewFiltersType.KINDS:
+		_view_filter_row(dock, box, kind, HFViewFiltersType.LABELS[kind], hidden)
+	var classes: Dictionary = (
+		HFViewFiltersType.classes_in(root) if root else {"brush_entity": [], "entity": []}
+	)
+	for kind in HFViewFiltersType.CLASS_KINDS:
+		var names: Array = (classes.get(kind, []) as Array).duplicate()
+		for key in hidden:
+			var name_of := str(key).trim_prefix(kind + ":")
+			if str(key).begins_with(kind + ":") and not names.has(name_of):
+				names.append(name_of)
+		names.sort()
+		if names.is_empty():
+			continue
+		var head := Label.new()
+		head.text = "Brush entity classes" if kind == "brush_entity" else "Point entity classes"
+		head.add_theme_font_size_override("font_size", 11)
+		head.modulate = Color(1, 1, 1, 0.7)
+		box.add_child(head)
+		for class_name_shown in names:
+			_view_filter_row(
+				dock, box, "%s:%s" % [kind, class_name_shown], "  " + class_name_shown, hidden
+			)
+	dock.set("_view_filter_classes", classes)
+	var chip: Button = dock.get("_view_filter_chip")
+	if chip != null and is_instance_valid(chip):
+		chip.visible = not hidden.is_empty()
+		chip.text = "Filtered: %d kind%s" % [hidden.size(), "" if hidden.size() == 1 else "s"]
+
+
+static func _view_filter_row(
+	dock: Object, box: VBoxContainer, key: String, text: String, hidden: Dictionary
+) -> void:
+	var check := CheckBox.new()
+	check.name = key.replace(":", "_")
+	check.text = text
+	check.button_pressed = not hidden.has(key)
+	check.tooltip_text = "Untick to hide every one in the editor"
+	check.add_theme_font_size_override("font_size", 11)
+	check.toggled.connect(dock._on_view_filter_toggled.bind(key))
+	box.add_child(check)
 
 
 static func setup_visgroup_ui(dock: Object) -> void:
