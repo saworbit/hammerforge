@@ -1,1 +1,0 @@
-- Align to Edge turns a texture to run along a face's edge, Fit Repeats shows a whole number of repeats, and Fit Strip fits one strip of a trim sheet. (issue [#1727](https://github.com/saworbit/hammerforge/issues/1727))

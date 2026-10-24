@@ -1,1 +1,0 @@
-- Carve and Hull of Selection make only closed brushes, so a redo or a reload no longer drops a piece they made. (issue [#1843](https://github.com/saworbit/hammerforge/issues/1843))

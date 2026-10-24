@@ -1,1 +1,0 @@
-- A command line in the Console and over the viewport (Shift+;) runs a command with its values, such as hollow 0.125, and runs scripts of them. (issue [#1696](https://github.com/saworbit/hammerforge/issues/1696))

@@ -1,1 +1,0 @@
-- Shift with an Extrude tool moves a face of any brush along its normal, with the selected brushes' faces in its plane; a clipped or carved brush had no handle to push. (issue [#1712](https://github.com/saworbit/hammerforge/issues/1712))

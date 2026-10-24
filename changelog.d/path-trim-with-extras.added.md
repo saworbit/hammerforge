@@ -1,1 +1,0 @@
-- The Path tool builds trim together with stairs or railings from one path, with Add Trim. (issue [#1629](https://github.com/saworbit/hammerforge/issues/1629))

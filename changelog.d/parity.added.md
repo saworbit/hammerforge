@@ -1,1 +1,0 @@
-- A parity page measures how much of the classic brush editors' tool set HammerForge covers, and the roadmap opens with where things stand and what comes next. (issue [#1707](https://github.com/saworbit/hammerforge/issues/1707))

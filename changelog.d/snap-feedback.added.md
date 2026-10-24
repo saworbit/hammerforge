@@ -1,1 +1,0 @@
-- A marker on each snapped point shows what it is on, Tab steps to the next snap in reach, and a command limits one pick to one kind. (issue [#1691](https://github.com/saworbit/hammerforge/issues/1691))

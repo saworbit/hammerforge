@@ -1,1 +1,0 @@
-- View Filters hide a kind in the editor, such as triggers, clip brushes or lights, including ones made later, without saving it or changing the bake. (issue [#1720](https://github.com/saworbit/hammerforge/issues/1720))

@@ -1,1 +1,0 @@
-- `hammerforge-mcp --record` writes a bridge session as JSON lines, and `replay` plays it back, naming the first call that differs. (issue [#1645](https://github.com/saworbit/hammerforge/issues/1645))

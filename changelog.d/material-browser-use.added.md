@@ -1,1 +1,0 @@
-- The material browser marks what the level uses, lists them most used first, searches by every word, selects what uses a material, and has a thumbnail size slider. (issue [#1725](https://github.com/saworbit/hammerforge/issues/1725))
