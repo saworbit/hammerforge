@@ -280,6 +280,10 @@ var export_game_scene_btn: Button = null
 var export_profile_opt: OptionButton = null
 ## The rows Check Bake Issues fills, with Select and Fix buttons (#992).
 var bake_issue_list: VBoxContainer = null
+## Said while the level's scene was saved by a newer HammerForge, which this
+## build would write the level without (#1638). The levels warned about already.
+var format_banner: Label = null
+var _format_warned: Dictionary = {}
 ## Below the rows: Show accepted, and the Checks menu of which kinds of check
 ## Validate runs for the project (#1731).
 var findings_tools_row: HBoxContainer = null
@@ -1720,6 +1724,63 @@ func _on_bake_issue_fix(fix: String, node: Variant) -> void:
 	HFDockManageHandler.on_bake_issue_fix(self, fix, node)
 
 
+## The read-only banner, under the one that says there is no level.
+func _build_format_banner() -> void:
+	if format_banner != null or no_root_banner == null:
+		return
+	format_banner = Label.new()
+	format_banner.name = "FormatBanner"
+	format_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	format_banner.add_theme_color_override("font_color", Color(1.0, 0.6, 0.35))
+	format_banner.visible = false
+	var holder := no_root_banner.get_parent()
+	holder.add_child(format_banner)
+	holder.move_child(format_banner, no_root_banner.get_index() + 1)
+
+
+## What the banner says for the open level, or "" when it can be written.
+func format_banner_text() -> String:
+	if level_root == null or not is_instance_valid(level_root):
+		return ""
+	if not level_root.has_method("format_refusal"):
+		return ""
+	var reason: String = level_root.format_refusal()
+	if reason == "":
+		return ""
+	return (
+		(
+			"Read only: this level %s. Save Level and autosave are off. Saving the scene with "
+			+ "Ctrl+S will drop what that build added; open it there instead."
+		)
+		% reason
+	)
+
+
+func _refresh_format_banner() -> void:
+	if format_banner == null:
+		return
+	var text := format_banner_text()
+	format_banner.visible = text != ""
+	if format_banner.text != text:
+		format_banner.text = text
+
+
+## Say so once, in a dialog, when a level a newer build saved is opened here.
+func _warn_about_a_newer_level() -> void:
+	var text := format_banner_text()
+	if text == "" or _format_warned.has(level_root.get_instance_id()):
+		return
+	_format_warned[level_root.get_instance_id()] = true
+	var dialog := AcceptDialog.new()
+	dialog.title = "Level saved by a newer HammerForge"
+	dialog.dialog_text = text
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	if is_inside_tree():
+		dialog.popup_centered()
+
+
 func _on_finding_accept(finding: Dictionary) -> void:
 	HFDockManageHandler.open_accept_dialog(self, finding)
 
@@ -2563,6 +2624,7 @@ func _ready():
 		progress_bar.hide()
 	if no_root_banner:
 		no_root_banner.visible = true
+		_build_format_banner()
 	_sync_snap_buttons(grid_snap.value)
 	var moved_presets := migrate_legacy_presets(LEGACY_PRESETS_DIR, presets_dir)
 	if moved_presets > 0:
@@ -2599,6 +2661,7 @@ func _process(_delta):
 		_disconnect_root_signals()
 		connected_root = level_root
 		_connect_root_signals()
+		_warn_about_a_newer_level()
 		# A level snaps to the grid alone until it is told otherwise.
 		HFDockToolMemory.push_snap_modes(self)
 		HFDockManageHandler.sync_bake_state_to_root(self)
@@ -2612,6 +2675,7 @@ func _process(_delta):
 	# Show/hide the "no root" banner
 	if no_root_banner:
 		no_root_banner.visible = level_root == null
+	_refresh_format_banner()
 	# Paint layers, materials, and surface paint sync are now signal-driven
 	# (see _connect_root_signals for paint_layer_changed, material_list_changed,
 	# selection_changed connections).

@@ -74,6 +74,30 @@ The workflow checks the archive rather than the `.gitattributes` meant to
 produce it, for the same reason it re-checks the built tree rather than the ship
 list.
 
+### Level format
+
+Every change to what a level saves raises the `.hflevel` format number, so an
+older build refuses a newer file rather than loading it, dropping what it does
+not know and saving it back without (#1638). `addons/hammerforge/data/format.json`
+lists every key path the last release saved, such as `state.brushes[].faces[].uv_scale`,
+with the records a level fills with names of its own, its visgroups for one,
+folded into `{}` by its `maps`. A pull request that saves something new adds a
+fragment to `data/format.d/`, `<issue>-<what>.json`, with `what` it saves,
+`older_builds` (what an older build does without it) and the `keys` it adds,
+and `maps` for a new record of names. One file each, so two never conflict.
+
+While any fragment waits, `HFLevelIO.FORMAT_VERSION` is the released number plus
+one, and the first pull request of a release to save something new raises it.
+A file names the waiting fragments it was written with in `format_pending`, so a
+development build refuses a file from a branch with a change it does not have,
+and a scene is stamped with its builder's number when it is saved: a build
+older than the stamp shows the level read only, refusing Save Level and
+autosave. `tests/test_format_record.gd` takes the census of a level with as much
+switched on as it can hold (`tests/support/full_feature_level.gd`) and fails
+naming any key nothing lists, and holds the number to the rule. A new saved
+feature belongs in that level too, or the census cannot see it.
+`python tools/format_fragments.py --check` reads the fragments.
+
 ### Cutting a release
 
 The `release` branch holds the built tree. It is what the Asset Library
@@ -87,7 +111,11 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    and refresh the published test totals from a full run (see "Published test
    totals are a release snapshot" below). In the changelog, first run
    `python tools/changelog_fragments.py --compile`, so every merged fragment is
-   in `[Unreleased]` and `changelog.d/` holds only its README. Then rename
+   in `[Unreleased]` and `changelog.d/` holds only its README. Fold the level
+   format fragments too, with `python tools/format_fragments.py --compile`: it
+   makes the number this build writes the released one in
+   `addons/hammerforge/data/format.json` and empties `data/format.d/` (see Level
+   format below). Then rename
    `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, turn **Highlights so far**
    into **Highlights** and bring them up to date (up to five lines someone
    using the editor would care about), and start a new `## [Unreleased]` above

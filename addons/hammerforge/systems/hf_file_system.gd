@@ -6,6 +6,7 @@ class_name HFFileSystem
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFLevelIO = preload("../hflevel_io.gd")
+const HFFormatRecord = preload("../hf_format_record.gd")
 const MapIO = preload("../map_io.gd")
 const HFEntityPropUtils = preload("../ui/hf_entity_prop_utils.gd")
 const HFNotes = preload("../hf_notes.gd")
@@ -45,6 +46,19 @@ func save_hflevel(path: String = "", force: bool = false, autosave: bool = false
 	var target = path if path != "" else root.resolved_hflevel_path()
 	if target == "":
 		return ERR_INVALID_PARAMETER
+	# A scene a newer build saved holds what this build would leave out (#1638).
+	var newer: String = root.format_refusal() if root.has_method("format_refusal") else ""
+	if newer != "":
+		var refused := (
+			"%s refused: this level %s. Saving it here would drop what that build added."
+			% ["Autosave" if autosave else "Save Level", newer]
+		)
+		HFLog.warn("HammerForge: %s" % refused)
+		if autosave and root.has_signal("autosave_failed"):
+			root.autosave_failed.emit(refused)
+		elif root.has_signal("user_message"):
+			root.user_message.emit(refused, 2)
+		return ERR_UNAVAILABLE
 	if autosave:
 		var occupant := autosave_target_belongs_elsewhere(target)
 		if occupant != "":
@@ -236,15 +250,11 @@ func read_hflevel(path: String) -> Dictionary:
 	# missing or zero version is an older file and still loads: every key defaults,
 	# which is the direction that has always been safe.
 	var version := int(decoded.get("version", 0))
-	if version > HFLevelIO.FORMAT_VERSION:
-		return {
-			"ok": false,
-			"error":
-			(
-				"%s was written by a newer build (format %d, this build reads %d)"
-				% [path.get_file(), version, HFLevelIO.FORMAT_VERSION]
-			),
-		}
+	var refusal := HFFormatRecord.refusal(
+		version, decoded.get("format_pending"), HFLevelIO.FORMAT_VERSION
+	)
+	if refusal != "":
+		return {"ok": false, "error": "%s %s" % [path.get_file(), refusal]}
 	return {"ok": true, "error": "", "bundle": decoded}
 
 

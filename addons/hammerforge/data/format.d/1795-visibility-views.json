@@ -1,0 +1,13 @@
+{
+	"what": "Named visibility views.",
+	"older_builds": "The saved views are gone; what is hidden stays as it was.",
+	"keys": [
+		"state.visibility_views",
+		"state.visibility_views{}",
+		"state.visibility_views{}{}"
+	],
+	"maps": [
+		"state.visibility_views",
+		"state.visibility_views{}"
+	]
+}

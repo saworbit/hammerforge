@@ -1,0 +1,7 @@
+{
+	"what": "Whether Validate warns about open To Do notes.",
+	"older_builds": "Validate stops warning about them.",
+	"keys": [
+		"settings.validate_warns_open_todos"
+	]
+}
