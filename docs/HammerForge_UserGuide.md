@@ -235,6 +235,7 @@ Destructive geometry operations show a wireframe preview overlay before permanen
 |-----------|--------------|---------------|
 | Carve (Ctrl+Shift+R) | Green wireframe | All resulting slice pieces |
 | Intersect (Ctrl+Shift+I) | Green wireframe | The one brush that is kept |
+| Hull of Selection | Green wireframe | The one brush that wraps them all |
 | Clip (Shift+X) | Cyan wireframe + orange plane | Two resulting halves + the cut surface |
 | Hollow (Ctrl+H) | Yellow wireframe | 6 wall pieces at the chosen thickness |
 | Extrude (U/J) | Semi-transparent brush | New brush being extruded from the face |
@@ -835,6 +836,24 @@ sculpts as a piece of a carve does. A face cut by another brush takes the look o
 that brush's face, its texture and how it is laid on. Brushes that share no volume,
 that mix solid brushes and cuts, or that are not all one entity are refused, and
 nothing changes.
+
+### Hull of Selection
+
+**Hull of Selection** (the command palette, or **Hull** on the context toolbar)
+replaces the selected brushes with one brush, the convex hull of all their
+corners, whether they touch or not: a ramp from one ledge down to another, a
+column tapering from a small top block to a wide base, a wedge between two posts.
+Merge stays as it is, the exact union that refuses brushes that do not touch, so
+nobody asking for a union gets a hull. The green wireframe shows the brush before
+you confirm, and it is one undo step.
+
+The brush is turned as the first selected one is and keeps its operation,
+visgroups, group and brush entity. A face of the hull on an old face's plane takes
+that face's material and texture, the largest one there; a face on no old plane
+takes the Active Material, or with none set the look of the old face it most
+nearly faces as. A face that grew cannot keep a sculpt, and the confirmation and
+the message both say how many go. Brushes that mix solid brushes and cuts, or
+that are not all one entity, are refused.
 
 > Hollow (`Ctrl+H`) handles rotation too. It shells a brush against its own face
 > planes, so a turned box gives you six turned walls. See [Hollow](#hollow).
@@ -1837,6 +1856,7 @@ The contexts and what their full lists cover:
 | Vertex Edit | Click vertex to select, drag to move, E: edge mode, Ctrl+W: merge, Ctrl+E: split |
 | Polygon Tool | Click to place verts, Shift: lock to axis, Enter: close, Escape: remove last |
 | Path Tool | Click to place waypoints, Shift: lock to axis, Enter: finalize, Escape: remove last |
+| Hull Tool | Click: point, double click a face: its corners, Shift drag a face: pull its corners out, Enter: make the brush, Backspace/RMB: take back, Escape: cancel |
 
 The HUD also shows current axis lock state (e.g. "[X Locked]"), and a grid indicator with the snap, plane axis and position (`Grid: 0.5  Y 1.3`). It flashes when the snap changes. Fractional snaps display exactly.
 
@@ -1946,6 +1966,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Polygon Tool | P | Draw a polygon, extrude to brushes (a concave one splits into convex brushes) |
 | Path Tool | ; | Place waypoints, extrude corridor brushes |
 | Clip Tool | C | Cut the selected brushes along a plane placed with two or three points |
+| Hull Tool | (palette) | Click points or a face's corners and make one brush around them |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 
 **Rebinding:** Press the **?** button on the toolbar to open the shortcut dialog, select a command and press **Set Key**, then the new chord ([#1733](https://github.com/saworbit/hammerforge/issues/1733)). Every command the palette runs is listed and can take a key, not only those that ship with one; a command with no key shows "none". **Set Second Key** gives a command a second chord, and either one fires it; the surfaces that name a key show the first. A chord another command already uses is said before it is kept, with that command's name, and you swap the keys, take it off the other command, or cancel. A chord the editor or the palette takes ahead of every binding, such as Ctrl+S, can only be cancelled. **Clear** takes a command's keys off, **Reset** puts one back to its default and **Reset All** puts every key back. A change works at once, with no restart, and is written to `user://hammerforge_keymap.json`, the keys you changed and nothing else, so an action you left alone keeps picking up later changes to its default. **Export...** and **Import...** share that file with a team. The file can still be edited by hand: each entry maps an action name to `{"keycode": "F", "ctrl": bool, "shift": bool, "alt": bool}`, with an optional `"second"` chord in the same shape, or `{"none": true}` for no key, for example `{"selection_filter": {"keycode": "G", "alt": true}}`. `keycode` is a key name as Godot spells it (`"F"`, `"Delete"`, `"PageDown"`, `"BracketLeft"`) or Godot's integer keycode; modifiers go in their own fields, not in the name. Restart the plugin after editing the file by hand. Every surface that names a chord — the viewport HUD, the coach marks, the dock tooltips, the hotkey palette and the shortcut list — reads the binding rather than repeating it, so a rebind shows up everywhere at once.
@@ -2170,6 +2191,17 @@ This is a fallback repair tool, not a modeling operation — it discards any con
 | Ctrl+E | Split selected edge |
 | Ctrl+W | Merge selected vertices |
 | Ctrl+B | Snap selected vertices to the grid |
+
+## Hull Tool
+
+The Hull tool makes one brush around points you click, for a shape that is easier to click than to draw: a rock, an odd corner fill. Start it with **Hull Tool** in the command palette, or give it a key in the Shortcuts dialog.
+
+- Click to drop a point on the face under the cursor, or on the grid where there is none. Points snap as a Draw start does.
+- Double click a face to add all its corners.
+- Hold **Shift** and drag a face to copy its corners out along its normal, held to the grid, so a face becomes a solid in one gesture.
+- A green wireframe shows the hull of the points as they go.
+- **Enter** makes the brush, as one undo step, with the Active Material. **Backspace** or a right click takes back the last click's points, and **Escape** lets them all go.
+- Fewer than four points, or points all in one plane, hold no solid. Enter says so and keeps the points, so you can add another.
 
 ## Polygon Tool
 

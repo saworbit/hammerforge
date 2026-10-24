@@ -2509,6 +2509,14 @@ func can_intersect_brushes(brush_ids: Array) -> HFOpResult:
 	return carve_system.can_intersect_brushes(brush_ids)
 
 
+func hull_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	return carve_system.hull_brushes_by_ids(brush_ids)
+
+
+func can_hull_brushes(brush_ids: Array) -> HFOpResult:
+	return carve_system.can_hull_brushes(brush_ids)
+
+
 ## The tie decides which brushes the bake makes one entity of, so each brush tied
 ## or untied is a change for Bake Changed, even when its class and name stay the
 ## same (#1198).

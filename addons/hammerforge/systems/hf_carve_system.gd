@@ -18,6 +18,7 @@ const FaceData = preload("../face_data.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFHullType = preload("../hf_hull.gd")
 
 ## How far a corner may stand off another brush's face plane and still count as
 ## lying on it, when a face of an intersection looks for the face it was cut by.
@@ -513,6 +514,169 @@ func _overrides_as_slots(faces: Array, owner_of: Dictionary, target: DraftBrush)
 			slot_of[draft.material_override] = root.add_material_to_palette(draft.material_override)
 		built.material_idx = int(slot_of[draft.material_override])
 	return true
+
+
+# ---------------------------------------------------------------------------
+# Hull of Selection
+# ---------------------------------------------------------------------------
+
+
+## Replace `brush_ids` with one brush, the convex hull of all their corners,
+## whether they touch or not (#1715).
+##
+## Merge makes the exact union and refuses brushes that do not touch or whose
+## union is an L, so a ramp from one ledge down to another, or a column tapering
+## from a small top block to a wide base, was built by vertex editing a box. This
+## is a command of its own, so nobody asking for a union gets a hull. The brush is
+## the first one's: its operation, visgroups, group and bake settings, with the
+## one entity they all are and every wire any of them held, as Merge keeps.
+func hull_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	# The rules live in the plan and hold here as well as at the press that asked
+	# first: the undo entry stores this method and these ids.
+	var plan := _plan_hull(brush_ids)
+	var check: HFOpResult = plan["result"]
+	if not check.ok:
+		return _op_fail(check.message, check.fix_hint)
+	var drafts: Array = plan["drafts"]
+	var target: DraftBrush = drafts[0]
+	var faces: Array = plan["faces"]
+	var origins: Dictionary = plan["origins"]
+	# A face that grew cannot hold its sculpt. The confirmation named them, so the
+	# message says how many went rather than a warning in the output.
+	var lost := HFConvexClip.carry_onto_union(faces, origins)
+	_give_active_material(plan["new_faces"], target)
+	var as_slots := _overrides_as_slots(faces, plan["owner_of"], target)
+	# Made before anything is deleted, so a brush that could not be made leaves
+	# every source where it was.
+	var info: Dictionary = root.brush_system._piece_infos_from_faces(target, [faces])[0]
+	info.merge(HFBrushEntity.carried_by_all(drafts), true)
+	if as_slots:
+		info.erase("material")
+	root.tag_full_reconcile()
+	if root.brush_system.create_brush_from_info(info) == null:
+		return _op_fail("Hull: produced no geometry")
+	for draft in drafts:
+		root.brush_system.delete_brush(draft)
+	var msg := "Hull: wrapped %d brushes in one" % drafts.size()
+	if lost > 0:
+		msg += ", and %d sculpt%s could not follow" % [lost, "" if lost == 1 else "s"]
+	root._log(msg)
+	return HFOpResult.success(msg)
+
+
+## Whether these brushes can be wrapped in one, and if not, why. Asked before the
+## confirmation opens, as Intersect asks its own.
+func can_hull_brushes(brush_ids: Array) -> HFOpResult:
+	return _plan_hull(brush_ids)["result"]
+
+
+## What wrapping `brush_ids` would make, worked out without changing the level.
+##
+## Returns `{"result", "drafts", "faces", "origins", "owner_of", "new_faces"}`:
+## the brushes, the first one first, the hull's faces in its space, for each face
+## on an old face's plane that face, the largest there, the brush each face takes
+## its look from, and the faces on no old plane. A new face looks like the old
+## face it most nearly faces as, until the hull is made and it takes the Active
+## Material. Side effect free, so the check, the preview and the hull agree.
+func _plan_hull(brush_ids: Array) -> Dictionary:
+	var drafts: Array = []
+	for brush_id in brush_ids:
+		var brush = root.brush_system.find_brush_by_id(str(brush_id))
+		if not brush or not (brush is DraftBrush):
+			return _hull_refusal("Hull: brush '%s' not found" % str(brush_id))
+		if not drafts.has(brush):
+			drafts.append(brush)
+	if drafts.size() < 2:
+		return _hull_refusal(
+			"Hull: select at least 2 brushes", "Clip to Convex in Vertex mode wraps one brush"
+		)
+	var target := drafts[0] as DraftBrush
+	for draft in drafts:
+		if (draft as DraftBrush).operation != target.operation:
+			return _hull_refusal(
+				"Hull: all brushes must have the same operation type",
+				"Cannot wrap solid brushes and cuts in one"
+			)
+	if not HFBrushEntity.are_one_entity(drafts):
+		return _hull_refusal(
+			"Hull: the selected brushes are not all one entity",
+			"Wrap the brushes of one door or trigger, or plain brushes. Tie or untie them first"
+		)
+	var into_target: Transform3D = target.global_transform.affine_inverse()
+	var sources: Array = []
+	var source_owner := {}
+	var points := PackedVector3Array()
+	for draft in drafts:
+		root.brush_system._ensure_faces(draft)
+		var carried: Array = HFBrushSystem._faces_carried(
+			draft, into_target * (draft as DraftBrush).global_transform
+		)
+		if carried.size() < 4:
+			return _hull_refusal(
+				"Hull: brush '%s' has no usable geometry" % _brush_id_of(draft),
+				"Rebuild or redraw it and try again"
+			)
+		for face in carried:
+			sources.append(face)
+			source_owner[face] = draft
+			points.append_array((face as FaceData).local_verts)
+	var hull: Dictionary = HFHullType.of(points)
+	if not hull["ok"]:
+		return _hull_refusal("Hull: the brushes hold no solid", hull["reason"])
+	var faces: Array = hull["faces"]
+	var origins := {}
+	var owner_of := {}
+	var new_faces: Array = []
+	for face in faces:
+		var built := face as FaceData
+		var source: FaceData = HFConvexClip._largest_on_face(sources, built, ON_PLANE)
+		if source == null:
+			source = HFConvexClip._nearest_face(sources, built.normal)
+			new_faces.append(built)
+		else:
+			origins[built] = source
+		if source != null:
+			built.copy_appearance_from(source)
+		owner_of[built] = source_owner.get(source, target)
+	return {
+		"result": HFOpResult.success(),
+		"drafts": drafts,
+		"faces": faces,
+		"origins": origins,
+		"owner_of": owner_of,
+		"new_faces": new_faces,
+	}
+
+
+static func _hull_refusal(msg: String, hint: String = "") -> Dictionary:
+	return {
+		"result": HFOpResult.fail(msg, hint),
+		"drafts": [],
+		"faces": [],
+		"origins": {},
+		"owner_of": {},
+		"new_faces": [],
+	}
+
+
+## Lay the level's Active Material on the hull's new faces, as a palette slot,
+## with its texture laid afresh. A cut keeps the cut look, as a drawn one does.
+func _give_active_material(new_faces: Array, target: DraftBrush) -> void:
+	var material: Variant = root.get("active_material")
+	if new_faces.is_empty() or not (material is Material):
+		return
+	if target.operation == CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	var slot := -1
+	var manager = root.get("material_manager")
+	if manager != null:
+		slot = (manager.materials as Array).find(material)
+	if slot < 0 and root.has_method("add_material_to_palette"):
+		slot = root.add_material_to_palette(material)
+	for face in new_faces:
+		var built := face as FaceData
+		built.material_idx = slot
+		built.custom_uvs = PackedVector2Array()
 
 
 func _op_fail(msg: String, hint: String = "") -> HFOpResult:
