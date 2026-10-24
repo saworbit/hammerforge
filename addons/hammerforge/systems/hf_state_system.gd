@@ -219,6 +219,10 @@ func restore_brush_scope(scope: Dictionary) -> void:
 	var entities = scope.get("entities", {})
 	if entities is Dictionary and not entities.is_empty() and root.entity_system != null:
 		skipped += root.entity_system.restore_entity_scope(entities as Dictionary)
+	# After the rebuilds, as `restore_state()` sets it: a step that added brushes
+	# carries the counter either side (#1646).
+	if scope.has("id_counter"):
+		root._brush_id_counter = int(scope["id_counter"])
 	if skipped > 0:
 		HFLog.warn("HFStateSystem: skipped %d record this undo step could not use" % skipped)
 

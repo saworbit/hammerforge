@@ -657,7 +657,13 @@ func _commit(root: Node, action_name: String, before: Dictionary) -> bool:
 	if before.get("adds", false):
 		var made := _changed_since(root, before["present"], [])
 		return HFUndoHelper.commit_added(
-			host.undo_manager(), root, action_name, made["brush_ids"], made["entities"], history
+			host.undo_manager(),
+			root,
+			action_name,
+			made["brush_ids"],
+			made["entities"],
+			history,
+			int(before["id_counter"])
 		)
 	return HFUndoHelper.commit_completed_if_changed(
 		host.undo_manager(),
