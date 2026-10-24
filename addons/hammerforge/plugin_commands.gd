@@ -83,6 +83,11 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 	state["vertex_mode"] = plugin._vertex_mode
 	state["is_subtract"] = dock.get_operation() != 0 if dock else false  # 0 = UNION
 	state["has_active_external_tool"] = (registry.has_active_external_tool() if registry else false)
+	# Why a tool cannot start, for the palette to grey it out with the reason its
+	# activation would give (#1868).
+	state["tool_refusals"] = (
+		registry.refusals(root) if registry and registry.has_method("refusals") else {}
+	)
 	# The toolbar's Repeat button: what it would place, and whether it is armed.
 	var last_drawn: Dictionary = {}
 	if root and root.get("drag_system"):

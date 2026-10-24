@@ -9,6 +9,7 @@ const DraftEntityType = preload("draft_entity.gd")
 @warning_ignore_start("shadowed_global_identifier")
 const HFCommandRegistry = preload("hf_command_registry.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFCommandAvailabilityType = preload("hf_command_availability.gd")
 const HF_SHORTCUT_APPLY := -3
 const SCOPE_EMPTY := 0
 const SCOPE_NATIVE_ONLY := 1
@@ -260,23 +261,31 @@ static func guard_hammerforge_shortcut(
 	var scope := classify_selection_scope(nodes, root)
 	if scope in [SCOPE_EMPTY, SCOPE_NATIVE_ONLY]:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
-	if scope == SCOPE_MIXED:
+	# The palette's tooltip on a greyed out command reads the same sentence
+	# (#1868).
+	var reason := HFCommandAvailabilityType.selection_reason(
+		{"brushes_only": brushes_only, "minimum": minimum_count, "label": action_label},
+		selection_counts(nodes, root, scope)
+	)
+	if reason != "":
 		if plugin.dock:
-			plugin.dock.show_toast("Edit HammerForge and Godot nodes separately", 1)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if brushes_only:
-		for node in nodes:
-			if not root.is_brush_node(node):
-				if plugin.dock:
-					plugin.dock.show_toast("%s works on brushes only" % action_label, 1)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if nodes.size() < minimum_count:
-		if plugin.dock:
-			plugin.dock.show_toast(
-				"%s needs at least %d selected" % [action_label, minimum_count], 1
-			)
+			plugin.dock.show_toast(reason, 1)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	return HF_SHORTCUT_APPLY
+
+
+## What `HFCommandAvailability.selection_reason()` reads of a selection.
+static func selection_counts(nodes: Array, root: Node, scope: int) -> Dictionary:
+	var brushes := 0
+	var entities := 0
+	for node in nodes:
+		if not is_instance_valid(node) or not node is Node:
+			continue
+		if root.is_brush_node(node):
+			brushes += 1
+		elif root.is_entity_node(node):
+			entities += 1
+	return {"mixed": scope == SCOPE_MIXED, "brushes": brushes, "entities": entities}
 
 
 ## What the surface guard asks of the selection before `action` runs from the
@@ -319,7 +328,8 @@ static func managed_action_surface_allowed(plugin: Object, root: Node, action: S
 	if guard == HF_SHORTCUT_APPLY:
 		return true
 	if guard == EditorPlugin.AFTER_GUI_INPUT_PASS and plugin.dock:
-		plugin.dock.show_toast("Select a HammerForge object first", 1)
+		var said := HFCommandAvailabilityType.selection_reason(requirement, {})
+		plugin.dock.show_toast(said if said != "" else HFCommandAvailabilityType.NOTHING, 1)
 	return false
 
 

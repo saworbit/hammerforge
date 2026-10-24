@@ -423,6 +423,7 @@ addons/hammerforge/
   hf_trim_profile.gd     A trim's section (Flat, Chamfer, Round, Cove, Ogee, Stepped) cut into convex horizontal bands
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching; labels and categories come from hf_command_registry.gd)
   hf_command_registry.gd Every palette command in one table: label, category, needs a level, selection requirement, and the bridge's parameter form
+  hf_command_availability.gd  Why a command cannot run now: the palette's tooltip and the selection guard's toast read the same sentence
   hf_command_aliases.gd  Other words for commands, so the palette finds Hollow by "shell" and Clip by "slice"
   hf_name_match.gd       How close a typed name is to a real one: the palette's fuzzy search and the bridge's "did you mean"
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
@@ -466,7 +467,7 @@ addons/hammerforge/
     hf_prefab_overlay.gd   Prefab ghost overlay (wireframe bounding box + override markers)
     hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions, group labels per tool cluster, pending-cuts buttons, bake preview toggle)
     selection_tools_builder.gd  Builds Selection Tools with domain sub-headers (Brush Modification, Positioning, Entity Binding, Duplicate Array)
-    hf_hotkey_palette.gd   Searchable command palette with fuzzy search and live gray-out (Shift+?/F1/Ctrl+K)
+    hf_hotkey_palette.gd   Searchable command palette with fuzzy search and live gray-out that says why (Shift+?/F1/Ctrl+K)
     hf_viewport_context_menu.gd  Context menu (Space key) with context-sensitive sections and submenus
     hf_radial_menu.gd      Radial/pie menu (backtick key) with 8 tool sectors drawn via _draw()
     hf_quick_property.gd   Double-tap popup (G G/B B/R R) for grid snap, brush size, paint radius
