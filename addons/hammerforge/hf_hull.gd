@@ -17,8 +17,13 @@ const FaceData = preload("face_data.gd")
 const HFConvexClip = preload("hf_convex_clip.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
-## How far a corner may sit off a face's plane and still be on it.
+## How far a point may sit off a plane for the points to count as flat.
 const ON_PLANE := 0.01
+## How far a corner may sit off a face's plane and still be one of its corners.
+## A face is flat, so this is a rounding error and no more. At ON_PLANE, a corner
+## 0.008 off a long thin face's plane joined it, and the hull came out with faces
+## that were not flat and overlapped, which is no closed solid (#1843).
+const ON_FACE := 0.0001
 ## Points closer than this are one point.
 const SAME_POINT := 0.001
 
@@ -103,7 +108,8 @@ static func _corners(points: PackedVector3Array) -> PackedVector3Array:
 
 
 ## One face for each plane through three of `corners` that has every corner on or
-## behind it, holding every corner on it.
+## behind it, holding every corner on it. Three corners on a face already found
+## are that face.
 static func _faces(corners: PackedVector3Array) -> Array:
 	var planes: Array[Plane] = []
 	var faces: Array = []
@@ -114,9 +120,9 @@ static func _faces(corners: PackedVector3Array) -> Array:
 				var normal := (corners[j] - corners[i]).cross(corners[k] - corners[i])
 				if normal.length_squared() < 1e-8:
 					continue
-				var plane := Plane(normal.normalized(), corners[i])
-				if _known(planes, plane) or _known(planes, -plane):
+				if _on_a_face(planes, [corners[i], corners[j], corners[k]]):
 					continue
+				var plane := Plane(normal.normalized(), corners[i])
 				var side := _side(corners, plane)
 				if side == 0:
 					continue
@@ -125,7 +131,7 @@ static func _faces(corners: PackedVector3Array) -> Array:
 				planes.append(plane)
 				var on_it := PackedVector3Array()
 				for corner in corners:
-					if absf(plane.distance_to(corner)) <= ON_PLANE:
+					if absf(plane.distance_to(corner)) <= ON_FACE:
 						on_it.append(corner)
 				var face := FaceData.new()
 				face.local_verts = HFConvexClip.sort_coplanar_cw(on_it, plane.normal)
@@ -142,17 +148,25 @@ static func _side(corners: PackedVector3Array, plane: Plane) -> int:
 	var ahead := true
 	for corner in corners:
 		var distance := plane.distance_to(corner)
-		if distance > ON_PLANE:
+		if distance > ON_FACE:
 			behind = false
-		if distance < -ON_PLANE:
+		if distance < -ON_FACE:
 			ahead = false
 		if not behind and not ahead:
 			return 0
 	return 1 if behind else -1
 
 
-static func _known(planes: Array[Plane], plane: Plane) -> bool:
+## Whether every one of `points` lies on one of `planes`. Comparing a new plane's
+## normal and distance with each known one let two faces a fraction of a degree
+## apart count as one, which left a hole where the second should have been.
+static func _on_a_face(planes: Array[Plane], points: Array) -> bool:
 	for known in planes:
-		if known.normal.dot(plane.normal) > 0.9999 and absf(known.d - plane.d) < ON_PLANE:
+		var all_on := true
+		for point in points:
+			if absf(known.distance_to(point)) > ON_FACE:
+				all_on = false
+				break
+		if all_on:
 			return true
 	return false
