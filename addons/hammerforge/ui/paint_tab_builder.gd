@@ -335,6 +335,8 @@ func build(parent: Control) -> void:
 	dock.material_browser = HFMaterialBrowser.new()
 	dock.material_browser.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dock.material_browser.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# How the open level uses each material, counted once per face change (#1725).
+	dock.material_browser.use_provider = dock.material_use_counts
 	mc.add_child(dock.material_browser)
 	# The count the grid shows goes in the header rather than on a row of its own.
 	dock.material_browser.status_changed.connect(mat_sec.set_note)

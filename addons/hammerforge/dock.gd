@@ -57,6 +57,7 @@ const HFSelectionInfo = preload("ui/hf_selection_info.gd")
 const HFToast = preload("ui/hf_toast.gd")
 const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
+const HFMaterialUse = preload("hf_material_use.gd")
 const HFValidationChecks = preload("hf_validation_checks.gd")
 const HFFileNames = preload("hf_file_names.gd")
 const HFPrefabType = preload("hf_prefab.gd")
@@ -2627,6 +2628,9 @@ func _process(_delta):
 	if _perf_frame_counter >= 30:
 		_perf_frame_counter = 0
 		_update_perf_label()
+		# The browser's in-use marks follow the level's faces (#1725).
+		if material_browser and material_browser.is_visible_in_tree():
+			material_browser.refresh_use()
 		if _is_perf_panel_visible():
 			_update_perf_panel()
 
@@ -5516,6 +5520,65 @@ func _on_browser_context_menu(index: int, global_pos: Vector2) -> void:
 	_material_context_popup.popup()
 
 
+## How many faces of the open level use each palette slot (#1725).
+func material_use_counts() -> Dictionary:
+	if not level_root or not is_instance_valid(level_root):
+		return {}
+	return HFMaterialUse.counts(level_root)
+
+
+## Face Select on, with the visible, unlocked faces using `slot` picked. Returns
+## how many.
+func select_faces_using(slot: int) -> int:
+	if not level_root:
+		return 0
+	var picked := HFMaterialUse.faces_using(level_root, slot)
+	var total := 0
+	for key in picked:
+		total += (picked[key] as Array).size()
+	if total == 0:
+		show_toast("No visible face uses %s" % _material_display_name(slot), 1)
+		return 0
+	if face_select_mode and not face_select_mode.button_pressed:
+		face_select_mode.button_pressed = true
+	level_root.face_selection = picked
+	level_root.face_selection_changed.emit()
+	show_toast(
+		(
+			"Selected %d face%s using %s"
+			% [total, "" if total == 1 else "s", _material_display_name(slot)]
+		),
+		0
+	)
+	return total
+
+
+## The visible, unlocked brushes with a face using `slot`, selected. Returns them.
+func select_brushes_using(slot: int) -> Array:
+	if not level_root:
+		return []
+	var picked := HFMaterialUse.brushes_using(level_root, slot)
+	if picked.is_empty():
+		show_toast("No visible brush uses %s" % _material_display_name(slot), 1)
+		return picked
+	if face_select_mode and face_select_mode.button_pressed:
+		face_select_mode.button_pressed = false
+	if editor_interface:
+		var selection = EditorInterface.get_selection()
+		if selection:
+			selection.clear()
+			for brush in picked:
+				selection.add_node(brush)
+	show_toast(
+		(
+			"Selected %d brush%s using %s"
+			% [picked.size(), "" if picked.size() == 1 else "es", _material_display_name(slot)]
+		),
+		0
+	)
+	return picked
+
+
 func _on_material_context_action(id: int) -> void:
 	if not level_root:
 		return
@@ -5561,6 +5624,10 @@ func _on_material_context_action(id: int) -> void:
 				),
 				0
 			)
+		7:  # Select Faces Using This
+			select_faces_using(idx)
+		8:  # Select Brushes Using This
+			select_brushes_using(idx)
 		2:  # Toggle Favorite
 			if material_browser:
 				var mat = level_root.material_manager.get_material(idx)

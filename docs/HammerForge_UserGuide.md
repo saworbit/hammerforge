@@ -1181,7 +1181,7 @@ A colored banner between the toolbar and tabs always shows your current tool and
 - **Extrude ▲** (green) / **Extrude ▼** (red) -- "Extruding..."
 - **Paint** (orange)
 
-When typing numeric input during a gesture, the value appears in brackets (e.g. "[64]").
+When typing numeric input during a gesture, the value appears in brackets (e.g. "[64]"). A base typed as width, depth and height shows each one, with the value being typed in brackets (see Typed sizes under Brush Creation).
 
 Sizes print as many decimal places as the grid step needs, so a 0.25 step reads "0.25 x 2 x 1", with at least two places for a size off the grid. The same size follows the cursor through both stages of a Draw drag, just below and to the right of the pointer, with a typed number in brackets; an Extrude shows its depth there ("Depth 1.5"). It goes when the brush is placed or the drag is cancelled, and is drawn over the viewport, never put in the scene. Turn it off with **Size at cursor** in **Test → Settings** or the Console's Viewport group.
 
@@ -1782,6 +1782,8 @@ The material palette can be saved and loaded as a JSON library file. **Save Libr
 ## Prototype Textures
 HammerForge includes 150 built-in SVG prototype textures organized as 15 patterns in 10 color variations. Click **Refresh Prototypes** in the Paint tab → Materials → Material Library to add them all to the palette. **Remove Unused** drops every slot no face is wearing and **Clear** empties the palette outright, both in one pass over the level rather than one pass per slot; a face whose material goes is unset and keeps its geometry. The **Material Browser** displays them as a visual thumbnail grid with search and pattern/color filters — no need to memorize names. Patterns include solid, brick, checker, cross, diamond, dots, hex, stripes (diagonal/horizontal), triangles, zigzag, and directional arrows (up/down/left/right).
 
+The browser knows what the open level uses ([#1725](https://github.com/saworbit/hammerforge/issues/1725)). A green dot marks each material a face uses, and its tooltip says how many, the texture's size in pixels and its file. The **In Use** view shows just those, the most used first. The search takes every word you type, in any order, in the name or the path, so `brick red` finds `wall_brick_red_02`. The slider beside them sizes the thumbnails from 48 to 192 pixels, and the size is kept with your preferences. Right-click a material for **Select Faces Using This**, which turns Face Select on with every face that wears it, and **Select Brushes Using This**; both leave out hidden and locked brushes. The counts are kept by the level and worked out again only when a face changes, so the browser stays quick on a large level.
+
 For GDScript API usage, see `docs/HammerForge_Prototype_Textures.md`.
 
 ## Pending Cuts Workflow
@@ -2085,6 +2087,15 @@ Modifier keys
 - Ctrl (held): no grid snap for the corners and the height while Grid (G) is on, grid snap while it is off.
 - X/Y/Z: axis locks (shown in HUD as "[X Locked]" etc.).
 - Right-click: cancel.
+
+Typed sizes
+- During the base drag, type a number for a square base, or width, depth and height with commas between them: `6,4` is 6 wide and 4 deep, and `6,4,3` is 3 high too. **Tab** moves on to the next value as a comma does.
+- **Enter** takes the base and goes on to the height stage. With a height typed as well, Enter places the brush with no height click.
+- Leave a value out and the mouse sets it: `6,` holds the width at 6 while the depth follows the mouse.
+- A minus before a value turns that side the other way from the drag, so `-6,4` goes 6 back along X. A minus before one number turns both sides.
+- A comma always moves on to the next value, so type a decimal with a point: `2.5`.
+- The size beside the cursor shows W, D and H, with the value being typed in brackets: "W 6  D [4]  H 2".
+- In the height stage and in an Extrude, a typed number is one value, and Enter or Tab applies it.
 
 Before you click
 - With Draw idle, and with Polygon or Path before their first point, the face under the cursor is tinted by what a draw there starts on: blue for a face level with the grid, green for a flat face at another height, amber for a face that is not flat (the draw still starts flat, at the height you clicked), and violet for a face Draw on Face will build on. Over empty space no face is tinted.

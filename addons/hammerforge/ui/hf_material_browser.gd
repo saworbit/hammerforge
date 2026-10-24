@@ -20,6 +20,9 @@ signal material_add_requested(path: String)
 const HFUIFactoryType = preload("hf_ui_factory.gd")
 
 const THUMB_SIZE := 64
+## The thumbnail sizes the size slider goes between, in pixels (#1725).
+const THUMB_SIZE_MIN := 48
+const THUMB_SIZE_MAX := 192
 ## The Recent row's thumbnails, smaller than the grid's so the row stays one line.
 const RECENT_THUMB_SIZE := 32
 ## How many favourites have a number: the context toolbar's strip and Alt+1 to
@@ -53,7 +56,8 @@ const COLOR_HEX: Dictionary = {
 	"yellow": Color(0.95, 0.85, 0.15),
 }
 
-enum ViewMode { PROTOTYPES, PALETTE, FAVORITES }
+## In Use lists what the open level's faces wear, most used first (#1725).
+enum ViewMode { PROTOTYPES, PALETTE, FAVORITES, IN_USE }
 
 var _search_line: LineEdit
 var _pattern_filter: OptionButton
@@ -93,6 +97,13 @@ var _user_prefs = null  # HFUserPrefs
 var _material_manager: MaterialManager = null
 ## Cached textures for prototype materials (material_path -> Texture2D).
 var _thumb_cache: Dictionary = {}
+## How many faces of the open level use each palette slot, asked of
+## `use_provider` at each redraw (#1725), and the switches that read it.
+var use_provider: Callable = Callable()
+var _use_counts: Dictionary = {}
+var _size_slider: HSlider
+## The thumbnail size, kept in the preferences as `material_thumb_size`.
+var _thumb_size: int = THUMB_SIZE
 
 
 func _ready() -> void:
@@ -126,9 +137,24 @@ func _ready() -> void:
 	_view_toggle.add_item("Prototypes", ViewMode.PROTOTYPES)
 	_view_toggle.add_item("Palette", ViewMode.PALETTE)
 	_view_toggle.add_item("Favorites", ViewMode.FAVORITES)
+	_view_toggle.add_item("In Use", ViewMode.IN_USE)
 	_view_toggle.item_selected.connect(_on_view_mode_changed)
 	_view_toggle.fit_to_longest_item = false
 	filter_row.add_child(_view_toggle)
+
+	# How big the thumbnails are (#1725), in the same row, so the Paint tab is no
+	# taller for it.
+	_size_slider = HSlider.new()
+	_size_slider.name = "ThumbSize"
+	_size_slider.min_value = THUMB_SIZE_MIN
+	_size_slider.max_value = THUMB_SIZE_MAX
+	_size_slider.step = 8
+	_size_slider.value = _thumb_size
+	_size_slider.custom_minimum_size.x = 48
+	_size_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_size_slider.tooltip_text = "Thumbnail size"
+	_size_slider.value_changed.connect(_on_thumb_size_changed)
+	filter_row.add_child(_size_slider)
 
 	# --- Color swatch row ---
 	_color_filter_row = HBoxContainer.new()
@@ -190,6 +216,13 @@ func set_user_prefs(prefs) -> void:
 			var text := str(path)
 			if text != "":
 				_favorites[text] = true
+		_thumb_size = clampi(
+			int(_user_prefs.get_pref("material_thumb_size", THUMB_SIZE)),
+			THUMB_SIZE_MIN,
+			THUMB_SIZE_MAX
+		)
+		if _size_slider:
+			_size_slider.set_value_no_signal(_thumb_size)
 	rebuild()
 	refresh_recent()
 
@@ -272,6 +305,7 @@ func get_favorite_infos(limit: int = FAVORITE_SLOTS) -> Array:
 func rebuild() -> void:
 	if not _grid:
 		return
+	_use_counts = use_provider.call() if use_provider.is_valid() else {}
 	_clear_grid()
 
 	if _view_mode == ViewMode.PROTOTYPES:
@@ -280,6 +314,8 @@ func rebuild() -> void:
 		_build_palette_grid()
 	elif _view_mode == ViewMode.FAVORITES:
 		_build_favorites_grid()
+	elif _view_mode == ViewMode.IN_USE:
+		_build_in_use_grid()
 
 	_update_status()
 	_update_selection_visual()
@@ -304,6 +340,24 @@ func _build_prototype_grid() -> void:
 		if not _passes_filters(mat_path, mat):
 			continue
 		_add_thumb_cell(i, mat, mat_path)
+
+
+## The materials the open level's faces wear, most used first, through the same
+## search and filters (#1725).
+func _build_in_use_grid() -> void:
+	if not _material_manager:
+		return
+	var cells: Array = []
+	for i in range(_material_manager.materials.size()):
+		var mat = _material_manager.materials[i]
+		if mat == null or use_count(i) == 0:
+			continue
+		var mat_path: String = mat.resource_path
+		if _passes_filters(mat_path, mat):
+			cells.append([i, mat, mat_path])
+	cells.sort_custom(func(a, b): return use_count(a[0]) > use_count(b[0]))
+	for cell in cells:
+		_add_thumb_cell(cell[0], cell[1], cell[2])
 
 
 func _build_palette_grid() -> void:
@@ -384,6 +438,29 @@ func _filters_active() -> bool:
 	return _search_text != "" or _active_pattern_filter != "" or _active_color_filter != ""
 
 
+## How many faces of the open level use `slot`.
+func use_count(slot: int) -> int:
+	return int(_use_counts.get(slot, 0))
+
+
+## Ask how the level uses its materials again, and redraw when that moved. The
+## dock calls this now and then while the browser is on screen.
+func refresh_use() -> void:
+	var now: Dictionary = use_provider.call() if use_provider.is_valid() else {}
+	if now != _use_counts:
+		rebuild()
+
+
+## Whether every word of the search is in `haystack`, in any order (#1725), so
+## `brick red` finds `wall_brick_red_02`.
+static func matches_words(query: String, haystack: String) -> bool:
+	var lower := haystack.to_lower()
+	for word in query.to_lower().split(" ", false):
+		if lower.find(word) < 0:
+			return false
+	return true
+
+
 func _passes_filters(mat_path: String, mat: Material) -> bool:
 	# Pattern filter
 	if _active_pattern_filter != "":
@@ -400,12 +477,31 @@ func _passes_filters(mat_path: String, mat: Material) -> bool:
 				pass
 			else:
 				return false
-	# Search text
+	# Search text: every word, in the name or the path.
 	if _search_text != "":
-		var label := MaterialManager.material_label(mat)
-		if label.to_lower().find(_search_text.to_lower()) < 0:
+		if not matches_words(_search_text, MaterialManager.material_label(mat) + " " + mat_path):
 			return false
 	return true
+
+
+func _on_thumb_size_changed(value: float) -> void:
+	set_thumb_size(int(value))
+
+
+## Draw the thumbnails `pixels` across, and remember it.
+func set_thumb_size(pixels: int) -> void:
+	_thumb_size = clampi(pixels, THUMB_SIZE_MIN, THUMB_SIZE_MAX)
+	if _size_slider and int(_size_slider.value) != _thumb_size:
+		_size_slider.set_value_no_signal(_thumb_size)
+	if _user_prefs:
+		_user_prefs.set_pref("material_thumb_size", _thumb_size)
+		_user_prefs.save()
+	_fit_grid_columns()
+	rebuild()
+
+
+func get_thumb_size() -> int:
+	return _thumb_size
 
 
 func _add_thumb_cell(
@@ -414,12 +510,30 @@ func _add_thumb_cell(
 	var cell = _create_thumb_button(palette_index, mat, mat_path)
 	if badge != "":
 		cell.add_child(_make_badge(badge))
+	var used := use_count(palette_index)
+	if used > 0:
+		cell.add_child(_make_use_marker(used))
 	_grid.add_child(cell)
 	_cell_to_palette_index.append(palette_index)
 
 
 ## A favourite's number in the corner of its thumbnail: the number its button on
 ## the context toolbar shows and the digit Alt applies it with.
+## The corner mark of a material the open level uses, with how many faces.
+func _make_use_marker(faces: int) -> Label:
+	var mark := Label.new()
+	mark.name = "InUse"
+	mark.text = "●"
+	mark.tooltip_text = "Used on %d face%s" % [faces, "" if faces == 1 else "s"]
+	mark.position = Vector2(_thumb_size - 6, 2)
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mark.add_theme_font_size_override("font_size", 12)
+	mark.add_theme_color_override("font_color", Color(0.45, 0.9, 0.5))
+	mark.add_theme_color_override("font_outline_color", Color.BLACK)
+	mark.add_theme_constant_override("outline_size", 4)
+	return mark
+
+
 func _make_badge(text: String) -> Label:
 	var badge := Label.new()
 	badge.name = "SlotNumber"
@@ -439,7 +553,7 @@ func _add_marker_cell(marker: Dictionary, label: String, tip: String) -> void:
 	var btn := Button.new()
 	btn.flat = true
 	btn.name = "Marker%d" % cell_idx
-	btn.custom_minimum_size = Vector2(THUMB_SIZE + 8, THUMB_SIZE + 22)
+	btn.custom_minimum_size = Vector2(_thumb_size + 8, _thumb_size + 22)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.tooltip_text = tip
 	btn.gui_input.connect(_on_cell_gui_input.bind(cell_idx))
@@ -449,7 +563,7 @@ func _add_marker_cell(marker: Dictionary, label: String, tip: String) -> void:
 	var mark := Label.new()
 	mark.name = "Mark"
 	mark.text = "!"
-	mark.custom_minimum_size = Vector2(THUMB_SIZE, THUMB_SIZE)
+	mark.custom_minimum_size = Vector2(_thumb_size, _thumb_size)
 	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	mark.add_theme_font_size_override("font_size", 32)
@@ -460,7 +574,7 @@ func _add_marker_cell(marker: Dictionary, label: String, tip: String) -> void:
 	name_label.add_theme_font_size_override("font_size", 10)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	name_label.custom_minimum_size.x = THUMB_SIZE
+	name_label.custom_minimum_size.x = _thumb_size
 	box.add_child(name_label)
 	_grid.add_child(btn)
 	_cell_markers[cell_idx] = marker
@@ -469,12 +583,12 @@ func _add_marker_cell(marker: Dictionary, label: String, tip: String) -> void:
 
 func _create_thumb_button(_palette_index: int, mat: Material, mat_path: String) -> Control:
 	var container = VBoxContainer.new()
-	container.custom_minimum_size = Vector2(THUMB_SIZE + 8, THUMB_SIZE + 22)
+	container.custom_minimum_size = Vector2(_thumb_size + 8, _thumb_size + 22)
 	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	# Thumbnail
 	var tex_rect = TextureRect.new()
-	tex_rect.custom_minimum_size = Vector2(THUMB_SIZE, THUMB_SIZE)
+	tex_rect.custom_minimum_size = Vector2(_thumb_size, _thumb_size)
 	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tex_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH
 	tex_rect.texture = _get_thumbnail(mat, mat_path)
@@ -486,13 +600,21 @@ func _create_thumb_button(_palette_index: int, mat: Material, mat_path: String) 
 	label.add_theme_font_size_override("font_size", 10)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	label.custom_minimum_size.x = THUMB_SIZE
+	label.custom_minimum_size.x = _thumb_size
 	container.add_child(label)
 
 	# Tooltip
 	var tip := MaterialManager.material_label(mat)
 	if is_favorite(mat_path):
 		tip += " [Favorite]"
+	var used := use_count(_palette_index)
+	if used > 0:
+		tip += "\nUsed on %d face%s" % [used, "" if used == 1 else "s"]
+	var texture := _get_thumbnail(mat, mat_path)
+	if texture != null:
+		tip += "\n%d x %d px" % [texture.get_width(), texture.get_height()]
+	if mat_path != "":
+		tip += "\n%s" % mat_path
 	tip += (
 		"\n\nLeft-click: Select material"
 		+ "\nHover: Preview on selected faces"
@@ -504,7 +626,7 @@ func _create_thumb_button(_palette_index: int, mat: Material, mat_path: String) 
 	# Wrap in a button-like panel for click/hover
 	var btn = Button.new()
 	btn.flat = true
-	btn.custom_minimum_size = Vector2(THUMB_SIZE + 8, THUMB_SIZE + 22)
+	btn.custom_minimum_size = Vector2(_thumb_size + 8, _thumb_size + 22)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	btn.add_child(container)
@@ -739,6 +861,9 @@ func create_context_popup() -> PopupMenu:
 	popup.add_item("Set as Active Material", 5)
 	popup.add_item("Replace Material...", 6)
 	popup.add_separator()
+	popup.add_item("Select Faces Using This", 7)
+	popup.add_item("Select Brushes Using This", 8)
+	popup.add_separator()
 	popup.add_item("Toggle Favorite", 2)
 	popup.add_separator()
 	popup.add_item("Copy Name", 3)
@@ -862,7 +987,7 @@ func _fit_grid_columns() -> void:
 	if not _grid or not _scroll:
 		return
 	var separation := _grid.get_theme_constant("h_separation")
-	var cell := THUMB_SIZE + 8 + separation
+	var cell := _thumb_size + 8 + separation
 	_grid.columns = maxi(1, int((_scroll.size.x + separation) / cell))
 
 

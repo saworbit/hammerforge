@@ -96,6 +96,7 @@ const SCHEMA := {
 	"power_user_overlays": {"type": TYPE_BOOL},
 	"size_at_cursor": {"type": TYPE_BOOL},
 	"draw_hover_preview": {"type": TYPE_BOOL},
+	"material_thumb_size": {"type": TYPE_INT, "min": 48, "max": 192},
 	"snap_labels": {"type": TYPE_BOOL},
 	"similar_brush_keys": {"type": TYPE_ARRAY},
 	"similar_face_keys": {"type": TYPE_ARRAY},
@@ -226,6 +227,7 @@ static func _defaults() -> Dictionary:
 		"power_user_overlays": false,
 		"size_at_cursor": true,
 		"draw_hover_preview": true,
+		"material_thumb_size": 64,
 		"snap_labels": true,
 		# What Select Similar matches on, as `HFSimilar.DEFAULTS` has it (#1698).
 		"similar_brush_keys": ["size"],
