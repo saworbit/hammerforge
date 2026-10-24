@@ -1301,6 +1301,10 @@ class FakeAnchorVertexSystem:
 	func select_vertex(_brush_id, _index, _additive) -> void:
 		pass
 
+	## A press on a corner selects every selected brush's corner there (#1713).
+	func select_shared_corner(_brush_id, _index, _additive) -> int:
+		return 1
+
 	func select_edge(_brush_id, _edge, _additive) -> void:
 		pass
 
@@ -1313,6 +1317,7 @@ class FakeAnchorPlugin:
 	var _keymap = null
 	var _vertex_drag_active := false
 	var _vertex_drag_start := Vector2.ZERO
+	var _vertex_shared_count := 0
 
 	func _update_vertex_overlay(_root, _camera) -> void:
 		pass
