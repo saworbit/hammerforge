@@ -164,9 +164,10 @@ _SPECS = [
         name="hf_get_brushes",
         title="List brushes",
         description=(
-            "The level's brushes, union brushes first, then pending cuts, then "
+            "The level's brushes, solid brushes first, then pending cuts, then "
             "committed cuts (frozen; the change tools refuse them): brush_id, shape, "
-            "union or subtract, whether it is a pending cut, position, "
+            "operation (union for a solid brush, subtract for a cut), whether it is "
+            "a pending cut, position, "
             "rotation_degrees, size, world bounds, material_id, brush_entity "
             "(null, or the entity_class, name, properties and outputs of a brush "
             "made a trigger, door or button by hf_set_brush_entity), structure "
@@ -176,7 +177,8 @@ _SPECS = [
             "piece of), and each face's "
             "index, world normal, centre and material. Find before you read: "
             "filter is an object of tests, all of which must hold: operation "
-            "(union or subtract), material (an id or name any face wears), shape, "
+            "(union for solid brushes, subtract for cuts), material (an id or name any "
+            "face wears), shape, "
             "visgroup, group, structure (a generator_id), prefab (an instance_id), "
             "brush_entity (a class, or true for any) and name (* matches any run, "
             "by name or brush_id). Also brush_ids, and bounds ({min, max}) with "

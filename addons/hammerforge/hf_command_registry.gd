@@ -68,8 +68,8 @@ const PARAM_TYPES := [
 const COMMANDS := [
 	{
 		"id": "toggle_operation",
-		"label": "Toggle Add / Cut",
-		"help": "Switch the next brush you draw between Add and Cut.",
+		"label": "Toggle Solid / Cut",
+		"help": "Switch the next brush you draw between Solid and Cut.",
 		"aliases": ["subtract", "negative brush", "cut brush"],
 		"category": "Workflow",
 		"needs_level": false,
@@ -334,7 +334,7 @@ const COMMANDS := [
 		{
 			"form": "create_structure",
 			"description":
-			"Build a structure from a generator: an arch, a straight flight of stairs, a spiral stair, a dome, a ring or a door frame, one brush per piece, kept as a live structure. A door frame with cut_opening on also holds the cut for its opening, a pending cut until applied. type picks the generator; settings sets its fields by key (see settings_by_type for each type's keys, ranges and defaults; anything not given keeps its default). position is where it stands and rotation_degrees turns it, Euler XYZ. The pieces come back in made, and generator_id names the structure.",
+			"Build a structure: an arch, a straight flight of stairs, a spiral stair, a dome, a ring or a door frame, one brush per piece, kept as a live structure. A door frame with cut_opening on also holds the cut for its opening, a pending cut until applied. type picks the kind of structure; settings sets its fields by key (see settings_by_type for each type's keys, ranges and defaults; anything not given keeps its default). position is where it stands and rotation_degrees turns it, Euler XYZ. The pieces come back in made, and generator_id names the structure.",
 			"targets": {"min": 0, "max": 0, "entities": false},
 			"params":
 			[

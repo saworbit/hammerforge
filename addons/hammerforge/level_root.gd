@@ -2328,7 +2328,7 @@ func create_generator(
 	run: Dictionary = {}
 ) -> HFOpResult:
 	if not generator_system:
-		return HFOpResult.fail("Generator: system unavailable")
+		return HFOpResult.fail("Structure: system unavailable")
 	begin_signal_batch()
 	var result: HFOpResult = generator_system.create(type, settings, placement, material, run)
 	end_signal_batch()
@@ -2340,7 +2340,7 @@ func create_generator(
 ## Rebuild an existing structure from new settings, in place.
 func regenerate_generator(generator_id: String, settings: Dictionary) -> HFOpResult:
 	if not generator_system:
-		return HFOpResult.fail("Generator: system unavailable")
+		return HFOpResult.fail("Structure: system unavailable")
 	begin_signal_batch()
 	var result: HFOpResult = generator_system.regenerate(generator_id, settings)
 	end_signal_batch()
@@ -2353,7 +2353,7 @@ func regenerate_generator(generator_id: String, settings: Dictionary) -> HFOpRes
 ## Re-pick. Its settings stay.
 func repick_generator(generator_id: String, run: Dictionary, placement: Transform3D) -> HFOpResult:
 	if not generator_system:
-		return HFOpResult.fail("Generator: system unavailable")
+		return HFOpResult.fail("Structure: system unavailable")
 	begin_signal_batch()
 	var result: HFOpResult = generator_system.repick(generator_id, run, placement)
 	end_signal_batch()
@@ -2367,7 +2367,7 @@ func repick_generator(generator_id: String, run: Dictionary, placement: Transfor
 ## "hint"}` (#1414).
 func trim_run_from_faces(picked_faces: Dictionary) -> Dictionary:
 	if not generator_system:
-		return {"refused": "Trim Run: generator system unavailable", "hint": ""}
+		return {"refused": "Trim Run: structure system unavailable", "hint": ""}
 	return generator_system.trim_run_from_faces(picked_faces)
 
 

@@ -10,14 +10,14 @@ This document makes the current tradeoffs explicit so level designers and develo
 
 ## Editing Model
 - Live editing uses lightweight DraftBrush previews for speed. Final geometry is produced at bake time.
-- Subtractive brushes are staged as Pending Cuts until applied or baked.
+- Cut brushes are staged as Pending Cuts until applied or baked.
 - Committed cuts can be frozen for restoration or cleared for performance.
 
 ## Brush Geometry
 - Brush shapes are primitives and platonic solids, or a Custom convex solid made by a cut, a merge, the Polygon and Path tools, a vertex edit or Convert to Brushes. A brush is never an arbitrary mesh: Convert to Brushes refuses a concave or open one.
 - A box, or any other primitive, is never thinner than 0.1 on a side, because it is built from its size. A Custom brush is built from its faces and keeps a thinner size. A piece a cut leaves under 0.1 is Custom for that reason.
 - Subtractive operations only affect baked output, not the live DraftBrush meshes.
-- Collision is generated from additive brushes only. A `func_clip` brush gives collision and no mesh, and a stair with Ramp collision bakes a slope in place of its steps' collision.
+- Collision is generated from solid brushes only. A `func_clip` brush gives collision and no mesh, and a stair with Ramp collision bakes a slope in place of its steps' collision.
 
 ## Face Materials + UVs
 - Face materials use a projection per face: Planar X, Y or Z, Box UV, the face's own plane (Face), or Cylindrical.
@@ -46,10 +46,10 @@ This document makes the current tradeoffs explicit so level designers and develo
 - Brush IDs, group IDs, and visgroup membership are cleared on capture to avoid conflicts on instantiation.
 - Entity I/O connections are remapped using a name map (old entity name → new entity name) on instantiation.
 - Prefab files (`.hfprefab`) use JSON with `HFLevelIO` encoding for Godot types (Vector3, Transform3D, etc.).
-- The subtract preview system does not render intersections for prefab preview — only placed brushes.
+- The cut preview system does not render intersections for prefab preview — only placed brushes.
 
-## Subtract Preview
-- Subtract preview includes DraftBrushes (not only leftover CSGShape3D nodes) and uses each brush's mesh bounds. It is still not a live full-level CSG boolean.
+## Cut Preview
+- Cut preview includes DraftBrushes (not only leftover CSGShape3D nodes) and uses each brush's mesh bounds. It is still not a live full-level CSG boolean.
 - It cuts only what the bake cuts: a brush tied to an entity class is never cut, and a cutter tied to one cuts nothing (`HFBakeSystem.is_structural_brush()`).
 - The preview is debounced (0.15s) to avoid rebuilding on every frame during rapid edits.
 - Maximum 50 intersection overlays are rendered simultaneously. Beyond that, intersections are silently dropped.

@@ -1,0 +1,1 @@
+- A glossary gives one word for each idea, the editor and the docs now say solid and cut brush and structure throughout, and a test keeps the old words out. (issue [#1657](https://github.com/saworbit/hammerforge/issues/1657))

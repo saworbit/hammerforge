@@ -92,7 +92,7 @@ const GUIDES: Dictionary = {
 			"Select a solid brush",
 			"Press {hollow} or use Command Palette",
 			"Enter wall thickness when prompted",
-			"Result: outer shell with inner subtraction",
+			"Result: an outer shell with a cut inside",
 		],
 	},
 	"measure":

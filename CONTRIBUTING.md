@@ -63,6 +63,7 @@ the change.
 - Only publish aggregate test totals from a successful full CI run; include the verification date so readers can distinguish a measured snapshot from a permanent guarantee.
 - Leave the published totals alone in a pull request. They are a snapshot refreshed when a release is cut (see DEVELOPMENT.md, Cutting a release), so a pull request that adds tests does not touch them. CI checks on every run that the shards covered the whole suite and prints the totals in the run summary.
 - Check relative Markdown links and `git diff --check` before submitting documentation-only changes.
+- Use the word [the glossary](docs/glossary.md) gives each idea. A pull request that adds an idea adds its term there, and `tests/test_glossary_words.gd` fails on a label, tooltip, message or page that uses a word the glossary lists under Don't use.
 - Describe known limitations plainly and link the tracking issue instead of implying unfinished safety or fidelity work is complete.
 
 ## Changelog Entries

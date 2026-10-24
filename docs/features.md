@@ -172,7 +172,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Drag-and-drop placement** from the entity palette, with a button per preset such as a warm ceiling lamp
 - **Light presets and projectors**: named property sets per class, and a projector texture that shapes a point or spot light's beam
 - **Sound preview**: pick a sound's file and play it in the editor from the Entity panel
-- **Clean operation styling** -- additive brushes use an uncluttered green-tinted surface, subtractors retain a clear red semantic outline, and brush entities use an understated blue tint, a clip brush violet. Hover and selection use sparse, shape-specific structural profiles; render-triangle topology is reserved for explicit editing and bake-preview modes
+- **Clean operation styling** -- solid brushes use an uncluttered green-tinted surface, subtractors retain a clear red semantic outline, and brush entities use an understated blue tint, a clip brush violet. Hover and selection use sparse, shape-specific structural profiles; render-triangle topology is reserved for explicit editing and bake-preview modes
 
 ### Organize Your Level
 
@@ -185,7 +185,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Measurement** (M key) -- persistent multi-ruler with angle display, Shift+Click chaining, and snap reference alignment
 - **Clip tool** (C key) -- cut the selected brushes along a plane placed with two or three points, keeping either piece or both, as one undo step ([#1711](https://github.com/saworbit/hammerforge/issues/1711))
 - **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
-- **Real-time subtract preview** -- toggle overlays of the cut between additive and subtractive brushes, only where the bake cuts: a brush tied to an entity class is never cut, and a cutter tied to one cuts nothing
+- **Real-time cut preview** -- toggle overlays of the cut between additive and cut brushes, only where the bake cuts: a brush tied to an entity class is never cut, and a cutter tied to one cuts nothing
 - **Geometry previews before commit** -- carve and intersect (green), clip (cyan + orange plane), and hollow (yellow) show wireframe overlay of resulting pieces with confirmation dialog before executing, which says when a sculpt cannot follow the cut
 
 ### Bake and Export
@@ -458,7 +458,7 @@ Shortcuts marked with **\*** are rebindable in the shortcut dialog (**?** on the
 | E * | Extrude Up (alt) |
 | Shift+E * | Extrude Down (alt) |
 | Shift+D * | Repeat Last Brush |
-| Q * | Toggle Add / Cut |
+| Q * | Toggle Solid / Cut |
 | Shift+P * | Toggle Paint Mode |
 | Ctrl+Enter * | Quick Play |
 | Ctrl+Shift+Enter * | Validate Level |

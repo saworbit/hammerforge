@@ -27,7 +27,7 @@ const TEXTS := {
 	"Label the width, depth and height of the selection's bounds in the viewport\nFaces picked in Face Select are measured instead of their brushes",
 	"debug_logs": "Print debug info to Output panel",
 	"_show_subtract_preview":
-	"Show the live CSG cut between subtract and additive DraftBrushes\nOverlapping brushes only — not a full-level bake",
+	"Show the live CSG cut of each cut brush through the solid brushes it overlaps\nOverlapping brushes only, not a full-level bake",
 	# --- Build tab: brush size & shape ---
 	"size_x": "Brush width (X axis) in metres",
 	"size_y": "Brush height (Y axis) in metres",
@@ -211,7 +211,7 @@ const TEXTS := {
 	"reset_tool_settings_btn":
 	(
 		"Put every tool's settings back to their defaults: the Build tab's shape, Sides,"
-		+ " Solid/Cutout, snaps, Hollow and Bevel, the Structure section, and the"
+		+ " Solid/Cut, snaps, Hollow and Bevel, the Structure section, and the"
 		+ " Polygon, Path and Decal tools"
 	),
 	"save_preset_btn": "Save current brush settings as a reusable preset",

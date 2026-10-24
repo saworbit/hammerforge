@@ -1373,8 +1373,8 @@ func _update_toolbar_shortcut_labels() -> void:
 		tool_vertex.tooltip_text = "Vertex Edit (%s)\nSelect and drag brush vertices" % key
 	if mode_add and mode_subtract:
 		var key = _keymap.get_display_string("toggle_operation")
-		mode_add.tooltip_text = "Solid brush | Toggle Solid/Cutout: %s" % key
-		mode_subtract.tooltip_text = "Cutout brush | Toggle Solid/Cutout: %s" % key
+		mode_add.tooltip_text = "Solid brush | Toggle Solid/Cut: %s" % key
+		mode_subtract.tooltip_text = "Cut brush | Toggle Solid/Cut: %s" % key
 	if paint_mode:
 		var key = _keymap.get_display_string("toggle_paint_mode")
 		paint_mode.tooltip_text = "Toggle Paint Mode (%s)" % key
@@ -1489,7 +1489,7 @@ func _apply_toolbar_tooltips() -> void:
 	_set_tooltip(tool_select, "Select (%s)\nClick: select | Shift: add | Ctrl: toggle" % select_key)
 	_set_tooltip(mode_add, "Solid brush\nDrag to add geometry | Toggle: %s" % operation_key)
 	_set_tooltip(
-		mode_subtract, "Cutout brush\nDrag through solids to carve | Toggle: %s" % operation_key
+		mode_subtract, "Cut brush\nDrag through solids to carve | Toggle: %s" % operation_key
 	)
 	if paint_mode:
 		_set_tooltip(
@@ -3441,7 +3441,7 @@ func _build_draw_on_face_row(parent: Node, index: int) -> void:
 	draw_on_face_btn.text = "On Face"
 	draw_on_face_btn.tooltip_text = (
 		"Draw on Face: a draw that starts on a brush face builds on that face's plane."
-		+ "\nA Solid grows out of the face and a Cutout into it."
+		+ "\nA Solid grows out of the face and a Cut into it."
 	)
 	draw_on_face_btn.toggle_mode = true
 	face_row.add_child(draw_on_face_btn)

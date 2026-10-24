@@ -158,7 +158,7 @@ func test_overlapping_cuts_name_both_brushes_in_level_order():
 	assert_eq(overlaps.size(), 1)
 	assert_eq(
 		overlaps[0]["message"],
-		"Overlapping subtractions: '%s' and '%s'" % [first.name, second.name]
+		"Overlapping cut brushes: '%s' and '%s'" % [first.name, second.name]
 	)
 	assert_eq(overlaps[0]["node"], first, "The earlier brush carries the issue")
 

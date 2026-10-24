@@ -16,7 +16,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 
 | Command | Key | Needs | Palette | What it does |
 |---|---|---|---|---|
-| Toggle Add / Cut (`toggle_operation`) | Q | - | yes | Switch the next brush you draw between Add and Cut. |
+| Toggle Solid / Cut (`toggle_operation`) | Q | - | yes | Switch the next brush you draw between Solid and Cut. |
 | Toggle Paint Mode (`toggle_paint_mode`) | Shift+P | - | yes | Turn floor Paint mode on or off. |
 | Quick Play (`quick_play`) | Ctrl+Enter | a level | yes | Bake the level and run it to test. |
 | Validate Level (`validate_level`) | Ctrl+Shift+Enter | a level | yes | Check the level for problems and list them. |
@@ -259,7 +259,7 @@ Cut brushes along the plane of one face of another brush, the way Clip to Face P
 
 ### Create Structure (`create_arch`)
 
-Build a structure from a generator: an arch, a straight flight of stairs, a spiral stair, a dome, a ring or a door frame, one brush per piece, kept as a live structure. A door frame with cut_opening on also holds the cut for its opening, a pending cut until applied. type picks the generator; settings sets its fields by key (see settings_by_type for each type's keys, ranges and defaults; anything not given keeps its default). position is where it stands and rotation_degrees turns it, Euler XYZ. The pieces come back in made, and generator_id names the structure.
+Build a structure: an arch, a straight flight of stairs, a spiral stair, a dome, a ring or a door frame, one brush per piece, kept as a live structure. A door frame with cut_opening on also holds the cut for its opening, a pending cut until applied. type picks the kind of structure; settings sets its fields by key (see settings_by_type for each type's keys, ranges and defaults; anything not given keeps its default). position is where it stands and rotation_degrees turns it, Euler XYZ. The pieces come back in made, and generator_id names the structure.
 
 | Param | Type | Range | Default | Description |
 |---|---|---|---|---|

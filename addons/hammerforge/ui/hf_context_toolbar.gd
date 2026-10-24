@@ -418,8 +418,8 @@ func _build_draw_section() -> void:
 	_add_tool_button(section, "Cone", "Cone brush", "shape_cone")
 	_add_sep(section)
 	var toggle = Button.new()
-	toggle.text = "Add"
-	toggle.tooltip_text = "Toggle Add/Subtract — click to switch"
+	toggle.text = "Solid"
+	toggle.tooltip_text = "Toggle Solid/Cut: click to switch"
 	toggle.flat = true
 	toggle.focus_mode = Control.FOCUS_NONE
 	toggle.add_theme_font_size_override("font_size", 11)
@@ -825,7 +825,7 @@ func _update_dynamic_content(state: Dictionary) -> void:
 			var toggle = section.get_node_or_null("OpToggle")
 			if toggle:
 				var is_sub: bool = state.get("is_subtract", false)
-				toggle.text = "Sub" if is_sub else "Add"
+				toggle.text = "Cut" if is_sub else "Solid"
 				var c = Color(0.9, 0.5, 0.4) if is_sub else Color(0.5, 0.9, 0.5)
 				toggle.add_theme_color_override("font_color", c)
 			_update_repeat_button(section.get_node_or_null("RepeatBtn") as Button, state)
@@ -882,11 +882,11 @@ func _update_auto_hint(state: Dictionary) -> void:
 	if mode == 1 and tool_id == 0:
 		var is_sub: bool = state.get("is_subtract", false)
 		if is_sub:
-			_show_auto_hint("Drawing in Subtract mode", "Switch to Add", "toggle_add")
+			_show_auto_hint("Drawing cut brushes", "Switch to Solid", "toggle_add")
 		else:
 			_show_auto_hint(
-				"Drawing in Add mode \u2014 press Subtract to toggle",
-				"Switch to Subtract",
+				"Drawing solid brushes. Press Cut to switch",
+				"Switch to Cut",
 				"toggle_subtract"
 			)
 		return
