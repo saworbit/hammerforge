@@ -1493,7 +1493,7 @@ const COMMANDS := [
 		"label": "Show or Hide World Brushes",
 		"help":
 		"Hide world brushes, the ones that are no cut, no clip brush and no brush entity in the editor, or show them again. The level and the bake are not changed.",
-		"category": "View",
+		"category": "Selection",
 		"needs_level": true,
 		"selection": {},
 		"palette": true
@@ -1503,7 +1503,7 @@ const COMMANDS := [
 		"label": "Show or Hide Cut Brushes",
 		"help":
 		"Hide cut brushes, applied or waiting in the editor, or show them again. The level and the bake are not changed.",
-		"category": "View",
+		"category": "Selection",
 		"needs_level": true,
 		"selection": {},
 		"palette": true
@@ -1513,7 +1513,7 @@ const COMMANDS := [
 		"label": "Show or Hide Clip Brushes",
 		"help":
 		"Hide clip brushes, the collision the player cannot see in the editor, or show them again. The level and the bake are not changed.",
-		"category": "View",
+		"category": "Selection",
 		"needs_level": true,
 		"selection": {},
 		"palette": true
@@ -1523,7 +1523,7 @@ const COMMANDS := [
 		"label": "Show or Hide Triggers",
 		"help":
 		"Hide triggers, every brush entity whose class starts with trigger in the editor, or show them again. The level and the bake are not changed.",
-		"category": "View",
+		"category": "Selection",
 		"needs_level": true,
 		"selection": {},
 		"palette": true
@@ -1533,7 +1533,7 @@ const COMMANDS := [
 		"label": "Show or Hide Brush Entities",
 		"help":
 		"Hide brush entities: doors, buttons, triggers and the rest in the editor, or show them again. The level and the bake are not changed.",
-		"category": "View",
+		"category": "Selection",
 		"needs_level": true,
 		"selection": {},
 		"palette": true
@@ -1543,7 +1543,7 @@ const COMMANDS := [
 		"label": "Show or Hide Point Entities",
 		"help":
 		"Hide point entities: lights, sounds, props and logic in the editor, or show them again. The level and the bake are not changed.",
-		"category": "View",
+		"category": "Selection",
 		"needs_level": true,
 		"selection": {},
 		"palette": true
@@ -1553,7 +1553,7 @@ const COMMANDS := [
 		"label": "Show or Hide Structures",
 		"help":
 		"Hide the pieces of stairs, arches and the other structures in the editor, or show them again. The level and the bake are not changed.",
-		"category": "View",
+		"category": "Selection",
 		"needs_level": true,
 		"selection": {},
 		"palette": true
@@ -1563,7 +1563,7 @@ const COMMANDS := [
 		"label": "Show or Hide Prefab Copies",
 		"help":
 		"Hide the brushes and entities of placed prefab copies in the editor, or show them again. The level and the bake are not changed.",
-		"category": "View",
+		"category": "Selection",
 		"needs_level": true,
 		"selection": {},
 		"palette": true
@@ -1573,7 +1573,7 @@ const COMMANDS := [
 		"label": "Show or Hide Decals",
 		"help":
 		"Hide decals in the editor, or show them again. The level and the bake are not changed.",
-		"category": "View",
+		"category": "Selection",
 		"needs_level": true,
 		"selection": {},
 		"palette": true
@@ -1583,7 +1583,7 @@ const COMMANDS := [
 		"label": "Show or Hide I/O Wires",
 		"help":
 		"Hide the I/O wires between entities in the editor, or show them again. The level and the bake are not changed.",
-		"category": "View",
+		"category": "Selection",
 		"needs_level": true,
 		"selection": {},
 		"palette": true
@@ -1593,7 +1593,7 @@ const COMMANDS := [
 		"label": "Show or Hide Cordons",
 		"help":
 		"Hide the cordon boxes in the editor, or show them again. The level and the bake are not changed.",
-		"category": "View",
+		"category": "Selection",
 		"needs_level": true,
 		"selection": {},
 		"palette": true
