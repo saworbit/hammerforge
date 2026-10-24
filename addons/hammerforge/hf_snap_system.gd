@@ -12,6 +12,34 @@ const HFOverlayMesh = preload("hf_overlay_mesh.gd")
 
 enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4, EDGE = 8, PERPENDICULAR = 16 }
 
+## What a snapped point is on (#1691). The viewport marks each kind with its own
+## shape and names it, and Tab steps from one kind to the next, so the mapper can
+## see why a point lands where it does and ask for another.
+const KIND_GRID := "grid"
+const KIND_VERTEX := "vertex"
+const KIND_MIDPOINT := "midpoint"
+const KIND_CENTRE := "centre"
+const KIND_PERPENDICULAR := "perpendicular"
+## The snap line the Measure tool sets with Align to this.
+const KIND_LINE := "line"
+## What the viewport calls each kind beside its marker.
+const KIND_LABELS := {
+	KIND_GRID: "Grid",
+	KIND_VERTEX: "Vertex",
+	KIND_MIDPOINT: "Midpoint",
+	KIND_CENTRE: "Centre",
+	KIND_PERPENDICULAR: "Perpendicular",
+	KIND_LINE: "Line",
+}
+## The kinds a one-pick limit can ask for, with the snap mode each one is.
+const LIMIT_MODES := {
+	KIND_GRID: SnapMode.GRID,
+	KIND_VERTEX: SnapMode.VERTEX,
+	KIND_MIDPOINT: SnapMode.EDGE,
+	KIND_CENTRE: SnapMode.CENTER,
+	KIND_PERPENDICULAR: SnapMode.PERPENDICULAR,
+}
+
 ## How near the cursor, in pixels, another brush's vertex has to be for a vertex
 ## or handle drag to land on it (#1399). A drag happens at every zoom, so the
 ## reach is measured on screen rather than in metres as a placement's is.
@@ -108,6 +136,25 @@ var vertex_held := false
 ## The marker on the vertex a drag has landed on, or null.
 var _drag_marker: MeshInstance3D = null
 
+## The nearest candidate of each kind the last query found, nearest first, each
+## `{point, kind, distance}`. What Tab steps through.
+var last_choices: Array = []
+## The pick the viewport marks, `{point, kind}`, from the last query made while
+## the pointer moved over it, or `{}`. A drop or a palette command snaps too and
+## never shows here.
+var shown_pick: Dictionary = {}
+## Moves on every Tab and every one-pick limit, so a preview cached by pointer
+## position knows to ask again.
+var revision := 0
+var _pointer_event := false
+var _picked_in_event := false
+## The kind Tab stepped to, and where the pointer was then. Moving further than
+## the snap reach from there lets it go.
+var _stepped_kind := ""
+var _step_anchor := Vector3.ZERO
+## The one kind the next pick may take, or "" for the running modes.
+var _only_kind := ""
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
@@ -171,43 +218,150 @@ func drag_vertex_snap_on() -> bool:
 
 
 func _snap(point: Vector3, step: float, exclude_ids: Array) -> Vector3:
-	var best := point
-	var best_dist := INF
+	var choices := _choices(point, step, exclude_ids)
+	last_choices = choices
+	var pick := _pick_from(choices, point)
+	if _pointer_event:
+		_picked_in_event = true
+		shown_pick = pick
+	if pick.is_empty():
+		return point
+	return pick["point"]
 
-	# Grid snap candidate
-	if step > 0.0:
-		var grid_vec := Vector3(step, step, step)
-		var grid_snapped := point.snapped(grid_vec)
-		var d := point.distance_to(grid_snapped)
-		if d < best_dist:
-			best = grid_snapped
-			best_dist = d
 
-	# Geometry snap candidates (vertex / center / edge / perpendicular)
+## The nearest candidate of each kind within reach of `point`, nearest first. The
+## grid is always in reach when it is on, and beats geometry further than the
+## threshold, as it always has. With a one-pick limit only that kind is asked
+## for, whether its mode is on or not.
+func _choices(point: Vector3, step: float, exclude_ids: Array) -> Array:
+	var nearest := {}
+	if _only_kind == KIND_GRID and step <= 0.0:
+		step = float(root.get("grid_snap")) if root else 0.0
+	if step > 0.0 and (_only_kind == "" or _only_kind == KIND_GRID):
+		var grid_snapped := point.snapped(Vector3(step, step, step))
+		nearest[KIND_GRID] = [grid_snapped, point.distance_to(grid_snapped)]
+	var running := enabled_modes
+	if _only_kind != "" and _only_kind != KIND_GRID:
+		enabled_modes = int(LIMIT_MODES.get(_only_kind, 0))
 	if (
 		is_mode_on(SnapMode.VERTEX)
 		or is_mode_on(SnapMode.CENTER)
 		or is_mode_on(SnapMode.EDGE)
 		or is_mode_on(SnapMode.PERPENDICULAR)
 	):
-		var candidates := _collect_candidates(exclude_ids, point, snap_threshold)
-		for c in candidates:
-			var d := point.distance_to(c)
-			if d < snap_threshold and d < best_dist:
-				best = c
-				best_dist = d
+		for candidate in _collect_kinded(exclude_ids, point, snap_threshold):
+			var d := point.distance_to(candidate[0])
+			var kind: String = candidate[1]
+			if d < snap_threshold and (not nearest.has(kind) or d < nearest[kind][1]):
+				nearest[kind] = [candidate[0], d]
+	enabled_modes = running
 
 	# Custom snap line (from measure tool "Align to this")
-	if _has_custom_snap:
+	if _has_custom_snap and _only_kind == "":
 		var projected := _project_onto_line(point, _custom_snap_origin, _custom_snap_dir)
 		var d := point.distance_to(projected)
-		if d < snap_threshold and d < best_dist:
-			best = projected
-			best_dist = d
+		if d < snap_threshold:
+			nearest[KIND_LINE] = [projected, d]
 
-	if best_dist == INF:
-		return point
-	return best
+	var out: Array = []
+	for kind in nearest:
+		out.append({"point": nearest[kind][0], "kind": kind, "distance": nearest[kind][1]})
+	out.sort_custom(func(a, b): return a["distance"] < b["distance"])
+	return out
+
+
+## The choice a pick takes: the kind Tab stepped to while the pointer stays near
+## where Tab was pressed, otherwise the nearest.
+func _pick_from(choices: Array, point: Vector3) -> Dictionary:
+	if choices.is_empty():
+		return {}
+	if _stepped_kind != "":
+		if point.distance_to(_step_anchor) <= snap_threshold:
+			for choice in choices:
+				if choice["kind"] == _stepped_kind:
+					return choice
+		_stepped_kind = ""
+	return choices[0]
+
+
+## Step the shown pick to the next kind in reach, and back round (#1691). False,
+## with nothing changed, when fewer than two kinds are in reach of the pick the
+## viewport shows, so Tab keeps its other uses then.
+func step_choice() -> bool:
+	if not can_step():
+		return false
+	var at := 0
+	for i in last_choices.size():
+		if last_choices[i]["kind"] == shown_pick.get("kind", ""):
+			at = i
+	var next: Dictionary = last_choices[(at + 1) % last_choices.size()]
+	_stepped_kind = next["kind"]
+	_step_anchor = shown_pick.get("point", next["point"])
+	revision += 1
+	return true
+
+
+## Whether Tab has somewhere to step: the viewport shows a pick and more than one
+## kind is in reach of it.
+func can_step() -> bool:
+	return not shown_pick.is_empty() and last_choices.size() > 1
+
+
+## Limit the next pick to one kind, whatever the running modes are, then go back
+## to them (#1691). False for a kind there is no limit for.
+func limit_next_pick(kind: String) -> bool:
+	if not LIMIT_MODES.has(kind):
+		return false
+	_only_kind = kind
+	_stepped_kind = ""
+	revision += 1
+	return true
+
+
+## The kind the next pick is limited to, or "".
+func next_pick_limit() -> String:
+	return _only_kind
+
+
+## A pick was taken, by a click or the end of a drag: a one-pick limit and a Tab
+## step are spent.
+func pick_taken() -> void:
+	if _only_kind == "" and _stepped_kind == "":
+		return
+	_only_kind = ""
+	_stepped_kind = ""
+	revision += 1
+
+
+## The pointer moved over the viewport, or was pressed there. What snaps until
+## `end_pointer_event()` is what the viewport marks.
+func begin_pointer_event() -> void:
+	_pointer_event = true
+	_picked_in_event = false
+
+
+## A motion that snapped nothing takes the mark down. True when the mark may have
+## changed, so the viewport redraws.
+func end_pointer_event(motion: bool) -> bool:
+	_pointer_event = false
+	if motion and not _picked_in_event and not shown_pick.is_empty():
+		shown_pick = {}
+		return true
+	return _picked_in_event
+
+
+## Mark a pick a drag made without `_snap()`, such as a vertex landing on another
+## brush's vertex. Anything but a point and a kind takes the mark down.
+func show_drag_pick(point: Variant, kind: String) -> void:
+	if not _pointer_event:
+		return
+	_picked_in_event = true
+	if point is Vector3 and kind != "":
+		shown_pick = {"point": point, "kind": kind}
+		last_choices = [shown_pick]
+	else:
+		shown_pick = {}
+		last_choices = []
 
 
 ## Point every snap within `snap_threshold` of the line at the nearest point on
@@ -345,6 +499,16 @@ func _collect_candidates(
 	exclude_ids: Array, point: Vector3 = Vector3.ZERO, max_distance: float = INF
 ) -> PackedVector3Array:
 	var out := PackedVector3Array()
+	for candidate in _collect_kinded(exclude_ids, point, max_distance):
+		out.append(candidate[0])
+	return out
+
+
+## `_collect_candidates()` with what each one is: `[point, kind]` pairs.
+func _collect_kinded(
+	exclude_ids: Array, point: Vector3 = Vector3.ZERO, max_distance: float = INF
+) -> Array:
+	var out: Array = []
 	brushes_measured = 0
 	if not root or not root.has_method("_iter_pick_nodes"):
 		return out
@@ -364,7 +528,7 @@ func _collect_candidates(
 		var origin := brush.global_position
 		var origin_distance := point.distance_to(origin)
 		if do_center and origin_distance <= max_distance:
-			out.append(origin)
+			out.append([origin, KIND_CENTRE])
 		if not (do_vertex or do_edge or do_perp):
 			continue
 		# Snap points live in brush space. Going through the transform is what
@@ -388,15 +552,16 @@ func _collect_candidates(
 		for local_vert in local_verts:
 			verts.append(xform * local_vert)
 		if do_vertex:
-			out.append_array(verts)
+			for vert in verts:
+				out.append([vert, KIND_VERTEX])
 		if do_edge or do_perp:
 			for edge in geometry["edges"]:
 				var a: Vector3 = verts[edge[0]]
 				var b: Vector3 = verts[edge[1]]
 				if do_edge:
-					out.append((a + b) * 0.5)
+					out.append([(a + b) * 0.5, KIND_MIDPOINT])
 				if do_perp:
-					out.append(_closest_point_on_segment(point, a, b))
+					out.append([_closest_point_on_segment(point, a, b), KIND_PERPENDICULAR])
 	return out
 
 

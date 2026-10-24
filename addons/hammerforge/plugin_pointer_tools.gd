@@ -139,6 +139,8 @@ static func follow_draw_hover(
 		camera.size,
 		on_face,
 		tool.get_instance_id() if tool != null else 0,
+		# A Tab step or a one-pick limit changes the snap with nothing moved.
+		root.snap_system.revision if root.get("snap_system") else 0,
 	]
 	if root.draw_hover.is_current(view_key):
 		return
