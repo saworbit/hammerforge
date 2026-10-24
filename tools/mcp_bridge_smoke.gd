@@ -8,7 +8,10 @@ extends SceneTree
 ## outside the editor, so undo goes through the same stand-in the GUT tests use.
 ##
 ##   godot --headless --path . -s res://tools/mcp_bridge_smoke.gd -- \
-##       --discovery=<file> --artifact=<file> --done=<file> [--seconds=120]
+##       --discovery=<file> --artifact=<file> --done=<file> [--seconds=120] [--empty]
+##
+## `--empty` leaves the scene without a level, for a client that makes its own
+## with hf_create_starter, as a replay does.
 ##
 ## It quits when the `--done` file appears, or after `--seconds`. `--discovery`
 ## keeps it off the project's own discovery file, which an editor with the bridge
@@ -28,6 +31,7 @@ var _listener = null
 var _dispatcher = null
 var _undo = null
 var _built := false
+var _empty := false
 
 
 func _initialize() -> void:
@@ -41,6 +45,8 @@ func _initialize() -> void:
 			_artifact_path = arg.trim_prefix("--artifact=")
 		elif arg.begins_with("--seconds="):
 			seconds = float(arg.trim_prefix("--seconds="))
+		elif arg == "--empty":
+			_empty = true
 	_deadline_ms = Time.get_ticks_msec() + int(seconds * 1000.0)
 
 
@@ -65,11 +71,12 @@ func _build() -> bool:
 	var scene := Node3D.new()
 	scene.name = "SmokeScene"
 	root.add_child(scene)
-	var level = LevelRootScript.new()
-	level.name = "LevelRoot"
-	level.auto_spawn_player = false
-	level.hflevel_autosave_enabled = false
-	scene.add_child(level)
+	if not _empty:
+		var level = LevelRootScript.new()
+		level.name = "LevelRoot"
+		level.auto_spawn_player = false
+		level.hflevel_autosave_enabled = false
+		scene.add_child(level)
 
 	_undo = UndoStandIn.new()
 	var host = HostStandIn.new()

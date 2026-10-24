@@ -23,6 +23,7 @@ from hammerforge_mcp.check import run_check
 from hammerforge_mcp.guide import pages as guide_pages
 from hammerforge_mcp.guide import title_of
 from hammerforge_mcp.prompts import PROMPTS
+from hammerforge_mcp.recording import Recorder
 
 log = logging.getLogger("hammerforge_mcp")
 
@@ -564,7 +565,7 @@ def error_result(
     )
 
 
-def build_server(bridge: BridgeLike) -> MCPServer:
+def build_server(bridge: BridgeLike, recorder: Recorder | None = None) -> MCPServer:
     server = MCPServer(
         name="hammerforge",
         title="HammerForge",
@@ -589,8 +590,26 @@ def build_server(bridge: BridgeLike) -> MCPServer:
             )
         except BridgeError as exc:
             log.warning("%s failed: %s: %s", method, exc.code, exc)
+            if recorder is not None:
+                recorder.write(
+                    method,
+                    params,
+                    mutating=spec.mutating,
+                    response=None,
+                    error=exc.code,
+                    took_ms=(time.monotonic() - started) * 1000.0,
+                )
             return error_result(exc.code, str(exc), exc.details)
         took = (time.monotonic() - started) * 1000.0
+        if recorder is not None:
+            recorder.write(
+                method,
+                params,
+                mutating=spec.mutating,
+                response=response,
+                error=None,
+                took_ms=took,
+            )
         if response.get("ok"):
             log.info(
                 "%s ok at revision %s in %.0f ms",
@@ -1098,9 +1117,16 @@ def _page_reader(path: Path):
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["replay"]:
+        from hammerforge_mcp.replay import main as replay_main
+
+        return replay_main(argv[1:])
     parser = argparse.ArgumentParser(
         prog="hammerforge-mcp",
         description="Let an MCP agent drive a live HammerForge level in Godot.",
+        epilog="hammerforge-mcp replay FILE plays a session --record wrote back "
+        "against the editor; replay --help says how.",
     )
     parser.add_argument(
         "--project",
@@ -1120,6 +1146,12 @@ def main(argv: list[str] | None = None) -> int:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
     )
     parser.add_argument("--log-file", type=Path, help="also write the log here")
+    parser.add_argument(
+        "--record",
+        type=Path,
+        metavar="FILE",
+        help="write each call to FILE as a JSON line, to play back with replay",
+    )
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument(
         "--check",
@@ -1141,5 +1173,11 @@ def main(argv: list[str] | None = None) -> int:
         handlers=handlers,
     )
     log.info("hammerforge-mcp %s for %s", __version__, args.project)
-    build_server(Bridge(args.project, discovery=args.discovery)).run("stdio")
+    recorder = Recorder(args.record) if args.record else None
+    try:
+        bridge = Bridge(args.project, discovery=args.discovery)
+        build_server(bridge, recorder).run("stdio")
+    finally:
+        if recorder is not None:
+            recorder.close()
     return 0

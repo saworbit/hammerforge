@@ -9,6 +9,11 @@ refused. Then it closes that Godot and starts another under the same server, the
 way an editor restart looks to an agent: the server says the editor is gone,
 then refuses a change aimed at the old one, then works once status reattaches.
 
+Last it records a session with `--record` in an editor with an empty scene,
+plays the recording back with `replay` in a second, and sends the payloads
+`replay --to-batch` writes in a third. All three must end in the same level,
+and the recording must not hold the token (#1645).
+
 Needs the mcp SDK in the interpreter that runs it. The server it starts is
 hammerforge_mcp straight from this checkout's source:
 
@@ -22,6 +27,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
+import os
 import subprocess
 import sys
 import time
@@ -53,9 +60,13 @@ def _kill_tree(process: subprocess.Popen) -> None:
 class Editor:
     """One headless Godot running the smoke listener, and its log."""
 
-    def __init__(self, args, project: Path, work: Path, name: str) -> None:
+    def __init__(
+        self, args, project: Path, work: Path, name: str, *, empty: bool = False
+    ) -> None:
         self.args = args
         self.project = project
+        #: A scene with no level, for a client that makes a starter level.
+        self.empty = empty
         self.discovery = work / "discovery.json"
         self.artifact = work / "smoke_mcp.tscn"
         self.done = work / "done"
@@ -78,6 +89,8 @@ class Editor:
             f"--done={self.done}",
             f"--seconds={self.args.seconds:g}",
         ]
+        if self.empty:
+            command.append("--empty")
         print("mcp smoke:", " ".join(command))
         with self.log_path.open("w", encoding="utf-8") as log:
             self.process = subprocess.Popen(
@@ -110,12 +123,10 @@ def _check(condition: bool, what: str, seen: object) -> None:
         raise SmokeFailure(f"{what}: got {seen!r}")
 
 
-async def _round_trip(
-    project: Path, discovery: Path, artifact: Path, restart
-) -> list[str]:
-    from mcp import Client, StdioServerParameters
+def _server(project: Path, discovery: Path, *extra: str):
+    from mcp import StdioServerParameters
 
-    server = StdioServerParameters(
+    return StdioServerParameters(
         command=sys.executable,
         args=[
             "-m",
@@ -124,12 +135,20 @@ async def _round_trip(
             str(project),
             "--discovery",
             str(discovery),
+            *extra,
         ],
         # This checkout's server, not whatever version is installed.
         env={"PYTHONPATH": str(PACKAGE_SOURCE)},
     )
+
+
+async def _round_trip(
+    project: Path, discovery: Path, artifact: Path, restart
+) -> list[str]:
+    from mcp import Client
+
     report: list[str] = []
-    async with Client(server) as client:
+    async with Client(_server(project, discovery)) as client:
         tools = sorted(tool.name for tool in (await client.list_tools()).tools)
         _check("hf_place_brush" in tools, "the catalogue lists hf_place_brush", tools)
         report.append(f"tools: {', '.join(tools)}")
@@ -307,6 +326,162 @@ async def _round_trip(
     return report
 
 
+async def _call(client, tool: str, params: dict | None = None) -> dict:
+    return (await client.call_tool(tool, params or {})).structured_content
+
+
+def _without_ids(value):
+    """`value` without the ids a fresh level gives out anew, its lists sorted."""
+    if isinstance(value, dict):
+        return {
+            key: _without_ids(inner)
+            for key, inner in value.items()
+            if key != "id" and not key.endswith("_id")
+        }
+    if isinstance(value, list):
+        return sorted(
+            (_without_ids(inner) for inner in value),
+            key=lambda inner: json.dumps(inner, sort_keys=True),
+        )
+    return value
+
+
+async def _level(client) -> dict:
+    brushes = await _call(client, "hf_get_brushes")
+    entities = await _call(client, "hf_get_entities")
+    _check(brushes["ok"] and entities["ok"], "the level reads back", brushes)
+    return {
+        "brushes": _without_ids(brushes["result"]["brushes"]),
+        "entities": _without_ids(entities["result"]["entities"]),
+    }
+
+
+async def _record_session(project: Path, discovery: Path, recording: Path) -> dict:
+    """A short session on an empty scene, recorded. The level it ends in."""
+    from mcp import Client
+
+    record = ("--record", str(recording))
+    async with Client(_server(project, discovery, *record)) as client:
+        await _call(client, "hf_get_status")
+        made = await _call(client, "hf_create_starter")
+        _check(made["ok"], "the empty scene takes a starter level", made)
+        placed = await _call(
+            client, "hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 0]}
+        )
+        _check(placed["ok"], "a brush is placed", placed)
+        batch = {
+            "ops": [
+                {
+                    "tool": "hf_place_brush",
+                    "params": {"size": [2, 2, 2], "position": [6, 1, 0]},
+                },
+                {
+                    "tool": "hf_resize_brush",
+                    "params": {"brush_id": "$0.brush_id", "size": [4, 2, 2]},
+                },
+            ]
+        }
+        batched = await _call(client, "hf_batch", batch)
+        _check(batched["ok"], "the batch lands", batched)
+        wide = batched["result"]["results"][1]["result"]["brush"]["brush_id"]
+        hollowed = await _call(
+            client,
+            "hf_run_command",
+            {"command": "hollow", "brush_ids": [wide], "params": {"thickness": 0.25}},
+        )
+        _check(hollowed["ok"], "the batch's brush is hollowed", hollowed)
+        dropped = await _call(
+            client, "hf_place_brush", {"size": [1, 1, 1], "position": [-6, 0.5, 0]}
+        )
+        _check(dropped["ok"], "a brush to undo is placed", dropped)
+        undone = await _call(client, "hf_undo")
+        _check(undone["ok"], "the placement is undone", undone)
+        moved = await _call(
+            client,
+            "hf_transform_brush",
+            {"brush_id": placed["result"]["brush"]["brush_id"], "position": [0, 1, 4]},
+        )
+        _check(moved["ok"], "the first brush is moved", moved)
+        lamp = await _call(
+            client,
+            "hf_place_entity",
+            {"entity_class": "light_point", "position": [0, 4, 0], "name": "lamp"},
+        )
+        _check(lamp["ok"], "a lamp is placed", lamp)
+        refused = await _call(client, "hf_delete_brush", {"brush_id": "no_such"})
+        _check(not refused["ok"], "a delete of no brush is refused", refused)
+        return await _level(client)
+
+
+async def _read_level(project: Path, discovery: Path) -> dict:
+    from mcp import Client
+
+    async with Client(_server(project, discovery)) as client:
+        return await _level(client)
+
+
+def _replay(project: Path, discovery: Path, *args: str) -> str:
+    """Run `replay` as a user would, and its output when it says no difference."""
+    finished = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "hammerforge_mcp",
+            "replay",
+            *args,
+            "--project",
+            str(project),
+            "--discovery",
+            str(discovery),
+        ],
+        env={**os.environ, "PYTHONPATH": str(PACKAGE_SOURCE)},
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    said = (finished.stdout + finished.stderr).strip()
+    _check(finished.returncode == 0, f"replay {' '.join(args)} exits 0", said)
+    return said
+
+
+def _record_and_replay(project: Path, work: Path, editors: tuple) -> list[str]:
+    recording = work / "session.jsonl"
+    batches = work / "batches.jsonl"
+    recorder, player, batcher = editors
+    recorder.start()
+    try:
+        token = json.loads(recorder.discovery.read_text(encoding="utf-8"))["token"]
+        recorded = asyncio.run(_record_session(project, recorder.discovery, recording))
+    finally:
+        recorder.stop()
+    written = recording.read_text(encoding="utf-8")
+    _check(token not in written, "the recording does not hold the token", recording)
+    calls = [json.loads(line) for line in written.splitlines() if line.strip()]
+    report = [f"recorded {len(calls)} calls to {recording.name}"]
+
+    player.start()
+    try:
+        said = _replay(project, player.discovery, str(recording))
+        replayed = asyncio.run(_read_level(project, player.discovery))
+    finally:
+        player.stop()
+    _check(replayed == recorded, "the replay builds the session's level", replayed)
+    report.append(f"replayed it on a new starter level: {said.splitlines()[-1]}")
+
+    _replay(project, player.discovery, str(recording), "--to-batch", str(batches))
+    batcher.start()
+    try:
+        _replay(project, batcher.discovery, str(batches))
+        batched = asyncio.run(_read_level(project, batcher.discovery))
+    finally:
+        batcher.stop()
+    _check(batched == recorded, "the batch payloads build the same level", batched)
+    lines = len(batches.read_text(encoding="utf-8").splitlines())
+    report.append(f"sent it again as {lines} lines of hf_batch payloads")
+    return report
+
+
 def _wait_for(path: Path, process: subprocess.Popen, seconds: float) -> bool:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -332,6 +507,10 @@ def main(argv: list[str] | None = None) -> int:
     work.mkdir(parents=True, exist_ok=True)
     first = Editor(args, project, work, "godot")
     second = Editor(args, project, work, "godot_restarted")
+    replayers = tuple(
+        Editor(args, project, work, name, empty=True)
+        for name in ("godot_record", "godot_replay", "godot_batch")
+    )
     first.artifact.unlink(missing_ok=True)
 
     async def restart(step: str) -> None:
@@ -346,6 +525,9 @@ def main(argv: list[str] | None = None) -> int:
         report = asyncio.run(
             _round_trip(project, first.discovery, first.artifact, restart)
         )
+        first.stop()
+        second.stop()
+        report += _record_and_replay(project, work, replayers)
     except SmokeFailure as failure:
         print(f"mcp smoke: FAILED: {failure}")
         ok = False
@@ -354,9 +536,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"mcp smoke: {line}")
         ok = True
     finally:
-        first.stop()
-        second.stop()
-    for editor in (first, second):
+        for editor in (first, second, *replayers):
+            editor.stop()
+    for editor in (first, second, *replayers):
         if editor.log():
             print(editor.log())
     if first.discovery.exists():

@@ -161,6 +161,8 @@ Say sizes in metres. The agent is told the rest of the conventions.
 - The server logs one line per call to stderr. `--log-file` writes them to a file
   as well, and `--log-level DEBUG` adds the arguments of each call. The token is
   never logged.
+- `--record session.jsonl` writes every call as one JSON line, ready to play
+  back. See Record a session below.
 
 ## What the agent can call
 
@@ -410,11 +412,42 @@ you are most likely to meet:
 | `screenshot_unavailable` | The editor has no picture to give | Screenshots need an editor with a window. A headless editor cannot draw |
 | `no_bake` | A screenshot asked to show the bake, and the level has none | The agent bakes first with `hf_bake` |
 | `timeout` | No answer in time | The editor may still be working. The answer gives an `operation_id`; the same change sent with it returns the first answer instead of running twice |
-| `internal_error` | A script error in the editor | See the Output panel, and report it with what you asked for |
+| `internal_error` | A script error in the editor | See the Output panel, and report it with a recording of the session (below) |
 
 `hammerforge-mcp --check` is the quickest way to see whether the server can
 reach the editor at all. It connects beside a working agent, not in its place,
 and can only read status, so it is safe to run while an agent builds.
+
+### Record a session
+
+A bug an agent runs into 80 calls into a session needs all 80 calls to show it.
+Start the server with `--record session.jsonl` and it writes each call as one
+JSON line: the tool, its arguments, whether it was a change or a read, ok or the
+error code, the revision before and after, how long it took, and the ids it
+made, changed and removed. The token is never written, so the file can go into
+a bug report as it is.
+
+To play it back, open an empty scene and run:
+
+```bash
+hammerforge-mcp replay session.jsonl --project /path/to/your/godot/project
+```
+
+It makes a starter level, unless the recording made one, then sends the
+recorded changes in order. Reads are skipped. It stops at the first call whose
+outcome is not the recorded one and prints both, such as
+`call 41 (hf_run_command) differs`, `recorded: ok, made 6`,
+`replayed: refused: invalid_argument`. A brush the replay makes gets a new id,
+and later calls that named the old one are sent the new one.
+
+- `--until N` stops after call N.
+- `--keep-going` reports every difference instead of stopping at the first.
+- `--here` plays onto the level that is open instead of a new starter level.
+- `--to-batch batch.jsonl` sends nothing and writes the changes that built the
+  session's level as `hf_batch` payloads of up to 100 ops, one per line, for a
+  test. Refused changes, a change an undo took back and that undo, and bakes are
+  left out. Within a payload, a brush an earlier op placed is named
+  `$N.brush_id`. `replay` plays this file back as well.
 
 ## Limits
 
