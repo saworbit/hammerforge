@@ -1,0 +1,10 @@
+{
+	"what": "Which faces are Hidden: kept out of the bake's mesh and lightmap, still in its collision.",
+	"older_builds": "Every Hidden face is a plain face again, drawn and baked in its material.",
+	"keys": [
+		"state.brushes[].faces[].face_type",
+		"state.pending[].faces[].face_type",
+		"state.committed[].faces[].face_type",
+		"state.hollows[].source.faces[].face_type"
+	]
+}

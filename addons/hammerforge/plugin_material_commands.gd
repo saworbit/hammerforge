@@ -128,6 +128,12 @@ static func pick_face_material(plugin: Object, root: Node) -> void:
 	if brush == null or face_idx < 0 or face_idx >= brush.faces.size():
 		return
 	var face: FaceData = brush.faces[face_idx]
+	# A Hidden face's look is Hidden, for Apply Picked Look; the material it keeps
+	# under it is not what it shows (#1719).
+	if face and face.is_hidden():
+		dock.remember_picked_look(face)
+		dock.show_toast("Picked Hidden: Alt+T makes the selected faces Hidden", 0)
+		return
 	var mat_idx: int = face.material_idx if face else -1
 	if mat_idx < 0:
 		dock.show_toast("Face has no material assigned", 1)

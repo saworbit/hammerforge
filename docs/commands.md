@@ -21,6 +21,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Quick Play (`quick_play`) | Ctrl+Enter | a level | yes | Bake the level and run it to test. |
 | Validate Level (`validate_level`) | Ctrl+Shift+Enter | a level | yes | Check the level for problems and list them. |
 | Repeat Last Command (`repeat_last_command`) | none | a level | yes | Run the last command again on the current selection, with the same settings. |
+| Convert Entity Definitions to JSON (`convert_entity_definitions`) | none | a level | yes | Write the entity classes the level reads from an FGD as an entities.json beside it, to edit them in that form. |
 | Cycle I/O Wires (`cycle_io_wires`) | none | - | yes | Step the I/O wires through none, all, the selection's chain and its own. |
 
 ## Tools
@@ -207,6 +208,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Show or Hide Decals (`view_filter_decal`) | none | a level | yes | Hide decals in the editor, or show them again. The level and the bake are not changed. |
 | Show or Hide I/O Wires (`view_filter_wires`) | none | a level | yes | Hide the I/O wires between entities in the editor, or show them again. The level and the bake are not changed. |
 | Show or Hide Cordons (`view_filter_cordons`) | none | a level | yes | Hide the cordon boxes in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Hidden Faces (`view_filter_hidden_faces`) | none | a level | yes | Hide the striped Hidden faces in the editor, or show them again. The level and the bake are not changed. |
 | Selection Filters (`selection_filter`) | Alt+F | no mix of HammerForge and Godot nodes | yes | Open the selection filters, which pick by kind, material and more. |
 | Quick Select (`quick_select`) | none | no mix of HammerForge and Godot nodes, a level | yes | Select brushes or entities by a typed rule, such as class is light_point and energy > 2. |
 | Grow Selection (`grow_selection`) | Ctrl+] | 1 item or faces, a level | yes | Add the faces next to the selected faces, or the brushes touching the selected brushes. |
@@ -220,6 +222,9 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Command | Key | Needs | Palette | What it does |
 |---|---|---|---|---|
 | Show Material in Browser (`show_material_in_browser`) | none | 1 brush or faces, a level | no | Select the picked face's material in the material browser. |
+| Make Faces Hidden (`make_faces_hidden`) | none | a level | yes | Mark the selected faces Hidden: they keep their collision, and the bake leaves them out of the mesh and the lightmap. |
+| Make Faces Normal (`make_faces_normal`) | none | a level | yes | Show the selected Hidden faces again, in the material they had. |
+| Hide Faces Against Solids (`hide_faces_against_solids`) | none | a level | yes | Make Hidden every face of the selection that lies flat against another solid brush, after showing which. |
 | Paint Brush (`paint_bucket`) | B | - | yes | Paint floor cells. |
 | Erase (`paint_erase`) | E | - | yes | Erase floor cells. |
 | Ramp / Rect (`paint_ramp`) | R | - | yes | Paint a rectangle of floor cells. |

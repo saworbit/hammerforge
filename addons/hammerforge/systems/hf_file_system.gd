@@ -10,6 +10,7 @@ const HFFormatRecord = preload("../hf_format_record.gd")
 const MapIO = preload("../map_io.gd")
 const HFEntityPropUtils = preload("../ui/hf_entity_prop_utils.gd")
 const HFNotes = preload("../hf_notes.gd")
+const HFHiddenFaces = preload("../hf_hidden_faces.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFMapAdapterType = preload("../map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("../map_adapters/hf_map_quake.gd")
@@ -553,6 +554,11 @@ func _assign_map_texture(face, token: String, palette: Dictionary) -> void:
 	if name_token == "" or name_token == MapIO.DEFAULT_TEXTURE:
 		return
 	face.map_texture = name_token
+	# `skip`, `nodraw` and the like name a face the compiler drops: a Hidden face,
+	# with no palette slot made for a texture nobody sees (#1719).
+	if HFHiddenFaces.is_map_name(name_token):
+		face.face_type = FaceData.FaceType.HIDDEN
+		return
 	if not palette.has(name_token):
 		var minted := _mint_palette_slot(name_token)
 		if minted < 0:

@@ -16,6 +16,7 @@ const DraftBrush = preload("brush_instance.gd")
 const HFTransformSystem = preload("systems/hf_transform_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFViewAxes = preload("hf_view_axes.gd")
+const HFHiddenFaceSearch = preload("hf_hidden_face_search.gd")
 
 
 static func delete_selected(plugin: Object, root: Node) -> bool:
@@ -1009,6 +1010,97 @@ static func hull_selected(plugin: Object, root: Node) -> bool:
 	)
 	dlg.popup_centered()
 	return true
+
+
+## Hide Faces Against Solids (#1719): every face of the selected brushes that lies
+## flat against another solid brush, or of the selected faces when no brush is
+## selected, made Hidden as one undo step. The faces it found are picked while the
+## dialog asks, so the face overlay shows them, and Cancel picks what was picked
+## before.
+static func hide_faces_against_solids(plugin: Object, root: Node) -> bool:
+	var brushes: Array = []
+	for brush_id in selection_brush_ids(plugin, root):
+		var brush = root.brush_system.find_brush_by_id(str(brush_id))
+		if brush:
+			brushes.append(brush)
+	var among: Dictionary = {}
+	if brushes.is_empty():
+		among = root.face_selection.duplicate(true)
+		for key in among:
+			var brush = root.brush_system.find_brush_by_id(str(key))
+			if brush:
+				brushes.append(brush)
+	if brushes.is_empty():
+		if plugin.dock:
+			plugin.dock.show_toast("Select the brushes whose faces against solids to hide", 1)
+		return false
+	var found := HFHiddenFaceSearch.against_solids(root, brushes)
+	if not among.is_empty():
+		found = _only_in(found, among)
+	var count := 0
+	for key in found:
+		count += (found[key] as Array).size()
+	if count == 0:
+		if plugin.dock:
+			plugin.dock.show_toast(
+				"No face of the selection lies flat against another solid brush", 0
+			)
+		return true
+	var picked_before: Dictionary = root.face_selection.duplicate(true)
+	root.face_selection = found.duplicate(true)
+	root.face_selection_changed.emit()
+	var dlg = ConfirmationDialog.new()
+	dlg.title = "Hide Faces Against Solids"
+	dlg.dialog_text = (
+		(
+			"Make %d face%s Hidden?\nThey lie flat against other solid brushes, so nobody"
+			+ " sees them. The bake leaves them out of the mesh and the lightmap, and they"
+			+ " keep their collision.\n(The faces are picked to show which)"
+		)
+		% [count, "" if count == 1 else "s"]
+	)
+	dlg.min_size = Vector2i(300, 100)
+	plugin._add_confirmable_dialog(dlg)
+	dlg.confirmed.connect(
+		func():
+			if is_instance_valid(plugin) and is_instance_valid(root):
+				HFUndoHelper.commit_if_changed(
+					plugin._get_undo_redo(),
+					root,
+					"Hide Faces Against Solids",
+					"set_faces_hidden",
+					[found, true],
+					Callable(plugin, "_record_history"),
+					found.keys()
+				)
+				if plugin.dock:
+					plugin.dock.show_toast(
+						"%d face%s made Hidden" % [count, "" if count == 1 else "s"], 0
+					)
+			dlg.queue_free()
+	)
+	dlg.canceled.connect(
+		func():
+			if is_instance_valid(root):
+				root.face_selection = picked_before
+				root.face_selection_changed.emit()
+			dlg.queue_free()
+	)
+	dlg.popup_centered()
+	return true
+
+
+## The faces of `found` that are in `among`, both brush key -> face indices.
+static func _only_in(found: Dictionary, among: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for key in found:
+		var kept: Array = []
+		for face_idx in found[key]:
+			if (among.get(key, []) as Array).has(face_idx):
+				kept.append(face_idx)
+		if not kept.is_empty():
+			out[key] = kept
+	return out
 
 
 # ---------------------------------------------------------------------------

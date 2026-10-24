@@ -317,11 +317,14 @@ static func _refusal_text(files: Array) -> String:
 static func handle_material_drop(plugin: Object, position: Vector2, data: Variant) -> void:
 	if not is_material_drag_data(data):
 		return
-	var mat_idx: int = int(data.get("index", -1))
-	if mat_idx < 0:
-		return
 	var root = plugin.active_root if plugin.active_root else plugin._get_level_root()
 	if not root:
+		return
+	if bool(data.get("hidden", false)):
+		_hide_dropped(plugin, root, position)
+		return
+	var mat_idx: int = int(data.get("index", -1))
+	if mat_idx < 0:
 		return
 	if mat_idx >= root.get_materials().size():
 		_toast(plugin, "Material #%d is no longer in the palette" % mat_idx)
@@ -379,6 +382,37 @@ static func _paint_dropped(
 			plugin.dock.show_toast("Applied material #%d to face" % slot, 0)
 		else:
 			plugin.dock.show_toast("Applied material #%d to %d faces" % [slot, count], 0)
+
+
+## The Hidden swatch dropped on a face (#1719): that face, or every selected face
+## when it is one of them, made Hidden as one undo step, as a material applies.
+static func _hide_dropped(plugin: Object, root: Node, position: Vector2) -> void:
+	var camera = plugin.last_3d_camera
+	if not camera:
+		return
+	var hit: Dictionary = root.pick_face(camera, position)
+	if hit.is_empty():
+		_toast(plugin, "No face under drop position")
+		return
+	var brush: DraftBrushType = hit.get("brush") as DraftBrushType
+	var face_idx: int = int(hit.get("face_idx", -1))
+	if brush == null or face_idx < 0:
+		return
+	var targets := _drop_targets(root, brush, face_idx)
+	if targets.is_empty():
+		return
+	var before := HFUndoHelper.capture_scope_or_state(root, targets.keys())
+	var count: int = root.set_faces_hidden(targets, true)
+	HFUndoHelper.commit_completed_if_changed(
+		plugin._get_undo_redo(),
+		root,
+		"Make Face Hidden" if count == 1 else "Make Faces Hidden",
+		before["state"],
+		Callable(plugin, "_record_history"),
+		before["scope_ids"]
+	)
+	if plugin.dock:
+		plugin.dock.show_toast("%d face%s made Hidden" % [count, "" if count == 1 else "s"], 0)
 
 
 ## `{brush_id: [face indices]}` for a drop on face `face_idx` of `brush`: that
