@@ -66,8 +66,8 @@ func tool_id() -> int:
 	return 104
 
 
-func tool_shortcut_key() -> int:
-	return KEY_C
+func keymap_action() -> String:
+	return "tool_clip"
 
 
 func get_settings_schema() -> Array:

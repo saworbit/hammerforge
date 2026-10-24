@@ -222,7 +222,8 @@ func test_tool_name():
 
 func test_shortcut_key():
 	var tool = HFPolygonTool.new()
-	assert_eq(tool.tool_shortcut_key(), KEY_P)
+	assert_eq(tool.keymap_action(), "tool_polygon", "it starts on a keymap action (#1820)")
+	assert_eq(HFKeymap.load_or_default().get_display_string("tool_polygon"), "P")
 
 
 func test_settings_schema():
