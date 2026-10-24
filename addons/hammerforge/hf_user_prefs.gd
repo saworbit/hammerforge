@@ -141,6 +141,9 @@ const SCHEMA := {
 	HFOverlayColors.FUNC_CLIP: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.BRUSH_ENTITY: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.AGENT_CHANGE: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.COMPARE_ADDED: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.COMPARE_CHANGED: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.COMPARE_REMOVED: {"type": TYPE_STRING, "color": true},
 }
 
 

@@ -219,6 +219,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Validate** | Check level integrity before bake, including brush stairs, doorways and ramps measured against the playtest player, and brushes that add nothing to the bake: a cut that cuts nothing, a solid wholly inside another, two the same to within a millimetre; findings are listed with Select on the object each names, can be accepted with a note so they stop coming back, and follow an edit within a second; Checks chooses which kinds run for the project (#1731) |
 | **.map export** | Classic Quake or Valve 220 format |
 | **.glb export** | glTF binary for external tools |
+| **Compare With** | What changed since another `.hflevel`, in the viewport and the Console; `tools/compare_levels.gd` prints the same list for CI or a pull request |
 | **Test Level** | Check, bake, validate spawn (including a spawn inside a brush, with Fix & Play to move it clear), and run with the FPS controller |
 | **Play from Camera** | Test from the editor camera position and yaw |
 | **Play Selected Area** | Auto-cordon to selection, bake + play that region only |
@@ -257,7 +258,7 @@ Turn on **Power-user overlays** for the radial menu, coach marks, and operation 
 
 Open it from **HammerForge** in the main-screen switcher at the top of the
 editor, beside 2D, 3D and Script, wearing the HammerForge mark. It is the
-addon's front door, with five tabs:
+addon's front door, with six tabs:
 
 - **Status**: a red / amber / green board of eight checks, each one saying what
   was measured, what the threshold is, and offering the single button that
@@ -289,6 +290,13 @@ addon's front door, with five tabs:
   playtest finding, with its title in the viewport and its body on hover. The
   tab lists them by kind, and they never bake or export
   ([#1700](https://github.com/saworbit/hammerforge/issues/1700)).
+- **Compare**: what changed between the open level and another `.hflevel`, an
+  older save, an autosave or a file out of git, picked with **Compare With...**
+  in the dock: a summary, then each change, such as "brush 'stair_03': moved
+  0.5 m up". Clicking one selects what it names, and the viewport outlines what
+  was added, changed and removed, each with its own line as well as its own
+  colour. The open level is only looked at; **End Compare** takes it all off
+  ([#1701](https://github.com/saworbit/hammerforge/issues/1701)).
 
 **Report a Problem** in the header opens the bug form in the browser filled in
 with the versions, the level's stats, the last undo steps and log lines, and a

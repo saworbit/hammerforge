@@ -34,6 +34,9 @@ const FUNC_WALL := "color_func_wall"
 const FUNC_CLIP := "color_func_clip"
 const BRUSH_ENTITY := "color_brush_entity"
 const AGENT_CHANGE := "color_agent_change"
+const COMPARE_ADDED := "color_compare_added"
+const COMPARE_CHANGED := "color_compare_changed"
+const COMPARE_REMOVED := "color_compare_removed"
 
 ## The look before these were a preference, in the order Settings lists them.
 const DEFAULTS := {
@@ -55,6 +58,9 @@ const DEFAULTS := {
 	FUNC_CLIP: Color(0.75, 0.35, 1.0, 0.25),
 	BRUSH_ENTITY: Color(0.35, 0.5, 0.85, 0.2),
 	AGENT_CHANGE: Color(0.2, 0.95, 0.85, 1.0),
+	COMPARE_ADDED: Color(0.3, 0.9, 0.35, 1.0),
+	COMPARE_CHANGED: Color(1.0, 0.72, 0.15, 1.0),
+	COMPARE_REMOVED: Color(1.0, 0.3, 0.3, 1.0),
 }
 
 ## Settings' High Contrast button. Taken from the Okabe-Ito colours, which stay
@@ -85,6 +91,9 @@ const HIGH_CONTRAST := {
 	FUNC_CLIP: Color(1.0, 1.0, 1.0, 0.3),
 	BRUSH_ENTITY: Color(0.6, 0.6, 0.6, 0.3),
 	AGENT_CHANGE: Color(0.0, 0.62, 0.45, 1.0),
+	COMPARE_ADDED: Color(0.0, 0.62, 0.45, 1.0),
+	COMPARE_CHANGED: Color(0.94, 0.89, 0.26, 1.0),
+	COMPARE_REMOVED: Color(0.84, 0.37, 0.0, 1.0),
 }
 
 const LABELS := {
@@ -106,6 +115,9 @@ const LABELS := {
 	FUNC_CLIP: "func_clip",
 	BRUSH_ENTITY: "Other brush entity",
 	AGENT_CHANGE: "Agent change",
+	COMPARE_ADDED: "Compare: added",
+	COMPARE_CHANGED: "Compare: changed",
+	COMPARE_REMOVED: "Compare: removed",
 }
 
 const TOOLTIPS := {
@@ -127,6 +139,10 @@ const TOOLTIPS := {
 	FUNC_CLIP: "The see-through look of a func_clip brush, whatever its faces carry",
 	BRUSH_ENTITY: "The see-through look of any other brush entity with no material",
 	AGENT_CHANGE: "The outline round what an agent just changed over the bridge, for a moment",
+	COMPARE_ADDED:
+	"A brush or entity the open level has and the compared file does not, drawn solid",
+	COMPARE_CHANGED: "A brush or entity that changed since the compared file, drawn twice",
+	COMPARE_REMOVED: "A brush or entity the compared file has and the open level does not, dashed",
 }
 
 ## The colours drawn on or round every brush. A change to one of these redraws

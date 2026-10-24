@@ -22,6 +22,8 @@ signal command_requested(action: String)
 @warning_ignore_start("unused_signal")
 signal bake_state_changed(baking: bool, success: bool)
 signal command_palette_requested
+## Compare With... picked a file: compare the open level with it (#1701).
+signal compare_requested(path: String)
 signal power_user_overlays_changed(enabled: bool)
 signal paint_options_changed
 signal paint_raise_requested
@@ -333,6 +335,8 @@ var clear_btn: Button = null
 # -- File buttons (built programmatically) --
 var save_hflevel_btn: Button = null
 var load_hflevel_btn: Button = null
+var compare_hflevel_btn: Button = null
+var _compare_dialog: FileDialog = null
 var import_map_btn: Button = null
 var export_map_btn: Button = null
 var export_plan_btn: Button = null
@@ -4891,6 +4895,7 @@ func _update_disabled_hints() -> void:
 	_set_control_disabled_hint(load_hflevel_btn, not has_root, need_root_hint)
 	_set_control_disabled_hint(import_map_btn, not has_root, need_root_hint)
 	_set_control_disabled_hint(export_map_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(compare_hflevel_btn, not has_root, need_root_hint)
 	_set_control_disabled_hint(export_plan_btn, not has_root, need_root_hint)
 	_set_control_disabled_hint(autosave_enabled, not has_root, need_root_hint)
 	_set_control_disabled_hint(autosave_minutes, not has_root, need_root_hint)
@@ -6578,6 +6583,20 @@ func _on_save_hflevel() -> void:
 
 func _on_load_hflevel() -> void:
 	HFDockFileHandler.show_dialog(hflevel_load_dialog)
+
+
+## Ask for a `.hflevel` to compare the open level with (#1701). Only looks: the
+## plugin draws and lists what changed and the open level stays as it is.
+func open_compare_dialog() -> void:
+	if _compare_dialog == null:
+		_compare_dialog = FileDialog.new()
+		_compare_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_compare_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+		_compare_dialog.filters = PackedStringArray(["*.hflevel ; HammerForge level"])
+		_compare_dialog.title = "Compare With"
+		_compare_dialog.file_selected.connect(func(path: String): compare_requested.emit(path))
+		add_child(_compare_dialog)
+	_compare_dialog.popup_centered_ratio(0.6)
 
 
 func _on_import_map() -> void:

@@ -1,0 +1,1 @@
+- Compare With shows what changed since another .hflevel, outlined in the viewport and listed in the Console, and tools/compare_levels.gd prints it for CI. (issue [#1701](https://github.com/saworbit/hammerforge/issues/1701))

@@ -26,6 +26,7 @@ const HFEntityCensus = preload("hf_entity_census.gd")
 const HFPluginCrashJournalType = preload("plugin_crash_journal.gd")
 const HFPluginProblemReportType = preload("plugin_problem_report.gd")
 const HFPluginUpdateCheckType = preload("plugin_update_check.gd")
+const HFPluginCompareType = preload("plugin_compare.gd")
 
 const PANEL_TITLE := "HammerForge"
 ## The Scene-tree icon, drawn at about 16px, is the compact weight of the mark.
@@ -231,6 +232,10 @@ static func handle_action(plugin: Object, action_id: String) -> void:
 			HFPluginProblemReportType.open_form(plugin)
 		"update_notes", "update_skip", "update_later":
 			HFPluginUpdateCheckType.handle_action(plugin, action_id)
+		"compare_end":
+			HFPluginCompareType.end(plugin)
+		_ when action_id.begins_with("compare_pick:"):
+			HFPluginCompareType.pick(plugin, action_id.trim_prefix("compare_pick:"))
 		_ when action_id.begins_with("select_note:"):
 			_select_note(plugin, action_id.trim_prefix("select_note:"))
 		_ when action_id.begins_with("select_entity_class:"):
