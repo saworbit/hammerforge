@@ -144,6 +144,8 @@ const SCHEMA := {
 	HFOverlayColors.COMPARE_ADDED: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.COMPARE_CHANGED: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.COMPARE_REMOVED: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.FACE_FRONT: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.FACE_BACK: {"type": TYPE_STRING, "color": true},
 }
 
 
