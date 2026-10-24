@@ -36,6 +36,8 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Clip Tool (`tool_clip`) | C | - | yes | Start the Clip tool, which cuts the selected brushes along a plane you place. |
 | Polygon Tool (`tool_polygon`) | P | - | yes | Start the Polygon tool: click an outline on the ground, then drag its height. |
 | Path Tool (`tool_path`) | ; | - | yes | Start the Path tool, which builds a corridor of brushes along the points you click. |
+| Hull Tool (`tool_hull`) | none | - | yes | Start the Hull tool: click points, or a face's corners, and Enter makes one brush around them. |
+| Shear Tool (`tool_shear`) | none | - | yes | Start the Shear tool: drag a handle on a side of the selection's box to lean everything between. |
 | Decal Tool (`tool_decal`) | N | - | yes | Start the Decal tool, which places a decal on the surface you click. |
 | Repeat Last Brush (`repeat_brush`) | Shift+D | a level | yes | Arm a stamp of the brush the last Draw made; each click places one. |
 | Place Entity Here (`place_entity_here`) | none | a level | no | Place an entity on the surface under the cursor, standing on it. |
@@ -80,6 +82,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Re-pick Trim Run (`repick_trim_run`) | none | a level | no | Move the selected trim run onto the wall faces picked in Face Select. |
 | Carve (`carve`) | Ctrl+Shift+R | 1 brush, a level | yes | Cut the selected brush out of every brush it overlaps, after a preview. |
 | Merge Brushes (`merge`) | Ctrl+Shift+M | 2 brushes, a level | yes | Join the selected brushes into one brush. |
+| Hull of Selection (`hull`) | none | 2 brushes, a level | yes | Replace the selected brushes with one brush around them all, touching or not. |
 | Intersect (`intersect`) | Ctrl+Shift+I | 2 brushes, a level | yes | Keep only the volume the selected brushes share. |
 | Convert to Brushes (`convert_to_brushes`) | none | no mix of HammerForge and Godot nodes, a level | no | Make the selected convex mesh or CSG node a brush where it stands. |
 | Duplicate (`duplicate`) | Ctrl+D | 1 item, a level | yes | Copy the selected brushes and entities in place. |
@@ -162,6 +165,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Rotate CCW (`rotate_ccw`) | R | a level | yes | Turn the selection a step counterclockwise. |
 | Rotate CW (`rotate_cw`) | Shift+R | a level | yes | Turn the selection a step clockwise. |
 | Flip Selection (`flip_selection`) | Shift+M | a level | yes | Mirror the selection in place across an axis. |
+| Shear (`shear_selection`) | none | 1 item, a level | yes | Lean the selection: one side moves along an axis and the opposite side stays put. |
 | Mirror Copy (`mirror_copy`) | Alt+M | 1 item, a level | yes | Keep the selection and add copies mirrored across the ticked axes. |
 | Offset (`offset_selection`) | Alt+G | 1 item or faces, a level | yes | Move the selection, its vertices or its faces by a typed X, Y and Z. |
 | Pick Pivot (`pick_pivot`) | Alt+P | a level | yes | Click a brush vertex, edge or face to turn and flip about. |
@@ -308,6 +312,12 @@ No parameters.
 ### Merge Brushes (`merge`)
 
 Merge two or more brushes into one: the convex solid they make together. Refused when that solid would not be convex (an L shape, two separate blocks), or when it mixes solid brushes and cuts. The sources are replaced by one brush, given as brush.
+
+No parameters.
+
+### Hull of Selection (`hull`)
+
+Replace two or more brushes with one brush, the convex hull of all their corners, whether they touch or not. It is turned as the first brush in brush_ids is and keeps its operation, visgroups, group and brush entity. A face on an old face's plane keeps that face's look; a new face takes the Active Material. Refused when the brushes mix solid brushes and cuts or are not all one entity.
 
 No parameters.
 

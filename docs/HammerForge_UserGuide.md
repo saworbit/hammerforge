@@ -235,6 +235,7 @@ Destructive geometry operations show a wireframe preview overlay before permanen
 |-----------|--------------|---------------|
 | Carve (Ctrl+Shift+R) | Green wireframe | All resulting slice pieces |
 | Intersect (Ctrl+Shift+I) | Green wireframe | The one brush that is kept |
+| Hull of Selection | Green wireframe | The one brush that wraps them all |
 | Clip (Shift+X) | Cyan wireframe + orange plane | Two resulting halves + the cut surface |
 | Hollow (Ctrl+H) | Yellow wireframe | 6 wall pieces at the chosen thickness |
 | Extrude (U/J) | Semi-transparent brush | New brush being extruded from the face |
@@ -836,6 +837,24 @@ that brush's face, its texture and how it is laid on. Brushes that share no volu
 that mix solid brushes and cuts, or that are not all one entity are refused, and
 nothing changes.
 
+### Hull of Selection
+
+**Hull of Selection** (the command palette, or **Hull** on the context toolbar)
+replaces the selected brushes with one brush, the convex hull of all their
+corners, whether they touch or not: a ramp from one ledge down to another, a
+column tapering from a small top block to a wide base, a wedge between two posts.
+Merge stays as it is, the exact union that refuses brushes that do not touch, so
+nobody asking for a union gets a hull. The green wireframe shows the brush before
+you confirm, and it is one undo step.
+
+The brush is turned as the first selected one is and keeps its operation,
+visgroups, group and brush entity. A face of the hull on an old face's plane takes
+that face's material and texture, the largest one there; a face on no old plane
+takes the Active Material, or with none set the look of the old face it most
+nearly faces as. A face that grew cannot keep a sculpt, and the confirmation and
+the message both say how many go. Brushes that mix solid brushes and cuts, or
+that are not all one entity, are refused.
+
 > Hollow (`Ctrl+H`) handles rotation too. It shells a brush against its own face
 > planes, so a turned box gives you six turned walls. See [Hollow](#hollow).
 
@@ -1001,6 +1020,32 @@ of it.
 **Texture Lock decides the texture**, as it does for a move. On, the texture is
 mirrored with the copy, so the copy shows the mirror image of the original. Off,
 the copy reads the level's texture where it lands, as Flip leaves a brush.
+
+### Shear
+
+Leaning walls, sloped buttresses, a parallelogram floor and a staircase rising
+along a slanted wall are all shears. **Shear** leans the whole selection at once:
+one side of its box moves along an axis and the opposite side stays put, so
+everything between leans by the same amount and brushes that met still meet.
+
+- **The Shear tool** (the command palette, or a key you give it in the Shortcuts
+  dialog) draws the selection's box with a handle in the middle of each side. Drag
+  a handle along its side: that side moves, held to the grid, and the opposite side
+  stays put. Hold **Ctrl** to drag off the grid, and press **Escape** to let the
+  drag go. A green outline shows each brush leaned before you let go.
+- **The Shear command** asks for it in numbers: the axis that moves, the axis it
+  leans over, the amount in metres per metre or in degrees, and which side stays
+  put. A wall leaned 0.5 m over 3 m is 0.167 metres per metre, or 9.46 degrees.
+  The dialog opens as you last left it.
+
+Every corner of every brush moves by the one shear, and a shear keeps a flat face
+flat, so a convex brush stays convex. Each brush keeps its turn, with the lean
+folded into its faces, so a box becomes custom, as Apply Rotation and Scale makes
+one. A point entity moves with its origin and is not turned. A brush with a sculpt
+is left alone, since a lean would stretch it, and the toast names it. With
+**Texture Lock** on, each face keeps its texture where it showed it; off, the
+face's projection is laid on its new corners afresh. It is one undo step, named
+Shear.
 
 ### Arrays
 
@@ -1849,6 +1894,7 @@ The contexts and what their full lists cover:
 | Vertex Edit | Click vertex to select, drag to move, drag on empty space to box select, E: edge mode, Ctrl+W: merge, Ctrl+E: split, Del: delete corners, Alt+Click: add a corner, arrows: nudge corners, R: turn corners |
 | Polygon Tool | Click to place verts, Shift: lock to axis, Enter: close, Escape: remove last |
 | Path Tool | Click to place waypoints, Shift: lock to axis, Enter: finalize, Escape: remove last |
+| Hull Tool | Click: point, double click a face: its corners, Shift drag a face: pull its corners out, Enter: make the brush, Backspace/RMB: take back, Escape: cancel |
 
 The HUD also shows current axis lock state (e.g. "[X Locked]"), and a grid indicator with the snap, plane axis and position (`Grid: 0.5  Y 1.3`). It flashes when the snap changes. Fractional snaps display exactly.
 
@@ -1898,6 +1944,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Rotate CW | Shift+R | Turn the selection clockwise |
 | Flip Selection | Shift+M | Flip the selection |
 | Mirror Copy | Alt+M | Keep the selection and add copies mirrored across the ticked axes |
+| Shear | (palette) | Lean the selection: one side moves along an axis, the opposite side stays put |
 | Reset Rotation | Alt+R | Return the selection to its unrotated orientation |
 | Offset | Alt+G | Move the selection, its vertices or its faces by a typed X, Y, Z |
 | Pick Pivot | Alt+P | Click a brush vertex, edge or face to turn and flip about |
@@ -1958,6 +2005,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Polygon Tool | P | Draw a polygon, extrude to brushes (a concave one splits into convex brushes) |
 | Path Tool | ; | Place waypoints, extrude corridor brushes |
 | Clip Tool | C | Cut the selected brushes along a plane placed with two or three points |
+| Hull Tool | (palette) | Click points or a face's corners and make one brush around them |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 
 **Rebinding:** Press the **?** button on the toolbar to open the shortcut dialog, select a command and press **Set Key**, then the new chord ([#1733](https://github.com/saworbit/hammerforge/issues/1733)). Every command the palette runs is listed and can take a key, not only those that ship with one; a command with no key shows "none". **Set Second Key** gives a command a second chord, and either one fires it; the surfaces that name a key show the first. A chord another command already uses is said before it is kept, with that command's name, and you swap the keys, take it off the other command, or cancel. A chord the editor or the palette takes ahead of every binding, such as Ctrl+S, can only be cancelled. **Clear** takes a command's keys off, **Reset** puts one back to its default and **Reset All** puts every key back. A change works at once, with no restart, and is written to `user://hammerforge_keymap.json`, the keys you changed and nothing else, so an action you left alone keeps picking up later changes to its default. **Export...** and **Import...** share that file with a team. The file can still be edited by hand: each entry maps an action name to `{"keycode": "F", "ctrl": bool, "shift": bool, "alt": bool}`, with an optional `"second"` chord in the same shape, or `{"none": true}` for no key, for example `{"selection_filter": {"keycode": "G", "alt": true}}`. `keycode` is a key name as Godot spells it (`"F"`, `"Delete"`, `"PageDown"`, `"BracketLeft"`) or Godot's integer keycode; modifiers go in their own fields, not in the name. Restart the plugin after editing the file by hand. Every surface that names a chord — the viewport HUD, the coach marks, the dock tooltips, the hotkey palette and the shortcut list — reads the binding rather than repeating it, so a rebind shows up everywhere at once.
@@ -2193,6 +2241,17 @@ This is a fallback repair tool, not a modeling operation — it discards any con
 | Ctrl+W | Merge selected vertices |
 | Ctrl+B | Snap selected vertices to the grid |
 
+## Hull Tool
+
+The Hull tool makes one brush around points you click, for a shape that is easier to click than to draw: a rock, an odd corner fill. Start it with **Hull Tool** in the command palette, or give it a key in the Shortcuts dialog.
+
+- Click to drop a point on the face under the cursor, or on the grid where there is none. Points snap as a Draw start does.
+- Double click a face to add all its corners.
+- Hold **Shift** and drag a face to copy its corners out along its normal, held to the grid, so a face becomes a solid in one gesture.
+- A green wireframe shows the hull of the points as they go.
+- **Enter** makes the brush, as one undo step, with the Active Material. **Backspace** or a right click takes back the last click's points, and **Escape** lets them all go.
+- Fewer than four points, or points all in one plane, hold no solid. Enter says so and keeps the points, so you can add another.
+
 ## Polygon Tool
 
 The polygon tool lets you draw any outline that does not cross itself and extrude it into brushes.
@@ -2419,7 +2478,15 @@ When a face is selected, adjust its UV parameters with the spinboxes:
 
 Changes are live-previewed and fully undoable. Rapid spinbox changes merge into a single undo step.
 
-The boxes edit the face on show. These buttons edit every face in the face selection, as one undo step:
+A box typed in goes to every face in the face selection, and only that box: typing a scale for twenty faces sets it on all twenty and leaves each one's offset and rotation as they were. With no face selected it goes to the face on show. A box the selected faces disagree on shows **mixed** instead of one face's number; typing in it sets all of them.
+
+**Slide and turn with the keys.** In Face Select, with faces selected, the arrow keys move their texture instead of nudging objects:
+- An arrow slides each selected face's texture one grid step the way the arrow points on screen, worked out from that face's own U and V, so a wall seen from the side and a floor seen from above both follow the arrow. **Alt** makes it a tenth of the step.
+- **Shift** with **Left** or **Right** turns the texture 15 degrees about the middle of each face, **Shift+Alt** 1 degree, and **Shift** with **Up** or **Down** a quarter turn.
+- A face seen edge on, or on the Cylindrical projection, is left as it was, and the HUD says how many.
+- The HUD lists the keys with their steps, and a quick run of presses is one undo step.
+
+These buttons edit every face in the face selection too, as one undo step:
 - **x2** and **/2** beside Scale double or halve U and V. Each axis keeps its sign, so a mirrored face stays mirrored, and the offset stays where it is, so faces that lined up still line up. /2 stops at 0.01 and x2 at 100, the range of the boxes.
 - **Link** between the two Scale boxes: while it is on, typing one box sets the other to the same size, each keeping its sign. It is kept in `user://hammerforge_prefs.json`.
 - **Flip U**, **Flip V** and **Rotate 90** under Rotate mirror the texture or turn it a quarter about the middle of the face, so it does not jump. Two flips, or four quarter turns, put the face back.

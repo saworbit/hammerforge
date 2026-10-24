@@ -13,6 +13,7 @@ const HFBrushConversion = preload("hf_brush_conversion.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 const DraftBrush = preload("brush_instance.gd")
+const HFTransformSystem = preload("systems/hf_transform_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFViewAxes = preload("hf_view_axes.gd")
 
@@ -949,6 +950,67 @@ static func intersect_selected(plugin: Object, root: Node) -> bool:
 	return true
 
 
+## Replace the selected brushes with one brush, the convex hull of all their
+## corners (#1715). Asked before the confirmation, as Intersect asks, so brushes
+## that cannot be wrapped say so instead of asking first; then the brush that
+## would be made is shown in Carve's green.
+static func hull_selected(plugin: Object, root: Node) -> bool:
+	var brush_ids := selection_brush_ids(plugin, root)
+	if brush_ids.size() < 2:
+		if plugin.dock:
+			plugin.dock.show_toast("Select at least 2 brushes to wrap in a hull", 1)
+		return false
+	var check: HFOpResult = root.can_hull_brushes(brush_ids)
+	if not check.ok:
+		root.user_message.emit(check.user_text(), 1)
+		return true
+	if root.carve_preview:
+		root.carve_preview.show_hull_preview(brush_ids)
+	var dlg = ConfirmationDialog.new()
+	dlg.title = "Hull of Selection"
+	dlg.dialog_text = (
+		"Replace %d brushes with one brush around them all?\n%s(Green wireframe shows the brush that is made)"
+		% [brush_ids.size(), _dropped_sculpts_line(root.carve_preview)]
+	)
+	dlg.min_size = Vector2i(300, 100)
+	plugin._add_confirmable_dialog(dlg)
+	dlg.confirmed.connect(
+		func():
+			if not is_instance_valid(plugin) or not is_instance_valid(root):
+				dlg.queue_free()
+				return
+			if root.carve_preview:
+				root.carve_preview.clear()
+			# Asked again: a step is registered whatever the method then does.
+			var still: HFOpResult = root.can_hull_brushes(brush_ids)
+			if still.ok:
+				HFUndoHelper.commit(
+					plugin._get_undo_redo(),
+					root,
+					"Hull of Selection",
+					"hull_brushes_by_ids",
+					[brush_ids],
+					false,
+					Callable(plugin, "_record_history"),
+					"",
+					true
+				)
+			else:
+				root.user_message.emit(still.user_text(), 1)
+			dlg.queue_free()
+	)
+	dlg.canceled.connect(
+		func():
+			if not is_instance_valid(plugin):
+				return
+			if root and is_instance_valid(root) and root.carve_preview:
+				root.carve_preview.clear()
+			dlg.queue_free()
+	)
+	dlg.popup_centered()
+	return true
+
+
 # ---------------------------------------------------------------------------
 # Free transform
 # ---------------------------------------------------------------------------
@@ -1053,6 +1115,148 @@ static func mirror_copy_selected(plugin: Object, root: Node) -> bool:
 			plugin.hf_selection.append(entity)
 	plugin._apply_hf_selection(selection)
 	return true
+
+
+## What the Shear dialog last asked for, so it opens as it was left.
+static var last_shear := {"along": 0, "over": 1, "amount": 0.0, "degrees": false, "high": false}
+
+
+## Lean the selection (#1718): every corner moves along `along` by `amount` for
+## each metre past the selection's low side on `over`, or its high side with
+## `high_fixed`, which stays where it is.
+static func shear_selected(
+	plugin: Object, root: Node, along: int, over: int, amount: float, high_fixed := false
+) -> bool:
+	if not root:
+		return false
+	var problem := HFTransformSystem.shear_problem(along, over, amount)
+	if problem != "":
+		root.user_message.emit(problem, 1)
+		return false
+	var targets := collect_managed_targets(plugin, root)
+	var brush_ids: Array = targets["brush_ids"]
+	var entity_paths: Array = targets["entity_paths"]
+	if brush_ids.is_empty() and entity_paths.is_empty():
+		root.user_message.emit("Shear: select brushes or entities first", 1)
+		return false
+	var bounds: AABB = root.transform_system.selection_bounds(brush_ids, entity_paths)
+	var pivot: float = bounds.end[over] if high_fixed else bounds.position[over]
+	var report := commit_shear(
+		plugin._get_undo_redo(),
+		Callable(plugin, "_record_history"),
+		root,
+		brush_ids,
+		entity_paths,
+		along,
+		over,
+		amount,
+		pivot
+	)
+	return int(report.get("changed", 0)) + int(report.get("entities", 0)) > 0
+
+
+## Shear and record it as one step named Shear, and say what it did. The dialog
+## and the Shear tool's drag both come here, so a typed shear and the matching
+## drag cannot differ.
+static func commit_shear(
+	undo_redo: Object,
+	history_cb: Callable,
+	root: Node,
+	brush_ids: Array,
+	entity_paths: Array,
+	along: int,
+	over: int,
+	amount: float,
+	pivot: float
+) -> Dictionary:
+	var before: Dictionary = root.capture_state()
+	var report: Dictionary = root.shear_managed_nodes(
+		brush_ids, entity_paths, along, over, amount, pivot
+	)
+	var brushes := int(report.get("changed", 0))
+	var entities := int(report.get("entities", 0))
+	if brushes + entities > 0:
+		HFUndoHelper.commit_completed(undo_redo, root, "Shear", before, history_cb)
+	var lead := "Sheared %d brush%s" % [brushes, "" if brushes == 1 else "es"]
+	if entities > 0:
+		lead += " and moved %d entit%s" % [entities, "y" if entities == 1 else "ies"]
+	var refused: Array = report.get("refused", [])
+	root.user_message.emit(
+		HFTransformSystem.fold_report_text(report, lead), 1 if not refused.is_empty() else 0
+	)
+	return report
+
+
+## The typed Shear: the axis that moves, the axis it leans over, the amount in
+## metres per metre or in degrees, and the side that stays put.
+static func open_shear_dialog(plugin: Object, root: Node) -> ConfirmationDialog:
+	if not root:
+		return null
+	var targets := collect_managed_targets(plugin, root)
+	if (targets["brush_ids"] as Array).is_empty() and (targets["entity_paths"] as Array).is_empty():
+		root.user_message.emit("Shear: select brushes or entities first", 1)
+		return null
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Shear"
+	var grid := GridContainer.new()
+	grid.columns = 2
+	dialog.add_child(grid)
+	var along := _labelled_options(grid, "Move along", ["X", "Y", "Z"], last_shear["along"])
+	along.name = "Along"
+	var over := _labelled_options(grid, "Leaning over", ["X", "Y", "Z"], last_shear["over"])
+	over.name = "Over"
+	var label := Label.new()
+	label.text = "Amount"
+	grid.add_child(label)
+	var amount := SpinBox.new()
+	amount.name = "Amount"
+	amount.min_value = -100.0
+	amount.max_value = 100.0
+	amount.step = 0.001
+	amount.value = float(last_shear["amount"])
+	grid.add_child(amount)
+	var unit := _labelled_options(
+		grid, "In", ["metres per metre", "degrees"], 1 if last_shear["degrees"] else 0
+	)
+	unit.name = "Unit"
+	var side := _labelled_options(
+		grid, "Stays put", ["Low side", "High side"], 1 if last_shear["high"] else 0
+	)
+	side.name = "Side"
+	dialog.confirmed.connect(
+		func():
+			var degrees := unit.selected == 1
+			last_shear = {
+				"along": along.selected,
+				"over": over.selected,
+				"amount": amount.value,
+				"degrees": degrees,
+				"high": side.selected == 1,
+			}
+			var lean: float = amount.value
+			if degrees:
+				lean = HFTransformSystem.shear_amount_for_degrees(clampf(amount.value, -89.0, 89.0))
+			shear_selected(plugin, root, along.selected, over.selected, lean, side.selected == 1)
+			dialog.queue_free()
+	)
+	dialog.canceled.connect(dialog.queue_free)
+	plugin._add_confirmable_dialog(dialog)
+	dialog.popup_centered()
+	return dialog
+
+
+static func _labelled_options(
+	grid: GridContainer, text: String, items: Array, selected: int
+) -> OptionButton:
+	var label := Label.new()
+	label.text = text
+	grid.add_child(label)
+	var options := OptionButton.new()
+	for item in items:
+		options.add_item(str(item))
+	options.select(selected)
+	grid.add_child(options)
+	return options
 
 
 ## Clear rotation on the selected brushes, keeping their position and size.

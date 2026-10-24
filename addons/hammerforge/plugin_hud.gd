@@ -13,6 +13,7 @@ const HFPluginOverlays = preload("plugin_overlays.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 const HFSizeLabels = preload("hf_size_labels.gd")
+const HFPluginTextureKeysType = preload("plugin_texture_keys.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -62,6 +63,7 @@ static func update_hud_context(plugin: Object) -> void:
 	ctx["face_xray"] = (
 		dock != null and dock.is_face_select_mode_enabled() and dock.is_face_xray_enabled()
 	)
+	ctx["texture_keys"] = PackedStringArray()
 	ctx["mode"] = 0
 	ctx["axis_lock"] = 0
 	ctx["external_tool_name"] = ""
@@ -71,6 +73,9 @@ static func update_hud_context(plugin: Object) -> void:
 	if root and root.input_state:
 		ctx["mode"] = root.input_state.mode
 		ctx["axis_lock"] = root.input_state.axis_lock
+	# What the arrows do to the picked faces' textures, with the steps (#1728).
+	if root and HFPluginTextureKeysType.active(plugin, root):
+		ctx["texture_keys"] = HFPluginTextureKeysType.hud_lines(root)
 	# Where the last arrow press went, for a moment after it (#1716).
 	var readout = plugin.get("_nudge_readout")
 	if readout is Array and readout.size() == 2:

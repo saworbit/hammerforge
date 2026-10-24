@@ -85,6 +85,7 @@ const HFDockVisgroupHandler = preload("dock_visgroup_handler.gd")
 const HFDockFileHandler = preload("dock_file_handler.gd")
 const HFDockToolMemory = preload("dock_tool_memory.gd")
 const HFViewFiltersType = preload("hf_view_filters.gd")
+const HFUVMulti = preload("hf_uv_multi.gd")
 const HFQuickSelectType = preload("hf_quick_select.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -4504,6 +4505,7 @@ func _on_root_material_list_changed() -> void:
 
 func _on_root_face_selection_changed() -> void:
 	_sync_surface_paint_from_root()
+	_show_mixed_uv_fields()
 	set_selection_count(_selection_nodes.size())
 	_hints_dirty = true
 
@@ -6005,60 +6007,52 @@ var _uv_param_updating := false
 func _on_uv_param_changed(value: float, param: String) -> void:
 	if _uv_param_updating:
 		return
-	if _uv_active_face == null or _uv_active_brush == null:
-		return
-	if not level_root:
+	if not level_root or not HFUVMulti.FIELDS.has(param):
 		return
 	if not _guard_selection_action("Edit UV", DockSelectionRequirement.BRUSHES_ONLY):
 		return
-	if _uv_active_brush.brush_id == "":
-		level_root.get_brush_info_from_node(_uv_active_brush)
-	var brush_id: String = _uv_active_brush.brush_id
-	var face_idx: int = _uv_active_brush.faces.find(_uv_active_face)
-	if brush_id == "" or face_idx < 0:
-		return
-	# The box that changed, over what the face holds. Reading every box rounded
-	# the others to their steps: a scale of 0.125 that /2 made went back as 0.13
-	# the moment the offset was touched.
-	var face := _uv_active_face
-	var uv_scale := face.uv_scale
-	var offset := face.uv_offset
-	var uv_rotation := face.uv_rotation
-	match param:
-		"scale_x":
-			uv_scale.x = value
-			if _uv_scale_linked():
-				uv_scale.y = _same_uv_size(value, uv_scale.y)
-				_show_uv_scale(uv_scale_y, uv_scale.y)
-		"scale_y":
-			uv_scale.y = value
-			if _uv_scale_linked():
-				uv_scale.x = _same_uv_size(value, uv_scale.x)
-				_show_uv_scale(uv_scale_x, uv_scale.x)
-		"offset_x":
-			offset.x = value
-		"offset_y":
-			offset.y = value
-		"rotation":
-			uv_rotation = deg_to_rad(value)
-		_:
+	# The box typed goes to every selected face, and only that box: each face
+	# keeps its own values for the rest (#1728). It used to reach the face on
+	# show alone, which still takes it with no face selected. Reading every box
+	# rounded the others to their steps: a scale of 0.125 that /2 made went back
+	# as 0.13 the moment the offset was touched.
+	var records := HFUVMulti.picked(level_root)
+	if records.is_empty():
+		if _uv_active_face == null or _uv_active_brush == null:
 			return
-	# Route through undo system with collation so rapid spinbox changes merge.
-	# The scope is the one brush the spinbox is editing: set_face_uv_params()
-	# writes one face's UV fields and rebuilds that brush's preview, and the
-	# collation tag already names the brush and the face (#761).
+		if _uv_active_brush.brush_id == "":
+			level_root.get_brush_info_from_node(_uv_active_brush)
+		var face_idx: int = _uv_active_brush.faces.find(_uv_active_face)
+		if _uv_active_brush.brush_id == "" or face_idx < 0:
+			return
+		records = [
+			{
+				"brush_id": str(_uv_active_brush.brush_id),
+				"index": face_idx,
+				"face": _uv_active_face,
+			}
+		]
+	var changes := HFUVMulti.field_changes(records, param, value, _uv_scale_linked())
+	var keys := PackedStringArray()
+	for change in changes:
+		keys.append("%s:%d" % [change[0], change[1]])
+	# Through the undo system with collation, so a run of spinbox changes to the
+	# same faces merges. The scope is the brushes the faces are on (#761).
 	HFUndoHelper.commit(
 		undo_redo,
 		level_root,
 		"Set UV Params",
-		"set_face_uv_params",
-		[brush_id, face_idx, uv_scale, offset, uv_rotation],
+		"set_uv_params_on_faces",
+		[changes],
 		false,
 		Callable(self, "record_history"),
-		"uv_param_%s_%d" % [brush_id, face_idx],
-		false,
-		[brush_id]
+		"uv_param_%s_%s" % [param, ",".join(keys)],
+		true,
+		HFUVMulti.brush_ids_of(changes)
 	)
+	# A linked scale set the other box too, and the faces agree on the box now.
+	if _uv_active_face:
+		_sync_uv_params_to_face(_uv_active_face)
 	_refresh_uv_canvas()
 
 
@@ -6084,17 +6078,6 @@ func _on_uv_smoothing_changed(value: float) -> void:
 ## Whether U and V are linked in the Scale row (#1418).
 func _uv_scale_linked() -> bool:
 	return uv_scale_link != null and uv_scale_link.button_pressed
-
-
-## `other` made as large as `typed`, keeping its own sign: a mirrored axis stays
-## mirrored when the other is typed.
-static func _same_uv_size(typed: float, other: float) -> float:
-	return absf(typed) * (-1.0 if other < 0.0 else 1.0)
-
-
-func _show_uv_scale(spin: SpinBox, uv_size: float) -> void:
-	if spin:
-		spin.set_value_no_signal(uv_size)
 
 
 func _on_uv_scale_link_toggled(pressed: bool) -> void:
@@ -6162,6 +6145,45 @@ func _sync_uv_params_to_face(face: FaceData) -> void:
 	if uv_smoothing_spin:
 		uv_smoothing_spin.value = face.smoothing_group
 	_uv_param_updating = false
+	_show_mixed_uv_fields()
+
+
+## A box the selected faces disagree on shows "mixed" rather than the face on
+## show's number, which read as if they all matched (#1728). Typing in it sets
+## all of them.
+func _show_mixed_uv_fields() -> void:
+	var records := HFUVMulti.picked(level_root) if level_root else []
+	var boxes := [uv_scale_x, uv_scale_y, uv_offset_x, uv_offset_y, uv_rotation_spin]
+	for i in boxes.size():
+		var spin: SpinBox = boxes[i]
+		if spin == null:
+			continue
+		var line := spin.get_line_edit()
+		if HFUVMulti.mixed(records, HFUVMulti.FIELDS[i]):
+			line.text = ""
+			line.placeholder_text = "mixed"
+		elif line.placeholder_text != "":
+			line.placeholder_text = ""
+			_refresh_spin_text(spin)
+
+
+## Write a box's number back into its text, after "mixed" cleared it. Setting the
+## value it already has writes nothing, so it goes a step away and back.
+static func _refresh_spin_text(spin: SpinBox) -> void:
+	var held := spin.value
+	var away := held - spin.step if held + spin.step > spin.max_value else held + spin.step
+	spin.set_value_no_signal(away)
+	spin.set_value_no_signal(held)
+
+
+## Which UV boxes show "mixed" now, by field.
+func mixed_uv_fields() -> Array:
+	var out: Array = []
+	var boxes := [uv_scale_x, uv_scale_y, uv_offset_x, uv_offset_y, uv_rotation_spin]
+	for i in boxes.size():
+		if boxes[i] != null and (boxes[i] as SpinBox).get_line_edit().placeholder_text == "mixed":
+			out.append(HFUVMulti.FIELDS[i])
+	return out
 
 
 func _on_uv_changed(_face: FaceData) -> void:

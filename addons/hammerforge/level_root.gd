@@ -2158,6 +2158,22 @@ func set_brush_rotation_by_id(brush_id: String, degrees: Vector3) -> HFOpResult:
 	return HFOpResult.success()
 
 
+## Shear (#1718): lean brushes and move entities along `along` by `amount` for
+## each unit past `pivot` on `over`. Returns the transform system's report.
+## Records no undo; the caller does.
+func shear_managed_nodes(
+	brush_ids: Array, entity_paths: Array, along: int, over: int, amount: float, pivot: float
+) -> Dictionary:
+	if not transform_system:
+		return {"changed": 0, "refused": [], "entities": 0}
+	begin_signal_batch()
+	var report: Dictionary = transform_system.shear(
+		brush_ids, entity_paths, along, over, amount, pivot
+	)
+	end_signal_batch()
+	return report
+
+
 func reset_managed_rotation(brush_ids: Array) -> void:
 	if not transform_system:
 		return
@@ -2585,6 +2601,14 @@ func can_intersect_brushes(brush_ids: Array) -> HFOpResult:
 	return carve_system.can_intersect_brushes(brush_ids)
 
 
+func hull_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	return carve_system.hull_brushes_by_ids(brush_ids)
+
+
+func can_hull_brushes(brush_ids: Array) -> HFOpResult:
+	return carve_system.can_hull_brushes(brush_ids)
+
+
 ## The tie decides which brushes the bake makes one entity of, so each brush tied
 ## or untied is a change for Bake Changed, even when its class and name stay the
 ## same (#1198).
@@ -2985,6 +3009,20 @@ func set_face_uv_params(
 		tag_brush_dirty(brush_id)
 		# The face's texture group lays on the same (#1437).
 		brush_system.spread_texture_groups([face])
+
+
+## Several faces' scale, offset and turn at once (#1728), each change as
+## `[brush_id, face_idx, scale, offset, rotation]`, through `set_face_uv_params()`
+## so a layout laid by hand and a texture group follow as they do for one face.
+## Returns how many faces it set. Records no undo; the caller does.
+func set_uv_params_on_faces(changes: Array) -> int:
+	var count := 0
+	for change in changes:
+		if not (change is Array) or (change as Array).size() != 5:
+			continue
+		set_face_uv_params(str(change[0]), int(change[1]), change[2], change[3], float(change[4]))
+		count += 1
+	return count
 
 
 func clip_brush_to_convex(brush_id: String) -> bool:

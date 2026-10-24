@@ -192,6 +192,27 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "tool_hull",
+		"label": "Hull Tool",
+		"help":
+		"Start the Hull tool: click points, or a face's corners, and Enter makes one brush around them.",
+		"aliases": ["points to brush", "rock"],
+		"category": "Tools",
+		"needs_level": false,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "tool_shear",
+		"label": "Shear Tool",
+		"help":
+		"Start the Shear tool: drag a handle on a side of the selection's box to lean everything between.",
+		"category": "Tools",
+		"needs_level": false,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "tool_decal",
 		"label": "Decal Tool",
 		"help": "Start the Decal tool, which places a decal on the surface you click.",
@@ -467,6 +488,26 @@ const COMMANDS := [
 		"repeat": true
 	},
 	{
+		"id": "hull",
+		"label": "Hull of Selection",
+		"help": "Replace the selected brushes with one brush around them all, touching or not.",
+		"aliases": ["convex hull", "wrap"],
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 2, "label": "Hull of Selection"},
+		"palette": true,
+		"bridge":
+		{
+			"form": "hull",
+			"description":
+			"Replace two or more brushes with one brush, the convex hull of all their corners, whether they touch or not. It is turned as the first brush in brush_ids is and keeps its operation, visgroups, group and brush entity. A face on an old face's plane keeps that face's look; a new face takes the Active Material. Refused when the brushes mix solid brushes and cuts or are not all one entity.",
+			"targets": {"min": 2, "max": -1, "entities": false},
+			"params": [],
+			"undo": "level"
+		},
+		"repeat": true
+	},
+	{
 		"id": "intersect",
 		"label": "Intersect",
 		"help": "Keep only the volume the selected brushes share.",
@@ -512,6 +553,17 @@ const COMMANDS := [
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {},
+		"repeat": true
+	},
+	{
+		"id": "shear_selection",
+		"label": "Shear",
+		"help": "Lean the selection: one side moves along an axis and the opposite side stays put.",
+		"aliases": ["skew", "lean", "slant"],
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Shear"},
+		"palette": true,
 		"repeat": true
 	},
 	{

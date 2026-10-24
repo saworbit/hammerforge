@@ -1,0 +1,1 @@
+- A typed UV box goes to every selected face, a box the faces disagree on shows mixed, and in Face Select the arrows slide and turn the texture. (issue [#1728](https://github.com/saworbit/hammerforge/issues/1728))
