@@ -135,7 +135,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 <img src="images/showcase_gallery.png" alt="Low view up through a HammerForge colonnade toward the gallery overhead, lit by sunlight" width="820">
 
-- **Visual material browser** -- thumbnail grid with search, pattern/color filters, and Prototypes/Palette/Favorites views
+- **Visual material browser** -- thumbnail grid with search, pattern/color filters, and Prototypes/Palette/Favorites views; marks what the level uses with a face count, an In Use view with the most used first, a search that takes every word, Select Faces and Select Brushes Using This, and a thumbnail size slider (#1725)
 - **150 built-in prototype textures** (15 patterns x 10 colors) -- click **Refresh Prototypes** for instant greyboxing with visual browsing
 - **Texture Picker** (T key) -- eyedropper tool samples material from any face
 - **Apply Picked Look** (Alt+T) -- gives the selected faces the picked face's material, projection, scale, offset and rotation in one undo step, so faces on separate brushes line up
