@@ -12,6 +12,8 @@ const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFPlaytestRequest = preload("hf_playtest_request.gd")
 const HFBakeProfilesType = preload("hf_bake_profiles.gd")
+const HFAcceptedFindings = preload("hf_accepted_findings.gd")
+const HFValidationChecks = preload("hf_validation_checks.gd")
 
 ## The saved profiles as last read and the stored values they were read from, so
 ## a bad entry in the preferences is named once rather than at every click.
@@ -134,7 +136,9 @@ static func on_bake_check_issues(dock: Object) -> void:
 	var issues: Array = dock.level_root.validation_system.check_bake_issues()
 	if dock.level_root.spawn_system:
 		issues.append_array(dock.level_root.spawn_system.layout_issues())
-	show_bake_issue_list(dock, issues)
+	var sorted := HFAcceptedFindings.sort(dock.level_root, issues)
+	show_findings(dock, sorted["open"], sorted["accepted"], "bake")
+	issues = sorted["open"]
 	if issues.is_empty():
 		dock.show_toast("No bake issues found", 0)
 		dock._set_status("Bake check: no issues", false, 3.0)
@@ -159,19 +163,235 @@ static func on_bake_check_issues(dock: Object) -> void:
 ## Fix button that makes it as one undo step and checks again; the rest stay rows,
 ## because a fix that is a judgement call is the mapper's.
 static func show_bake_issue_list(dock: Object, issues: Array) -> void:
+	var sorted := HFAcceptedFindings.sort(dock.level_root, issues)
+	show_findings(dock, sorted["open"], sorted["accepted"], "bake")
+
+
+## Keep what the list shows, `open` findings and the `accepted` ones set aside,
+## and which button found them, then draw it. An edit to what a Validate list
+## names is checked again from this once it settles (#1731).
+static func show_findings(dock: Object, open: Array, accepted: Array, source: String) -> void:
+	dock._shown_findings = {"open": open, "accepted": accepted, "source": source}
+	dock._findings_changed_ids = {}
+	dock._findings_entities_changed = false
+	render_findings(dock)
+
+
+## Draw the list from what it keeps: a row per open finding, the accepted ones
+## when Show accepted is on, and a Select All row per kind.
+static func render_findings(dock: Object) -> void:
 	var list: VBoxContainer = dock.bake_issue_list
 	if list == null:
 		return
 	for child in list.get_children():
 		list.remove_child(child)
 		child.queue_free()
-	list.visible = not issues.is_empty()
+	var shown: Dictionary = dock._shown_findings
+	var issues: Array = _still_there(shown.get("open", []))
+	var accepted: Array = _still_there(shown.get("accepted", []))
+	var with_accepted: bool = (
+		dock.show_accepted_findings != null and dock.show_accepted_findings.button_pressed
+	)
 	for issue in issues:
 		list.add_child(_bake_issue_row(dock, issue))
+	if with_accepted:
+		for issue in accepted:
+			list.add_child(_accepted_row(dock, issue))
 	for kind in KIND_ROWS:
 		var nodes := _nodes_of_kind(issues, kind)
 		if not nodes.is_empty():
 			list.add_child(_kind_row(dock, kind, nodes))
+	list.visible = list.get_child_count() > 0
+	if dock.show_accepted_findings != null:
+		dock.show_accepted_findings.text = "Show accepted (%d)" % accepted.size()
+
+
+## The findings whose objects are still in the level. A row naming a brush that
+## was deleted has nothing left to select.
+static func _still_there(findings: Array) -> Array:
+	var out: Array = []
+	for finding in findings:
+		var node: Variant = finding.get("node")
+		if node != null and not is_instance_valid(node):
+			continue
+		var other: Variant = finding.get("other_node")
+		if other != null and not is_instance_valid(other):
+			continue
+		out.append(finding)
+	return out
+
+
+## A row for an accepted finding: what it says, why it is fine and when that was
+## said, and Un-accept.
+static func _accepted_row(dock: Object, issue: Dictionary) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var record: Dictionary = issue.get("accepted", {})
+	var text := Label.new()
+	var note := str(record.get("note", ""))
+	text.text = (
+		"Accepted  %s%s (%s)"
+		% [
+			str(issue.get("message", "")),
+			(": " + note) if note != "" else "",
+			str(record.get("date", "")),
+		]
+	)
+	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.modulate = Color(1, 1, 1, 0.6)
+	row.add_child(text)
+	var back := Button.new()
+	back.text = "Un-accept"
+	back.tooltip_text = "List this finding again on every pass"
+	back.pressed.connect(dock._on_finding_unaccept.bind(str(issue.get("key", ""))))
+	row.add_child(back)
+	return row
+
+
+## Accept `finding` with `note`, as one undo step, and draw the list again.
+static func accept_finding(dock: Object, finding: Dictionary, note: String) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var before: Dictionary = dock.level_root.capture_state()
+	var key := HFAcceptedFindings.accept(dock.level_root, finding, note)
+	if key == "":
+		return
+	HFUndoHelper.commit_completed(
+		dock.undo_redo, dock.level_root, "Accept Finding", before, Callable(dock, "record_history")
+	)
+	_resort_shown(dock)
+
+
+## Take an acceptance back, as one undo step, and draw the list again.
+static func unaccept_finding(dock: Object, key: String) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var before: Dictionary = dock.level_root.capture_state()
+	if not HFAcceptedFindings.unaccept(dock.level_root, key):
+		return
+	HFUndoHelper.commit_completed(
+		dock.undo_redo,
+		dock.level_root,
+		"Un-accept Finding",
+		before,
+		Callable(dock, "record_history")
+	)
+	_resort_shown(dock)
+
+
+static func _resort_shown(dock: Object) -> void:
+	var shown: Dictionary = dock._shown_findings
+	var everything: Array = []
+	for finding in shown.get("open", []) + shown.get("accepted", []):
+		var plain: Dictionary = finding.duplicate()
+		for key in ["key", "accepted", "changed_since_accepted", "accepted_note"]:
+			plain.erase(key)
+		everything.append(plain)
+	var sorted := HFAcceptedFindings.sort(dock.level_root, everything)
+	dock._shown_findings["open"] = sorted["open"]
+	dock._shown_findings["accepted"] = sorted["accepted"]
+	render_findings(dock)
+
+
+## Ask why a finding is fine, then accept it.
+static func open_accept_dialog(dock: Object, finding: Dictionary) -> ConfirmationDialog:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Accept Finding"
+	dialog.ok_button_text = "Accept"
+	var box := VBoxContainer.new()
+	var says := Label.new()
+	says.text = str(finding.get("message", ""))
+	says.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	says.custom_minimum_size = Vector2(320, 0)
+	box.add_child(says)
+	var note := LineEdit.new()
+	note.name = "Note"
+	note.placeholder_text = "Why this is fine, such as decorative, not walked"
+	box.add_child(note)
+	dialog.add_child(box)
+	dialog.confirmed.connect(
+		func():
+			accept_finding(dock, finding, note.text)
+			dialog.queue_free()
+	)
+	dialog.canceled.connect(dialog.queue_free)
+	dock.add_child(dialog)
+	dialog.popup_centered()
+	note.grab_focus()
+	return dialog
+
+
+## An edit to the level while a Validate list shows: note what changed and wait
+## for a second without edits before checking it again (#1731).
+static func note_findings_change(dock: Object, brush_id: String, entities: bool) -> void:
+	if dock == null or str(dock._shown_findings.get("source", "")) != "validate":
+		return
+	if brush_id != "":
+		dock._findings_changed_ids[brush_id] = true
+	if entities:
+		dock._findings_entities_changed = true
+	if dock._findings_settle == null or not is_instance_valid(dock._findings_settle):
+		dock._findings_settle = Timer.new()
+		dock._findings_settle.name = "FindingsSettle"
+		dock._findings_settle.one_shot = true
+		dock._findings_settle.wait_time = FINDINGS_SETTLE_SECONDS
+		dock._findings_settle.timeout.connect(dock._on_findings_settled)
+		dock.add_child(dock._findings_settle)
+	if dock._findings_settle.is_inside_tree():
+		dock._findings_settle.start()
+
+
+## How long the level has to stay still before the list checks what changed.
+const FINDINGS_SETTLE_SECONDS := 1.0
+
+
+## Check again only what changed since the list was drawn, and redraw it: rows
+## about a changed brush go, and what the recheck finds about them comes in.
+static func settle_findings(dock: Object) -> void:
+	if dock == null or not dock.level_root or not dock.level_root.validation_system:
+		return
+	var ids: Array = dock._findings_changed_ids.keys()
+	var entities: bool = dock._findings_entities_changed
+	dock._findings_changed_ids = {}
+	dock._findings_entities_changed = false
+	if ids.is_empty() and not entities:
+		return
+	var result: Dictionary = dock.level_root.validation_system.recheck(ids, entities)
+	var shown: Dictionary = dock._shown_findings
+	for part in ["open", "accepted"]:
+		var kept: Array = []
+		for finding in shown.get(part, []):
+			if (
+				_names_a_changed(finding, ids)
+				or (entities and finding.get("check", "") == "entities")
+			):
+				continue
+			kept.append(finding)
+		kept.append_array(result.get(part, []))
+		shown[part] = kept
+	render_findings(dock)
+
+
+static func _names_a_changed(finding: Dictionary, ids: Array) -> bool:
+	for slot in ["node", "other_node"]:
+		var node: Variant = finding.get(slot)
+		if node is DraftBrush and is_instance_valid(node) and ids.has(str(node.brush_id)):
+			return true
+	return false
+
+
+## Run a kind of check or leave it out, for the whole project.
+static func set_check_runs(dock: Object, kind: String, on: bool) -> void:
+	var err := HFValidationChecks.set_runs(kind, on)
+	if dock and err == OK:
+		dock._set_status(
+			(
+				"Validate %s %s"
+				% ["runs" if on else "leaves out", str(HFValidationChecks.KINDS[kind]).to_lower()]
+			),
+			false,
+			3.0
+		)
 
 
 ## The kinds of finding a row below the list selects together, with what the row
@@ -246,6 +466,11 @@ static func _bake_issue_row(dock: Object, issue: Dictionary) -> HBoxContainer:
 	var severity: int = clampi(int(issue.get("severity", 0)), 0, 2)
 	var text := Label.new()
 	text.text = "%s  %s" % [["Info", "Warning", "Error"][severity], str(issue.get("message", ""))]
+	if issue.get("changed_since_accepted", false):
+		text.text += "  (changed since accepted)"
+		var note := str(issue.get("accepted_note", ""))
+		if note != "":
+			text.tooltip_text = "Accepted as: %s" % note
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(text)
@@ -269,6 +494,12 @@ static func _bake_issue_row(dock: Object, issue: Dictionary) -> HBoxContainer:
 		fix_button.tooltip_text = BAKE_ISSUE_FIXES[fix]
 		fix_button.pressed.connect(dock._on_bake_issue_fix.bind(fix, node))
 		row.add_child(fix_button)
+	# Fine as it is for this level: set it aside, with a note (#1731).
+	var accept := Button.new()
+	accept.text = "Accept"
+	accept.tooltip_text = "This is meant: stop listing it until what it names changes"
+	accept.pressed.connect(dock._on_finding_accept.bind(issue))
+	row.add_child(accept)
 	return row
 
 
@@ -1398,7 +1629,7 @@ static func run_validation(dock: Object, auto_fix: bool) -> void:
 	# The same rows Check Bake Issues fills, with Select on the object each names.
 	# The findings were a count in the status line and text in the log, so a
 	# mapper found the brushes they named by hand in the Scene dock (#1004).
-	show_bake_issue_list(dock, result.get("findings", []))
+	show_findings(dock, result.get("findings", []), result.get("accepted", []), "validate")
 	if issues.is_empty():
 		if auto_fix and fixed > 0:
 			dock._set_status("Validate: fixed %d, no issues left" % fixed, false, 3.0)

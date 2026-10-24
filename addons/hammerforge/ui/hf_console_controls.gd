@@ -66,6 +66,12 @@ const GROUPS := [
 				"Before you click, tints the face a draw would start on and marks the snapped start point, with the two grid lines through it."
 			},
 			{
+				"pref": "snap_labels",
+				"label": "Name the snap",
+				"help":
+				"A word beside the snap marker says what the point is on: Vertex, Midpoint, Centre, Perpendicular or Grid. The marker's shape says it too."
+			},
+			{
 				"pref": "nudge_follows_view",
 				"label": "Arrows follow the view",
 				"help":

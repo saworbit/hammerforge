@@ -34,6 +34,7 @@ const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFObjectFilter = preload("../hf_object_filter.gd")
 const HFEntityCensus = preload("../hf_entity_census.gd")
 const HFLevelPlan = preload("../hf_level_plan.gd")
+const HFAcceptedFindings = preload("../hf_accepted_findings.gd")
 
 ## World axes a face selector may name.
 const SIDES := {
@@ -720,10 +721,15 @@ func _read_validate(root: Node, _params: Dictionary) -> Dictionary:
 		found.append_array(partial_bake_findings(root, spawns.get_active_spawn()))
 	var report: Dictionary = root.validate_level(false)
 	found.append_array(report.get("findings", []))
+	# A finding accepted for this level is counted, not listed (#1731). Validate
+	# has set its own aside already; the bake and spawn checks are sorted here.
+	var sorted := HFAcceptedFindings.sort(root, found)
+	var accepted_count: int = (sorted["accepted"] as Array).size()
+	accepted_count += (report.get("accepted", []) as Array).size()
 	var issues: Array = []
 	var seen := {}
 	var counts := {"error": 0, "warning": 0, "info": 0}
-	for item in found:
+	for item in sorted["open"]:
 		if not (item is Dictionary):
 			continue
 		var entry := _issue_dict(root, item)
@@ -739,7 +745,7 @@ func _read_validate(root: Node, _params: Dictionary) -> Dictionary:
 		seen[key] = true
 		issues.append(entry)
 		counts[entry["severity"]] += 1
-	return {"ok": true, "result": {"issues": issues, "counts": counts}}
+	return {"ok": true, "result": {"issues": issues, "counts": counts, "accepted": accepted_count}}
 
 
 const _SEVERITIES := ["info", "warning", "error"]
@@ -768,6 +774,10 @@ func _issue_dict(root: Node, item: Dictionary) -> Dictionary:
 		entry["other_brush_id"] = (other as DraftBrush).brush_id
 	if item.has("fix"):
 		entry["fix"] = str(item["fix"])
+	if item.has("check"):
+		entry["check"] = str(item["check"])
+	if item.get("changed_since_accepted", false):
+		entry["changed_since_accepted"] = true
 	return entry
 
 

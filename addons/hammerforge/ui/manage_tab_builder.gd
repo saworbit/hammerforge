@@ -190,6 +190,23 @@ func build(parent: Control) -> void:
 	dock.bake_issue_list.name = "BakeIssueList"
 	dock.bake_issue_list.visible = false
 	adv.add_child(dock.bake_issue_list)
+	# Show the findings set aside as fine, and choose which checks run (#1731).
+	dock.findings_tools_row = HBoxContainer.new()
+	dock.findings_tools_row.name = "FindingsTools"
+	dock.show_accepted_findings = CheckBox.new()
+	dock.show_accepted_findings.text = "Show accepted (0)"
+	dock.show_accepted_findings.tooltip_text = ("List the findings accepted for this level, with Un-accept")
+	dock.findings_tools_row.add_child(dock.show_accepted_findings)
+	dock.validate_checks_btn = MenuButton.new()
+	dock.validate_checks_btn.text = "Checks"
+	dock.validate_checks_btn.flat = false
+	dock.validate_checks_btn.tooltip_text = (
+		"Which kinds of check Validate runs. Kept for the whole project in "
+		+ "hammerforge_presets/validation_checks.json"
+	)
+	dock.validate_checks_btn.get_popup().hide_on_checkable_item_selection = false
+	dock.findings_tools_row.add_child(dock.validate_checks_btn)
+	adv.add_child(dock.findings_tools_row)
 
 	# -- Preview mode --
 	var preview_row = HBoxContainer.new()
@@ -764,6 +781,12 @@ func connect_signals() -> void:
 		dock.bake_changed_btn.pressed.connect(dock._on_bake_changed)
 	if dock.bake_check_issues_btn:
 		dock.bake_check_issues_btn.pressed.connect(dock._on_bake_check_issues)
+	if dock.show_accepted_findings:
+		dock.show_accepted_findings.toggled.connect(dock._on_show_accepted_toggled)
+	if dock.validate_checks_btn:
+		var checks_popup: PopupMenu = dock.validate_checks_btn.get_popup()
+		dock.validate_checks_btn.about_to_popup.connect(dock._on_validate_checks_about_to_popup)
+		checks_popup.index_pressed.connect(dock._on_validate_check_toggled)
 	if dock.quick_play_camera_btn:
 		dock.quick_play_camera_btn.pressed.connect(dock._on_quick_play_from_camera)
 	if dock.quick_play_area_btn:

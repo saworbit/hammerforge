@@ -260,6 +260,7 @@ addons/hammerforge/
   plugin_overlays.gd     Power-user lifecycle, vertex/marquee drawing, quick properties, and coach marks
   plugin_vertex_input.gd Vertex/edge pick, drag, merge, and split dispatch
   plugin_hud.gd          HUD context, mode banner, and the state push to the context toolbar and palette
+  plugin_snap_feedback.gd  The snap marker and its label over the viewport, Tab to the next snap, and the one-pick limits
   plugin_vertex_ops.gd   Vertex merge, split, and selection-resolving wrappers
   plugin_shortcuts.gd    Editor shortcut registration and keymap binding
   plugin_tool_modes.gd   Tool-mode entry, exit, and mutual exclusion

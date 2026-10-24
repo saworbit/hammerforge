@@ -27,6 +27,7 @@ const HFPluginSelectionInput = preload("plugin_selection_input.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginShortcuts = preload("plugin_shortcuts.gd")
+const HFPluginSnapFeedback = preload("plugin_snap_feedback.gd")
 const HFPluginGestureRecovery = preload("plugin_gesture_recovery.gd")
 const HFPluginMaterialCommands = preload("plugin_material_commands.gd")
 const HFPluginToolModes = preload("plugin_tool_modes.gd")
@@ -920,7 +921,10 @@ static func is_lmb_release_recovery_motion(event: InputEvent) -> bool:
 
 
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
-	return HFPluginViewportInput.handle(self, camera, event)
+	HFPluginSnapFeedback.begin(self, event)
+	var answer := HFPluginViewportInput.handle(self, camera, event)
+	HFPluginSnapFeedback.end(self, event)
+	return answer
 
 
 func _should_start_disp_paint(event: InputEvent, root: Node, cam: Camera3D) -> bool:
@@ -1641,6 +1645,7 @@ func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
 	HFPluginOverlays.refresh_viewport_overlay_placement(self)
 	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
 	HFPluginHud.draw_cursor_size(self, viewport_control)
+	HFPluginSnapFeedback.draw(self, viewport_control)
 	if _agent_highlight:
 		_agent_highlight.draw_edge_arrow(viewport_control, last_3d_camera)
 

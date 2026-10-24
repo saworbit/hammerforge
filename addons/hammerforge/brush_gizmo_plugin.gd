@@ -10,6 +10,7 @@ const LevelRoot = preload("level_root.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
+const HFSnapSystemType = preload("hf_snap_system.gd")
 const HFOverlayColors = preload("hf_overlay_colors.gd")
 const MIN_SIZE := 0.1
 const AXIS_SCALE_EPSILON := 0.00001
@@ -534,6 +535,7 @@ static func land_handle_drag(
 		)
 	if snap:
 		snap.set_drag_marker(target)
+		snap.show_drag_pick(target, HFSnapSystemType.KIND_VERTEX if target != null else "")
 	return resize
 
 

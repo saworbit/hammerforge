@@ -16,6 +16,8 @@ const HFBakeSplit = preload("../hf_bake_split.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFNotes = preload("../hf_notes.gd")
+const HFAcceptedFindings = preload("../hf_accepted_findings.gd")
+const HFValidationChecks = preload("../hf_validation_checks.gd")
 
 ## Two brushes this close everywhere are the same brush, for the near duplicate
 ## finding (#1708). A solid brush inside another to within this is inside it.
@@ -56,6 +58,22 @@ var _connector_memo: Variant = null
 
 ## The findings of the `validate()` call in flight, each naming its object.
 var _findings: Array = []
+
+## Findings accepted for this level, key to `{message, note, date, fingerprint}`
+## (#1731). `HFAcceptedFindings` reads and writes it; it travels in the level's
+## registries.
+var accepted: Dictionary = {}
+## How many whole passes `validate()` has made, and how many `recheck()` passes
+## over changed brushes. Read by the tests that hold an edit to a recheck.
+var full_passes := 0
+var rechecks := 0
+## How many brushes the last `recheck()` looked at: the changed ones and those
+## near them.
+var last_recheck_brushes := 0
+## The kind of check in flight, which `_found()` stamps on each finding, and the
+## kinds the project leaves out, read once a pass (`HFValidationChecks`).
+var _check := ""
+var _skipped := PackedStringArray()
 
 
 func _init(level_root: Node3D) -> void:
@@ -143,14 +161,22 @@ func _any_face_names_a_material() -> bool:
 ## and `findings`, the same findings as `{type, severity, message, node}` with the
 ## object each names, as `check_bake_issues()` gives them, for the Test tab's list
 ## (#1004).
+##
+## Each finding carries its `check`, one of `HFValidationChecks.KINDS`, and the
+## kinds the project leaves out are not run. Findings accepted for this level
+## come back under `accepted` and are left out of `issues` and `findings`, unless
+## what they name has changed since (#1731).
 func validate(auto_fix: bool = false) -> Dictionary:
 	var issues: Array = []
 	var fixed := 0
 	_findings = []
 	if not root:
-		return {"issues": issues, "fixed": fixed, "findings": _findings}
+		return {"issues": issues, "fixed": fixed, "findings": _findings, "accepted": []}
+	full_passes += 1
+	_skipped = HFValidationChecks.skipped()
 
 	# Dependencies
+	_check = "data"
 	for warning in check_missing_dependencies():
 		_found(issues, "Dependency: %s" % str(warning))
 
@@ -164,41 +190,13 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		brush_nodes.append_array(root.committed_node.get_children())
 	var geometry_repairs: Array[DraftBrush] = []
 	var brushes_to_delete: Array[DraftBrush] = []
-	for node in brush_nodes:
-		if not (node is DraftBrush):
-			continue
-		var brush := node as DraftBrush
-		var size = brush.size
-		# Finite first, then the sign. Every comparison against NaN is false and
-		# an infinite size is legitimately `> 0.0`, so the sign test below could
-		# not see either — and this is the backstop: a mapper with a NaN-sized
-		# brush saw a clean badge, baked, and got a mesh with a poisoned AABB
-		# with nothing anywhere naming the brush responsible. The brush cannot be
-		# found by eye either, because a NaN size draws nothing.
-		if not size.is_finite():
-			_found(issues, "Brush size is not a number: %s" % brush.name, brush)
-			if auto_fix:
-				brush.size = root.brush_size_default
-				fixed += 1
-		elif size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
-			# A negative size is not a zero size. It builds the brush inside out,
-			# with every face normal pointing the opposite way from the vertices
-			# it holds, and saying "zero" sends the reader looking for the wrong
-			# thing.
-			var negative: bool = size.x < 0.0 or size.y < 0.0 or size.z < 0.0
-			var label: String = "Inverted brush" if negative else "Zero-size brush"
-			_found(issues, "%s: %s" % [label, brush.name], brush)
-			if auto_fix:
-				var next = Vector3(
-					max(0.1, abs(size.x)), max(0.1, abs(size.y)), max(0.1, abs(size.z))
+	_check = "geometry"
+	if _runs("geometry"):
+		for node in brush_nodes:
+			if node is DraftBrush:
+				fixed += _check_brush_basics(
+					node, issues, auto_fix, geometry_repairs, brushes_to_delete
 				)
-				brush.size = next
-				fixed += 1
-		# The transform has the same effect and nothing checked it either. There
-		# is no honest repair for a non-finite origin or basis, so this reports.
-		if not brush.global_transform.is_finite():
-			_found(issues, "Brush position is not a number: %s" % brush.name, brush)
-		_check_brush_geometry(brush, issues, geometry_repairs, brushes_to_delete)
 
 	# The repairs and the deletion happen after the walk, so the loop is not
 	# mutating the list it is reading.
@@ -215,6 +213,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 				fixed += 1
 
 	# Invalid face indices in selection
+	_check = "data"
 	var invalid_indices := 0
 	var next_selection: Dictionary = {}
 	for key in root.face_selection.keys():
@@ -278,6 +277,189 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			if root.brush_system:
 				root.brush_system._refresh_brush_previews()
 
+	_check = "entities"
+	if _runs("entities"):
+		_check_entities(issues)
+
+	_check = "data"
+	# Paint layers without grid
+	if root.paint_layers:
+		var grid_template: HFPaintGrid = root.paint_layers.base_grid
+		for layer in root.paint_layers.layers:
+			if layer == null:
+				continue
+			if layer.grid == null:
+				_found(issues, "Paint layer %s has no grid" % str(layer.layer_id))
+				if auto_fix:
+					if grid_template == null:
+						grid_template = HFPaintGrid.new()
+						root.paint_layers.base_grid = grid_template
+					var grid = grid_template.duplicate() as HFPaintGrid
+					if grid == null:
+						grid = HFPaintGrid.new()
+					grid.layer_y = root.grid_plane_origin.y
+					layer.grid = grid
+					fixed += 1
+
+	_check = "geometry"
+	if _runs("geometry"):
+		_check_convexity(brush_nodes, issues)
+	_check = "overlap"
+	if _runs("overlap"):
+		_check_coincident_brushes(brush_nodes, issues)
+		_check_brushes_that_add_nothing(brush_nodes, issues)
+	_check = "data"
+	_check_duplicate_brush_ids(brush_nodes, issues)
+	_check = "spawn"
+	if _runs("spawn"):
+		_check_spawn(issues)
+	_check = "notes"
+	if _runs("notes"):
+		_check_open_todo_notes(issues)
+	# Stairs, doorways and ramps built from brushes, against the player (#1046).
+	_check = "traversal"
+	if _runs("traversal"):
+		for finding in HFTraversalCheck.findings(root, brush_nodes):
+			finding["check"] = "traversal"
+			issues.append(finding["message"])
+			_findings.append(finding)
+	_check = ""
+
+	return _set_aside_accepted(issues, fixed)
+
+
+## The findings accepted for this level, taken out of `issues` and `findings`
+## and handed back under `accepted` (#1731).
+func _set_aside_accepted(issues: Array, fixed: int) -> Dictionary:
+	var sorted := HFAcceptedFindings.sort(root, _findings)
+	_findings = sorted["open"]
+	for finding in sorted["accepted"]:
+		var at := issues.find(finding.get("message", ""))
+		if at >= 0:
+			issues.remove_at(at)
+	return {"issues": issues, "fixed": fixed, "findings": _findings, "accepted": sorted["accepted"]}
+
+
+## Whether the project runs `kind` this pass.
+func _runs(kind: String) -> bool:
+	return not _skipped.has(kind)
+
+
+## Check again only what an edit touched (#1731): the changed brushes' own size,
+## place and faces, and the overlap checks between them and the brushes near
+## them, and with `entities_changed` the entity names and wiring. Level wide
+## checks, the spawn, the traversal and the To Do notes wait for the next full
+## pass. Returns `{open, accepted}`, as `HFAcceptedFindings.sort()` splits them,
+## holding only findings that name a changed brush, or any entity finding.
+func recheck(changed_ids: Array, entities_changed: bool = false) -> Dictionary:
+	var issues: Array = []
+	_findings = []
+	rechecks += 1
+	last_recheck_brushes = 0
+	if not root:
+		return {"open": [], "accepted": []}
+	_skipped = HFValidationChecks.skipped()
+	var changed: Array = []
+	var everything: Array = []
+	for container in [root.draft_brushes_node, root.pending_node, root.committed_node]:
+		if container:
+			everything.append_array(container.get_children())
+	for node in everything:
+		if node is DraftBrush and changed_ids.has(str(node.brush_id)):
+			changed.append(node)
+	var none_repaired: Array[DraftBrush] = []
+	var none_deleted: Array[DraftBrush] = []
+	_check = "geometry"
+	if _runs("geometry"):
+		for brush in changed:
+			_check_brush_basics(brush, issues, false, none_repaired, none_deleted)
+		_check_convexity(changed, issues)
+	var near := _with_neighbours(changed, everything)
+	last_recheck_brushes = near.size()
+	_check = "overlap"
+	if _runs("overlap") and not changed.is_empty():
+		var before := _findings.size()
+		_check_coincident_brushes(near, issues)
+		_check_brushes_that_add_nothing(near, issues)
+		var kept: Array = _findings.slice(0, before)
+		for finding in _findings.slice(before):
+			if changed.has(finding.get("node")) or changed.has(finding.get("other_node")):
+				kept.append(finding)
+		_findings = kept
+	_check = "entities"
+	if entities_changed and _runs("entities"):
+		_check_entities(issues)
+	_check = ""
+	var sorted := HFAcceptedFindings.sort(root, _findings)
+	_findings = []
+	return sorted
+
+
+## `brushes` and every brush in `among` whose box reaches one of theirs.
+func _with_neighbours(brushes: Array, among: Array) -> Array:
+	var out: Array = brushes.duplicate()
+	if brushes.is_empty():
+		return out
+	var boxes: Array = []
+	for brush in brushes:
+		boxes.append(HFSolidMeasure.bounds(HFSolidMeasure.world_faces(brush)).grow(NEAR_DUPLICATE))
+	for node in among:
+		if not (node is DraftBrush) or out.has(node):
+			continue
+		var box := HFSolidMeasure.bounds(HFSolidMeasure.world_faces(node))
+		for other in boxes:
+			if other.intersects(box):
+				out.append(node)
+				break
+	return out
+
+
+## One brush's size, place and faces, as `validate()` and `recheck()` check them.
+## Returns how many repairs it made; the geometry repairs and deletions it
+## gathers are made by the caller, after the walk.
+func _check_brush_basics(
+	brush: DraftBrush,
+	issues: Array,
+	auto_fix: bool,
+	geometry_repairs: Array[DraftBrush],
+	brushes_to_delete: Array[DraftBrush]
+) -> int:
+	var repaired := 0
+	var size = brush.size
+	# Finite first, then the sign. Every comparison against NaN is false and
+	# an infinite size is legitimately `> 0.0`, so the sign test below could
+	# not see either — and this is the backstop: a mapper with a NaN-sized
+	# brush saw a clean badge, baked, and got a mesh with a poisoned AABB
+	# with nothing anywhere naming the brush responsible. The brush cannot be
+	# found by eye either, because a NaN size draws nothing.
+	if not size.is_finite():
+		_found(issues, "Brush size is not a number: %s" % brush.name, brush)
+		if auto_fix:
+			brush.size = root.brush_size_default
+			repaired += 1
+	elif size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
+		# A negative size is not a zero size. It builds the brush inside out,
+		# with every face normal pointing the opposite way from the vertices
+		# it holds, and saying "zero" sends the reader looking for the wrong
+		# thing.
+		var negative: bool = size.x < 0.0 or size.y < 0.0 or size.z < 0.0
+		var label: String = "Inverted brush" if negative else "Zero-size brush"
+		_found(issues, "%s: %s" % [label, brush.name], brush)
+		if auto_fix:
+			var next = Vector3(max(0.1, abs(size.x)), max(0.1, abs(size.y)), max(0.1, abs(size.z)))
+			brush.size = next
+			repaired += 1
+	# The transform has the same effect and nothing checked it either. There
+	# is no honest repair for a non-finite origin or basis, so this reports.
+	if not brush.global_transform.is_finite():
+		_found(issues, "Brush position is not a number: %s" % brush.name, brush)
+	_check_brush_geometry(brush, issues, geometry_repairs, brushes_to_delete)
+	return repaired
+
+
+## Entity names and wiring: two entities answering to one name, a wire with a
+## field missing, and a wire aimed at a name nothing answers to.
+func _check_entities(issues: Array) -> void:
 	# Two entities answering to the same authored name, and wiring with a field
 	# missing. A level can get either from a paste, a `.map` import or a hand
 	# edit, so the check at the setter is not enough on its own.
@@ -352,38 +534,6 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	for report in dangling_targets:
 		_found(issues, report, dangling_targets[report])
 
-	# Paint layers without grid
-	if root.paint_layers:
-		var grid_template: HFPaintGrid = root.paint_layers.base_grid
-		for layer in root.paint_layers.layers:
-			if layer == null:
-				continue
-			if layer.grid == null:
-				_found(issues, "Paint layer %s has no grid" % str(layer.layer_id))
-				if auto_fix:
-					if grid_template == null:
-						grid_template = HFPaintGrid.new()
-						root.paint_layers.base_grid = grid_template
-					var grid = grid_template.duplicate() as HFPaintGrid
-					if grid == null:
-						grid = HFPaintGrid.new()
-					grid.layer_y = root.grid_plane_origin.y
-					layer.grid = grid
-					fixed += 1
-
-	_check_convexity(brush_nodes, issues)
-	_check_coincident_brushes(brush_nodes, issues)
-	_check_brushes_that_add_nothing(brush_nodes, issues)
-	_check_duplicate_brush_ids(brush_nodes, issues)
-	_check_spawn(issues)
-	_check_open_todo_notes(issues)
-	# Stairs, doorways and ramps built from brushes, against the player (#1046).
-	for finding in HFTraversalCheck.findings(root, brush_nodes):
-		issues.append(finding["message"])
-		_findings.append(finding)
-
-	return {"issues": issues, "fixed": fixed, "findings": _findings}
-
 
 ## Say one thing `validate()` found: its text into `issues`, which is what the
 ## Console, the status board and Validate's count read, and the finding with the
@@ -391,8 +541,12 @@ func validate(auto_fix: bool = false) -> Dictionary:
 ## `extra` is merged into the finding: a `kind` the Test tab selects together,
 ## and an `other_node` for a finding about a pair.
 func _found(issues: Array, message: String, node: Node = null, extra: Dictionary = {}) -> void:
+	if _skipped.has(_check):
+		return
 	issues.append(message)
-	var finding := {"type": "validate", "severity": 1, "message": message, "node": node}
+	var finding := {
+		"type": "validate", "severity": 1, "message": message, "node": node, "check": _check
+	}
 	finding.merge(extra)
 	_findings.append(finding)
 

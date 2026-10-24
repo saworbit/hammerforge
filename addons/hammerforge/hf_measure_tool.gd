@@ -69,6 +69,14 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 	if event is InputEventKey and event.pressed:
 		return handle_keyboard(event)
 
+	# The snap under the cursor shows before the click, as every snapping tool's
+	# does, and Tab can step it (#1691). Nothing else changes on a hover.
+	if event is InputEventMouseMotion and event.button_mask == 0:
+		var hover = _raycast_world(camera, mouse_pos)
+		if hover != null:
+			snap_point(hover)
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.ctrl_pressed or event.meta_pressed:

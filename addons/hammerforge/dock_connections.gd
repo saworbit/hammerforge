@@ -20,6 +20,12 @@ const ROOT_SIGNALS := {
 	"active_material_changed": "_sync_active_material_from_root",
 	"transform_pivot_changed": "_on_root_transform_pivot_changed",
 	"material_used": "_on_root_material_used",
+	# The findings list checks what an edit changed once it settles (#1731).
+	"brush_added": "_on_root_brush_findings_changed",
+	"brush_removed": "_on_root_brush_findings_changed",
+	"brush_changed": "_on_root_brush_findings_changed",
+	"entity_added": "_on_root_entity_findings_changed",
+	"entity_removed": "_on_root_entity_findings_changed",
 }
 
 
