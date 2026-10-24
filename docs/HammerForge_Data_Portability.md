@@ -211,6 +211,7 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - A `.hfprefab` written before the `materials` block existed has none, and is placed exactly as it was before.
 - Data encoding uses the same `HFLevelIO.encode_variant()` / `decode_variant()` pipeline as `.hflevel` (handles Vector3, Transform3D, Basis, etc.).
 - Prefab files are saved to `res://prefabs/` by default. The directory is created automatically on first save.
+- A prefab is written whole, as a level is: to a `.writing` file first, with the old one kept as `.previous` until the new one is in place. A save cut short, or a Push to Source that fails, leaves the old prefab for every linked copy to read, and a prefab left only as `.previous` still loads. The `.map` export and Settings Export write the same way (#1758).
 - Prefabs are portable between projects — just copy `.hfprefab` files to another project's `res://prefabs/` folder.
 
 ## Autosave Safety

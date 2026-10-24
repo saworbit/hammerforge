@@ -72,6 +72,10 @@ A grey lamp means **not measured yet** — usually because no level is open. It 
 
 After an editor session that did not close cleanly, a **Did not close cleanly** row comes first, with **Open Folder**, **Copy Report** and **Dismiss**. See [When the editor crashes](#when-the-editor-crashes).
 
+When a newer HammerForge is on the Asset Library, a grey line at the top says so, such as "HammerForge 0.4.2 is out", with **What's New**, **Skip This Version** and **Later**. It never downloads anything, and grey never colours the headline. See [Upgrade](HammerForge_Install_Upgrade.md#upgrade) ([#1656](https://github.com/saworbit/hammerforge/issues/1656)).
+
+A level with notes in it gets a grey **Notes** row, counting the open ones by kind, with **Show Notes**. See [Notes](#notes).
+
 Every lamp carries a shape as well as a colour (tick, exclamation, cross, dash), so the board reads the same with a red/green colour deficiency. Hover any row for the thresholds behind it. **Needs attention only** hides the checks that are already fine.
 
 The header carries the overall lamp, the live scope line (`Arena · 74 brushes · 9 entities · ~3120 verts · 256 KiB paint`), and when the board was last checked.
