@@ -654,6 +654,19 @@ func _normal_in(space: Transform3D) -> Vector3:
 	return normal if space.basis.is_equal_approx(Basis.IDENTITY) else normal_through(space.basis)
 
 
+## The world axes this face's texture is laid along, U then V, before its turn and
+## scale: the ones its projection reads where its brush stands now. Empty for a
+## Cylindrical face, which has no flat pair. The slide keys move a texture along
+## these (#1728).
+func texture_axes() -> Array:
+	var projection := uv_projection
+	if projection == UVProjection.BOX_UV:
+		projection = _box_projection_axis_in(world_transform)
+	if projection == UVProjection.CYLINDRICAL:
+		return []
+	return axes_for(projection)
+
+
 ## The axes this face reads for `projection`, old or new as the face was laid. The
 ## Face projection's come off the face where its brush now stands.
 func axes_for(projection: int) -> Array:

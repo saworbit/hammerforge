@@ -21,7 +21,7 @@ An agent on the bridge can make a starter level, place, move, turn, resize,
 delete and extrude brushes, paint them with palette materials, stand the player
 spawn, place, move, retune, wire, unwire and delete lights, sounds, props and
 logic entities, make a brush a trigger, a door, a button, a wall, a detail or a
-clip brush and wire it, hollow, clip, carve, merge and intersect brushes, snap
+clip brush and wire it, hollow, clip, carve, merge, intersect and hull brushes, snap
 them to the grid, build stairs, arches, domes, rings and door frames and change or
 detach them, place prefabs from the library and switch and propagate them, mark
 out the parts of the level a partial bake takes with cordons, list brushes,
@@ -193,7 +193,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A picture of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params, the prefab library's prefabs and the level's paint layers |
-| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, intersect, snap to grid, build stairs, arches, spiral stairs, domes, rings or door frames, change or detach one, place a prefab from the library, switch or propagate a placed one, move to floor or ceiling, reset rotation; or paint floor by cell: a rectangle painted or erased, its walls raised, a room stamped, a connector between two layers confirmed. Each command's parameters are on [Commands](commands.md#agent-bridge) |
+| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, intersect, hull, snap to grid, build stairs, arches, spiral stairs, domes, rings or door frames, change or detach one, place a prefab from the library, switch or propagate a placed one, move to floor or ceiling, reset rotation; or paint floor by cell: a rectangle painted or erased, its walls raised, a room stamped, a connector between two layers confirmed. Each command's parameters are on [Commands](commands.md#agent-bridge) |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 | `hf_bake` | Bake the whole level, or with `cordons: true` only what the cordons take, and write `<scene>_mcp.tscn` with the bake id on its root |
 | `hf_undo` | Take back the agent's last step, never anyone else's |

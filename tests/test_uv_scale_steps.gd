@@ -234,7 +234,8 @@ func test_with_the_link_on_typing_one_box_sets_the_other_to_the_same_size():
 	dock.uv_scale_link.button_pressed = false
 	dock.uv_scale_x.value = 2.0
 	assert_eq(_face("a").uv_scale, Vector2(2, 4), "unlinked, V is left alone")
-	assert_eq(_face("b").uv_scale, Vector2(1, 1), "the boxes reach only the face on show")
+	# Every selected face takes what is typed, each keeping its own sign (#1728).
+	assert_eq(_face("b").uv_scale, Vector2(2, 4), "the boxes reach every selected face")
 
 
 ## The other boxes are what the face holds, not what they round it to: /2 makes

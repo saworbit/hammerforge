@@ -34,6 +34,8 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Clip to Face Plane** (Shift+Alt+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
 - **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes, using the carver's real face planes, so the carver can be rotated or a cylinder. A doorway carved through a painted wall leaves the paint on the wall
 - **Merge** (Ctrl+Shift+M) -- combine 2+ touching brushes into the one convex solid they make, centred on it, keeping each outer face's material and UVs; an L or a doorway is refused
+- **Hull of Selection** -- replace 2+ brushes with one brush, the convex hull of all their corners, touching or not; faces on an old face's plane keep its look, new faces take the Active Material, with a green preview and one undo step
+- **Hull Tool** -- click points, double click a face for its corners or Shift drag a face to pull them out, and Enter makes one brush around them; a flat set is refused with the reason
 - **Intersect** (Ctrl+Shift+I) -- keep only the volume 2+ brushes share, as one convex brush: the first selected is cut down by the planes of the others, and each face keeps the look of the brush whose plane it lies on. A quarter round column from a box and a cylinder in one step
 - **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock carries the texture round with the brush, upright, the same way it carries one you move. Turn it off and the texture keeps its place in the level
 - **Flip** (Shift+M) -- mirror the selection across the locked axis, or X. Winding is preserved, so a mirrored brush never bakes inside out, and a sculpted displacement is mirrored with its face
@@ -339,6 +341,7 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Live dimensions** -- real-time W x H x D display during drag gestures
 - **Size at cursor** -- a size label beside the pointer through both stages of a Draw, and the depth during an Extrude; Test → Settings turns it off
 - **Show Selection Size** (Alt+D) -- width, depth and height labels on the selection's bounds in the viewport, coloured by axis, following a nudge, a drag and an undo
+- **Texture on many faces** -- a typed UV box goes to every selected face and only that box, a box the faces disagree on shows mixed, and in Face Select the arrows slide each face's texture the way they point on screen by the grid step, Alt a tenth, with Shift turning it 15, 1 or 90 degrees
 - **Selection Info** -- a Build tab section with one brush's centre and size, one vertex's X, Y and Z to type into, one edge's length or one face's normal and area, in World or Local; a mixed selection lists its kinds with counts, and a click keeps one kind
 - **Select Similar by choice** (Shift+S) -- tick what must match in Selection Filters: material, shape, add or cut, size, visgroup, group, structure or entity class for brushes, material, UV scale or normal for faces, class or a named property for entities; the ticks are kept
 - **Quick Select** -- select brushes or entities by a typed rule such as `class is light_point and energy > 2`, to replace, add to or take from the selection, over the level or within the selection; the same tests the MCP bridge filters by

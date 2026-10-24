@@ -223,6 +223,7 @@ func _build_brush_section() -> void:
 	_add_tool_button(
 		section, "Isect", "Intersect ({intersect}) — keep only what the brushes share", "intersect"
 	)
+	_add_tool_button(section, "Hull", "Hull of Selection — one brush around them all", "hull")
 	_add_sep(section)
 	_add_group_label(section, "Transform")
 	_add_tool_button(
