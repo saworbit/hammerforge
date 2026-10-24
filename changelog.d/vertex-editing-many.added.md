@@ -1,0 +1,1 @@
+- Vertex mode moves a corner several selected brushes share as one, box selects corners, deletes and adds corners, and nudges, turns and scales the selected corners. (issue [#1713](https://github.com/saworbit/hammerforge/issues/1713))

@@ -494,9 +494,11 @@ func _surface_paint_shortcuts() -> String:
 func _vertex_edit_shortcuts() -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Vertex Edit --")
-	lines.append("Click: Select vertex")
-	lines.append("Shift+Click: Multi-select")
-	lines.append("Drag: Move selected")
+	lines.append("Click: Select vertex (every brush's at that spot)")
+	lines.append("Shift+Click: Multi-select | Alt+Click: Just this brush's")
+	lines.append("Drag: Move selected | Drag on empty space: Box select")
+	lines.append(_chords("{delete}: Delete corners | Alt+Click face: Add a corner"))
+	lines.append(_chords("Arrows: Nudge corners | {rotate_ccw}: Turn corners"))
 	lines.append(
 		_chords("Hold {snap_invert_hold}: Grid Snap Off/On | {snap_vertex_hold}: Vertices")
 	)

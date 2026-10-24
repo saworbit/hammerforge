@@ -64,6 +64,25 @@ static func handle(
 		if keymap and keymap.matches("vertex_split_edge", event):
 			HFPluginVertexOps.split_selected_edge(plugin, root)
 			return STOP
+		# With corners selected, Delete, the arrows and the turn keys edit them
+		# rather than the whole brush (#1713).
+		if vs.has_selection() and not vs.is_dragging():
+			if keymap and keymap.matches("delete", event):
+				HFPluginVertexOps.delete_selected(plugin, root)
+				return STOP
+			if HFKeymapType.fixed_key(event) == "nudge" and not event.ctrl_pressed:
+				var step: float = root.grid_snap if root.grid_snap > 0.0 else 1.0
+				if event.alt_pressed:
+					step *= 0.1
+				var direction: Vector3 = plugin._get_nudge_direction(event.keycode)
+				HFPluginVertexOps.nudge_selected(plugin, root, direction * step)
+				return STOP
+			if keymap and keymap.matches("rotate_ccw", event):
+				HFPluginVertexOps.turn_selected(plugin, root, 1)
+				return STOP
+			if keymap and keymap.matches("rotate_cw", event):
+				HFPluginVertexOps.turn_selected(plugin, root, -1)
+				return STOP
 
 	# Mouse click — select or begin drag
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
@@ -86,11 +105,37 @@ static func handle(
 			# Vertex sub-mode: pick vertices
 			var pick = vs.pick_vertex(cam, pos)
 			if pick.is_empty():
+				# Alt on a face or the grid adds a corner there (#1713).
+				if event.alt_pressed:
+					_add_corner_at(plugin, root, cam, pos)
+					return STOP
+				# A drag from empty space selects every corner in its box.
+				if _begin_marquee(plugin, root, cam, event, pos):
+					return STOP
 				if not event.shift_pressed:
 					vs.clear_selection()
 				plugin._update_vertex_overlay(root, cam)
 				return PASS
-			vs.select_vertex(pick.brush_id, pick.vertex_index, event.shift_pressed)
+			if event.alt_pressed:
+				# Just this brush's corner.
+				vs.select_vertex(pick.brush_id, pick.vertex_index, event.shift_pressed)
+				plugin._vertex_shared_count = 1
+			elif event.ctrl_pressed:
+				# Take the corner, and its partners, away; nothing is dragged.
+				if (
+					vs.selected_vertices.has(pick.brush_id)
+					and ((vs.selected_vertices[pick.brush_id] as PackedInt32Array).has(
+						pick.vertex_index
+					))
+				):
+					vs.select_shared_corner(pick.brush_id, pick.vertex_index, true)
+				plugin._update_vertex_overlay(root, cam)
+				return STOP
+			else:
+				# Every selected brush's corner at this spot (#1713).
+				plugin._vertex_shared_count = vs.select_shared_corner(
+					pick.brush_id, pick.vertex_index, event.shift_pressed
+				)
 			# Begin drag
 			plugin._vertex_drag_active = true
 			plugin._vertex_drag_start = pos
@@ -103,6 +148,9 @@ static func handle(
 			plugin._vertex_drag_active = false
 			vs.cancel_drag()
 			plugin._update_vertex_overlay(root, cam)
+			return STOP
+		if plugin._vertex_marquee_active:
+			_end_marquee(plugin, root, cam, pos)
 			return STOP
 		# Mouse release — end drag
 		if plugin._vertex_drag_active:
@@ -127,6 +175,9 @@ static func handle(
 
 	# Mouse motion — update drag or hover
 	if event is InputEventMouseMotion:
+		if plugin._vertex_marquee_active:
+			plugin._update_marquee_overlay(plugin._vertex_marquee_start, pos, true)
+			return STOP
 		if plugin._vertex_drag_active and vs.is_dragging():
 			if event.button_mask & MOUSE_BUTTON_MASK_LEFT == 0:
 				plugin._vertex_drag_active = false
@@ -143,3 +194,64 @@ static func handle(
 		plugin._update_vertex_overlay(root, cam)
 
 	return PASS
+
+
+## How far the pointer has to travel before a press on empty space is a box.
+const MARQUEE_PX := 4.0
+
+
+## A press on empty space in vertex mode starts a box over the corners: Shift
+## adds what it holds and Ctrl takes it away. Over a brush that is not a corner
+## the press goes on to Godot, which picks the brush to edit. True when a box
+## began.
+static func _begin_marquee(
+	plugin: Object, root: Node, cam: Camera3D, event: InputEventMouseButton, pos: Vector2
+) -> bool:
+	if root.has_method("pick_face") and not root.pick_face(cam, pos).is_empty():
+		return false
+	plugin._vertex_marquee_active = true
+	plugin._vertex_marquee_start = pos
+	plugin._vertex_marquee_mode = 1 if event.shift_pressed else (2 if event.ctrl_pressed else 0)
+	return true
+
+
+static func _end_marquee(plugin: Object, root: Node, cam: Camera3D, pos: Vector2) -> void:
+	var vs = root.vertex_system
+	plugin._vertex_marquee_active = false
+	plugin._update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
+	var start: Vector2 = plugin._vertex_marquee_start
+	if start.distance_to(pos) < MARQUEE_PX:
+		if int(plugin._vertex_marquee_mode) == 0:
+			vs.clear_selection()
+	else:
+		vs.select_in_rect(cam, Rect2(start, pos - start).abs(), int(plugin._vertex_marquee_mode))
+	plugin._update_vertex_overlay(root, cam)
+	plugin._update_hud_context()
+
+
+## Add a corner where an Alt click lands: one grid step out from the face of a
+## selected brush it lands on, or on the grid for the one brush selected.
+static func _add_corner_at(plugin: Object, root: Node, cam: Camera3D, pos: Vector2) -> void:
+	var vs = root.vertex_system
+	var step: float = root.grid_snap if root.grid_snap > 0.0 else 1.0
+	var hit: Dictionary = root.pick_face(cam, pos) if root.has_method("pick_face") else {}
+	var brush = hit.get("brush", null)
+	var selected: Array = vs._get_selected_brushes()
+	if brush != null and selected.has(brush):
+		var face = brush.faces[int(hit.get("face_idx", 0))]
+		var normal: Vector3 = face.normal_through(brush.global_transform.basis)
+		var on: Vector3 = root._snap_point(hit.get("position", Vector3.ZERO))
+		HFPluginVertexOps.add_corner(plugin, root, str(brush.brush_id), on + normal * step)
+		return
+	if selected.size() != 1:
+		root.emit_signal(
+			"user_message",
+			"Add Vertex: Alt+click a face of a selected brush, or select one brush",
+			1
+		)
+		return
+	var ground: Dictionary = root._raycast(cam, pos) if root.has_method("_raycast") else {}
+	if ground.get("position") is Vector3:
+		HFPluginVertexOps.add_corner(
+			plugin, root, str(selected[0].brush_id), root._snap_point(ground["position"])
+		)

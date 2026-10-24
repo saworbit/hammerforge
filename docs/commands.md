@@ -57,6 +57,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Merge Vertices (`vertex_merge`) | Ctrl+W | 1 brush, a level | yes | Merge the selected vertices into one at their middle. |
 | Split Edge (`vertex_split_edge`) | Ctrl+E | 1 brush, a level | yes | Split the selected edge at its middle. |
 | Snap Vertices to Grid (`vertex_snap_to_grid`) | Ctrl+B | 1 brush, a level | yes | Move the selected vertices to their nearest grid points. |
+| Scale Vertices... (`vertex_scale`) | none | 1 brush, a level | yes | Scale the selected vertices by typed factors, about their middle or the picked pivot. |
 | Texture Picker (`texture_picker`) | T | a level | yes | Sample a face's material and its whole look, for Apply Last Texture and Apply Picked Look. |
 | Measure (`measure`) | M | - | yes | Start the Measure tool, which draws rulers between points. |
 | Context Menu (`context_menu`) | Space | a level | yes | Open the context menu at the cursor. |

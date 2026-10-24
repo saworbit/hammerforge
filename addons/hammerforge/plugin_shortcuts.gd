@@ -17,6 +17,7 @@ const SHORTCUT_APPLY := -3
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
 const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
+const HFPluginVertexOpsType = preload("plugin_vertex_ops.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -60,6 +61,12 @@ static func handle(plugin: Object, event: InputEvent) -> void:
 	# the 3D viewport. Claim managed selections here as well so every entry point
 	# uses HammerForge's undo, stable-ID, and reference-cleanup boundaries.
 	if plugin._keymap.matches("delete", event):
+		# Corners picked in vertex mode are what Delete takes then (#1713).
+		var corners = root.get("vertex_system")
+		if plugin.get("_vertex_mode") and corners and corners.has_selection():
+			HFPluginVertexOpsType.delete_selected(plugin, root)
+			mark_handled(plugin)
+			return
 		if _claim(plugin, root, "Delete"):
 			plugin._delete_selected(root)
 		return

@@ -477,6 +477,9 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"vertex_snap_to_grid":
 			if root:
 				HFPluginVertexOps.snap_selected_to_grid(plugin, root)
+		"vertex_scale":
+			if root:
+				HFPluginVertexOps.open_scale_dialog(plugin, root)
 		"vertex_exit":
 			plugin._toggle_vertex_mode(root)
 		"select_all":

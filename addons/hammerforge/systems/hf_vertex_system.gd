@@ -1563,6 +1563,263 @@ func get_pre_op_snapshots() -> Dictionary:
 
 
 # ---------------------------------------------------------------------------
+# Many corners at once (#1713)
+# ---------------------------------------------------------------------------
+
+## Two corners of different brushes this close are one corner.
+const SHARED_CORNER_GAP := 0.001
+
+
+## Pick a corner and every selected brush's corner at the same spot, so the
+## corner where four floor brushes meet moves as one and leaves no crack.
+## Returns how many brushes share it.
+func select_shared_corner(brush_id: String, vertex_index: int, additive: bool = false) -> int:
+	var was_selected: bool = (
+		selected_vertices.has(brush_id)
+		and (selected_vertices[brush_id] as PackedInt32Array).has(vertex_index)
+	)
+	select_vertex(brush_id, vertex_index, additive)
+	var brush = _find_brush(brush_id)
+	if brush == null:
+		return 0
+	var verts := get_brush_vertices(brush)
+	if vertex_index < 0 or vertex_index >= verts.size():
+		return 1
+	var at: Vector3 = brush.global_transform * verts[vertex_index]
+	# A Shift click on a picked corner takes it off; its partners go with it.
+	var taking_off := additive and was_selected
+	var count := 1
+	for other in _get_selected_brushes():
+		if other == null or other == brush or not other.get("faces"):
+			continue
+		var other_id := str(other.brush_id)
+		var other_verts := get_brush_vertices(other)
+		for i in other_verts.size():
+			if (other.global_transform * other_verts[i]).distance_to(at) > SHARED_CORNER_GAP:
+				continue
+			var held: bool = (
+				selected_vertices.has(other_id)
+				and (selected_vertices[other_id] as PackedInt32Array).has(i)
+			)
+			if held == taking_off:
+				select_vertex(other_id, i, true)
+			count += 1
+			break
+	return count
+
+
+## The corners of the selected brushes whose place on screen is inside `rect`,
+## put in the selection's place, added to it or taken from it, by `mode`: 0, 1 or
+## 2. In edge mode the edges with both ends inside. Returns how many it found.
+func select_in_rect(camera: Camera3D, rect: Rect2, mode: int = 0) -> int:
+	if camera == null:
+		return 0
+	if mode == 0:
+		selected_vertices.clear()
+		selected_edges.clear()
+	var found := 0
+	for brush in _get_selected_brushes():
+		if brush == null or not brush.get("faces"):
+			continue
+		var brush_id := str(brush.brush_id)
+		var inside: Dictionary = {}
+		var verts := get_brush_vertices(brush)
+		for i in verts.size():
+			var world: Vector3 = brush.global_transform * verts[i]
+			if (
+				not camera.is_position_behind(world)
+				and rect.has_point(camera.unproject_position(world))
+			):
+				inside[i] = true
+		if sub_mode == VertexSubMode.EDGE:
+			for edge in get_brush_edges(brush):
+				if inside.has(edge[0]) and inside.has(edge[1]):
+					found += 1
+					_mark_edge(brush_id, edge, mode != 2)
+			continue
+		for i in inside:
+			found += 1
+			var held: bool = (
+				selected_vertices.has(brush_id)
+				and (selected_vertices[brush_id] as PackedInt32Array).has(int(i))
+			)
+			if held != (mode != 2):
+				select_vertex(brush_id, int(i), true)
+	return found
+
+
+func _mark_edge(brush_id: String, edge: Array, on: bool) -> void:
+	var edges: Array = selected_edges.get(brush_id, [])
+	var at := -1
+	for i in edges.size():
+		var held: Array = edges[i]
+		if (
+			(held[0] == edge[0] and held[1] == edge[1])
+			or (held[0] == edge[1] and held[1] == edge[0])
+		):
+			at = i
+	if on and at < 0:
+		edges.append([edge[0], edge[1]])
+	elif not on and at >= 0:
+		edges.remove_at(at)
+	if edges.is_empty():
+		selected_edges.erase(brush_id)
+	else:
+		selected_edges[brush_id] = edges
+	_sync_vertices_from_edges()
+
+
+## Remove the selected corners, or in edge mode the ends of the selected edges,
+## and rebuild each brush as the hull of what is left. A brush that would be left
+## flat, or with too few corners, refuses the whole edit with the reason, and
+## nothing changes. Face looks follow the faces that survive, as Clip to Convex
+## carries them. Returns the snapshots for undo, or {}.
+func delete_selected() -> Dictionary:
+	if _drag_active:
+		_say("Delete rejected: finish the drag first")
+		return {}
+	var plans: Dictionary = {}
+	for brush_id in selected_vertices:
+		var brush = _find_brush(brush_id)
+		if brush == null or not brush.get("faces"):
+			continue
+		var gone: PackedInt32Array = selected_vertices[brush_id]
+		var kept := PackedVector3Array()
+		var verts := get_brush_vertices(brush)
+		for i in verts.size():
+			if not gone.has(i):
+				kept.append(verts[i])
+		var faces := _hull_faces(kept, brush.faces)
+		if faces.is_empty():
+			_say("Delete rejected: %s would be left flat" % brush.name)
+			return {}
+		plans[brush_id] = faces
+	return _apply_hull_plans(plans)
+
+
+## Add a corner at `world_point` to `brush_id` and rebuild the brush as the hull
+## of its corners and the new one. A point inside the brush, or on its surface,
+## would change nothing and is refused. Returns the snapshots for undo, or {}.
+func add_corner(brush_id: String, world_point: Vector3) -> Dictionary:
+	if _drag_active:
+		_say("Add rejected: finish the drag first")
+		return {}
+	var brush = _find_brush(brush_id)
+	if brush == null or not brush.get("faces") or not world_point.is_finite():
+		return {}
+	var local: Vector3 = brush.global_transform.affine_inverse() * world_point
+	var outside := false
+	for face in brush.faces:
+		if face == null:
+			continue
+		if HFConvexClip.face_plane(face).distance_to(local) > 0.001:
+			outside = true
+	if not outside:
+		_say("Add rejected: the point is inside the brush")
+		return {}
+	var corners := get_brush_vertices(brush)
+	corners.append(local)
+	var faces := _hull_faces(corners, brush.faces)
+	if faces.is_empty():
+		_say("Add rejected: the brush would be flat")
+		return {}
+	return _apply_hull_plans({brush_id: faces})
+
+
+## Move the selected corners through `xform`, a world space transform such as a
+## turn about their middle or a scale, judged as a drag's release is: a bent face
+## is cut flat, and a dent refuses the whole edit after `refusal`. Returns the
+## snapshots for undo, or {}.
+func transform_selected(xform: Transform3D, refusal: String) -> Dictionary:
+	if _drag_active:
+		_say("%s: finish the drag first" % refusal)
+		return {}
+	var targets: Dictionary = {}
+	for brush_id in selected_vertices:
+		var brush = _find_brush(brush_id)
+		if brush == null or not brush.get("faces"):
+			continue
+		var to_world: Transform3D = brush.global_transform
+		if absf(to_world.basis.determinant()) < _DRAG_EPSILON:
+			continue
+		var verts := get_brush_vertices(brush)
+		var target_positions: Dictionary = {}
+		for vi in selected_vertices[brush_id]:
+			if vi >= 0 and vi < verts.size():
+				target_positions[_vertex_key(verts[vi])] = (
+					to_world.affine_inverse() * (xform * (to_world * verts[vi]))
+				)
+		if target_positions.is_empty():
+			continue
+		if _would_collapse(verts, target_positions):
+			_say("%s: two vertices of a brush would land on one point" % refusal)
+			return {}
+		targets[brush_id] = target_positions
+	if targets.is_empty():
+		return {}
+	_capture_face_snapshots_for(targets.keys())
+	if not _move_to_targets(targets, refusal):
+		_pre_drag_faces.clear()
+		return {}
+	return get_pre_op_snapshots()
+
+
+## The middle of the selected corners in world space.
+func selected_centre() -> Vector3:
+	var positions := get_selected_world_positions()
+	if positions.is_empty():
+		return Vector3.ZERO
+	var sum := Vector3.ZERO
+	for point in positions:
+		sum += point
+	return sum / float(positions.size())
+
+
+## The faces of the hull of `corners`, each taking the look of the face of
+## `original` it faces most nearly the same way as, or [] when the hull is flat.
+func _hull_faces(corners: PackedVector3Array, original: Array) -> Array:
+	if corners.size() < 4:
+		return []
+	var hull := _convex_hull_3d(corners)
+	if hull.size() < 4:
+		return []
+	var faces := _faces_from_convex_hull(hull, original)
+	if faces.size() < 4:
+		return []
+	var low := INF
+	var high := -INF
+	var plane := HFConvexClip.face_plane(faces[0])
+	for point in hull:
+		var along := plane.normal.dot(point)
+		low = minf(low, along)
+		high = maxf(high, along)
+	if high - low < 0.001:
+		return []
+	return faces
+
+
+## Put each brush's planned hull faces on it, `{brush_id: faces}`, as one edit,
+## and clear the corners it named. Returns the snapshots for undo.
+func _apply_hull_plans(plans: Dictionary) -> Dictionary:
+	if plans.is_empty():
+		return {}
+	_capture_face_snapshots_for(plans.keys())
+	for brush_id in plans:
+		var brush = _find_brush(brush_id)
+		if brush == null:
+			continue
+		brush.faces.clear()
+		for face in plans[brush_id]:
+			brush.faces.append(face)
+		_commit_geometry(brush)
+		selected_vertices.erase(brush_id)
+		selected_edges.erase(brush_id)
+		if root:
+			root.tag_brush_dirty(str(brush_id))
+	return get_pre_op_snapshots()
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
