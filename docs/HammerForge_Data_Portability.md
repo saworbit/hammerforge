@@ -8,6 +8,44 @@ Last updated: October 25, 2026
 
 This document describes how to move data in and out of HammerForge safely.
 
+## What Each Format Keeps
+
+One row for each thing a level holds, one column for each file it goes through. The `.map` column is an export and then an import into an empty level. The `.glb` column is the bake, exported. The `.hfprefab` column is every piece of the level saved as one prefab and placed again. `tests/test_format_table.gd` takes a level that holds every row through each file and holds every cell to what comes back, so a change to an exporter that this table does not follow fails the tests. An export that loses something names it in the Console, for example ".map export left out 2 cordons, 1 note".
+
+| What the level holds | `.hflevel` | `.tscn` | `.map` | `.glb` | `.hfprefab` |
+|---|---|---|---|---|---|
+| Brushes | Kept | Kept | Kept | Kept as mesh | Kept |
+| Brush shapes | Kept | Kept | Lost | Kept as mesh | Kept |
+| Cuts | Kept | Kept | Lost | Kept as mesh | Kept |
+| Face materials | Kept | Kept | Kept | Kept | Kept |
+| Texture settings | Kept | Kept | Kept as the map's texture axes | Kept as mesh UVs | Kept |
+| Hand laid UVs | Kept | Kept | Lost | Kept as mesh UVs | Kept |
+| Face paint | Kept | Kept | Lost | Kept as a baked texture | Kept |
+| Sculpts | Kept | Kept | Lost | Kept as mesh | Kept |
+| Smoothing groups | Kept | Kept | Lost | Kept as mesh normals | Kept |
+| Hidden faces | Kept | Kept | Kept as the `skip` texture | Kept as faces the mesh leaves out | Kept |
+| Texture groups | Kept | Kept | Lost | Not applicable | Kept |
+| Point entities | Kept | Kept | Kept | Lost | Kept |
+| Entity properties | Kept | Kept | Kept as text | Lost | Kept |
+| I/O wires | Kept | Kept | Kept | Lost | Kept |
+| Brush entities | Kept | Kept | Kept | Kept as named nodes | Kept |
+| Visgroups | Kept | Kept | Lost | Not applicable | Lost |
+| Groups | Kept | Kept | Lost | Not applicable | Lost |
+| Structures | Kept | Kept | Lost | Not applicable | Lost |
+| Prefab copies | Kept | Kept | Lost | Not applicable | Lost |
+| Cordons | Kept | Kept | Lost | Not applicable | Not applicable |
+| Bake options | Kept | Kept | Lost | Not applicable | Not applicable |
+| A brush's bake options | Kept | Kept | Lost | Not applicable | Kept |
+| Floor paint | Kept | Kept | Lost | Kept as mesh | Not applicable |
+| Notes | Kept | Kept | Lost | Lost | Kept |
+
+- **Kept as mesh.** A `.glb` holds what the bake built, so a row arrives as the triangles it made and not as something you can still edit. A cylinder, a cut or a sculpt cannot be got back from it; keep the `.hflevel` for that.
+- **Not applicable.** The format has no place for the row, and the export leaves out nothing by not having one. A `.glb` has no visgroups or structures, and the bake has applied the cordons and the bake options already. A prefab is a set of pieces rather than a level, so it holds no cordons, level bake options or floor paint.
+- **The `.map` column.** A brush keeps its faces and loses the shape it was made as, so a cylinder comes back as a plain brush with a cylinder's faces. A cut is left out rather than written as a solid that would fill its hole. Texture settings come back as the map's own texture axes, so a face draws the same while its numbers differ, and entity properties come back as text, which is how the format writes every value.
+- **Structures and prefab copies** keep their brushes wherever brushes are kept. What is lost is the record that can still change them: a staircase comes back as its steps.
+- The `.tscn` column is the default **Scene Keeps** setting, Brushes and bake. A scene set to keep only its bake loads its `.hflevel` when it opens, below.
+- Bake profiles are editor preferences rather than part of a level, and no file here carries them.
+
 ## Source of Truth: `.hflevel`
 - `.hflevel` files are the canonical save format for brushes, paint layers, materials, entities, decals, and settings.
 - When region streaming is enabled, per-region paint data is stored in a sibling `<level>.hfregions/` folder as one `.hfr` file per region.
