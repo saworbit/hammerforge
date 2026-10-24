@@ -2945,6 +2945,20 @@ func set_face_uv_params(
 		brush_system.spread_texture_groups([face])
 
 
+## Several faces' scale, offset and turn at once (#1728), each change as
+## `[brush_id, face_idx, scale, offset, rotation]`, through `set_face_uv_params()`
+## so a layout laid by hand and a texture group follow as they do for one face.
+## Returns how many faces it set. Records no undo; the caller does.
+func set_uv_params_on_faces(changes: Array) -> int:
+	var count := 0
+	for change in changes:
+		if not (change is Array) or (change as Array).size() != 5:
+			continue
+		set_face_uv_params(str(change[0]), int(change[1]), change[2], change[3], float(change[4]))
+		count += 1
+	return count
+
+
 func clip_brush_to_convex(brush_id: String) -> bool:
 	if not vertex_system:
 		return false

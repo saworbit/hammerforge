@@ -15,6 +15,7 @@ const HFPluginMaterialCommandsType = preload("plugin_material_commands.gd")
 const HFPluginSelectionCommandsType = preload("plugin_selection_commands.gd")
 const HFMaterialBrowserType = preload("ui/hf_material_browser.gd")
 const HFPluginSnapFeedbackType = preload("plugin_snap_feedback.gd")
+const HFPluginTextureKeysType = preload("plugin_texture_keys.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
@@ -359,6 +360,15 @@ static func _handle_keyboard(
 	# that way, and Alt makes the step a tenth (#1716). It was a plain nudge with
 	# Shift ignored. Shift with Page Up or Down stays a nudge, for the vertical
 	# tenth Alt+Shift gives.
+	# In Face Select with faces picked, the arrows slide and turn their textures
+	# (#1728). Face Select puts the object selection aside, so a nudge had nothing
+	# to move there.
+	if (
+		fixed == "nudge"
+		and not event.ctrl_pressed
+		and HFPluginTextureKeysType.handle(plugin, root, event)
+	):
+		return STOP
 	if fixed == "nudge" and event.shift_pressed and not event.ctrl_pressed:
 		if event.keycode in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT]:
 			var copy_guard = plugin._guard_hammerforge_shortcut(
