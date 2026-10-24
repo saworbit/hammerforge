@@ -21,18 +21,21 @@ panel included; it says nothing of how deep each one goes.
 
 In order:
 
-1. One table of what each file format keeps and loses ([#1706](https://github.com/saworbit/hammerforge/issues/1706))
-2. Repeat the whole run of commands since the selection last changed ([#1735](https://github.com/saworbit/hammerforge/issues/1735))
-3. A command line in the Console: type a command and its values ([#1696](https://github.com/saworbit/hammerforge/issues/1696))
-4. Sweep selected faces into a run of brushes along a bend ([#1714](https://github.com/saworbit/hammerforge/issues/1714))
-5. Alignment guides from points you rest on, and points built from two others ([#1692](https://github.com/saworbit/hammerforge/issues/1692))
-6. Dimensions that stay in the level and follow the brushes they measure ([#1699](https://github.com/saworbit/hammerforge/issues/1699))
-7. Groups you can name, nest, list and open ([#1723](https://github.com/saworbit/hammerforge/issues/1723))
-8. Compare two versions of a level ([#1701](https://github.com/saworbit/hammerforge/issues/1701))
-9. Follow the system's motion and contrast settings, and name every control ([#1703](https://github.com/saworbit/hammerforge/issues/1703))
-10. Every brush and face action on a set of levels, against a recorded baseline ([#1648](https://github.com/saworbit/hammerforge/issues/1648))
+1. Repeat the whole run of commands since the selection last changed ([#1735](https://github.com/saworbit/hammerforge/issues/1735))
+2. Sweep selected faces into a run of brushes along a bend ([#1714](https://github.com/saworbit/hammerforge/issues/1714))
+3. Alignment guides from points you rest on, and points built from two others ([#1692](https://github.com/saworbit/hammerforge/issues/1692))
+4. Dimensions that stay in the level and follow the brushes they measure ([#1699](https://github.com/saworbit/hammerforge/issues/1699))
+5. Groups you can name, nest, list and open ([#1723](https://github.com/saworbit/hammerforge/issues/1723))
+6. Follow the system's motion and contrast settings, and name every control ([#1703](https://github.com/saworbit/hammerforge/issues/1703))
+7. Every brush and face action on a set of levels, against a recorded baseline ([#1648](https://github.com/saworbit/hammerforge/issues/1648))
 
 What is done is below, newest first.
+
+## Done (From the Next List, October 2026)
+
+- One table of what each file format keeps and loses, every cell checked by a test, and exports that name what they left out ([#1706](https://github.com/saworbit/hammerforge/issues/1706)). Its round trips found floor paint and entity keys lost from a saved scene, fixed in #1854 and #1855.
+- A command line in the Console and over the viewport (Shift+;) that runs a command with its values, and scripts of them ([#1696](https://github.com/saworbit/hammerforge/issues/1696)).
+- Compare the open level with another version of it, in the viewport, the Console and a headless tool for CI ([#1701](https://github.com/saworbit/hammerforge/issues/1701)).
 
 ## Done (Agent Bridge, MCP -- October 2026)
 
