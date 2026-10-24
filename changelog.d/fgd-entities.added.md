@@ -1,0 +1,1 @@
+- Entity classes can be read from an FGD file, with base classes, typed properties, choices, flags, inputs and outputs, and converted to JSON. (issue [#1721](https://github.com/saworbit/hammerforge/issues/1721))
