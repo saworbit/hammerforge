@@ -388,6 +388,21 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"uv_rotate_90":
 			if dock:
 				dock._on_uv_edit("rotate_90")
+		"align_texture_to_edge":
+			if dock:
+				# From the face menu, the edge nearest where it was opened (#1727).
+				var near: Variant = null
+				if not args.is_empty() and str(args[0]) == "cursor" and root:
+					near = root.pick_face(plugin.last_3d_camera, plugin.last_3d_mouse_pos).get(
+						"position"
+					)
+				dock._on_align_to_edge(near)
+		"fit_texture_repeats":
+			if dock:
+				dock._on_fit_repeats()
+		"fit_texture_strip":
+			if dock:
+				dock._on_fit_strip()
 		"uv_align_face":
 			if dock:
 				dock._on_uv_align(FaceData.UVProjection.FACE)

@@ -647,6 +647,12 @@ var justify_bottom_btn: Button = null
 var justify_treat_as_one: CheckBox = null
 var uv_align_face_btn: Button = null
 var uv_align_world_btn: Button = null
+## Align to Edge, and the counts Fit Repeats and Fit Strip use (#1727).
+var uv_align_edge_btn: Button = null
+var fit_repeats_u: SpinBox = null
+var fit_repeats_v: SpinBox = null
+var fit_strip_index: SpinBox = null
+var fit_strip_count: SpinBox = null
 var uv_wrap_btn: Button = null
 var uv_link_btn: Button = null
 var uv_unlink_btn: Button = null
@@ -4293,6 +4299,55 @@ func _on_justify(mode: String) -> void:
 		"Justify UV (%s)" % mode, "justify_selected_faces", [mode, treat_as_one]
 	)
 	_resync_uv_face()
+
+
+## Turn each selected face's texture to run along one of its edges, the next
+## edge round the face each press, or the edge nearest `near` (#1727).
+func _on_align_to_edge(near: Variant = null) -> void:
+	if not _uv_faces_ready("Align to Edge"):
+		return
+	_commit_state_action_if_changed("Align to Edge", "align_selected_faces_to_edge", [near])
+	_resync_uv_face()
+
+
+## Fit the counts in Repeats: whole repeats across and down, 0 to keep the aspect.
+func _on_fit_repeats() -> void:
+	if not _uv_faces_ready("Fit Repeats"):
+		return
+	var u := int(fit_repeats_u.value) if fit_repeats_u else 1
+	var v := int(fit_repeats_v.value) if fit_repeats_v else 0
+	if u <= 0 and v <= 0:
+		show_toast("Give Repeats a count across or down", 1)
+		return
+	_commit_state_action_if_changed("Fit Repeats", "fit_selected_faces_repeats", [u, v])
+	_resync_uv_face()
+
+
+## Fit the strip in Strip: strip k of N across V, stretched along U.
+func _on_fit_strip() -> void:
+	if not _uv_faces_ready("Fit Strip"):
+		return
+	var count := int(fit_strip_count.value) if fit_strip_count else 4
+	var index := mini(int(fit_strip_index.value) if fit_strip_index else 1, count)
+	_commit_state_action_if_changed("Fit Strip", "fit_selected_faces_strip", [index, count])
+	_resync_uv_face()
+
+
+## The strip number can go no higher than the strips there are.
+func _on_fit_strip_count_changed(value: float) -> void:
+	if fit_strip_index:
+		fit_strip_index.max_value = value
+
+
+func _uv_faces_ready(label: String) -> bool:
+	if not level_root:
+		return false
+	if not _guard_selection_action(label, DockSelectionRequirement.BRUSHES_ONLY):
+		return false
+	if _count_selected_faces() == 0:
+		show_toast("Select the faces for %s" % label, 1)
+		return false
+	return true
 
 
 ## Align to Face and Align to World, beside the Justify buttons (#1419): every

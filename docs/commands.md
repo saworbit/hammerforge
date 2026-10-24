@@ -111,6 +111,9 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Justify Fit V (`justify_fit_v`) | none | 1 brush or faces | yes | Stretch the texture across the selected faces' height only. |
 | UV Flip U (`uv_flip_u`) | none | 1 brush or faces | yes | Flip the texture left to right on the selected faces. |
 | UV Flip V (`uv_flip_v`) | none | 1 brush or faces | yes | Flip the texture top to bottom on the selected faces. |
+| Align Texture to Edge (`align_texture_to_edge`) | none | 1 brush or faces | yes | Turn the texture to run along an edge of each selected face, the next edge each time. |
+| Fit Texture Repeats (`fit_texture_repeats`) | none | 1 brush or faces | yes | Show the Paint tab's count of whole repeats across the selected faces. |
+| Fit Trim Strip (`fit_texture_strip`) | none | 1 brush or faces | yes | Fit one strip of a trim sheet, as the Paint tab's Strip sets it, to the selected faces. |
 | UV Rotate 90 (`uv_rotate_90`) | none | 1 brush or faces | yes | Turn the texture a quarter turn on the selected faces. |
 | Align to Face (`uv_align_face`) | none | 1 brush or faces | yes | Lay the texture along each selected face's own plane. |
 | Align to World (`uv_align_world`) | none | 1 brush or faces | yes | Lay the texture on the world's axes, so neighbouring faces line up. |

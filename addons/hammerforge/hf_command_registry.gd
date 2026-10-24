@@ -939,6 +939,44 @@ const COMMANDS := [
 		"repeat": true
 	},
 	{
+		"id": "align_texture_to_edge",
+		"label": "Align Texture to Edge",
+		"help":
+		"Turn the texture to run along an edge of each selected face, the next edge each time.",
+		"aliases": ["texture along edge", "rotate texture to edge"],
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Align to Edge", "allow_faces": true},
+		"palette": true,
+		"repeat": true
+	},
+	{
+		"id": "fit_texture_repeats",
+		"label": "Fit Texture Repeats",
+		"help": "Show the Paint tab's count of whole repeats across the selected faces.",
+		"aliases": ["fit repeats", "whole repeats"],
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Fit Repeats", "allow_faces": true},
+		"palette": true,
+		"repeat": true
+	},
+	{
+		"id": "fit_texture_strip",
+		"label": "Fit Trim Strip",
+		"help":
+		"Fit one strip of a trim sheet, as the Paint tab's Strip sets it, to the selected faces.",
+		"aliases": ["trim sheet", "fit strip"],
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Fit Strip", "allow_faces": true},
+		"palette": true,
+		"repeat": true
+	},
+	{
 		"id": "uv_rotate_90",
 		"label": "UV Rotate 90",
 		"help": "Turn the texture a quarter turn on the selected faces.",
