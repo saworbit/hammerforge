@@ -131,7 +131,7 @@ Notes save with the level, the scene and a prefab like any entity, and never rea
 
 The **Compare** tab names the file and sums up, such as "3 brushes, 1 face, 1 entity changed", then lists each change: "brush 'stair_03': moved 0.5 m up", "brush 'wall_12': face +x: material changed from brick to plaster", "entity 'lamp' (light_point): added". Click one to select what it names, and **F** frames it.
 
-The viewport outlines the same changes: what the open level added is drawn solid, what changed is drawn twice, and what it removed is drawn dashed where the file has it. Each has its own line as well as its own colour, and the colours are in **Settings** with the other overlay colours, so **High Contrast** covers them.
+The viewport outlines the same changes: what the open level added is drawn solid, what changed is drawn twice, and what it removed is drawn dashed where the file has it. Each has its own line as well as its own colour, and the colours are in **Settings** with the other overlay colours, so **High Contrast** covers them. The brushes that did not change are faded, so the changes stand out in a big level ([#1864](https://github.com/saworbit/hammerforge/issues/1864)). How far they fade is **Compare: unchanged** in Settings, beside the compare colours, 70% unless you change it, and 0% leaves them as they are. The fade is drawn and nothing more: the brushes, their materials, a scene saved meanwhile and the undo history are all left as they were, and **End Compare** brings them back.
 
 Brushes are matched by id, and a brush whose id changed but whose shape and place did not is still the same brush. Entities are matched by name, then by class and place. Visgroups, cordons and paint layers are counted too.
 
