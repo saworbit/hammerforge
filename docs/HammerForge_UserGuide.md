@@ -1770,6 +1770,8 @@ The material palette can be saved and loaded as a JSON library file. **Save Libr
 ## Prototype Textures
 HammerForge includes 150 built-in SVG prototype textures organized as 15 patterns in 10 color variations. Click **Refresh Prototypes** in the Paint tab → Materials → Material Library to add them all to the palette. **Remove Unused** drops every slot no face is wearing and **Clear** empties the palette outright, both in one pass over the level rather than one pass per slot; a face whose material goes is unset and keeps its geometry. The **Material Browser** displays them as a visual thumbnail grid with search and pattern/color filters — no need to memorize names. Patterns include solid, brick, checker, cross, diamond, dots, hex, stripes (diagonal/horizontal), triangles, zigzag, and directional arrows (up/down/left/right).
 
+The browser knows what the open level uses ([#1725](https://github.com/saworbit/hammerforge/issues/1725)). A green dot marks each material a face uses, and its tooltip says how many, the texture's size in pixels and its file. The **In Use** view shows just those, the most used first. The search takes every word you type, in any order, in the name or the path, so `brick red` finds `wall_brick_red_02`. The slider beside them sizes the thumbnails from 48 to 192 pixels, and the size is kept with your preferences. Right-click a material for **Select Faces Using This**, which turns Face Select on with every face that wears it, and **Select Brushes Using This**; both leave out hidden and locked brushes. The counts are kept by the level and worked out again only when a face changes, so the browser stays quick on a large level.
+
 For GDScript API usage, see `docs/HammerForge_Prototype_Textures.md`.
 
 ## Pending Cuts Workflow
