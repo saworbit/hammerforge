@@ -16,12 +16,18 @@ class FakeInputState:
 	var drag_end := Vector3.ZERO
 	var drag_height := 0.0
 	var numeric_override := -1.0
+	var typed_lock_x := true
+	var typed_lock_z := true
+	var typed_heading := Vector3.ZERO
 
 	func has_numeric_override() -> bool:
 		return numeric_override > 0.0
 
 	func clear_numeric_override() -> void:
 		numeric_override = -1.0
+		typed_lock_x = true
+		typed_lock_z = true
+		typed_heading = Vector3.ZERO
 
 	func is_dragging() -> bool:
 		return dragging
@@ -168,21 +174,144 @@ func test_enter_commits_numeric_extrusion() -> void:
 	root.free()
 
 
-func test_tab_applies_base_dimension_and_advances_to_height() -> void:
+## Tab in a draw's base moves on to the next value, width to depth to height
+## (#1693), and with all three typed it places the brush. It used to apply the one
+## number as a square base, so the depth could never be typed apart.
+func test_tab_moves_a_base_entry_on_to_its_next_value() -> void:
 	var plugin := FakePlugin.new()
-	var root := FakeRoot.new()
-	root.input_state.dragging = true
-	root.input_state.drag_base = true
+	var root := _base_drag()
+	root.drag_result = {"placed": true, "info": {"brush_id": "drawn"}}
 	plugin.numeric_buffer = "4"
 	assert_eq(
 		HFPluginNumericInput.handle(plugin, _key(KEY_TAB), root), EditorPlugin.AFTER_GUI_INPUT_STOP
 	)
+	assert_eq(plugin.numeric_buffer, "4,", "Tab is a comma in the base")
+	assert_true(root.input_state.drag_base, "and the base is still being set")
+	assert_eq(root.input_state.drag_end.x, 4.0, "the width holds")
+	_type(plugin, root, [KEY_3, KEY_TAB, KEY_2])
+	assert_eq(plugin.numeric_buffer, "4,3,2")
+	assert_eq(root.input_state.drag_end, Vector3(4.0, 0.0, 3.0))
+	assert_eq(root.input_state.drag_height, 2.0)
+	HFPluginNumericInput.handle(plugin, _key(KEY_TAB), root)
+	assert_eq(plugin.committed_info, {"brush_id": "drawn"}, "Tab on the height places it")
 	assert_eq(plugin.numeric_buffer, "")
-	assert_false(root.input_state.drag_base)
-	assert_true(root.input_state.drag_height_mode)
-	assert_eq(root.input_state.drag_end, Vector3(4.0, 0.0, 4.0))
-	assert_eq(root.update_count, 1)
-	assert_eq(plugin.hud_updates, 1)
+	root.free()
+
+
+func _base_drag(end := Vector3.ZERO) -> FakeRoot:
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_base = true
+	root.input_state.drag_end = end
+	return root
+
+
+func _type(plugin: FakePlugin, root: FakeRoot, keys: Array) -> void:
+	for keycode in keys:
+		HFPluginNumericInput.handle(plugin, _key(keycode), root)
+
+
+func test_width_and_depth_are_typed_apart() -> void:
+	var plugin := FakePlugin.new()
+	var root := _base_drag()
+	_type(plugin, root, [KEY_6, KEY_COMMA, KEY_4])
+	assert_eq(plugin.numeric_buffer, "6,4")
+	assert_eq(root.input_state.drag_end, Vector3(6.0, 0.0, 4.0), "6 wide and 4 deep")
+	assert_true(root.input_state.has_numeric_override(), "the mouse leaves it alone")
+	_type(plugin, root, [KEY_ENTER])
+	assert_true(root.input_state.drag_height_mode, "Enter goes on to the height")
+	assert_eq(root.input_state.drag_end, Vector3(6.0, 0.0, 4.0))
+	assert_eq(plugin.committed_info, {}, "with nothing placed yet")
+	assert_eq(plugin.numeric_buffer, "")
+	root.free()
+
+
+func test_a_minus_turns_its_side_the_other_way() -> void:
+	var plugin := FakePlugin.new()
+	var root := _base_drag(Vector3(2, 0, 2))
+	plugin.numeric_buffer = "-6"
+	_type(plugin, root, [KEY_COMMA, KEY_4])
+	assert_eq(plugin.numeric_buffer, "-6,4")
+	assert_eq(root.input_state.drag_end, Vector3(-6.0, 0.0, 4.0), "the width goes back")
+	root.free()
+	var heading_back := _base_drag(Vector3(-2, 0, -2))
+	plugin.numeric_buffer = ""
+	_type(plugin, heading_back, [KEY_6, KEY_COMMA, KEY_KP_SUBTRACT, KEY_4])
+	assert_eq(heading_back.input_state.drag_end, Vector3(-6.0, 0.0, 4.0), "against the drag")
+	heading_back.free()
+	var square := _base_drag(Vector3(2, 0, -2))
+	plugin.numeric_buffer = ""
+	_type(plugin, square, [KEY_MINUS, KEY_3])
+	assert_eq(square.input_state.drag_end, Vector3(-3.0, 0.0, 3.0), "one number flips both")
+	square.free()
+
+
+func test_three_values_place_the_brush_with_no_height_click() -> void:
+	var plugin := FakePlugin.new()
+	var root := _base_drag()
+	root.drag_result = {"placed": true, "info": {"brush_id": "drawn"}}
+	_type(plugin, root, [KEY_6, KEY_COMMA, KEY_4, KEY_COMMA, KEY_3, KEY_ENTER])
+	assert_eq(plugin.committed_info, {"brush_id": "drawn"})
+	assert_eq(root.input_state.drag_height, 3.0)
+	assert_eq(root.input_state.drag_end, Vector3(6.0, 0.0, 4.0))
+	root.free()
+
+
+func test_a_width_alone_leaves_the_depth_to_the_mouse() -> void:
+	var plugin := FakePlugin.new()
+	var root := _base_drag(Vector3(2, 0, 5))
+	plugin.numeric_buffer = "6"
+	_type(plugin, root, [KEY_COMMA])
+	assert_eq(root.input_state.drag_end, Vector3(6.0, 0.0, 5.0), "the depth is the drag's")
+	assert_true(root.input_state.typed_lock_x)
+	assert_false(root.input_state.typed_lock_z, "the drag system lets the mouse set it")
+	_type(plugin, root, [KEY_BACKSPACE])
+	assert_eq(plugin.numeric_buffer, "6")
+	assert_true(root.input_state.typed_lock_z, "one number is a square again")
+	assert_eq(root.input_state.drag_end, Vector3(6.0, 0.0, 6.0))
+	root.free()
+
+
+func test_a_third_comma_and_a_ctrl_minus_are_not_typed() -> void:
+	var plugin := FakePlugin.new()
+	var root := _base_drag()
+	plugin.numeric_buffer = "6,4,3"
+	assert_eq(
+		HFPluginNumericInput.handle(plugin, _key(KEY_COMMA), root),
+		EditorPlugin.AFTER_GUI_INPUT_PASS
+	)
+	assert_eq(plugin.numeric_buffer, "6,4,3")
+	plugin.numeric_buffer = ""
+	var ctrl_minus := _key(KEY_MINUS)
+	ctrl_minus.ctrl_pressed = true
+	assert_eq(
+		HFPluginNumericInput.handle(plugin, ctrl_minus, root),
+		EditorPlugin.AFTER_GUI_INPUT_PASS,
+		"Ctrl and minus is the grid's"
+	)
+	assert_eq(plugin.numeric_buffer, "")
+	root.free()
+
+
+func test_a_comma_in_the_height_stage_is_not_typed() -> void:
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_height_mode = true
+	plugin.numeric_buffer = "4"
+	_type(plugin, root, [KEY_COMMA, KEY_MINUS])
+	assert_eq(plugin.numeric_buffer, "4", "a height is one number")
+	root.free()
+
+
+func test_a_typed_zero_side_is_refused() -> void:
+	var plugin := FakePlugin.new()
+	var root := _base_drag(Vector3(2, 0, 2))
+	_type(plugin, root, [KEY_6, KEY_COMMA, KEY_0])
+	assert_eq(plugin.dock.toasts, [], "nothing is said on the way to 0.5")
+	_type(plugin, root, [KEY_ENTER])
+	assert_true(root.input_state.drag_base, "the base is still being set")
+	assert_eq(plugin.dock.toasts, ["Type a size greater than 0"], "Enter says why")
 	root.free()
 
 

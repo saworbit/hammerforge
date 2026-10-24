@@ -102,9 +102,17 @@ func update_drag(camera: Camera3D, mouse_pos: Vector2) -> void:
 		# buffer empties. Recomputing it here is what made the number look like it
 		# did nothing: it went on screen and the mouse took it straight back.
 		var typed_base := input_state.has_numeric_override()
-		if (not input_state.alt_pressed or input_state.shift_pressed) and not typed_base:
+		# `6,` holds the width and lets the mouse set the depth (#1693).
+		var partial := typed_base and not (input_state.typed_lock_x and input_state.typed_lock_z)
+		if (
+			(not input_state.alt_pressed or input_state.shift_pressed)
+			and (not typed_base or partial)
+		):
+			var held: Vector3 = input_state.drag_end
 			input_state.drag_end = root.grid_system.snap_draw_hit(hit, true)
 			input_state.drag_end = _apply_axis_lock(input_state.drag_origin, input_state.drag_end)
+			if partial:
+				input_state.drag_end = _keep_typed_sides(input_state.drag_end, held)
 			_update_lock_state(input_state.drag_origin, input_state.drag_end)
 		if input_state.alt_pressed:
 			input_state.drag_height = _height_from_mouse(
@@ -359,10 +367,13 @@ func _on_grid_plane(point: Vector3) -> bool:
 ## follows it past the brush it started on.
 func _update_face_base(camera: Camera3D, mouse_pos: Vector2) -> void:
 	var typed_base := input_state.has_numeric_override()
-	if (not input_state.alt_pressed or input_state.shift_pressed) and not typed_base:
+	var partial := typed_base and not (input_state.typed_lock_x and input_state.typed_lock_z)
+	if (not input_state.alt_pressed or input_state.shift_pressed) and (not typed_base or partial):
 		var corner: Variant = _face_point_under(camera, mouse_pos)
 		if corner is Vector3:
-			input_state.drag_end = corner
+			input_state.drag_end = (
+				_keep_typed_sides(corner, input_state.drag_end) if partial else corner
+			)
 	if input_state.alt_pressed:
 		input_state.drag_height = _height_from_mouse(
 			mouse_pos, input_state.height_stage_start_mouse, input_state.height_stage_start_height
@@ -377,6 +388,15 @@ func _update_face_base(camera: Camera3D, mouse_pos: Vector2) -> void:
 		input_state.shift_pressed and not input_state.alt_pressed,
 		input_state.shift_pressed and input_state.alt_pressed
 	)
+
+
+## `end` with the sides a typed base holds put back from `held` (#1693).
+func _keep_typed_sides(end: Vector3, held: Vector3) -> Vector3:
+	if input_state.typed_lock_x:
+		end.x = held.x
+	if input_state.typed_lock_z:
+		end.z = held.z
+	return end
 
 
 ## Where the screen ray meets the face's plane, snapped and in the face's frame,
