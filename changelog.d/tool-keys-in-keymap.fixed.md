@@ -1,0 +1,1 @@
+- The Shortcuts dialog lists and changes the keys that start Clip, Measure, Decal, Polygon and Path; a command given one of them used to lose it to the tool unseen. (issue [#1820](https://github.com/saworbit/hammerforge/issues/1820))

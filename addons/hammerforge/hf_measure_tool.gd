@@ -43,8 +43,8 @@ func tool_id() -> int:
 	return 100
 
 
-func tool_shortcut_key() -> int:
-	return KEY_M
+func keymap_action() -> String:
+	return "measure"
 
 
 func can_activate(p_root: Node3D) -> bool:

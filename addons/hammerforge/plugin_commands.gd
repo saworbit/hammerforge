@@ -606,9 +606,11 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"set_grid_snap":
 			if dock and not args.is_empty():
 				dock._apply_grid_snap(float(args[0]))
-		"measure":
+		"measure", "tool_clip", "tool_polygon", "tool_path", "tool_decal":
 			if plugin._tool_registry and plugin.active_root:
-				plugin._activate_external_tool(100, plugin.active_root)
+				var tool_id: int = plugin._tool_registry.tool_id_for_action(action)
+				if tool_id >= 0:
+					plugin._activate_external_tool(tool_id, plugin.active_root)
 		"snap_next_vertex", "snap_next_midpoint", "snap_next_centre", "snap_next_perpendicular", "snap_next_grid":
 			HFPluginSnapFeedbackType.limit(plugin, action)
 		"cancel_drag":

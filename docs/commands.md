@@ -33,6 +33,10 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Extrude Up (alt) (`tool_extrude`) | E | - | yes | Switch to Extrude Up, outside Paint and Vertex modes. |
 | Extrude Down (`tool_extrude_down`) | J | - | yes | Switch to Extrude Down: drag a face to push a cut into it. |
 | Extrude Down (alt) (`tool_extrude_down_alt`) | Shift+E | - | yes | Switch to Extrude Down, outside Paint and Vertex modes. |
+| Clip Tool (`tool_clip`) | C | - | yes | Start the Clip tool, which cuts the selected brushes along a plane you place. |
+| Polygon Tool (`tool_polygon`) | P | - | yes | Start the Polygon tool: click an outline on the ground, then drag its height. |
+| Path Tool (`tool_path`) | ; | - | yes | Start the Path tool, which builds a corridor of brushes along the points you click. |
+| Decal Tool (`tool_decal`) | N | - | yes | Start the Decal tool, which places a decal on the surface you click. |
 | Repeat Last Brush (`repeat_brush`) | Shift+D | a level | yes | Arm a stamp of the brush the last Draw made; each click places one. |
 | Place Entity Here (`place_entity_here`) | none | a level | no | Place an entity on the surface under the cursor, standing on it. |
 | Apply Last Texture (`apply_last_texture`) | Shift+T | 1 brush or faces, a level | yes | Give the selection the material the Texture Picker last sampled. |
@@ -54,6 +58,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Split Edge (`vertex_split_edge`) | Ctrl+E | 1 brush, a level | yes | Split the selected edge at its middle. |
 | Snap Vertices to Grid (`vertex_snap_to_grid`) | Ctrl+B | 1 brush, a level | yes | Move the selected vertices to their nearest grid points. |
 | Texture Picker (`texture_picker`) | T | a level | yes | Sample a face's material and its whole look, for Apply Last Texture and Apply Picked Look. |
+| Measure (`measure`) | M | - | yes | Start the Measure tool, which draws rulers between points. |
 | Context Menu (`context_menu`) | Space | a level | yes | Open the context menu at the cursor. |
 | Radial Menu (`radial_menu`) | &#96; | - | yes | Open the radial menu, when Power-user overlays are on. |
 | Operation Replay Timeline (`toggle_operation_replay`) | Ctrl+Shift+T | - | yes | Show or hide the operation replay timeline, when Power-user overlays are on. |
@@ -137,7 +142,6 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Undo (`undo`) | none | - | no | Take back the last change. |
 | Redo (`redo`) | none | - | no | Put back the last change undone. |
 | Set Grid Snap (`set_grid_snap`) | none | - | no | Set the grid step to a value. |
-| Measure (`measure`) | none | - | no | Start the Measure tool, which draws rulers between points. |
 | Next Pick: Vertex Only (`snap_next_vertex`) | none | a level | yes | The next click snaps only to a vertex, whatever snaps are on, then they all return. |
 | Next Pick: Midpoint Only (`snap_next_midpoint`) | none | a level | yes | The next click snaps only to the middle of an edge, then every snap that was on returns. |
 | Next Pick: Centre Only (`snap_next_centre`) | none | a level | yes | The next click snaps only to a brush's centre, then every snap that was on returns. |

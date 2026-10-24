@@ -324,6 +324,12 @@ static func _default_bindings() -> Dictionary:
 		"tool_extrude_down": {"keycode": KEY_J},
 		"tool_extrude": {"keycode": KEY_E},
 		"tool_extrude_down_alt": {"keycode": KEY_E, "shift": true},
+		# The tools in the toolbar's second row, each a bare key (#1820).
+		"measure": {"keycode": KEY_M},
+		"tool_decal": {"keycode": KEY_N},
+		"tool_polygon": {"keycode": KEY_P},
+		"tool_path": {"keycode": KEY_SEMICOLON},
+		"tool_clip": {"keycode": KEY_C},
 		# Draw's own key with Shift: the last brush drawn, again (#1407).
 		"repeat_brush": {"keycode": KEY_D, "shift": true},
 		# Workflow accelerators
@@ -1002,6 +1008,8 @@ static func _keycode_to_label(keycode: int) -> String:
 			return "["
 		KEY_BRACKETRIGHT:
 			return "]"
+		KEY_SEMICOLON:
+			return ";"
 	# Single letter keys
 	if keycode >= KEY_A and keycode <= KEY_Z:
 		return char(keycode)

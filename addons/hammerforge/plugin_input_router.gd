@@ -626,7 +626,7 @@ static func _handle_keyboard(
 		return STOP
 	# External tool shortcuts
 	if plugin._tool_registry:
-		var ext_id = plugin._tool_registry.check_shortcut(event)
+		var ext_id = plugin._tool_registry.check_shortcut(event, keymap)
 		if ext_id >= 0 and plugin.active_root:
 			plugin._activate_external_tool(ext_id, plugin.active_root)
 			plugin._show_coach_mark_for_tool_id(ext_id)

@@ -243,6 +243,12 @@ const GROUPS := [
 				"Adds a debug player when this level's own scene is run on its own. Test Level builds its own player and does not read this. Never applies to a release build."
 			},
 			{
+				"key": "validate_warns_open_todos",
+				"label": "Validate warns about open To Do notes",
+				"help":
+				"Validate lists each To Do note not marked Done. Kept in the level, so everyone's check of it agrees."
+			},
+			{
 				"pref": "check_for_updates",
 				"label": "Check for a newer HammerForge",
 				"help":

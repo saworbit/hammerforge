@@ -1,0 +1,1 @@
+- Validate can list each open To Do note, with a level setting under Safety net in the Console's Controls, off by default. (issue [#1818](https://github.com/saworbit/hammerforge/issues/1818))

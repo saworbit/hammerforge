@@ -100,9 +100,9 @@ static func marker_lines(kind: String, half: float = MARKER_HALF) -> PackedVecto
 
 ## What the label beside a marker says for `kind`, with the one-pick limit named
 ## when one is waiting.
-static func label_text(kind: String, limit: String = "") -> String:
+static func label_text(kind: String, limited_to: String = "") -> String:
 	var text := str(HFSnapSystemType.KIND_LABELS.get(kind, ""))
-	if limit != "" and text != "":
+	if limited_to != "" and text != "":
 		text += " only"
 	return text
 

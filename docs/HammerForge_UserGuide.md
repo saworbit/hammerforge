@@ -90,7 +90,7 @@ Every HammerForge switch on one screen, grouped by what it affects:
 
 - **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, draw hover preview, name the snap, show selection size, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
 - **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh (cell size and height, agent height, radius, climb and slope), visible only, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
-- **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), check for a newer HammerForge (once a day, from the Asset Library, see [Upgrade](HammerForge_Install_Upgrade.md#upgrade)), debug logging
+- **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), Validate warns about open To Do notes (off by default, kept in the level, see [Notes](#notes)), check for a newer HammerForge (once a day, from the Asset Library, see [Upgrade](HammerForge_Install_Upgrade.md#upgrade)), debug logging
 
 Each switch is captioned with what it does, and **Find a setting** searches those captions as well as the names, so "pathfinding" finds *Bake navmesh*. Turn **Descriptions** off to fit more on screen; the text stays on the tooltips. A switch with nowhere to write — no level open — is disabled rather than shown at a made-up default.
 
@@ -121,7 +121,7 @@ A **Note** is text left in the level for the people working on it: "the lift goe
 
 In the viewport a note is a marker with its title over it: a sphere for a Note, a diamond for a To Do, a cylinder for a Playtest. Its body shows under the title while the cursor is over it, and a done note fades.
 
-The Console's **Notes** tab lists every note under its kind, with how many are open, and clicking one selects it, so **F** frames it. The Status board counts open notes in a grey **Notes** row, which never colours the headline.
+The Console's **Notes** tab lists every note under its kind, with how many are open, and clicking one selects it, so **F** frames it. The Status board counts open notes in a grey **Notes** row, which never colours the headline. Turn on **Validate warns about open To Do notes** under Safety net in the Console's Controls and Validate lists each open To Do note as `Open To Do note: <title>`, with Select on its row; Note and Playtest notes never warn. The setting is kept in the level and the scene, off by default, so everyone's check of a level agrees ([#1818](https://github.com/saworbit/hammerforge/issues/1818)).
 
 Notes save with the level, the scene and a prefab like any entity, and never reach a bake, a playtest, a running game, a `.glb` or a `.map` export; the `.map` export says how many it left out. An agent can place, change and list notes over the bridge with `hf_place_entity`, `hf_set_entity_properties` and `hf_get_entities`.
 
@@ -345,7 +345,8 @@ Scripts that create or update a structure must pass settings in their declared t
 Press the button (or `Ctrl+Shift+A`) and it lands centred on whatever you have
 selected, **facing the way that selection faces** — select a wall standing at
 forty-five degrees and the arch you build on it stands at forty-five degrees too.
-With nothing selected it lands on the world origin, square. Then treat it like
+With nothing selected it stands on the world origin, square, with its lowest
+point at y = 0 rather than its middle, so it stands on a floor there. Then treat it like
 any other geometry: rotate it, carve a doorway through it, clip a piece off.
 
 A selection has to agree with itself to hand its facing over: pick two brushes
@@ -1933,9 +1934,10 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Invert Grid Snap (hold) | Ctrl | Held in a draw, vertex or resize handle drag: no grid snap with Grid on, grid snap with it off |
 | Snap to Vertices (hold) | Alt | Held in a vertex or resize handle drag: land on another brush's vertex, as Vertex snap does |
 | Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
-| Decal | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
-| Polygon | P | Draw a polygon, extrude to brushes (a concave one splits into convex brushes) |
-| Path | ; | Place waypoints, extrude corridor brushes |
+| Decal Tool | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
+| Polygon Tool | P | Draw a polygon, extrude to brushes (a concave one splits into convex brushes) |
+| Path Tool | ; | Place waypoints, extrude corridor brushes |
+| Clip Tool | C | Cut the selected brushes along a plane placed with two or three points |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 
 **Rebinding:** Press the **?** button on the toolbar to open the shortcut dialog, select a command and press **Set Key**, then the new chord ([#1733](https://github.com/saworbit/hammerforge/issues/1733)). Every command the palette runs is listed and can take a key, not only those that ship with one; a command with no key shows "none". **Set Second Key** gives a command a second chord, and either one fires it; the surfaces that name a key show the first. A chord another command already uses is said before it is kept, with that command's name, and you swap the keys, take it off the other command, or cancel. A chord the editor or the palette takes ahead of every binding, such as Ctrl+S, can only be cancelled. **Clear** takes a command's keys off, **Reset** puts one back to its default and **Reset All** puts every key back. A change works at once, with no restart, and is written to `user://hammerforge_keymap.json`, the keys you changed and nothing else, so an action you left alone keeps picking up later changes to its default. **Export...** and **Import...** share that file with a team. The file can still be edited by hand: each entry maps an action name to `{"keycode": "F", "ctrl": bool, "shift": bool, "alt": bool}`, with an optional `"second"` chord in the same shape, or `{"none": true}` for no key, for example `{"selection_filter": {"keycode": "G", "alt": true}}`. `keycode` is a key name as Godot spells it (`"F"`, `"Delete"`, `"PageDown"`, `"BracketLeft"`) or Godot's integer keycode; modifiers go in their own fields, not in the name. Restart the plugin after editing the file by hand. Every surface that names a chord — the viewport HUD, the coach marks, the dock tooltips, the hotkey palette and the shortcut list — reads the binding rather than repeating it, so a rebind shows up everywhere at once.
