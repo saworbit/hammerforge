@@ -81,12 +81,26 @@ static func detach_viewport_overlay(plugin: Object, control: Control) -> void:
 
 ## Godot hands the draw-over Control to every viewport of a split layout on every
 ## draw. Keep the first live one: adopting each call in turn would drag the
-## overlays between viewports every frame.
+## overlays between viewports every frame. A host the layout has hidden is not
+## live, so the overlays go to a viewport that is still shown (#1627).
 static func adopt_viewport_overlay_host(plugin: Object, host: Control) -> void:
 	if plugin == null or host == null or not is_instance_valid(host):
 		return
 	var current = plugin._viewport_overlay_host
-	if current != null and is_instance_valid(current) and current.is_inside_tree():
+	if (
+		current != null
+		and is_instance_valid(current)
+		and current.is_inside_tree()
+		and (current.is_visible_in_tree() or not host.is_visible_in_tree())
+	):
+		return
+	move_viewport_overlays(plugin, host)
+
+
+## Put the overlays over `host`, the viewport the mapper is working in now: a
+## click in another viewport of a split layout takes them there (#1627).
+static func move_viewport_overlays(plugin: Object, host: Control) -> void:
+	if plugin == null or host == null or not is_instance_valid(host):
 		return
 	plugin._viewport_overlay_host = host
 	for property in VIEWPORT_OVERLAY_PROPERTIES:
@@ -96,21 +110,32 @@ static func adopt_viewport_overlay_host(plugin: Object, host: Control) -> void:
 			place_viewport_overlay(plugin, control)
 
 
-## Keep the plugin's drop target on the viewport host, behind every overlay, so a
-## drag over the viewport reaches `_can_drop_data()` and `_drop_data()` (#1417).
-## It is not one of the overlays above: it covers the whole host and has nothing
-## to show, and adoption would put it on top of them. The toolbar row is no place
-## for it either, so it waits for a host.
-static func ensure_viewport_drop_target(plugin: Object) -> void:
-	var host = plugin._viewport_overlay_host
+## Keep a drop target on each viewport host, behind every overlay, so a drag
+## over any viewport of a split layout reaches `_can_drop_data()` and
+## `_drop_data()` (#1417, #1627). Each answers for the viewport it is on, with that
+## viewport's camera. It is not one of the overlays above: it covers the whole host
+## and has nothing to show, and adoption would put it on top of them.
+## `_viewport_drop_target` is the one on the overlays' host.
+static func ensure_viewport_drop_target(plugin: Object, host: Control = null) -> void:
+	if host == null:
+		host = plugin._viewport_overlay_host
 	if host == null or not is_instance_valid(host):
 		return
-	var target = plugin._viewport_drop_target
-	if target == null or not is_instance_valid(target):
+	var targets: Dictionary = plugin._viewport_drop_targets
+	for key in targets.keys():
+		if not is_instance_valid(targets[key]):
+			targets.erase(key)
+	var target = targets.get(host.get_instance_id())
+	if target == null:
 		target = HFViewportDropTarget.new()
-		target.can_drop = Callable(plugin, "_can_drop_data")
-		target.drop = Callable(plugin, "_drop_data")
+		target.can_drop = Callable(plugin, "_can_drop_data_on").bind(host)
+		target.drop = Callable(plugin, "_drop_data_on").bind(host)
+		targets[host.get_instance_id()] = target
+	if host == plugin._viewport_overlay_host:
 		plugin._viewport_drop_target = target
+	var camera := camera_for_host(host)
+	if camera:
+		plugin._viewport_hosts_by_camera[camera.get_instance_id()] = host
 	if target.get_parent() == host:
 		return
 	_rehome_viewport_overlay(target, host)
@@ -118,13 +143,32 @@ static func ensure_viewport_drop_target(plugin: Object) -> void:
 
 
 static func free_viewport_drop_target(plugin: Object) -> void:
-	var target = plugin._viewport_drop_target
 	plugin._viewport_drop_target = null
-	if target == null or not is_instance_valid(target):
-		return
-	if target.get_parent():
-		target.get_parent().remove_child(target)
-	target.free()
+	var targets: Dictionary = plugin._viewport_drop_targets
+	for target in targets.values():
+		if target == null or not is_instance_valid(target):
+			continue
+		if target.get_parent():
+			target.get_parent().remove_child(target)
+		target.free()
+	targets.clear()
+	plugin._viewport_hosts_by_camera.clear()
+
+
+## The camera of the viewport `host` draws over. In the editor the draw-over
+## Control sits beside the viewport it covers, under one parent; a host inside a
+## viewport of its own, as a test builds one, has that viewport's camera.
+static func camera_for_host(host: Control) -> Camera3D:
+	if host == null or not is_instance_valid(host):
+		return null
+	var parent := host.get_parent()
+	if parent != null and not (parent is Viewport):
+		for found in parent.find_children("*", "SubViewport", true, false):
+			var camera := (found as SubViewport).get_camera_3d()
+			if camera:
+				return camera
+	var own := host.get_viewport()
+	return own.get_camera_3d() if own else null
 
 
 static func _rehome_viewport_overlay(control: Control, host: Control) -> void:
