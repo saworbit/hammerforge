@@ -2975,6 +2975,158 @@ func _selected_face_refs() -> Array:
 	return face_refs
 
 
+# ---------------------------------------------------------------------------
+# Align to Edge, Fit Repeats and Fit Strip (#1727)
+# ---------------------------------------------------------------------------
+
+## The edge each face was last turned to, by face, so a second Align to Edge
+## steps on to the next edge round the face.
+var _aligned_edges: Dictionary = {}
+
+
+## Turn each selected face's texture so its U runs along one of the face's edges,
+## with the texture's top toward the middle of the face and a repeat starting at
+## the edge (#1727). A clipped diagonal wall, a roof slope or a bevel rarely runs
+## at a round angle, so neither Rotate 90 nor the gizmo's snapped turn could put
+## brick courses along it. With `near`, a world point, the edge nearest it;
+## otherwise the edge after the one the face was last turned to. Cylindrical faces
+## are left alone. Returns how many faces turned.
+func align_selected_faces_to_edge(near: Variant = null) -> int:
+	var turned := 0
+	for ref in _selected_face_refs():
+		var face: FaceData = ref["face"]
+		var count := face.local_verts.size()
+		var axes := face.texture_axes()
+		if count < 3 or axes.is_empty():
+			continue
+		var place: Transform3D = face.world_transform
+		var edge := -1
+		if near is Vector3:
+			edge = _nearest_edge(face, place, near)
+		else:
+			edge = (int(_aligned_edges.get(face.get_instance_id(), -1)) + 1) % count
+		var start: Vector3 = place * face.local_verts[edge]
+		var finish: Vector3 = place * face.local_verts[(edge + 1) % count]
+		var middle := Vector3.ZERO
+		for corner in face.local_verts:
+			middle += place * corner
+		middle /= float(count)
+		var along := _raw_uv(finish - start, axes)
+		if along.length() < 0.0001:
+			continue
+		var turn := -along.angle()
+		# The top of the texture, v going down from it, faces the middle.
+		var inward := (_raw_uv(middle - start, axes).rotated(turn) * face.uv_scale).y
+		if inward > 0.0:
+			turn += PI
+		turn = wrapf(turn, -PI, PI)
+		var at_start := _raw_uv(start, axes)
+		var showing := at_start.rotated(face.uv_rotation) * face.uv_scale + face.uv_offset
+		var offset := showing.round() - at_start.rotated(turn) * face.uv_scale
+		_set_uv_on(ref, face.uv_scale, offset, turn)
+		_aligned_edges[face.get_instance_id()] = edge
+		turned += 1
+	return turned
+
+
+## Fit each selected face to show `u` whole repeats across and `v` down, its
+## first repeat starting at the face's edge, as Fit makes one (#1727). A count of
+## 0 takes the other axis's scale, so the texture keeps its aspect. Returns how
+## many faces were fitted.
+func fit_selected_faces_repeats(u: int, v: int) -> int:
+	if u <= 0 and v <= 0:
+		return 0
+	var fitted := 0
+	for ref in _selected_face_refs():
+		var bounds := _shown_uv_bounds(ref["face"])
+		if bounds.is_empty():
+			continue
+		var size: Vector2 = bounds["max"] - bounds["min"]
+		var k := Vector2(
+			float(u) / size.x if u > 0 and size.x > 0.0001 else 0.0,
+			float(v) / size.y if v > 0 and size.y > 0.0001 else 0.0
+		)
+		if is_zero_approx(k.x):
+			k.x = k.y
+		if is_zero_approx(k.y):
+			k.y = k.x
+		if is_zero_approx(k.x) or is_zero_approx(k.y):
+			continue
+		_fit_onto(ref, bounds["min"], k, Vector2.ZERO)
+		fitted += 1
+	return fitted
+
+
+## Fit strip `index` of `count` equal strips across V to each selected face,
+## stretched once along U (#1727). A trim sheet holds several strips in one
+## texture, and one face shows one of them. Returns how many faces were fitted.
+func fit_selected_faces_strip(index: int, count: int) -> int:
+	if count < 1 or index < 1 or index > count:
+		return 0
+	var fitted := 0
+	for ref in _selected_face_refs():
+		var bounds := _shown_uv_bounds(ref["face"])
+		if bounds.is_empty():
+			continue
+		var size: Vector2 = bounds["max"] - bounds["min"]
+		if size.x <= 0.0001 or size.y <= 0.0001:
+			continue
+		var k := Vector2(1.0 / size.x, (1.0 / float(count)) / size.y)
+		_fit_onto(ref, bounds["min"], k, Vector2(0.0, float(index - 1) / float(count)))
+		fitted += 1
+	return fitted
+
+
+## Lay `ref`'s texture so the UV `low` its face shows lands on `shift`, every UV
+## scaled by `k` from there.
+func _fit_onto(ref: Dictionary, low: Vector2, k: Vector2, shift: Vector2) -> void:
+	var face: FaceData = ref["face"]
+	_set_uv_on(ref, face.uv_scale * k, (face.uv_offset - low) * k + shift, face.uv_rotation)
+
+
+## The UV bounds `face` shows, `{"min", "max"}`, or empty for a face with none.
+static func _shown_uv_bounds(face: FaceData) -> Dictionary:
+	var uvs := face.shown_uvs()
+	if uvs.is_empty():
+		return {}
+	var low := Vector2(INF, INF)
+	var high := Vector2(-INF, -INF)
+	for uv in uvs:
+		low = low.min(uv)
+		high = high.max(uv)
+	return {"min": low, "max": high}
+
+
+static func _raw_uv(point: Vector3, axes: Array) -> Vector2:
+	return Vector2(point.dot(axes[0]), point.dot(axes[1]))
+
+
+## The edge of `face`, by its first corner, nearest the world point `near`.
+static func _nearest_edge(face: FaceData, place: Transform3D, near: Vector3) -> int:
+	var best := 0
+	var best_distance := INF
+	var count := face.local_verts.size()
+	for i in count:
+		var a: Vector3 = place * face.local_verts[i]
+		var b: Vector3 = place * face.local_verts[(i + 1) % count]
+		var on_edge := Geometry3D.get_closest_point_to_segment(near, a, b)
+		var distance := on_edge.distance_to(near)
+		if distance < best_distance:
+			best_distance = distance
+			best = i
+	return best
+
+
+## Through `LevelRoot.set_face_uv_params()`, so a layout laid by hand and a
+## texture group follow as they do for a typed value.
+func _set_uv_on(ref: Dictionary, uv_scale: Vector2, offset: Vector2, turn: float) -> void:
+	var brush: DraftBrush = ref["brush"]
+	var index: int = brush.faces.find(ref["face"])
+	if index < 0:
+		return
+	root.set_face_uv_params(str(brush.brush_id), index, uv_scale, offset, turn)
+
+
 func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 	var face_refs := _selected_face_refs()
 	if face_refs.is_empty():

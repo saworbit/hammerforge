@@ -2670,6 +2670,19 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 	brush_system.justify_selected_faces(mode, treat_as_one)
 
 
+## Align to Edge, Fit Repeats and Fit Strip on the face selection (#1727).
+func align_selected_faces_to_edge(near: Variant = null) -> int:
+	return brush_system.align_selected_faces_to_edge(near)
+
+
+func fit_selected_faces_repeats(u: int, v: int) -> int:
+	return brush_system.fit_selected_faces_repeats(u, v)
+
+
+func fit_selected_faces_strip(index: int, count: int) -> int:
+	return brush_system.fit_selected_faces_strip(index, count)
+
+
 func edit_selected_face_uvs(edit: String) -> void:
 	brush_system.edit_selected_face_uvs(edit)
 
