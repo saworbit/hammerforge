@@ -123,3 +123,47 @@ func test_a_brush_whose_id_changed_in_the_same_place_is_the_same_brush():
 	assert_eq(result["brushes"]["added"], [], "not added")
 	assert_eq(result["brushes"]["removed"], [], "nor removed")
 	assert_eq(result["lines"], PackedStringArray(["No changes"]))
+
+
+## A file an older build saved keeps a box's faces in another order, each begun
+## at another corner. Loading it puts them in this build's order, each face's
+## texture turned with its corners, so the file and the level hold the same box
+## (#1870). Paired by index, every face read as changed.
+func test_a_box_whose_faces_a_file_keeps_in_another_order_shows_no_change():
+	var level := _level()
+	var box := _box(level, Vector3(0, 1, 0), "box")
+	var corners: int = box.faces[0].local_verts.size()
+	var uvs := PackedVector2Array()
+	for i in corners:
+		uvs.append(Vector2(i, i * 2))
+	box.faces[0].custom_uvs = uvs
+	var saved := await _saved(level)
+	var record: Dictionary = saved["state"]["brushes"][0]
+	var faces: Array = record["faces"]
+	for face in faces:
+		for key in ["local_verts", "custom_uvs"]:
+			var values: Array = Array(face.get(key, []))
+			if values.size() == corners:
+				values.push_front(values.pop_back())
+				face[key] = values
+	faces.push_front(faces.pop_back())
+	var result := HFLevelCompare.compare(saved, _now(level))
+	assert_eq(result["lines"], PackedStringArray(["No changes"]), "\n".join(result["lines"]))
+	(faces[3] as Dictionary)["uv_rotation"] = 45.0
+	result = HFLevelCompare.compare(saved, _now(level))
+	assert_eq(result["counts"]["faces"], 1, "a face that did change still shows")
+
+
+## A visgroup and the cordons as a file saved before the keys added to them
+## since: a load reads each missing key at its default, so a compare does too.
+func test_keys_a_file_is_older_than_show_no_change():
+	var level := _level()
+	_box(level, Vector3(0, 1, 0), "box")
+	level.visgroup_system.create_visgroup("west")
+	level.cordon_enabled = true
+	var saved := await _saved(level)
+	saved["state"]["visgroups"]["west"] = {"visible": true}
+	saved["settings"].erase("cordon_aabb_active")
+	saved["settings"].erase("cordon_extra_aabbs")
+	var result := HFLevelCompare.compare(saved, _now(level))
+	assert_eq(result["lines"], PackedStringArray(["No changes"]), "\n".join(result["lines"]))

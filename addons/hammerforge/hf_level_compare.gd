@@ -22,6 +22,8 @@ const KINDS := ["brushes", "faces", "entities", "wires", "visgroups", "cordons",
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const HFVisgroupSystem = preload("systems/hf_visgroup_system.gd")
+const HFDisplacementData = preload("displacement_data.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -242,8 +244,11 @@ static func _brush_changes(
 		faces_changed = maxi(old_faces.size(), new_faces.size())
 	else:
 		var basis := tnew.basis
+		var paired := face_pairs(old_faces, new_faces)
 		for index in new_faces.size():
-			var said := _face_changes(old_faces[index], new_faces[index], palette_old, palette_new)
+			var said := _face_changes(
+				old_faces[paired[index]], new_faces[index], palette_old, palette_new
+			)
 			if said.is_empty():
 				continue
 			faces_changed += 1
@@ -263,6 +268,7 @@ static func _face_changes(
 	var new_material := material_name(palette_new, now)
 	if old_material != new_material:
 		out.append("material changed from %s to %s" % [old_material, new_material])
+	old = _corners_turned_to(old, now)
 	for key in ["uv_projection", "uv_scale", "uv_offset", "uv_rotation", "custom_uvs"]:
 		if not same(old.get(key), now.get(key)):
 			out.append("texture moved")
@@ -276,6 +282,45 @@ static func _face_changes(
 	if int(old.get("face_type", 0)) != int(now.get("face_type", 0)):
 		out.append("now Hidden" if int(now.get("face_type", 0)) != 0 else "no longer Hidden")
 	return out
+
+
+## `old` with its corners in the order `now` keeps them, when the two are the
+## same corners begun at another one, and as it is otherwise. A box an older
+## build saved begins its faces at another corner, and loading it turns each
+## face's corner data with its corners (`FaceData.relabel_corner_data()`), so
+## the same texture read corner by corner is not a change (#1870).
+static func _corners_turned_to(old: Dictionary, now: Dictionary) -> Dictionary:
+	var was: Array = Array(old.get("local_verts", []))
+	var is_now: Array = Array(now.get("local_verts", []))
+	var count := was.size()
+	if count < 3 or count != is_now.size():
+		return old
+	for shift in range(1, count):
+		var turned := true
+		for i in count:
+			if not corner(was[(i + shift) % count]).is_equal_approx(corner(is_now[i])):
+				turned = false
+				break
+		if not turned:
+			continue
+		var out := old.duplicate()
+		out["local_verts"] = is_now
+		var uvs: Array = Array(old.get("custom_uvs", []))
+		if uvs.size() == count:
+			var moved: Array = []
+			for i in count:
+				moved.append(uvs[(i + shift) % count])
+			out["custom_uvs"] = moved
+		var sculpt: Variant = old.get("displacement")
+		if count == 4 and sculpt is Dictionary:
+			var corner_from := PackedInt32Array()
+			for i in 4:
+				corner_from.append((i + shift) % 4)
+			var remapped = HFDisplacementData.from_dict(sculpt).remapped(corner_from)
+			if remapped != null:
+				out["displacement"] = remapped.to_dict()
+		return out
+	return old
 
 
 ## A face's material by name: the palette slot's file name or resource name, the
@@ -323,6 +368,49 @@ static func face_name_of(face: Dictionary, basis: Basis, index: int) -> String:
 		if world.dot(axes[label]) > 0.999:
 			return label
 	return "#%d" % index
+
+
+## For each face of `new_faces`, the index of the face of `old_faces` it is.
+##
+## The same index, unless the faces there point different ways and another old
+## face points the way the new one does: a box an older build saved keeps its
+## faces in another order, and loading it puts them in this build's, each with
+## its own material (#1870). Paired by index, every face of it read as changed.
+static func face_pairs(old_faces: Array, new_faces: Array) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	out.resize(new_faces.size())
+	var old_normals: Array[Vector3] = []
+	for face in old_faces:
+		old_normals.append(_face_normal(face))
+	var new_normals: Array[Vector3] = []
+	var taken := {}
+	var astray: Array[int] = []
+	for index in new_faces.size():
+		out[index] = index
+		new_normals.append(_face_normal(new_faces[index]))
+		if index < old_normals.size() and new_normals[index].dot(old_normals[index]) > 0.999:
+			taken[index] = true
+		else:
+			astray.append(index)
+	for index in astray:
+		if new_normals[index].is_zero_approx():
+			continue
+		for other in old_normals.size():
+			if not taken.has(other) and new_normals[index].dot(old_normals[other]) > 0.999:
+				out[index] = other
+				taken[other] = true
+				break
+	return out
+
+
+## A face's outward normal in its brush's own space, from its record.
+static func _face_normal(face: Variant) -> Vector3:
+	if not (face is Dictionary):
+		return Vector3.ZERO
+	var normal := corner((face as Dictionary).get("normal"))
+	if normal.is_zero_approx():
+		normal = _normal_from_corners((face as Dictionary).get("local_verts", []))
+	return normal.normalized()
 
 
 ## The outward normal of a face's corners, which wind clockwise seen from
@@ -547,7 +635,7 @@ static func _compare_visgroups(
 		if not old_groups.has(vg_name):
 			lines.append("visgroup '%s': added" % vg_name)
 			counts["visgroups"] += 1
-		elif not same(old_groups[vg_name], new_groups[vg_name]):
+		elif not same(_visgroup(old_groups[vg_name]), _visgroup(new_groups[vg_name])):
 			lines.append("visgroup '%s': changed" % vg_name)
 			counts["visgroups"] += 1
 	for vg_name in old_groups:
@@ -555,6 +643,10 @@ static func _compare_visgroups(
 			lines.append("visgroup '%s': removed" % vg_name)
 			counts["visgroups"] += 1
 	return lines
+
+
+static func _visgroup(entry: Variant) -> Variant:
+	return HFVisgroupSystem.record_from(entry) if entry is Dictionary else entry
 
 
 const CORDON_KEYS := [
@@ -565,12 +657,17 @@ const CORDON_KEYS := [
 	"cordon_extra_aabbs"
 ]
 
+## What a load reads for a cordon key a file older than it leaves out
+## (`HFStateSystem.apply_hflevel_settings()`): the first cordon on, and no others.
+const CORDON_DEFAULTS := {"cordon_aabb_active": true, "cordon_extra_aabbs": []}
+
 
 static func _compare_cordons(
 	old_settings: Dictionary, new_settings: Dictionary, counts: Dictionary
 ) -> PackedStringArray:
 	for key in CORDON_KEYS:
-		if not same(old_settings.get(key), new_settings.get(key)):
+		var fallback: Variant = CORDON_DEFAULTS.get(key)
+		if not same(old_settings.get(key, fallback), new_settings.get(key, fallback)):
 			counts["cordons"] += 1
 			return PackedStringArray(["cordons: changed"])
 	return PackedStringArray()

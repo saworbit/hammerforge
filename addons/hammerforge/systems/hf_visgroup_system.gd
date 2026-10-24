@@ -731,17 +731,25 @@ func restore_visgroups(data: Dictionary, order: Array = []) -> void:
 		var entry = data[key]
 		if not entry is Dictionary:
 			continue
-		# A "color" key in an older payload is read past. It was carried through
-		# every layer - created, stored, saved, loaded, and given a setter - and
-		# nothing ever read one, so there is nothing to restore it into.
-		var cast: Variant = entry.get("cast_shadow", HFBakeSplit.LEVEL_DEFAULT)
-		visgroups[str(key)] = _record(
-			bool(entry.get("visible", true)),
-			int(cast) if HFBakeSplit.is_cast_shadow(cast) else HFBakeSplit.LEVEL_DEFAULT,
-			not (entry.get("bake") is bool) or bool(entry["bake"]),
-			entry.get("locked") is bool and bool(entry["locked"])
-		)
+		visgroups[str(key)] = record_from(entry)
 	refresh_visibility()
+
+
+## A visgroup's record as a file or a state holds it, with what it leaves out
+## at its default: a file older than a field has none. A compare reads both
+## sides through this too, so a field added since is not a change (#1870).
+##
+## A "color" key in an older payload is read past. It was carried through every
+## layer - created, stored, saved, loaded, and given a setter - and nothing ever
+## read one, so there is nothing to restore it into.
+static func record_from(entry: Dictionary) -> Dictionary:
+	var cast: Variant = entry.get("cast_shadow", HFBakeSplit.LEVEL_DEFAULT)
+	return _record(
+		bool(entry.get("visible", true)),
+		int(cast) if HFBakeSplit.is_cast_shadow(cast) else HFBakeSplit.LEVEL_DEFAULT,
+		not (entry.get("bake") is bool) or bool(entry["bake"]),
+		entry.get("locked") is bool and bool(entry["locked"])
+	)
 
 
 ## `data`'s keys, in `order` first and then whatever `order` did not mention.
