@@ -1198,7 +1198,7 @@ The command palette is a searchable action list. Open it with **Shift+?**, **F1*
 - **Your own words**: put them in `hammerforge_presets/aliases.txt`, one `alias = command_id` a line, `#` for a comment. Yours win over the built in ones. A line the palette cannot read, or one that names no command, is left out with one warning in the Output panel. The file is read when the editor starts.
 - **Fuzzy search**: if nothing holds what you typed, the palette finds approximate matches using subsequence matching with word-boundary bonuses
 - **"Did you mean: ..."** suggestion appears when fuzzy matching kicks in
-- Actions gray out when unavailable (e.g., Hollow requires a brush selection)
+- Actions gray out when unavailable (e.g., Hollow requires a brush selection), and the tooltip says why
 - Press **Enter** to execute the top enabled row
 - Press **Esc** to close without executing
 
@@ -1688,7 +1688,7 @@ If Godot's visible selection mixes HammerForge objects with ordinary Godot nodes
 An **auto-mode hint bar** appears during brush drawing, showing the current operation mode (e.g. "Drawing in Add mode — press Subtract to toggle") with a one-click toggle button.
 
 ### Command Palette
-Press **Shift+?**, **F1** or **Ctrl+K** to open the command palette: a searchable list of all HammerForge actions with key bindings. Actions that cannot run in the current state are grayed out (e.g. Hollow is disabled when nothing is selected, paint tools are disabled outside paint mode). Type to filter, press **Enter** to execute the first matching action, **Esc** to close.
+Press **Shift+?**, **F1** or **Ctrl+K** to open the command palette: a searchable list of all HammerForge actions with key bindings. Actions that cannot run in the current state are grayed out (e.g. Hollow is disabled when nothing is selected, paint tools are disabled outside paint mode). A grayed out action says why: its tooltip ends with the reason, such as "Select a brush first" or "Turn Paint mode on first", and with the mouse on it the same reason shows in a line under the list. While you type, that line speaks for the top match. The reason is the same sentence the action's key would have shown as a toast ([#1868](https://github.com/saworbit/hammerforge/issues/1868)). The context toolbar's Repeat button and its bake and cut buttons say why on their tooltips too while they are grayed out. Type to filter, press **Enter** to execute the first matching action, **Esc** to close.
 
 Selection-dependent managed actions are also grayed out for a mixed HammerForge/Godot selection. If selection changes between opening and invoking the palette, the final dispatcher repeats the same safety check.
 

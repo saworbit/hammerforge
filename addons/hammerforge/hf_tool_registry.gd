@@ -315,6 +315,21 @@ func check_shortcut(event: InputEventKey, keymap: HFKeymap = null) -> int:
 
 
 ## The external tool whose `keymap_action()` is `action`, or -1.
+## Why each external tool cannot start in `root`, by the command that starts it,
+## for the palette to say beside a greyed out tool (#1868). A tool that can start
+## is left out.
+func refusals(root: Node3D) -> Dictionary:
+	var out := {}
+	for t in _tools:
+		if t.tool_id() < 100 or t.keymap_action() == "" or t.can_activate(root):
+			continue
+		var reason: String = t.get_poll_fail_reason(root)
+		out[t.keymap_action()] = (
+			reason if reason != "" else "%s cannot run right now" % t.tool_name()
+		)
+	return out
+
+
 func tool_id_for_action(action: String) -> int:
 	for t in _tools:
 		if t.tool_id() >= 100 and action != "" and t.keymap_action() == action:

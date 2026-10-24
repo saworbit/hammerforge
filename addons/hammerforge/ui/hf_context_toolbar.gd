@@ -11,6 +11,7 @@ extends PanelContainer
 const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 const HFMaterialBrowserType = preload("res://addons/hammerforge/ui/hf_material_browser.gd")
 const HFShapeIconsType = preload("res://addons/hammerforge/ui/hf_shape_icons.gd")
+const HFCommandAvailabilityType = preload("res://addons/hammerforge/hf_command_availability.gd")
 
 signal action_requested(action: String, args: Array)
 signal operation_toggle_requested
@@ -610,9 +611,24 @@ func _chords(text: String) -> String:
 
 func _refresh_tooltips(node: Node) -> void:
 	if node.has_meta("hf_tooltip_source"):
-		node.tooltip_text = _chords(str(node.get_meta("hf_tooltip_source")))
+		node.tooltip_text = _tooltip_for(node)
 	for child in node.get_children():
 		_refresh_tooltips(child)
+
+
+## Grey `button` out when `reason` says why, and say it on its tooltip (#1868).
+## An empty reason turns it back on.
+func _set_reason(button: Button, reason: String) -> void:
+	button.disabled = reason != ""
+	button.set_meta("hf_disabled_reason", reason)
+	if button.has_meta("hf_tooltip_source"):
+		button.tooltip_text = _tooltip_for(button)
+
+
+func _tooltip_for(node: Node) -> String:
+	var text := _chords(str(node.get_meta("hf_tooltip_source")))
+	var reason := str(node.get_meta("hf_disabled_reason", ""))
+	return text if reason == "" else "%s\n%s" % [text, reason]
 
 
 func update_state(state: Dictionary) -> void:
@@ -817,7 +833,10 @@ func _update_dynamic_content(state: Dictionary) -> void:
 					var active: bool = state["bake_preview_active"]
 					if preview_btn.button_pressed != active:
 						preview_btn.set_pressed_no_signal(active)
-				preview_btn.disabled = state.get("bake_disabled", false)
+				_set_reason(
+					preview_btn,
+					HFCommandAvailabilityType.BAKING if state.get("bake_disabled", false) else ""
+				)
 
 	# Update operation toggle label and pending cuts buttons
 	if _context == Context.DRAW_IDLE:
@@ -846,7 +865,7 @@ func _update_dynamic_content(state: Dictionary) -> void:
 				for n2 in ["ApplyCutsBtn", "CommitCutsBtn", "ClearCutsBtn"]:
 					var btn = section.get_node_or_null(n2)
 					if btn:
-						btn.disabled = bake_dis
+						_set_reason(btn, HFCommandAvailabilityType.BAKING if bake_dis else "")
 
 	# Update drag dimensions
 	if _context == Context.DRAGGING:
@@ -864,7 +883,7 @@ func _update_repeat_button(button: Button, state: Dictionary) -> void:
 	if button == null:
 		return
 	var label := str(state.get("repeat_label", ""))
-	button.disabled = label == ""
+	_set_reason(button, HFCommandAvailabilityType.NOTHING_DRAWN if label == "" else "")
 	button.text = label if label != "" else "Repeat"
 	button.icon = (
 		HFShapeIconsType.get_icon(str(state.get("repeat_shape", ""))) if label != "" else null

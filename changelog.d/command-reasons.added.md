@@ -1,0 +1,1 @@
+- A grayed out command in the palette says why on its tooltip, in the same words its key would have shown. (issue [#1868](https://github.com/saworbit/hammerforge/issues/1868))
