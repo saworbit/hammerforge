@@ -644,6 +644,11 @@ fail you on, in three jobs:
 - **Workflow & Tooling Lint** -- `ruff check` and `ruff format --check` over `tools/`, actionlint with shellcheck, zizmor, and a schema check on `.github/dependabot.yml`.
 - **GUT unit + integration tests** -- 6,064 tests across 334 test scripts (6,057 passing plus seven intentional no-assert safety tests; 37,085 assertions; verified in CI on October 21, 2026; runs Godot headless)
 
+`.github/workflows/changelog-fragment.yml` runs one more check on a pull
+request, **Changelog Fragment**: a change to the addon or the server adds a
+fragment, or carries the `no-changelog` label. It is a workflow of its own so
+that a label change runs it again in seconds, without running CI (#1447).
+
 The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
 four; that is the one the branch ruleset requires. `tools/shard_tests.py` packs
 the scripts by the seconds each took, from `tests/.durations.json`, so the

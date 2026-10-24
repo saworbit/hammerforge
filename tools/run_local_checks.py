@@ -198,12 +198,6 @@ CHECKS: tuple[Check, ...] = (
     ),
     Check("Check the top-level pages' links", _py("tools/check_doc_links.py"), ""),
     Check(
-        "Check a changed addon brings a changelog fragment",
-        (),
-        "needs the pull request's base and its labels; on a branch, run"
-        " python tools/changelog_fragments.py --require origin/main",
-    ),
-    Check(
         "Check the release tree still ships the right files",
         _py("tools/build_release_tree.py", "--selftest"),
         "",

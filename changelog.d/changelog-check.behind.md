@@ -1,0 +1,1 @@
+- The changelog fragment check counts only a fragment the change adds, and a no-changelog label added after CI started now takes effect with no push. (issues [#1447](https://github.com/saworbit/hammerforge/issues/1447), [#1487](https://github.com/saworbit/hammerforge/issues/1487))

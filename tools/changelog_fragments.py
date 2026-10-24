@@ -43,7 +43,11 @@ the server used to pass with no fragment at all, and was missing from the
 changelog until someone noticed (#1297). This fails when the changes since BASE
 touch `addons/hammerforge/` or `hammerforge_mcp/src/` and add no fragment; the
 `no-changelog` label on the pull request waives it for a refactor or a
-test-only change. Docs, tests and tooling are never asked.
+test-only change. Docs, tests and tooling are never asked. Only an added
+fragment counts. A deleted or edited one used to count too, so a change that
+only touched someone else's fragment passed with no line of its own (#1487).
+The one change that deletes fragments and brings none is a compile, which
+writes CHANGELOG.md in the same change, and that is not asked.
 
 `--selftest` breaks a good fragment once per rule, compiles fragments in a
 throwaway repository, and asks for a fragment where it should.
@@ -174,6 +178,7 @@ def check_bracket(refs: str) -> list[str]:
 # dev-only capture plugin) is Behind the scenes at most, and not asked for one.
 ASKED = ("addons/hammerforge/", "hammerforge_mcp/src/")
 WAIVER = "no-changelog"
+CHANGELOG = "CHANGELOG.md"
 
 
 def is_fragment(path: str) -> bool:
@@ -181,10 +186,33 @@ def is_fragment(path: str) -> bool:
     return folder == FOLDER and name != README and NAME_RE.match(name) is not None
 
 
-def fragment_missing(changed: list[str]) -> str | None:
-    """Why these changed paths need a fragment they do not bring, or None."""
+def compiles(changed: dict[str, str]) -> bool:
+    """Whether these changes are a compile: the changelog written, fragments gone.
+
+    Compile deletes every fragment it writes in, and the release pull request
+    carries it, so a change with deleted fragments and CHANGELOG.md is the one
+    that may bring none.
+    """
+    fragments = [status for path, status in changed.items() if is_fragment(path)]
+    return (
+        CHANGELOG in changed
+        and bool(fragments)
+        and all(status == "D" for status in fragments)
+    )
+
+
+def fragment_missing(changed: dict[str, str]) -> str | None:
+    """Why these changes need a fragment they do not bring, or None.
+
+    changed maps each path to its git status letter: A added, M edited,
+    D deleted, R renamed onto that path. Only an added fragment is a line of
+    the change's own.
+    """
     asked = sorted(path for path in changed if path.startswith(ASKED))
-    if not asked or any(is_fragment(path) for path in changed):
+    brought = any(
+        status == "A" and is_fragment(path) for path, status in changed.items()
+    )
+    if not asked or brought or compiles(changed):
         return None
     shown = ", ".join(asked[:3]) + (", ..." if len(asked) > 3 else "")
     return (
@@ -194,13 +222,15 @@ def fragment_missing(changed: list[str]) -> str | None:
     )
 
 
-def changed_since(root: Path, base: str) -> list[str]:
-    """Paths changed since the branch left base, untracked files included.
+def changed_since(root: Path, base: str) -> dict[str, str]:
+    """Each path changed since the branch left base, with its status letter.
 
     From the merge base where the history is there, so a base that moved on
     is not counted against the branch. A pull request's merge commit checked
     out at depth 1 has no history to find one in, and there base's tip is the
-    merge commit's own parent, which is the same thing.
+    merge commit's own parent, which is the same thing. Untracked files count
+    as added, so the check is useful before the commit too. A rename is found
+    as one, so moving a fragment to a new name does not read as adding one.
     """
     found = subprocess.run(
         ["git", "merge-base", base, "HEAD"],
@@ -211,11 +241,18 @@ def changed_since(root: Path, base: str) -> list[str]:
         check=False,
     )
     since = found.stdout.strip() if found.returncode == 0 else base
-    committed = git(root, "diff", "--name-only", since or base)
+    committed = git(root, "diff", "--name-status", "--find-renames", since or base)
+    changed: dict[str, str] = {}
+    for line in committed.splitlines():
+        fields = line.split("\t")
+        if len(fields) >= 2:
+            # A rename or copy lists the old path, then the new one.
+            changed[fields[-1].strip()] = fields[0][:1]
     untracked = git(root, "ls-files", "--others", "--exclude-standard")
-    return sorted(
-        {line.strip() for line in (committed + untracked).splitlines() if line.strip()}
-    )
+    for line in untracked.splitlines():
+        if line.strip():
+            changed[line.strip()] = "A"
+    return changed
 
 
 def require_fragment(root: Path, base: str) -> list[str]:
@@ -803,35 +840,69 @@ def round_trips() -> int:
 
 
 REQUIRE_CASES = (
-    # (name, changed paths, whether a fragment is missing)
-    ("an addon change with no fragment", ["addons/hammerforge/plugin.gd"], True),
+    # (name, changed paths with their git status, whether a fragment is missing)
+    ("an addon change with no fragment", {"addons/hammerforge/plugin.gd": "M"}, True),
     (
         "an addon change with a fragment",
-        ["addons/hammerforge/plugin.gd", "changelog.d/fix.fixed.md"],
+        {"addons/hammerforge/plugin.gd": "M", "changelog.d/fix.fixed.md": "A"},
         False,
     ),
     (
         "an addon change that only touches the README",
-        ["addons/hammerforge/plugin.gd", "changelog.d/README.md"],
+        {"addons/hammerforge/plugin.gd": "M", "changelog.d/README.md": "M"},
+        True,
+    ),
+    (
+        "an addon change that deletes someone else's fragment",
+        {"addons/hammerforge/plugin.cfg": "M", "changelog.d/1297.added.md": "D"},
+        True,
+    ),
+    (
+        "an addon change that edits someone else's fragment",
+        {"addons/hammerforge/a.gd": "M", "changelog.d/old.fixed.md": "M"},
+        True,
+    ),
+    (
+        "an addon change that renames someone else's fragment",
+        {"addons/hammerforge/a.gd": "M", "changelog.d/new.fixed.md": "R"},
+        True,
+    ),
+    (
+        "a compile, as the release carries it",
+        {
+            "addons/hammerforge/plugin.cfg": "M",
+            "CHANGELOG.md": "M",
+            "changelog.d/1297.added.md": "D",
+            "changelog.d/old.fixed.md": "D",
+        },
+        False,
+    ),
+    (
+        "the changelog edited by hand with a fragment edited, not compiled",
+        {
+            "addons/hammerforge/a.gd": "M",
+            "CHANGELOG.md": "M",
+            "changelog.d/old.fixed.md": "M",
+        },
         True,
     ),
     (
         "a server change with no fragment",
-        ["hammerforge_mcp/src/hammerforge_mcp/server.py"],
+        {"hammerforge_mcp/src/hammerforge_mcp/server.py": "M"},
         True,
     ),
     (
         "docs, tests and tooling",
-        [
-            "docs/a.md",
-            "tests/test_a.gd",
-            "tools/a.py",
-            "hammerforge_mcp/tests/test_a.py",
-            "addons/hf_docshot/hf_docshot.gd",
-        ],
+        {
+            "docs/a.md": "M",
+            "tests/test_a.gd": "A",
+            "tools/a.py": "M",
+            "hammerforge_mcp/tests/test_a.py": "M",
+            "addons/hf_docshot/hf_docshot.gd": "M",
+        },
         False,
     ),
-    ("nothing", [], False),
+    ("nothing", {}, False),
 )
 
 
@@ -853,6 +924,7 @@ def require_cases() -> int:
             git(root, "init", "-q", "-b", "main")
             (root / "addons" / "hammerforge" / "a.gd").write_text("extends Node\n")
             write_fragment(root / FOLDER, README, "# Fragments")
+            write_fragment(root / FOLDER, "old.fixed.md", "- Fixed before.")
             commit(root, "Start", "2026-10-02T10:00:00+11:00", "2026-10-02T10:00:00Z")
             git(root, "checkout", "-q", "-b", "topic")
             (root / "addons" / "hammerforge" / "a.gd").write_text("extends Node3D\n")
@@ -896,6 +968,39 @@ def require_cases() -> int:
                 print(
                     f"selftest: a docs-only branch was asked because main moved: {problems}"
                 )
+                failures += 1
+            # Someone else's fragment, deleted, edited or renamed, is not a
+            # line of this change's own (#1487).
+            old_fragment = root / FOLDER / "old.fixed.md"
+            for change in ("deleted", "edited", "renamed"):
+                git(root, "checkout", "-q", "-b", f"{change}-fragment", "main")
+                (root / "addons" / "hammerforge" / "a.gd").write_text(
+                    "extends Node2D\n"
+                )
+                if change == "deleted":
+                    old_fragment.unlink()
+                elif change == "edited":
+                    old_fragment.write_text("- Fixed before, said better.\n")
+                else:
+                    old_fragment.rename(old_fragment.with_name("moved.fixed.md"))
+                commit(
+                    root,
+                    f"Change the addon, {change} fragment",
+                    "2026-10-06T10:00:00+11:00",
+                    "2026-10-06T10:00:00Z",
+                )
+                if not require_fragment(root, "main"):
+                    print(f"selftest: the {change} fragment was counted as a new one")
+                    failures += 1
+            # A compile writes the changelog and deletes what it wrote in.
+            git(root, "checkout", "-q", "-b", "compile", "main")
+            (root / "addons" / "hammerforge" / "a.gd").write_text("extends Node2D\n")
+            old_fragment.unlink()
+            (root / "CHANGELOG.md").write_text("# Changelog\n")
+            commit(root, "Compile", "2026-10-07T10:00:00+11:00", "2026-10-07T10:00:00Z")
+            problems = require_fragment(root, "main")
+            if problems:
+                print(f"selftest: a compile was asked for a fragment: {problems}")
                 failures += 1
     return failures
 
