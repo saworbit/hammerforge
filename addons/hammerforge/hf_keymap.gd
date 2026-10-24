@@ -342,6 +342,7 @@ static func _default_bindings() -> Dictionary:
 		"duplicate": {"keycode": KEY_D, "ctrl": true},
 		"copy": {"keycode": KEY_C, "ctrl": true},
 		"paste": {"keycode": KEY_V, "ctrl": true},
+		"paste_at_cursor": {"keycode": KEY_V, "ctrl": true, "alt": true},
 		"group": {"keycode": KEY_G, "ctrl": true},
 		"ungroup": {"keycode": KEY_U, "ctrl": true},
 		"hollow": {"keycode": KEY_H, "ctrl": true},

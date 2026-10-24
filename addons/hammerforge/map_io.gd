@@ -458,11 +458,16 @@ static func _connections_from_pairs(pairs: Array, dropped: Array) -> Array:
 ## `parse_map_text()` does: the conversion is the level's policy, not the
 ## format's. The figure is put on the adapter, which is where every coordinate
 ## and every texture scale passes through on the way out.
+##
+## `only`, when given, is the brushes and entities to write and nothing else, with
+## the level's own worldspawn keys left out: what Copy puts on the system
+## clipboard (#1722).
 static func export_map_from_level(
 	level_root: Node,
 	adapter: HFMapAdapterType = null,
 	units_per_metre: float = 1.0,
-	convert_axes: bool = false
+	convert_axes: bool = false,
+	only: Array = []
 ) -> String:
 	if not level_root:
 		return ""
@@ -497,10 +502,13 @@ static func export_map_from_level(
 			)
 		)
 	)
-	lines.append_array(_worldspawn_lines(level_root, adapter))
+	if only.is_empty():
+		lines.append_array(_worldspawn_lines(level_root, adapter))
 	var brush_nodes: Array = []
 	if level_root.has_method("_iter_pick_nodes"):
 		brush_nodes.append_array(level_root.call("_iter_pick_nodes"))
+	if not only.is_empty():
+		brush_nodes = brush_nodes.filter(func(node): return only.has(node))
 	# Keyed on `[class, authored name]` rather than on the node, so brushes tied
 	# under one name become one entity. An Array key compares by content in Godot,
 	# which avoids inventing a separator that an authored name could contain.
@@ -570,6 +578,8 @@ static func export_map_from_level(
 	if level_root.has_method("_iter_pick_nodes"):
 		for node in level_root.call("_iter_pick_nodes"):
 			if not (node is DraftEntity) or left_out_of_bake(level_root, node):
+				continue
+			if not only.is_empty() and not only.has(node):
 				continue
 			# A note is for the people working on the level, not the map (#1700).
 			if HFNotes.is_editor_only(level_root, node):

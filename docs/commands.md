@@ -88,7 +88,8 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Convert to Brushes (`convert_to_brushes`) | none | no mix of HammerForge and Godot nodes, a level | no | Make the selected convex mesh or CSG node a brush where it stands. |
 | Duplicate (`duplicate`) | Ctrl+D | 1 item, a level | yes | Copy the selected brushes and entities in place. |
 | Copy (`copy`) | Ctrl+C | 1 item, a level | yes | Put the selection on the clipboard. |
-| Paste (`paste`) | Ctrl+V | nothing, a level | yes | Place what is on the clipboard where it was copied from. |
+| Paste (`paste`) | Ctrl+V | nothing, a level | yes | Place what is on the clipboard where it was copied from, or .map text copied since at the cursor. |
+| Paste at Cursor (`paste_at_cursor`) | Ctrl+Alt+V | nothing, a level | yes | Place what is on the clipboard standing on the point under the cursor. |
 | Delete (`delete`) | Del | 1 item, a level | yes | Delete the selected brushes and entities. |
 | Group (`group`) | Ctrl+G | 2 items, a level | yes | Group the selected brushes, so a click picks them all. |
 | Ungroup (`ungroup`) | Ctrl+U | 1 item, a level | yes | Take the selected brushes out of their group. |

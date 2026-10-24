@@ -244,6 +244,12 @@ static func _handle_keyboard(
 			return copy_guard
 		plugin._copy_selection(root)
 		return STOP
+	if keymap.matches("paste_at_cursor", event):
+		var at_cursor_guard = _registry_guard(plugin, root, "paste_at_cursor")
+		if at_cursor_guard != SHORTCUT_APPLY:
+			return at_cursor_guard
+		HFPluginEditActionsType.paste_at_cursor(plugin, root)
+		return STOP
 	if keymap.matches("paste", event):
 		# Nothing has to be selected to paste, so the guard asks for none. It is
 		# still asked, because the answer also says whether this selection is
