@@ -1,1 +1,0 @@
-- A new spawn in a standard 3 metre room stands in it with a lower height offset, where it went onto the roof, and Validate Spawn no longer warns of headroom there. (issue [#657](https://github.com/saworbit/hammerforge/issues/657))

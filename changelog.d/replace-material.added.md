@@ -1,1 +1,0 @@
-- Replace Material swaps one material for another on every face that wears it, across the level, the selection or shown brushes, as one undo step. (issue [#1726](https://github.com/saworbit/hammerforge/issues/1726))

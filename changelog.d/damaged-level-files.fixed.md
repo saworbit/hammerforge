@@ -1,1 +1,0 @@
-- A damaged or half merged level file is refused with a message, or loads with the broken brushes left out or rebuilt, never with a script error. (issue [#1641](https://github.com/saworbit/hammerforge/issues/1641))

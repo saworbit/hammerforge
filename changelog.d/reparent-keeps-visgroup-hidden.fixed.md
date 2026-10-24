@@ -1,1 +1,0 @@
-- A brush dragged between DraftBrushes and PendingCuts in the Scene dock stays hidden when its visgroup is hidden, rather than showing until the visgroups next refresh. (issue [#1759](https://github.com/saworbit/hammerforge/issues/1759))

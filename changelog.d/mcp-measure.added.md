@@ -1,1 +1,0 @@
-- The agent bridge has `hf_measure`: sizes, volumes, the gap between two brushes, faces or points, and the angle between two faces, in one small answer. (issue [#1649](https://github.com/saworbit/hammerforge/issues/1649))

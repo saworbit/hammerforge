@@ -1,1 +1,0 @@
-- High Contrast and the Settings colour buttons reach the brush entity looks, so a selected func_detail or trigger is no longer drawn blue on blue. (issue [#1760](https://github.com/saworbit/hammerforge/issues/1760))

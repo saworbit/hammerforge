@@ -1,1 +1,0 @@
-- The bridge names the nearest commands when an agent asks for one that does not exist, and the nearest setting for a misspelt one. (issue [#1651](https://github.com/saworbit/hammerforge/issues/1651))

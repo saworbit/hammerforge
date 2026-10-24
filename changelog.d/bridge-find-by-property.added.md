@@ -1,1 +1,0 @@
-- `hf_get_brushes` and `hf_get_entities` find by property and answer a page at a time, with a count, and `count_only`. (issue [#1704](https://github.com/saworbit/hammerforge/issues/1704))

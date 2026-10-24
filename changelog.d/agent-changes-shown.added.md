@@ -1,1 +1,0 @@
-- What an agent changes over the bridge is outlined for a moment, an arrow points to it when out of view, and the Last line selects it. (issue [#1653](https://github.com/saworbit/hammerforge/issues/1653))

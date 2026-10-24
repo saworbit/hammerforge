@@ -1,1 +1,0 @@
-- A linked prefab copy keeps chosen properties and wires through a Pull, says what it changed, discards changes, and can stay linked on Ctrl+D. (issue [#1734](https://github.com/saworbit/hammerforge/issues/1734))

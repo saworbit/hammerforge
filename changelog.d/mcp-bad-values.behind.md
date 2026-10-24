@@ -1,1 +1,0 @@
-- A sweep sends every agent bridge input the wrong kind of value and fails on a script error or a refusal that names no field. (issue [#1647](https://github.com/saworbit/hammerforge/issues/1647))

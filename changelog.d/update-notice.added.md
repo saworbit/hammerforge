@@ -1,1 +1,0 @@
-- The Console says when a newer HammerForge is on the Asset Library, asked once a day only when the editor is online. (issue [#1656](https://github.com/saworbit/hammerforge/issues/1656))

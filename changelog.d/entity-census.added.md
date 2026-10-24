@@ -1,1 +1,0 @@
-- The Console has an Entities tab that counts entities by class and selects a class on a click, with Export Entities to CSV, a headless exporter and `count_by_class`. (issue [#1709](https://github.com/saworbit/hammerforge/issues/1709))

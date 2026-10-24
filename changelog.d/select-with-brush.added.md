@@ -1,1 +1,0 @@
-- Invert Selection, and Select Inside, Partly Inside, Touching and Column with a throwaway brush that is then deleted. (issue [#1717](https://github.com/saworbit/hammerforge/issues/1717))

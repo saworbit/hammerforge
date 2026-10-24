@@ -1,1 +1,0 @@
-- Fourteen vibe scenarios check what each closed issue's fix did, and fail a sweep if it comes back. (issue [#1775](https://github.com/saworbit/hammerforge/issues/1775))

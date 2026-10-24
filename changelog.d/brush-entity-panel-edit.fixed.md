@@ -1,1 +1,0 @@
-- The Entity panel writes a brush entity's properties and Add wires it, where both were refused because the dock counts a tied brush as a brush. (issue [#1784](https://github.com/saworbit/hammerforge/issues/1784))
