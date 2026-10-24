@@ -42,6 +42,7 @@ const VIEWPORT_OVERLAY_ANCHORS := {
 	"_operation_replay": ["bottom_left", 12.0],
 	# Above the coach marks, which share the bottom edge (#1696).
 	"_command_line_overlay": ["bottom_center", 56.0],
+	"_adjust_last_panel": ["bottom_right", 12.0],
 }
 
 
@@ -265,6 +266,10 @@ static func _anchor_overlay(control: Control, placement: Array) -> void:
 			control.grow_vertical = Control.GROW_DIRECTION_BEGIN
 			_set_anchors(control, 0.0, 1.0, 0.0, 1.0)
 			_set_offsets(control, margin, -margin, margin + width, -margin)
+		"bottom_right":
+			control.grow_vertical = Control.GROW_DIRECTION_BEGIN
+			_set_anchors(control, 1.0, 1.0, 1.0, 1.0)
+			_set_offsets(control, -margin - width, -margin, -margin, -margin)
 	control.set_meta(OVERLAY_PLACED_SIZE_META, control.get_combined_minimum_size())
 
 

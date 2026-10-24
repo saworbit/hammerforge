@@ -1202,6 +1202,24 @@ The command palette is a searchable action list. Open it with **Shift+?**, **F1*
 - Press **Enter** to execute the top enabled row
 - Press **Esc** to close without executing
 
+### Adjust Last
+
+Hollow with the wrong wall thickness, a clip in the wrong place, an array one
+copy too long: change it after the fact ([#1867](https://github.com/saworbit/hammerforge/issues/1867)).
+After Hollow, Clip, Nudge, Rotate CW or CCW, or a Duplicate, Radial or Grid
+Array, a small **Adjust** panel in the bottom right corner of the viewport shows
+the settings the command ran with. Change one and the command's step is undone
+and made again with the new value, so the history still holds one step for it and
+one Ctrl+Z gives back what was there before the command. Held arrow keys or
+repeated R presses that make one step show their total. **Save** keeps the
+settings under a name, and the list beside it puts a saved set back on the last
+step. The names are kept with your preferences, by command.
+
+The panel closes when any other step lands, an undo included, or with its **x**.
+**Adjust Last** in the palette, with no key by default, opens it again for the
+last step, or says there is nothing to adjust when the last step is another
+command's.
+
 ### Repeat Last Command
 
 **Repeat Last Command** runs the last command that changed the level or the selection again, on what is selected now: hollow one room, select the next, Repeat. It uses the settings the dock holds, so Hollow keeps its wall thickness. Toggles, views, panels, Select All and Deselect All never become the command it repeats. A selection the command refuses gets the command's own message. It has no key by default; give it one in the shortcut dialog.
@@ -2062,7 +2080,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Hull Tool | (palette) | Click points or a face's corners and make one brush around them |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 
-**Rebinding:** Press the **?** button on the toolbar to open the shortcut dialog, select a command and press **Set Key**, then the new chord ([#1733](https://github.com/saworbit/hammerforge/issues/1733)). Every command the palette runs is listed and can take a key, not only those that ship with one; a command with no key shows "none". **Set Second Key** gives a command a second chord, and either one fires it; the surfaces that name a key show the first. A chord another command already uses is said before it is kept, with that command's name, and you swap the keys, take it off the other command, or cancel. A chord the editor or the palette takes ahead of every binding, such as Ctrl+S, can only be cancelled. **Clear** takes a command's keys off, **Reset** puts one back to its default and **Reset All** puts every key back. A change works at once, with no restart, and is written to `user://hammerforge_keymap.json`, the keys you changed and nothing else, so an action you left alone keeps picking up later changes to its default. **Export...** and **Import...** share that file with a team. The file can still be edited by hand: each entry maps an action name to `{"keycode": "F", "ctrl": bool, "shift": bool, "alt": bool}`, with an optional `"second"` chord in the same shape, or `{"none": true}` for no key, for example `{"selection_filter": {"keycode": "G", "alt": true}}`. `keycode` is a key name as Godot spells it (`"F"`, `"Delete"`, `"PageDown"`, `"BracketLeft"`) or Godot's integer keycode; modifiers go in their own fields, not in the name. Restart the plugin after editing the file by hand. Every surface that names a chord — the viewport HUD, the coach marks, the dock tooltips, the hotkey palette and the shortcut list — reads the binding rather than repeating it, so a rebind shows up everywhere at once.
+**Rebinding:** Press the **?** button on the toolbar to open the shortcut dialog, select a command and press **Set Key**, then the new chord ([#1733](https://github.com/saworbit/hammerforge/issues/1733)). Every command the palette runs is listed and can take a key, not only those that ship with one; a command with no key shows "none". **Set Second Key** gives a command a second chord, and either one fires it; the surfaces that name a key show the first. A chord another command already uses is said before it is kept, with that command's name, and you swap the keys, take it off the other command, or cancel. A chord the editor or the palette takes ahead of every binding, such as Ctrl+S, can only be cancelled. **Clear** takes a command's keys off, **Reset** puts one back to its default and **Reset All** puts every key back. A change works at once, with no restart, and is written to `user://hammerforge_keymap.json`, the keys you changed and nothing else, so an action you left alone keeps picking up later changes to its default. **Export...** and **Import...** share that file with a team. The file can still be edited by hand: each entry maps an action name to `{"keycode": "F", "ctrl": bool, "shift": bool, "alt": bool}`, with an optional `"second"` chord in the same shape, or `{"none": true}` for no key, for example `{"selection_filter": {"keycode": "G", "alt": true}}`. An entry may also carry `"args"`, the settings its key runs the command with: Extrude is one command with a Direction, so `{"tool_extrude": {"keycode": "E", "args": {"direction": 1}}}` makes E extrude down ([#1867](https://github.com/saworbit/hammerforge/issues/1867)). The old Extrude names, such as `tool_extrude_down_alt`, still work and run Extrude with their own direction. `keycode` is a key name as Godot spells it (`"F"`, `"Delete"`, `"PageDown"`, `"BracketLeft"`) or Godot's integer keycode; modifiers go in their own fields, not in the name. Restart the plugin after editing the file by hand. Every surface that names a chord — the viewport HUD, the coach marks, the dock tooltips, the hotkey palette and the shortcut list — reads the binding rather than repeating it, so a rebind shows up everywhere at once.
 
 Extrude has two bindings each way. `Extrude Up` is U and `Extrude Up (alt)` is E; `Extrude Down` is J and `Extrude Down (alt)` is Shift+E. They are listed under their own names so you can tell which row you are changing.
 

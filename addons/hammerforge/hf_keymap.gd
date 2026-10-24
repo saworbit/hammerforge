@@ -246,6 +246,13 @@ static func _validated(data: Dictionary, defaults: Dictionary, path: String) -> 
 			var second := _read_chord(binding["second"], path, key + " (second)")
 			if not second.is_empty():
 				chord["second"] = second
+		# Settings the key runs its command with, such as Extrude's Direction
+		# (#1867).
+		if binding.has("args"):
+			if binding["args"] is Dictionary:
+				chord["args"] = (binding["args"] as Dictionary).duplicate(true)
+			else:
+				HFLog.warn("%s: '%s' has args that are not an object. Ignored." % [path, key])
 		out[key] = chord
 	for action in defaults:
 		if not out.has(action):
@@ -648,6 +655,16 @@ func format_chords(text: String) -> String:
 	return out
 
 
+## The settings `action`'s key runs it with, `{}` for none: a keymap entry may
+## carry `args`, such as `{"direction": 1}` for Extrude pointing down (#1867).
+func args_for(action: String) -> Dictionary:
+	var binding: Variant = _bindings.get(action, {})
+	if not (binding is Dictionary):
+		return {}
+	var args: Variant = (binding as Dictionary).get("args", {})
+	return args if args is Dictionary else {}
+
+
 ## Save current bindings to a JSON file, whole or not at all (#1663).
 func save(path: String) -> void:
 	var err := HFSettingsFile.write_text(path, JSON.stringify(_bindings, "\t"))
@@ -662,6 +679,9 @@ func set_chord(action: String, chord: Dictionary, slot: int = 0) -> void:
 	for modifier in ["ctrl", "shift", "alt", "meta"]:
 		if bool(chord.get(modifier, false)):
 			clean[modifier] = true
+	var args := args_for(action)
+	if not args.is_empty():
+		clean["args"] = args.duplicate(true)
 	var chords := _chords(_bindings.get(action, {}))
 	if slot <= 0 or chords.is_empty():
 		var kept: Variant = chords[1] if chords.size() > 1 else null
@@ -744,7 +764,10 @@ func changes() -> Dictionary:
 		if defaults.has(action):
 			if binding.is_empty():
 				out[action] = NO_KEY.duplicate()
-			elif not _same_binding(binding, defaults[action]):
+			elif (
+				not _same_binding(binding, defaults[action])
+				or binding.get("args", {}) != (defaults[action] as Dictionary).get("args", {})
+			):
 				out[action] = binding.duplicate(true)
 		elif not binding.is_empty():
 			out[action] = binding.duplicate(true)

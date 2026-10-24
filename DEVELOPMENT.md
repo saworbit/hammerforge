@@ -309,6 +309,7 @@ addons/hammerforge/
   plugin_transform_tools.gd  Offset (Alt+G) and Pick Pivot: the transform tools that take a typed number or a clicked point
   plugin_texture_keys.gd The nudge keys sliding and turning the texture on the picked faces in Face Select
   plugin_command_line.gd Runs what is typed on the command line, and command scripts read from a file
+  plugin_adjust_last.gd  Adjust Last: the last command's settings and how to make its step again with others
   plugin_compare.gd      Compare With: reads the other `.hflevel`, draws the outlines and fills the Console's Compare tab
   plugin_crash_journal.gd  The crash journal in the editor: started first, fed by every undo step and bridge call, read on the next start
   plugin_mcp.gd          The MCP bridge in the editor: the session's dispatcher, and the listener the Test tab turns on and off
@@ -460,6 +461,7 @@ addons/hammerforge/
   ui/                    Reusable UI components
     collapsible_section.gd HFCollapsibleSection: toggle-header VBoxContainer for dock sections
     hf_toast.gd            Toast notification system (auto-fading stacked messages)
+    hf_adjust_last_panel.gd  The Adjust Last panel: a command's settings as controls built from its params
     hf_tutorial_wizard.gd  Focused 2-step Draw → Test Level guide (signal-driven auto-advance)
     hf_shortcut_dialog.gd  Searchable shortcut reference dialog (filterable Tree with categories)
     hf_material_browser.gd Visual material browser (thumbnail grid, search, filters, favorites, drag-drop)

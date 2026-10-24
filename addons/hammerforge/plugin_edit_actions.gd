@@ -17,6 +17,8 @@ const HFTransformSystem = preload("systems/hf_transform_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFViewAxes = preload("hf_view_axes.gd")
 const HFHiddenFaceSearch = preload("hf_hidden_face_search.gd")
+## The axes by index, as the settings Adjust Last shows name them.
+const AXES := ["x", "y", "z"]
 
 
 static func delete_selected(plugin: Object, root: Node) -> bool:
@@ -425,6 +427,12 @@ static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bo
 		brush_ids,
 		entity_paths
 	)
+	var again := func(s: Dictionary) -> Array: return [brush_ids, entity_paths, s["offset"]]
+	var recipe := {"action": "Nudge HammerForge Objects", "method": "nudge_managed_nodes"}
+	recipe["args"] = again
+	recipe["scope_ids"] = brush_ids
+	recipe["scope_paths"] = entity_paths
+	plugin.call("_note_last_run", "nudge", {"offset": offset}, recipe)
 	return true
 
 
@@ -515,6 +523,9 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 				"",
 				true
 			)
+			var again := func(s: Dictionary) -> Array: return [brush_id, float(s["thickness"])]
+			var recipe := {"action": "Hollow", "method": "hollow_brush_by_id", "args": again}
+			plugin.call("_note_last_run", "hollow", {"thickness": thickness}, recipe)
 			dlg.queue_free()
 	)
 	dlg.canceled.connect(
@@ -911,6 +922,10 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 				"",
 				true
 			)
+			var again := func(s: Dictionary) -> Array:
+				return [brush_id, AXES.find(str(s["axis"])), float(s["position"])]
+			var recipe := {"action": "Clip Brush", "method": "clip_brush_by_id", "args": again}
+			plugin.call("_note_last_run", "clip", {"axis": "y", "position": split_pos}, recipe)
 			dlg.queue_free()
 	)
 	dlg.canceled.connect(
@@ -1245,6 +1260,16 @@ static func rotate_selected(plugin: Object, root: Node, direction: int) -> bool:
 		brush_ids,
 		entity_paths
 	)
+	var again := func(s: Dictionary) -> Array:
+		return [
+			brush_ids, entity_paths, maxi(0, AXES.find(str(s["axis"]))), float(s["angle"]), pivot
+		]
+	var recipe := {"action": "Rotate HammerForge Objects", "method": "rotate_managed_nodes"}
+	recipe["args"] = again
+	recipe["scope_ids"] = brush_ids
+	recipe["scope_paths"] = entity_paths
+	var id := "rotate_ccw" if direction >= 0 else "rotate_cw"
+	plugin.call("_note_last_run", id, {"angle": angle_degrees, "axis": AXES[axis_index]}, recipe)
 	return true
 
 

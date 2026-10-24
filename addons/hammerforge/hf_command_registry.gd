@@ -40,17 +40,22 @@ extends RefCounted
 ##   changes the level or the selection (#1694). Toggles, views, panels and Repeat
 ##   itself are left out, so Repeat never means toggle back, and so are Select All
 ##   and Deselect All, which would push the edit before them out of reach.
+## - `runs`: `{id, settings}` for an id kept for a keymap that names it, which
+##   runs another command with those settings: Extrude is one command with a
+##   Direction, and Extrude Down (alt) runs it pointing down (#1867).
 ## - `guard_only`: an id the guard knows that `execute()` never runs. The material
 ##   quick apply asks the guard about `apply_context_material` and then applies the
 ##   material itself.
+## - `params`: the command's settings, fields in `HFGeneratorSchema`'s shape
+##   (`key`, `type`, `min`, `max`, `step`, `default`, `description`, `required`),
+##   with the types in `PARAM_TYPES`. The bridge, the command line and Adjust Last
+##   all read them here (#1867).
 ## - `bridge`: present when an agent may run the command over the MCP bridge
 ##   (`hf_run_command`). `form` names the parameter form in
-##   `mcp/hf_mcp_commands.gd`, which takes explicit brush ids and parameters and
-##   never reads the selection or opens a dialog. `description` is what the agent
-##   reads. `targets` is how many of `brush_ids` and `entities` together it takes
-##   (`max` -1 for no cap) and whether entities count. `params` are fields in
-##   `HFGeneratorSchema`'s shape (`key`, `type`, `min`, `max`, `step`, `default`,
-##   `description`, `required`), with the types in `PARAM_TYPES`. `undo` is
+##   `mcp/hf_mcp_commands.gd`, which takes explicit brush ids and the command's
+##   `params` and never reads the selection or opens a dialog. `description` is
+##   what the agent reads. `targets` is how many of `brush_ids` and `entities`
+##   together it takes (`max` -1 for no cap) and whether entities count. `undo` is
 ##   `scope` for a command that only moves the brushes it names, so its step
 ##   records those, and `level` for anything else.
 ##
@@ -145,7 +150,8 @@ const COMMANDS := [
 		"help": "Switch to Extrude Up: drag a face to grow a brush out of it.",
 		"category": "Editing",
 		"needs_level": false,
-		"selection": {}
+		"selection": {},
+		"runs": {"id": "tool_extrude", "settings": {"direction": 0}}
 	},
 	{
 		"id": "tool_extrude_up",
@@ -153,15 +159,27 @@ const COMMANDS := [
 		"help": "Switch to Extrude Up: drag a face to grow a brush out of it.",
 		"category": "Tools",
 		"needs_level": false,
-		"selection": {}
+		"selection": {},
+		"runs": {"id": "tool_extrude", "settings": {"direction": 0}}
 	},
 	{
 		"id": "tool_extrude",
 		"label": "Extrude Up (alt)",
-		"help": "Switch to Extrude Up, outside Paint and Vertex modes.",
+		"help":
+		"Switch to Extrude, outside Paint and Vertex modes: up, or down when its Direction says so.",
 		"category": "Tools",
 		"needs_level": false,
-		"selection": {}
+		"selection": {},
+		"params":
+		[
+			{
+				"key": "direction",
+				"type": "enum",
+				"options": ["Up", "Down"],
+				"default": 0,
+				"description": "Up grows a brush out of the face, Down pushes a cut into it"
+			}
+		]
 	},
 	{
 		"id": "extrude_down",
@@ -169,7 +187,8 @@ const COMMANDS := [
 		"help": "Switch to Extrude Down: drag a face to push a cut into it.",
 		"category": "Editing",
 		"needs_level": false,
-		"selection": {}
+		"selection": {},
+		"runs": {"id": "tool_extrude", "settings": {"direction": 1}}
 	},
 	{
 		"id": "tool_extrude_down",
@@ -177,7 +196,8 @@ const COMMANDS := [
 		"help": "Switch to Extrude Down: drag a face to push a cut into it.",
 		"category": "Tools",
 		"needs_level": false,
-		"selection": {}
+		"selection": {},
+		"runs": {"id": "tool_extrude", "settings": {"direction": 1}}
 	},
 	{
 		"id": "tool_extrude_down_alt",
@@ -185,7 +205,8 @@ const COMMANDS := [
 		"help": "Switch to Extrude Down, outside Paint and Vertex modes.",
 		"category": "Tools",
 		"needs_level": false,
-		"selection": {}
+		"selection": {},
+		"runs": {"id": "tool_extrude", "settings": {"direction": 1}}
 	},
 	{
 		"id": "tool_clip",
@@ -297,24 +318,24 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Hollow"},
+		"params":
+		[
+			{
+				"key": "thickness",
+				"type": "float",
+				"min": 0.05,
+				"max": 128.0,
+				"step": 0.05,
+				"default": 0.25,
+				"description": "Wall thickness in metres"
+			}
+		],
 		"bridge":
 		{
 			"form": "hollow",
 			"description":
 			"Shell one brush into walls: each face becomes a wall of the given thickness, inward from the face, so a box gives six walls and a cylinder a pipe. The brush is replaced by the walls (made), and the shell stays editable as a hollow. Brushes with more than 128 distinct faces (spheres, capsules, tori) are refused.",
 			"targets": {"min": 1, "max": 1, "entities": false},
-			"params":
-			[
-				{
-					"key": "thickness",
-					"type": "float",
-					"min": 0.05,
-					"max": 128.0,
-					"step": 0.05,
-					"default": 0.25,
-					"description": "Wall thickness in metres"
-				}
-			],
 			"undo": "level"
 		},
 		"repeat": true
@@ -327,26 +348,26 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Clip"},
+		"params":
+		[
+			{
+				"key": "axis",
+				"type": "axis",
+				"default": "y",
+				"description": "The axis the cut crosses: x, y or z"
+			},
+			{
+				"key": "position",
+				"type": "float",
+				"description": "World coordinate along the axis; the brush's middle if absent"
+			}
+		],
 		"bridge":
 		{
 			"form": "clip",
 			"description":
 			"Split one brush in two along a plane across an axis. position is where the plane crosses that axis in world space, snapped to the grid, and must fall inside the brush; without it the brush is cut through its middle. The brush is replaced by the two pieces (made); split_position says where the cut went.",
 			"targets": {"min": 1, "max": 1, "entities": false},
-			"params":
-			[
-				{
-					"key": "axis",
-					"type": "axis",
-					"default": "y",
-					"description": "The axis the cut crosses: x, y or z"
-				},
-				{
-					"key": "position",
-					"type": "float",
-					"description": "World coordinate along the axis; the brush's middle if absent"
-				}
-			],
 			"undo": "level"
 		},
 		"repeat": true
@@ -358,28 +379,28 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
+		"params":
+		[
+			{
+				"key": "plane_brush_id",
+				"type": "string",
+				"required": true,
+				"description": "The brush whose face gives the plane"
+			},
+			{
+				"key": "plane_face",
+				"type": "face",
+				"required": true,
+				"description":
+				"That face: an index, a world side such as '+y', or {normal: [x, y, z]}"
+			}
+		],
 		"bridge":
 		{
 			"form": "clip_to_face",
 			"description":
 			"Cut brushes along the plane of one face of another brush, the way Clip to Face Plane does: an angled cut taken from an existing surface. Each brush the plane passes through is replaced by its pieces; those it misses are listed in skipped. Refused when it passes through none of them.",
 			"targets": {"min": 1, "max": -1, "entities": false},
-			"params":
-			[
-				{
-					"key": "plane_brush_id",
-					"type": "string",
-					"required": true,
-					"description": "The brush whose face gives the plane"
-				},
-				{
-					"key": "plane_face",
-					"type": "face",
-					"required": true,
-					"description":
-					"That face: an index, a world side such as '+y', or {normal: [x, y, z]}"
-				}
-			],
 			"undo": "level"
 		},
 		"repeat": true
@@ -392,38 +413,38 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
+		"params":
+		[
+			{
+				"key": "type",
+				"type": "enum",
+				"options_from": "generator_types",
+				"required": true,
+				"description": "arch, stairs, spiral_stairs, dome, ring or door_frame"
+			},
+			{
+				"key": "settings",
+				"type": "object",
+				"description": "The type's settings by key; see settings_by_type"
+			},
+			{
+				"key": "position",
+				"type": "vec3",
+				"required": true,
+				"description": "Where the structure stands, [x, y, z]"
+			},
+			{
+				"key": "rotation_degrees",
+				"type": "vec3",
+				"description": "Euler XYZ degrees; none if absent"
+			}
+		],
 		"bridge":
 		{
 			"form": "create_structure",
 			"description":
 			"Build a structure: an arch, a straight flight of stairs, a spiral stair, a dome, a ring or a door frame, one brush per piece, kept as a live structure. A door frame with cut_opening on also holds the cut for its opening, a pending cut until applied. type picks the kind of structure; settings sets its fields by key (see settings_by_type for each type's keys, ranges and defaults; anything not given keeps its default). position is where it stands and rotation_degrees turns it, Euler XYZ. The pieces come back in made, and generator_id names the structure.",
 			"targets": {"min": 0, "max": 0, "entities": false},
-			"params":
-			[
-				{
-					"key": "type",
-					"type": "enum",
-					"options_from": "generator_types",
-					"required": true,
-					"description": "arch, stairs, spiral_stairs, dome, ring or door_frame"
-				},
-				{
-					"key": "settings",
-					"type": "object",
-					"description": "The type's settings by key; see settings_by_type"
-				},
-				{
-					"key": "position",
-					"type": "vec3",
-					"required": true,
-					"description": "Where the structure stands, [x, y, z]"
-				},
-				{
-					"key": "rotation_degrees",
-					"type": "vec3",
-					"description": "Euler XYZ degrees; none if absent"
-				}
-			],
 			"undo": "level"
 		}
 	},
@@ -434,26 +455,26 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
+		"params":
+		[
+			{
+				"key": "generator_id",
+				"type": "string",
+				"required": true,
+				"description": "The structure, as create_arch or hf_get_brushes gives it"
+			},
+			{
+				"key": "settings",
+				"type": "object",
+				"description": "The fields to change, by key; see settings_by_type"
+			}
+		],
 		"bridge":
 		{
 			"form": "update_structure",
 			"description":
 			"Rebuild a structure in place from new settings. generator_id names it, as create_arch answers it and hf_get_brushes gives it on each piece. settings sets fields by key, as create_arch takes them for the structure's type (see settings_by_type, which has a Trim Run's keys as well); anything not given keeps the structure's current value. A structure moved or turned as a whole rebuilds where it stands. Each piece keeps its paint, name, brush entity and visgroups where the new pieces line up with the old. Every piece gets a new brush_id: made lists them and removed the old ones. Settings the structure already has, with no piece edited, moved on its own or deleted, rebuild nothing: every piece keeps its brush_id and no_change is true. appearance_dropped lists the old pieces whose paint these settings could not keep, and edits_replaced the pieces edited or deleted by hand that the rebuild put back to the settings' shape.",
 			"targets": {"min": 0, "max": 0, "entities": false},
-			"params":
-			[
-				{
-					"key": "generator_id",
-					"type": "string",
-					"required": true,
-					"description": "The structure, as create_arch or hf_get_brushes gives it"
-				},
-				{
-					"key": "settings",
-					"type": "object",
-					"description": "The fields to change, by key; see settings_by_type"
-				}
-			],
 			"undo": "level"
 		}
 	},
@@ -465,21 +486,21 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
+		"params":
+		[
+			{
+				"key": "generator_id",
+				"type": "string",
+				"required": true,
+				"description": "The structure, as create_arch or hf_get_brushes gives it"
+			}
+		],
 		"bridge":
 		{
 			"form": "detach_structure",
 			"description":
 			"Make a structure's pieces ordinary brushes, left where they are with everything on them. update_structure can no longer rebuild them, so hand edits are safe from it. generator_id names the structure. detached lists the pieces.",
 			"targets": {"min": 0, "max": 0, "entities": false},
-			"params":
-			[
-				{
-					"key": "generator_id",
-					"type": "string",
-					"required": true,
-					"description": "The structure, as create_arch or hf_get_brushes gives it"
-				}
-			],
 			"undo": "level"
 		}
 	},
@@ -514,7 +535,6 @@ const COMMANDS := [
 			"description":
 			"Cut each carver's shape out of every brush it overlaps. The brushes cut are replaced by their pieces, and the carver is used up: it is removed too. A carver that overlaps nothing is listed in skipped; if none overlaps anything, it is refused.",
 			"targets": {"min": 1, "max": -1, "entities": false},
-			"params": [],
 			"undo": "level"
 		},
 		"repeat": true
@@ -533,7 +553,6 @@ const COMMANDS := [
 			"description":
 			"Merge two or more brushes into one: the convex solid they make together. Refused when that solid would not be convex (an L shape, two separate blocks), or when it mixes solid brushes and cuts. The sources are replaced by one brush, given as brush.",
 			"targets": {"min": 2, "max": -1, "entities": false},
-			"params": [],
 			"undo": "level"
 		},
 		"repeat": true
@@ -553,7 +572,6 @@ const COMMANDS := [
 			"description":
 			"Replace two or more brushes with one brush, the convex hull of all their corners, whether they touch or not. It is turned as the first brush in brush_ids is and keeps its operation, visgroups, group and brush entity. A face on an old face's plane keeps that face's look; a new face takes the Active Material. Refused when the brushes mix solid brushes and cuts or are not all one entity.",
 			"targets": {"min": 2, "max": -1, "entities": false},
-			"params": [],
 			"undo": "level"
 		},
 		"repeat": true
@@ -572,7 +590,6 @@ const COMMANDS := [
 			"description":
 			"Keep only the volume two or more brushes share. The first brush in brush_ids is cut down by the planes of each of the others, and what is left, one convex brush given as brush, replaces them all. It keeps the first brush's operation, visgroups, group and brush entity; each face keeps the look of the brush whose plane it lies on. Refused when the brushes share no volume, mix solid brushes and cuts, or are not all one entity.",
 			"targets": {"min": 2, "max": -1, "entities": false},
-			"params": [],
 			"undo": "level"
 		},
 		"repeat": true
@@ -585,7 +602,25 @@ const COMMANDS := [
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {},
-		"repeat": true
+		"repeat": true,
+		"params":
+		[
+			{
+				"key": "angle",
+				"type": "float",
+				"min": -360.0,
+				"max": 360.0,
+				"step": 1.0,
+				"default": 15.0,
+				"description": "Degrees the selection turned"
+			},
+			{
+				"key": "axis",
+				"type": "axis",
+				"default": "y",
+				"description": "The axis it turned about: x, y or z"
+			}
+		]
 	},
 	{
 		"id": "rotate_cw",
@@ -595,7 +630,158 @@ const COMMANDS := [
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {},
-		"repeat": true
+		"repeat": true,
+		"params":
+		[
+			{
+				"key": "angle",
+				"type": "float",
+				"min": -360.0,
+				"max": 360.0,
+				"step": 1.0,
+				"default": 15.0,
+				"description": "Degrees the selection turned"
+			},
+			{
+				"key": "axis",
+				"type": "axis",
+				"default": "y",
+				"description": "The axis it turned about: x, y or z"
+			}
+		]
+	},
+	{
+		"id": "adjust_last",
+		"label": "Adjust Last",
+		"help":
+		"Show the settings the last command ran with, to change them and make its step again.",
+		"aliases": ["change last", "last settings", "tweak last"],
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "nudge",
+		"label": "Nudge",
+		"help": "Move the selection a grid step with the arrow keys and Page Up and Page Down.",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {},
+		"guard_only": true,
+		"params":
+		[{"key": "offset", "type": "vec3", "description": "How far the selection moved, in metres"}]
+	},
+	{
+		"id": "duplicate_array",
+		"label": "Duplicate Array",
+		"help": "Copies of the selected brushes in a line, each a step further on.",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"guard_only": true,
+		"params":
+		[
+			{
+				"key": "count",
+				"type": "int",
+				"min": 1,
+				"max": 256,
+				"step": 1,
+				"default": 3,
+				"description": "How many copies"
+			},
+			{"key": "offset", "type": "vec3", "description": "From one copy to the next, in metres"}
+		]
+	},
+	{
+		"id": "radial_array",
+		"label": "Radial Array",
+		"help": "Copies of the selected brushes turned in steps about an axis, rising as they go.",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"guard_only": true,
+		"params":
+		[
+			{
+				"key": "count",
+				"type": "int",
+				"min": 1,
+				"max": 256,
+				"step": 1,
+				"default": 7,
+				"description": "How many copies"
+			},
+			{
+				"key": "axis",
+				"type": "axis",
+				"default": "y",
+				"description": "The axis they turn about"
+			},
+			{
+				"key": "step",
+				"type": "float",
+				"min": -360.0,
+				"max": 360.0,
+				"step": 1.0,
+				"default": 45.0,
+				"description": "Degrees from one copy to the next"
+			},
+			{
+				"key": "rise",
+				"type": "float",
+				"min": -1024.0,
+				"max": 1024.0,
+				"step": 0.05,
+				"default": 0.0,
+				"description": "How far each copy rises along the axis, in metres"
+			}
+		]
+	},
+	{
+		"id": "grid_array",
+		"label": "Grid Array",
+		"help": "Copies of the selected brushes in rows, columns and layers.",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"guard_only": true,
+		"params":
+		[
+			{
+				"key": "count_x",
+				"type": "int",
+				"min": 1,
+				"max": 64,
+				"step": 1,
+				"default": 2,
+				"description": "Copies along x"
+			},
+			{
+				"key": "count_y",
+				"type": "int",
+				"min": 1,
+				"max": 64,
+				"step": 1,
+				"default": 1,
+				"description": "Copies along y"
+			},
+			{
+				"key": "count_z",
+				"type": "int",
+				"min": 1,
+				"max": 64,
+				"step": 1,
+				"default": 2,
+				"description": "Copies along z"
+			},
+			{
+				"key": "spacing",
+				"type": "vec3",
+				"description": "From one copy to the next, in metres"
+			}
+		]
 	},
 	{
 		"id": "flip_selection",
@@ -663,7 +849,6 @@ const COMMANDS := [
 			"description":
 			"Turn each brush back to no rotation about its own centre, keeping its position and size.",
 			"targets": {"min": 1, "max": -1, "entities": false},
-			"params": [],
 			"undo": "scope"
 		},
 		"repeat": true
@@ -822,7 +1007,6 @@ const COMMANDS := [
 			"description":
 			"Move each brush straight down until its bottom rests on the first surface below it: the floor, a brush, or baked collision. Its x and z stay; the new height snaps to the grid.",
 			"targets": {"min": 1, "max": -1, "entities": false},
-			"params": [],
 			"undo": "scope"
 		},
 		"repeat": true
@@ -840,7 +1024,6 @@ const COMMANDS := [
 			"description":
 			"Move each brush straight up until its top meets the first surface above it. Its x and z stay; the new height snaps to the grid.",
 			"targets": {"min": 1, "max": -1, "entities": false},
-			"params": [],
 			"undo": "scope"
 		},
 		"repeat": true
@@ -859,7 +1042,6 @@ const COMMANDS := [
 			"description":
 			"Move each brush the least distance that puts the lowest corner of its world bounds on a point of the level's grid: a whole number of grid_snap steps from the origin on each axis. Size and rotation stay, so a brush sized in whole steps ends with every corner on the grid. A brush already there is left alone. Refused when grid_snap is 0.",
 			"targets": {"min": 1, "max": -1, "entities": false},
-			"params": [],
 			"undo": "scope"
 		},
 		"repeat": true
@@ -1184,40 +1366,40 @@ const COMMANDS := [
 		"needs_level": true,
 		"selection": {},
 		"palette": true,
+		"params":
+		[
+			{
+				"key": "from",
+				"type": "string",
+				"required": true,
+				"description": "The material to replace, by id or name"
+			},
+			{
+				"key": "to",
+				"type": "string",
+				"required": true,
+				"description": "The material to put in its place, by id or name"
+			},
+			{
+				"key": "scope",
+				"type": "enum",
+				"options": ["level", "shown"],
+				"default": "level",
+				"description": "level, or shown for brushes that are not hidden"
+			},
+			{
+				"key": "reset_uv",
+				"type": "bool",
+				"default": false,
+				"description": "Put each face's UV scale, offset and rotation back to none"
+			}
+		],
 		"bridge":
 		{
 			"form": "replace_material",
 			"description":
 			"Give every face that wears the material from the material to, what Replace Material does, as one step: across the level, on the brushes brush_ids names when it names any, and on shown brushes alone with scope shown. Each face keeps its UV scale, offset and rotation unless reset_uv is true. from and to are ids or names that hf_get_materials lists. The answer gives faces, how many changed, and brushes, each changed brush's brush_id with its face indices; those faces become the face selection.",
 			"targets": {"min": 0, "max": -1, "entities": false},
-			"params":
-			[
-				{
-					"key": "from",
-					"type": "string",
-					"required": true,
-					"description": "The material to replace, by id or name"
-				},
-				{
-					"key": "to",
-					"type": "string",
-					"required": true,
-					"description": "The material to put in its place, by id or name"
-				},
-				{
-					"key": "scope",
-					"type": "enum",
-					"options": ["level", "shown"],
-					"default": "level",
-					"description": "level, or shown for brushes that are not hidden"
-				},
-				{
-					"key": "reset_uv",
-					"type": "bool",
-					"default": false,
-					"description": "Put each face's UV scale, offset and rotation back to none"
-				}
-			],
 			"undo": "level"
 		}
 	},
@@ -1825,7 +2007,6 @@ const COMMANDS := [
 			"description":
 			"Switch a placed prefab to its next variant, rebuilding its pieces. Name any one piece of it, a brush or an entity; hf_get_brushes and hf_get_entities give each piece's prefab. Refused for a prefab with one variant.",
 			"targets": {"min": 1, "max": 1, "entities": true},
-			"params": [],
 			"undo": "level"
 		},
 		"repeat": true
@@ -1883,7 +2064,6 @@ const COMMANDS := [
 			"description":
 			"Rebuild every linked copy of a prefab from its saved file, as Propagate Prefab does. Name any one piece of a copy of it, a brush or an entity. Refused when no copy of that prefab is linked.",
 			"targets": {"min": 1, "max": 1, "entities": true},
-			"params": [],
 			"undo": "level"
 		}
 	},
@@ -1894,43 +2074,43 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
+		"params":
+		[
+			{
+				"key": "prefab",
+				"type": "string",
+				"required": true,
+				"description": "The library prefab's name; see prefabs"
+			},
+			{
+				"key": "position",
+				"type": "vec3",
+				"required": true,
+				"description": "Where its centre goes, [x, y, z]"
+			},
+			{
+				"key": "rotation_degrees",
+				"type": "vec3",
+				"description": "Euler XYZ degrees about its centre; none if absent"
+			},
+			{
+				"key": "variant",
+				"type": "string",
+				"description": "One of its variants; its base if absent"
+			},
+			{
+				"key": "linked",
+				"type": "bool",
+				"default": false,
+				"description": "Whether the copy follows its file when propagated"
+			}
+		],
 		"bridge":
 		{
 			"form": "place_prefab",
 			"description":
 			"Place a prefab from the project's prefab library. Its pieces come in as new brushes and entities with fresh names and ties, as a drop from the library makes them, recorded as a copy that cycle_variant and propagate_prefab can change. prefab names it: prefabs lists the library, each one's name, variants, tags and how many brushes and entities it holds. position is where its centre goes, exactly; rotation_degrees turns it about that centre, Euler XYZ. variant picks one of its variants. linked makes the copy follow its file when the file changes and is propagated. The answer gives instance_id, the brushes made and entities_made.",
 			"targets": {"min": 0, "max": 0, "entities": false},
-			"params":
-			[
-				{
-					"key": "prefab",
-					"type": "string",
-					"required": true,
-					"description": "The library prefab's name; see prefabs"
-				},
-				{
-					"key": "position",
-					"type": "vec3",
-					"required": true,
-					"description": "Where its centre goes, [x, y, z]"
-				},
-				{
-					"key": "rotation_degrees",
-					"type": "vec3",
-					"description": "Euler XYZ degrees about its centre; none if absent"
-				},
-				{
-					"key": "variant",
-					"type": "string",
-					"description": "One of its variants; its base if absent"
-				},
-				{
-					"key": "linked",
-					"type": "bool",
-					"default": false,
-					"description": "Whether the copy follows its file when propagated"
-				}
-			],
 			"undo": "level"
 		},
 		"repeat": true
@@ -1976,46 +2156,46 @@ const COMMANDS := [
 		"category": "Paint",
 		"needs_level": false,
 		"selection": {},
+		"params":
+		[
+			{
+				"key": "layer",
+				"type": "layer",
+				"description":
+				"The paint layer, by index from 0 or by name; the active one if absent"
+			},
+			{
+				"key": "from",
+				"type": "cell",
+				"required": true,
+				"description": "One corner of the rectangle, [x, z] in cells"
+			},
+			{
+				"key": "to",
+				"type": "cell",
+				"description": "The opposite corner, [x, z] in cells; from if absent"
+			},
+			{
+				"key": "filled",
+				"type": "bool",
+				"default": true,
+				"description": "true paints the cells, false erases them"
+			},
+			{
+				"key": "material",
+				"type": "int",
+				"min": 0,
+				"max": 255,
+				"description":
+				"A cell material id for the filled cells, as the Blend tool writes one"
+			}
+		],
 		"bridge":
 		{
 			"form": "paint_rect",
 			"description":
 			"Paint or erase a rectangle of floor cells on a paint layer, what the Rect tool does with a drag. A cell is [x, z] on the layer's grid, one grid step square, the grid's second axis along world Z. from and to are two corners, both included, in any order; to alone is from, so one cell is a rectangle of one. Filled cells get a floor and walls round the edge of the painted area, rebuilt before the answer, and the walls stand at the default height until paint_raise sets one. filled false erases the cells. material writes a cell material id on the filled cells, as the Blend tool does. layer is a layer's index or name from paint_layers; the layer the Paint tab has active if absent. The answer gives the layer used, cells, cells_changed (how many filled bits flipped), materials_changed (how many cell material ids changed), and bounds, the rectangle in world metres on the floor's top.",
 			"targets": {"min": 0, "max": 0, "entities": false},
-			"params":
-			[
-				{
-					"key": "layer",
-					"type": "layer",
-					"description":
-					"The paint layer, by index from 0 or by name; the active one if absent"
-				},
-				{
-					"key": "from",
-					"type": "cell",
-					"required": true,
-					"description": "One corner of the rectangle, [x, z] in cells"
-				},
-				{
-					"key": "to",
-					"type": "cell",
-					"description": "The opposite corner, [x, z] in cells; from if absent"
-				},
-				{
-					"key": "filled",
-					"type": "bool",
-					"default": true,
-					"description": "true paints the cells, false erases them"
-				},
-				{
-					"key": "material",
-					"type": "int",
-					"min": 0,
-					"max": 255,
-					"description":
-					"A cell material id for the filled cells, as the Blend tool writes one"
-				}
-			],
 			"undo": "level"
 		}
 	},
@@ -2050,41 +2230,41 @@ const COMMANDS := [
 		"category": "Paint",
 		"needs_level": true,
 		"selection": {},
+		"params":
+		[
+			{
+				"key": "layer",
+				"type": "layer",
+				"description":
+				"The paint layer, by index from 0 or by name; the active one if absent"
+			},
+			{
+				"key": "from",
+				"type": "cell",
+				"required": true,
+				"description": "One corner of the rectangle, [x, z] in cells"
+			},
+			{
+				"key": "to",
+				"type": "cell",
+				"description": "The opposite corner, [x, z] in cells; from if absent"
+			},
+			{
+				"key": "height",
+				"type": "float",
+				"min": 0.25,
+				"max": 256.0,
+				"step": 0.25,
+				"required": true,
+				"description": "The wall height in metres"
+			}
+		],
 		"bridge":
 		{
 			"form": "raise_rect",
 			"description":
 			"Set the wall height of the painted cells in a rectangle on a paint layer, what the Y gesture does for the last stroke: the walls round that floor are rebuilt at height metres, before the answer. Cells in the rectangle that are not painted are left alone, and a rectangle with none painted is refused; paint_ramp paints them. from and to are two corners, [x, z] in cells, both included; to alone is from. layer is an index or a name from paint_layers; the active layer if absent. The answer gives raised, the painted cells, and heights_changed, how many overrides were added or changed, including pinning cells to the default height.",
 			"targets": {"min": 0, "max": 0, "entities": false},
-			"params":
-			[
-				{
-					"key": "layer",
-					"type": "layer",
-					"description":
-					"The paint layer, by index from 0 or by name; the active one if absent"
-				},
-				{
-					"key": "from",
-					"type": "cell",
-					"required": true,
-					"description": "One corner of the rectangle, [x, z] in cells"
-				},
-				{
-					"key": "to",
-					"type": "cell",
-					"description": "The opposite corner, [x, z] in cells; from if absent"
-				},
-				{
-					"key": "height",
-					"type": "float",
-					"min": 0.25,
-					"max": 256.0,
-					"step": 0.25,
-					"required": true,
-					"description": "The wall height in metres"
-				}
-			],
 			"undo": "level"
 		}
 	},
@@ -2111,51 +2291,51 @@ const COMMANDS := [
 		"category": "Paint",
 		"needs_level": true,
 		"selection": {},
+		"params":
+		[
+			{
+				"key": "layer",
+				"type": "layer",
+				"description":
+				"The paint layer, by index from 0 or by name; the active one if absent"
+			},
+			{
+				"key": "at",
+				"type": "cell",
+				"required": true,
+				"description": "The room's lowest corner, [x, z] in cells"
+			},
+			{
+				"key": "width",
+				"type": "int",
+				"min": 1,
+				"max": 256,
+				"default": 4,
+				"description": "Cells along x"
+			},
+			{
+				"key": "depth",
+				"type": "int",
+				"min": 1,
+				"max": 256,
+				"default": 4,
+				"description": "Cells along z"
+			},
+			{
+				"key": "height",
+				"type": "float",
+				"min": 0.25,
+				"max": 256.0,
+				"step": 0.25,
+				"description": "The wall height in metres; the default height if absent"
+			}
+		],
 		"bridge":
 		{
 			"form": "stamp_room",
 			"description":
 			"Paint a room on a paint layer: a width by depth rectangle of floor cells whose lowest corner is at, [x, z] in cells, and, when height is given, its walls raised to that many metres, in one step. What the H key does with the last rectangle's size at the hovered cell, with the size and the corner named; width and depth default to 4, the size the tool starts with. Without height the walls stand at the default height. layer is an index or a name from paint_layers; the active layer if absent. The answer gives from and to, the corners painted, cells, cells_changed, raised, and bounds, the room in world metres on the floor's top.",
 			"targets": {"min": 0, "max": 0, "entities": false},
-			"params":
-			[
-				{
-					"key": "layer",
-					"type": "layer",
-					"description":
-					"The paint layer, by index from 0 or by name; the active one if absent"
-				},
-				{
-					"key": "at",
-					"type": "cell",
-					"required": true,
-					"description": "The room's lowest corner, [x, z] in cells"
-				},
-				{
-					"key": "width",
-					"type": "int",
-					"min": 1,
-					"max": 256,
-					"default": 4,
-					"description": "Cells along x"
-				},
-				{
-					"key": "depth",
-					"type": "int",
-					"min": 1,
-					"max": 256,
-					"default": 4,
-					"description": "Cells along z"
-				},
-				{
-					"key": "height",
-					"type": "float",
-					"min": 0.25,
-					"max": 256.0,
-					"step": 0.25,
-					"description": "The wall height in metres; the default height if absent"
-				}
-			],
 			"undo": "level"
 		}
 	},
@@ -2166,38 +2346,38 @@ const COMMANDS := [
 		"category": "Paint",
 		"needs_level": true,
 		"selection": {},
+		"params":
+		[
+			{
+				"key": "layer",
+				"type": "layer",
+				"description":
+				"The paint layer the cells are on, by index from 0 or by name; the active one if absent"
+			},
+			{
+				"key": "from",
+				"type": "cell",
+				"required": true,
+				"description": "One corner of the rectangle, [x, z] in cells"
+			},
+			{
+				"key": "to",
+				"type": "cell",
+				"description": "The opposite corner, [x, z] in cells; from if absent"
+			},
+			{
+				"key": "to_layer",
+				"type": "layer",
+				"description":
+				"Only connectors to this layer, by index or name; any other layer if absent"
+			}
+		],
 		"bridge":
 		{
 			"form": "confirm_connector",
 			"description":
 			"Keep a ramp or stairs between two paint layers at different heights, what Enter does for the ghost a stroke proposes: where a painted cell in the rectangle on layer sits beside a painted cell of another layer, a connector is confirmed across that edge and built by the next bake, with the level's connector mode, stair height and width. from and to are two corners, [x, z] in cells, both included; to alone is from. to_layer keeps only connectors that join that layer. One already confirmed is counted in already, not added again; a rectangle that meets no other layer, or only boundaries already confirmed, is refused. The answer lists connectors, each one's from_layer, to_layer, from_cell, to_cell, type and width_cells.",
 			"targets": {"min": 0, "max": 0, "entities": false},
-			"params":
-			[
-				{
-					"key": "layer",
-					"type": "layer",
-					"description":
-					"The paint layer the cells are on, by index from 0 or by name; the active one if absent"
-				},
-				{
-					"key": "from",
-					"type": "cell",
-					"required": true,
-					"description": "One corner of the rectangle, [x, z] in cells"
-				},
-				{
-					"key": "to",
-					"type": "cell",
-					"description": "The opposite corner, [x, z] in cells; from if absent"
-				},
-				{
-					"key": "to_layer",
-					"type": "layer",
-					"description":
-					"Only connectors to this layer, by index or name; any other layer if absent"
-				}
-			],
 			"undo": "level"
 		}
 	},
@@ -2533,15 +2713,33 @@ static func bridge_ids() -> PackedStringArray:
 	return out
 
 
-## How the bridge runs `id`, or `{}` for a command it does not run. Read-only.
+## The command `id` stands for and the settings it runs it with, `{id, settings}`,
+## or `{}` for an id that is its own command. Read-only.
+static func runs(id: String) -> Dictionary:
+	return find(id).get("runs", {})
+
+
+## The settings `id` takes, as fields in `HFGeneratorSchema`'s shape, or `[]`:
+## what the bridge, the command line and Adjust Last offer (#1867). Read-only.
+static func params(id: String) -> Array:
+	return find(id).get("params", [])
+
+
+## How the bridge runs `id`, with the settings it takes under `params`, or `{}`
+## for a command it does not run.
 static func bridge(id: String) -> Dictionary:
-	return find(id).get("bridge", {})
+	var spec: Dictionary = find(id).get("bridge", {})
+	if spec.is_empty():
+		return spec
+	var out := spec.duplicate()
+	out["params"] = params(id)
+	return out
 
 
-## One bridge parameter of `id`, or `{}`. The dock reads Hollow's thickness range
-## here, so the dock and the bridge offer the same one.
+## One setting of `id`, or `{}`. The dock reads Hollow's thickness range here, so
+## the dock, the bridge and Adjust Last offer the same one.
 static func field(id: String, key: String) -> Dictionary:
-	for entry in bridge(id).get("params", []):
+	for entry in params(id):
 		if str(entry.get("key", "")) == key:
 			return entry
 	return {}

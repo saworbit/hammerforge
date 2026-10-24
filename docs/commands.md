@@ -35,7 +35,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Draw (`tool_draw`) | D | - | yes | Switch to Draw, which makes brushes with two clicks. |
 | Select (`tool_select`) | S | - | yes | Switch to Select, which picks brushes and entities. |
 | Extrude Up (`tool_extrude_up`) | U | - | yes | Switch to Extrude Up: drag a face to grow a brush out of it. |
-| Extrude Up (alt) (`tool_extrude`) | E | - | yes | Switch to Extrude Up, outside Paint and Vertex modes. |
+| Extrude Up (alt) (`tool_extrude`) | E | - | yes | Switch to Extrude, outside Paint and Vertex modes: up, or down when its Direction says so. |
 | Extrude Down (`tool_extrude_down`) | J | - | yes | Switch to Extrude Down: drag a face to push a cut into it. |
 | Extrude Down (alt) (`tool_extrude_down_alt`) | Shift+E | - | yes | Switch to Extrude Down, outside Paint and Vertex modes. |
 | Clip Tool (`tool_clip`) | C | - | yes | Start the Clip tool, which cuts the selected brushes along a plane you place. |
@@ -89,6 +89,10 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Merge Brushes (`merge`) | Ctrl+Shift+M | 2 brushes, a level | yes | Join the selected brushes into one brush. |
 | Hull of Selection (`hull`) | none | 2 brushes, a level | yes | Replace the selected brushes with one brush around them all, touching or not. |
 | Intersect (`intersect`) | Ctrl+Shift+I | 2 brushes, a level | yes | Keep only the volume the selected brushes share. |
+| Adjust Last (`adjust_last`) | none | a level | yes | Show the settings the last command ran with, to change them and make its step again. |
+| Duplicate Array (`duplicate_array`) | none | a level | no | Copies of the selected brushes in a line, each a step further on. |
+| Radial Array (`radial_array`) | none | a level | no | Copies of the selected brushes turned in steps about an axis, rising as they go. |
+| Grid Array (`grid_array`) | none | a level | no | Copies of the selected brushes in rows, columns and layers. |
 | Convert to Brushes (`convert_to_brushes`) | none | no mix of HammerForge and Godot nodes, a level | no | Make the selected convex mesh or CSG node a brush where it stands. |
 | Duplicate (`duplicate`) | Ctrl+D | 1 item, a level | yes | Copy the selected brushes and entities in place. |
 | Copy (`copy`) | Ctrl+C | 1 item, a level | yes | Put the selection on the clipboard. |
@@ -173,6 +177,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 |---|---|---|---|---|
 | Rotate CCW (`rotate_ccw`) | R | a level | yes | Turn the selection a step counterclockwise. |
 | Rotate CW (`rotate_cw`) | Shift+R | a level | yes | Turn the selection a step clockwise. |
+| Nudge (`nudge`) | none | a level | no | Move the selection a grid step with the arrow keys and Page Up and Page Down. |
 | Flip Selection (`flip_selection`) | Shift+M | a level | yes | Mirror the selection in place across an axis. |
 | Shear (`shear_selection`) | none | 1 item, a level | yes | Lean the selection: one side moves along an axis and the opposite side stays put. |
 | Mirror Copy (`mirror_copy`) | Alt+M | 1 item, a level | yes | Keep the selection and add copies mirrored across the ticked axes. |

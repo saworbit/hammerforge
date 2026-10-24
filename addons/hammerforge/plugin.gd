@@ -11,6 +11,7 @@ const HFPluginConsoleType = preload("plugin_console.gd")
 const HFPluginCommandLineType = preload("plugin_command_line.gd")
 const HFPluginMcpType = preload("plugin_mcp.gd")
 const HFPluginCompareType = preload("plugin_compare.gd")
+const HFPluginAdjustLastType = preload("plugin_adjust_last.gd")
 const HFPluginCrashJournalType = preload("plugin_crash_journal.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
@@ -167,6 +168,13 @@ var _compare_overlay = null
 ## The command line over the viewport, and the file dialog its scripts come
 ## from, built when first asked for (#1696). See plugin_command_line.gd.
 var _command_line_overlay: Control = null
+## The last command run with settings, for Adjust Last (#1867):
+## `{id, settings, version, recipe, targets}`. See `plugin_adjust_last.gd`.
+var last_run: Dictionary = {}
+var _adjust_last_panel: Control = null
+## Set while Adjust Last makes a step again, so its own undo and step do not close
+## the panel.
+var _adjusting_last := false
 var _command_script_dialog: FileDialog = null
 ## The lines run on either command line this session, oldest first.
 var command_line_history: Array = []
@@ -338,6 +346,8 @@ func _enter_tree():
 			)
 		if dock.has_signal("selection_vertex_typed"):
 			dock.connect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
+		if dock.has_signal("command_ran"):
+			dock.connect("command_ran", Callable(self, "_note_last_run"))
 		if dock.has_signal("selection_narrow_requested"):
 			dock.connect(
 				"selection_narrow_requested", Callable(self, "_on_selection_narrow_requested")
@@ -440,6 +450,7 @@ func _exit_tree():
 		_keymap.changed.disconnect(_on_keymap_changed)
 	HFPluginCompareType.end(self)
 	HFPluginCommandLineType.teardown(self)
+	HFPluginAdjustLastType.teardown(self)
 	HFPluginConsoleType.teardown(self)
 	# Before the dock goes: the panel lives in it, and the listener has a file to
 	# delete and a socket to close.
@@ -568,6 +579,8 @@ func _exit_tree():
 			"overlay_colors_changed", Callable(self, "_on_overlay_colors_changed")
 		):
 			dock.disconnect("overlay_colors_changed", Callable(self, "_on_overlay_colors_changed"))
+		if dock.is_connected("command_ran", Callable(self, "_note_last_run")):
+			dock.disconnect("command_ran", Callable(self, "_note_last_run"))
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
 			dock.queue_free()
@@ -1751,6 +1764,12 @@ func _group_selected(root: Node) -> bool:
 
 func _ungroup_selected(root: Node) -> bool:
 	return HFPluginEditActions.ungroup_selected(self, root)
+
+
+## Keep what a command with settings ran with, for Adjust Last (#1867). See
+## `HFPluginAdjustLast.note()`.
+func _note_last_run(id: String, settings: Dictionary, recipe: Dictionary) -> void:
+	HFPluginAdjustLastType.note(self, id, settings, recipe)
 
 
 func _hollow_selected(root: Node) -> bool:

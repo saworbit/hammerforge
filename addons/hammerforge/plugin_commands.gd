@@ -37,6 +37,7 @@ const HFPluginSnapFeedbackType = preload("plugin_snap_feedback.gd")
 const HFFgdReader = preload("hf_fgd_reader.gd")
 const HFSettingsFile = preload("hf_settings_file.gd")
 const HFPluginCompare = preload("plugin_compare.gd")
+const HFPluginAdjustLast = preload("plugin_adjust_last.gd")
 const HFPluginCommandLine = preload("plugin_command_line.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -220,9 +221,21 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 	return state
 
 
-static func execute(plugin: Object, action: String, args: Array = []) -> void:
+## Run `action` from any surface. `settings` are values for its `params`, as a
+## keymap entry's `args` or Adjust Last give them; a setting left out is what the
+## dock says, as before (#1867). An id kept for a keymap runs the command it
+## stands for, with its own settings under those given.
+static func execute(
+	plugin: Object, action: String, args: Array = [], settings: Dictionary = {}
+) -> void:
 	if plugin == null or action.is_empty():
 		return
+	var stands_for := HFCommandRegistry.runs(action)
+	if not stands_for.is_empty():
+		var given := (stands_for.get("settings", {}) as Dictionary).duplicate()
+		given.merge(settings, true)
+		settings = given
+		action = str(stands_for.get("id", action))
 	# A surface naming an id the table does not have would otherwise fall through
 	# the match and do nothing, with nothing said.
 	if not HFCommandRegistry.dispatches(action):
@@ -258,16 +271,13 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._deactivate_external_tool()
 			if dock and dock.tool_select:
 				dock.tool_select.button_pressed = true
-		"extrude_up", "tool_extrude_up", "tool_extrude":
+		"tool_extrude":
 			plugin._deactivate_external_tool()
 			if dock:
-				dock.set_extrude_tool(1)
+				dock.set_extrude_tool(-1 if int(settings.get("direction", 0)) == 1 else 1)
 				plugin._update_hud_context()
-		"extrude_down", "tool_extrude_down", "tool_extrude_down_alt":
-			plugin._deactivate_external_tool()
-			if dock:
-				dock.set_extrude_tool(-1)
-				plugin._update_hud_context()
+		"adjust_last":
+			HFPluginAdjustLast.show(plugin)
 		"repeat_brush":
 			plugin._ensure_brush_stamp().arm(plugin, root)
 		"repeat_last_command":

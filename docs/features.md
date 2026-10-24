@@ -180,6 +180,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 ### Organize Your Level
 
+- **Adjust Last** -- after Hollow, Clip, Nudge, Rotate or an array, the settings it ran with in a corner of the viewport; a change undoes the step and makes it again, as one step; settings saved by name
 - **View Filters** -- hide a kind in the editor: world, cut or clip brushes, triggers, brush entities and point entities by kind or class, structures, prefab copies, decals, I/O wires or cordons; a rule, so one made later is hidden too, never saved, ignored by the bake, with a footer chip while any is on
 - **Visgroups** -- named visibility groups ("walls", "detail", "lighting") with per-group show/hide. **Current** makes one the group new work joins, **Leave out of bake** keeps one in the editor only, and **Locked** keeps every tool and the agent bridge off its members. **Isolate**, **Hide Sel**, **Previous** and saved **Views** change what is shown without changing the level
 - **Grouping** (Ctrl+G / Ctrl+U) -- persistent groups that select and move together
