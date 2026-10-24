@@ -19,9 +19,15 @@ const TEXTS := {
 	"show_hud": "Show keyboard shortcut overlay in viewport",
 	"power_user_overlays":
 	"Radial menu, coach marks, and operation replay\nOff by default so Draw → Bake → Test Level stays obvious",
+	"size_at_cursor":
+	"Show the brush's size beside the cursor while drawing, and the depth while extruding\nA typed number shows in brackets",
+	"draw_hover_preview":
+	"Before you click, tint the face a draw would start on and mark the snapped start point\nBlue level with the grid, green on a raised face, amber on one that is not flat, violet with Draw on Face",
+	"show_selection_size":
+	"Label the width, depth and height of the selection's bounds in the viewport\nFaces picked in Face Select are measured instead of their brushes",
 	"debug_logs": "Print debug info to Output panel",
 	"_show_subtract_preview":
-	"Show the live CSG cut between subtract and additive DraftBrushes\nOverlapping brushes only — not a full-level bake",
+	"Show the live CSG cut of each cut brush through the solid brushes it overlaps\nOverlapping brushes only, not a full-level bake",
 	# --- Build tab: brush size & shape ---
 	"size_x": "Brush width (X axis) in metres",
 	"size_y": "Brush height (Y axis) in metres",
@@ -32,7 +38,9 @@ const TEXTS := {
 	"commit_freeze": "Keep committed cuts frozen (restorable)\ninstead of deleting them",
 	"collision_layer_opt": "Physics collision layer for baked geometry",
 	"active_material_button":
-	"Brush-level material override for whole brushes\nThis is separate from per-face materials in the Materials tab",
+	"The whole-brush material new brushes are made with: Draw, Polygon, Path, structures and dropped presets\nPaint mode puts it on a clicked brush. Saved with the scene\nThis is separate from per-face materials in the Materials tab",
+	"clear_active_material_button":
+	"New brushes go back to the translucent default\nBrushes already made keep their material",
 	# --- Build tab: bake options ---
 	"bake_profile_opt":
 	"Sets the bake options below in one step. Undo puts them back\nEditing: Merge Meshes and Generate LODs off, for a fast bake while you build\nShipping: both on, for a fast frame in the game\nBoth leave Lightmap UV2, Navmesh, Occluders and Chunk Size alone; save your own profile to keep those\nCustom: the options match no profile",
@@ -107,6 +115,8 @@ const TEXTS := {
 	"Load built-in prototype textures into the palette\nUse this first if the browser looks empty",
 	"material_remove_unused":
 	"Drop every palette slot no face is using\nRefresh Prototypes adds 150; this is the way back",
+	"material_replace":
+	"Replace one material with another on every face that wears it\nAcross the level, the selection or what is shown, as one undo step",
 	"material_clear":
 	"Empty the palette\nFaces that used a slot become unset, and keep their geometry",
 	"material_save_library":
@@ -116,9 +126,13 @@ const TEXTS := {
 	"material_assign":
 	"Apply the selected material to all selected faces\nTip: choose a texture in the browser, then click faces in Face Select Mode",
 	"face_clear": "Clear face selection",
+	"face_select_xray":
+	"X-ray ({toggle_face_xray})\nThe face box takes every face inside it, covered or facing away\nA brush you hid is still left out",
 	# --- UV tab ---
 	"uv_reset":
 	"Reset this face to default projected UVs\nUse after stretching or before Fit/Center/Left/Right justify",
+	"uv_apply_look_btn":
+	"Give every selected face the look the Texture Picker (T) last read ({apply_picked_look})\nMaterial, projection, scale, offset and rotation, as one undo step\nA hand-made UV layout on a selected face is cleared so the copied settings show",
 	# --- Manage tab ---
 	"floor_btn": "Create a default floor brush",
 	"apply_cuts_btn": "Move pending cuts into the draft brush tree",
@@ -129,6 +143,8 @@ const TEXTS := {
 	"hollow_thickness": "Wall thickness for the hollow operation",
 	"move_floor_btn": "Snap selected brushes to the nearest surface below ({move_to_floor})",
 	"move_ceiling_btn": "Snap selected brushes to the nearest surface above ({move_to_ceiling})",
+	"snap_to_grid_btn":
+	"Move each selected brush the least distance that puts its corner on the grid ({snap_to_grid})\nSize and rotation stay",
 	"tie_entity_btn": "Tag selected brushes as a brush entity class",
 	"untie_entity_btn": "Remove brush entity tag from selected brushes",
 	"brush_entity_class_opt": "Choose brush entity class (func_detail, trigger, etc.)",
@@ -140,6 +156,35 @@ const TEXTS := {
 	"justify_right_btn": "Align UVs to the right edge",
 	"justify_top_btn": "Align UVs to the top edge",
 	"justify_bottom_btn": "Align UVs to the bottom edge",
+	"uv_align_face_btn":
+	"Lay every selected face's texture in the face's own plane (Face projection)\nU level along the face, V down its slope, so a ramp repeats as a wall does\nKeeps scale, offset and rotation; one undo step",
+	"uv_wrap_btn":
+	"Carry the selected face's texture over an edge: click a face beside it, then the next one\nEach click is one undo step and the clicked face carries it on\nEsc or right click ends",
+	"uv_link_btn":
+	"Make the selected faces one surface: they share one mapping\nMoving, resizing, cutting or reshaping one keeps it on the surface, and a group last fitted is fitted again\nOne undo step",
+	"uv_unlink_btn": "The selected faces stop being one surface, each keeping the texture it shows",
+	"uv_select_group_btn": "Select every face linked with the selected face",
+	"uv_align_world_btn":
+	"Lay every selected face's texture along the world axes (Box UV)\nKeeps scale, offset and rotation; one undo step",
+	"justify_fit_u_btn":
+	"Fit one repeat across the face's width, keeping the texture's aspect\nThe texture repeats down the face",
+	"justify_fit_v_btn":
+	"Fit one repeat to the face's height, keeping the texture's aspect\nThe texture repeats along the wall",
+	"uv_scale_link":
+	"Link U and V\nTyping one sets the other to the same size, each keeping its sign",
+	"uv_scale_up_btn": "Scale x2: the texture repeats twice as often\nOn every selected face",
+	"uv_scale_down_btn":
+	"Scale /2: the texture repeats half as often\nOn every selected face, down to the smallest step of 0.01",
+	"uv_flip_u_btn": "Mirror the texture along U on every selected face, about the face's middle",
+	"uv_flip_v_btn": "Mirror the texture along V on every selected face, about the face's middle",
+	"uv_rotate_90_btn":
+	"Turn the texture a quarter on every selected face, about the face's middle",
+	"uv_snap_check":
+	"Snap a dragged UV corner to the grid\nHold Ctrl (Cmd on macOS) while dragging to place it freely",
+	"uv_snap_preset_opt": "UV snap step, in repeats of the texture",
+	"uv_texture_gizmo_check":
+	"Drag in the viewport to move the texture on the faces Face Select picked\nThe middle square slides it a grid step at a time, an axis end stretches it (Shift: both), the ring turns it by Selection Tools > Step\nRight click or Escape puts it back",
+	"uv_snap_step_spin": "UV snap step, in repeats of the texture",
 	"bake_btn": "Bake draft brushes into optimized static meshes",
 	"bake_dry_run_btn": "Report what will be baked without generating geometry",
 	"validate_btn": "Scan the level for common issues",
@@ -147,8 +192,11 @@ const TEXTS := {
 	"clear_btn": "Remove all brushes and baked geometry",
 	"save_hflevel_btn": "Save level to .hflevel file",
 	"load_hflevel_btn": "Load level from .hflevel file",
+	"compare_hflevel_btn":
+	"Show what changed since another .hflevel: outlined in the viewport, listed in the Console",
 	"import_map_btn": "Import a Quake-style .map file",
 	"export_map_btn": "Export level as .map file",
+	"export_plan_btn": "Write a top down plan of the level as an .svg and a .png beside it",
 	"map_scale_spin":
 	(
 		"How many .map units one metre is, for both import and export.\n"
@@ -162,6 +210,12 @@ const TEXTS := {
 	"autosave_keep": "Keep the last N autosave history files",
 	"export_settings_btn": "Export editor preferences to a settings file",
 	"import_settings_btn": "Import editor preferences from a settings file",
+	"reset_tool_settings_btn":
+	(
+		"Put every tool's settings back to their defaults: the Build tab's shape, Sides,"
+		+ " Solid/Cut, snaps, Hollow and Bevel, the Structure section, and the"
+		+ " Polygon, Path and Decal tools"
+	),
 	"save_preset_btn": "Save current brush settings as a reusable preset",
 	"quick_play_btn": "Bake and play the current scene",
 	"clip_btn": "Split selected brush along nearest axis plane ({clip})",

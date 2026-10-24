@@ -34,10 +34,42 @@ func run() -> void:
 		await _case(
 			"%s at its defaults" % t,
 			func(root: Node3D) -> void:
-				root.create_generator(
-					t, HFGeneratorSystem.default_settings(t), Transform3D.IDENTITY
-				)
+				var settings := HFGeneratorSystem.default_settings(t)
+				var bounds := _bounds(t, settings)
+				# A structure is built round its own middle. Stood at the origin, half
+				# of it is under the floor, and Validate rightly says a piece there adds
+				# nothing, so it stands on the floor as a mapper would put it.
+				var lift := Vector3(0, -bounds.position.y, 0)
+				if not HFGeneratorSystem.cutter_pieces(t, settings).is_empty():
+					_wall_through(root, bounds, settings, lift)
+				root.create_generator(t, settings, Transform3D(Basis.IDENTITY, lift))
 		)
+
+
+## A structure's box in its own space. Empty for one that follows a run of faces,
+## which builds nothing here.
+func _bounds(type: String, settings: Dictionary) -> AABB:
+	if HFGeneratorSystem.follows_run(type):
+		return AABB()
+	var points := PackedVector3Array()
+	for piece in HFGeneratorSystem.build_faces(type, settings):
+		for face in piece:
+			points.append_array(face.local_verts)
+	if points.is_empty():
+		return AABB()
+	var out := AABB(points[0], Vector3.ZERO)
+	for point in points:
+		out = out.expand(point)
+	return out
+
+
+## A wall through a structure that cuts, as a door frame goes in one, so the cut
+## has something to cut. As thick as the wall the structure says it wraps.
+func _wall_through(root: Node3D, bounds: AABB, settings: Dictionary, lift: Vector3) -> void:
+	var thickness := float(settings.get("wall", bounds.size.z * 0.5))
+	var size := Vector3(bounds.size.x + 2.0, bounds.size.y + 1.0, thickness)
+	var centre := bounds.get_center() + lift
+	box(root, size, Vector3(centre.x, size.y * 0.5, centre.z))
 
 
 func _case(label: String, build: Callable) -> void:

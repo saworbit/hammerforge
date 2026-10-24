@@ -49,13 +49,14 @@ func test_tool_id():
 
 
 func test_tool_shortcut():
-	assert_eq(tool.tool_shortcut_key(), KEY_M)
+	assert_eq(tool.keymap_action(), "measure", "it starts on a keymap action (#1820)")
+	assert_eq(HFKeymap.load_or_default().get_display_string("measure"), "M")
 
 
-func test_snap_hit_uses_level_root_snap_settings():
+func test_snap_point_uses_level_root_snap_settings():
 	var root := SnapRoot.new()
 	tool.root = root
-	assert_eq(tool._snap_hit(Vector3(3, 7, 9)), Vector3(4, 8, 8))
+	assert_eq(tool.snap_point(Vector3(3, 7, 9)), Vector3(4, 8, 8))
 	assert_eq(root.snap_calls, 1)
 	root.free()
 
@@ -269,7 +270,7 @@ func test_hud_lines_with_measurement():
 	tool._finish_ruler(Vector3(10, 0, 0))
 	var lines: PackedStringArray = tool.get_shortcut_hud_lines()
 	var joined := "\n".join(lines)
-	assert_true(joined.contains("10.0"), "Should show distance")
+	assert_true(joined.contains("Distance: 10"), "Should show distance")
 	assert_true(joined.contains("Rulers: 1"), "Should show ruler count")
 
 

@@ -11,6 +11,9 @@ class_name HFExtrudeTool
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFOverlayColors = preload("hf_overlay_colors.gd")
+const HFFacePush = preload("hf_face_push.gd")
+const HFUndoHelperType = preload("undo_helper.gd")
 
 enum Direction { UP = 1, DOWN = -1 }
 
@@ -39,6 +42,23 @@ const SQUARE_FACE := 0.9999
 ## Two edges that turn by less than this, the sine of the angle between them, are
 ## one straight edge; two that meet this far off a right angle are not square.
 const STRAIGHT := 0.0001
+
+## Moving the face itself rather than stamping a brush off it (#1712): Shift
+## held at the press. The face moves along its normal, and so does the face in
+## its plane of every other selected brush, and the brushes are rebuilt as the
+## drag goes. `push_note` says why a drag stopped short.
+var pushing := false
+var push_note := ""
+## Each brush the push moves, `{brush, face_idx, state}`, with the state it was
+## in at the press, which every step is worked out from again.
+var _push_targets: Array = []
+var _push_corners := PackedVector3Array()
+var _push_distance := 0.0
+## The level as it stood at the press, for the undo step the release makes.
+var _push_before: Dictionary = {}
+## What the last push that ended did, `{ids, moved, before}`, for the release to
+## record as one undo step. Taken once with `take_finished_push()`.
+var _finished_push: Dictionary = {}
 
 
 func _init(level_root: Node3D) -> void:
@@ -87,6 +107,86 @@ func begin_on_face(brush: DraftBrush, face_idx: int, extrude_direction: int) -> 
 	return true
 
 
+## Start moving a face of any brush along its normal (#1712), as a Shift drag
+## does. `selected` is what is selected: when the picked brush is in it, every
+## other selected brush with a face in the same plane moves with it.
+func begin_push(
+	camera: Camera3D, mouse_pos: Vector2, extrude_direction: int, selected: Array = []
+) -> bool:
+	if not camera or not root:
+		return false
+	var hit: Dictionary = root.pick_face(camera, mouse_pos)
+	if hit.is_empty():
+		return false
+	var picked := hit.get("brush", null) as DraftBrush
+	var face_idx := int(hit.get("face_idx", -1))
+	if picked == null or face_idx < 0 or face_idx >= picked.faces.size():
+		return false
+	var face: FaceData = picked.faces[face_idx]
+	if face == null:
+		return false
+	direction = extrude_direction
+	_snap = root.grid_snap if root.grid_snap > 0.0 else 1.0
+	source_brush = picked
+	source_face_idx = face_idx
+	face.ensure_geometry()
+	source_face_normal = face.normal_through(picked.global_transform.basis)
+	source_face_center = face_center(picked, face)
+	_push_corners = HFFacePush.world_corners(picked, face_idx)
+	_push_targets = [{"brush": picked, "face_idx": face_idx, "state": HFFacePush.state_of(picked)}]
+	if selected.has(picked):
+		for pair in HFFacePush.coplanar_faces(picked, face_idx, selected):
+			_push_targets.append(
+				{"brush": pair[0], "face_idx": pair[1], "state": HFFacePush.state_of(pair[0])}
+			)
+	_push_before = HFUndoHelperType.capture_scope_or_state(root, push_brush_ids())
+	_start_mouse_y = mouse_pos.y
+	_push_distance = 0.0
+	_current_height = 0.0
+	push_note = ""
+	pushing = true
+	active = true
+	return true
+
+
+## The brushes the push in progress moves, by id.
+func push_brush_ids() -> Array:
+	var out: Array = []
+	for target in _push_targets:
+		if is_instance_valid(target["brush"]):
+			out.append(str(target["brush"].brush_id))
+	return out
+
+
+## What the last push that ended did, once: `{ids, moved, before}`, or `{}`.
+func take_finished_push() -> Dictionary:
+	var finished := _finished_push
+	_finished_push = {}
+	return finished
+
+
+## Move every face the push holds `distance` out from where it was at the press,
+## or as far towards it as every one of their brushes allows.
+func _push_to(distance: float) -> void:
+	var allowed := distance
+	var reason := ""
+	for target in _push_targets:
+		HFFacePush.restore(target["brush"], target["state"])
+	for target in _push_targets:
+		var holds := HFFacePush.farthest(target["brush"], target["face_idx"], allowed)
+		if absf(holds) < absf(allowed):
+			reason = str(HFFacePush.pushed(target["brush"], target["face_idx"], allowed)["reason"])
+			allowed = holds
+	for target in _push_targets:
+		var brush: DraftBrush = target["brush"]
+		if allowed != 0.0:
+			HFFacePush.apply(brush, HFFacePush.pushed(brush, target["face_idx"], allowed))
+		if root.has_method("tag_brush_dirty"):
+			root.tag_brush_dirty(str(brush.brush_id))
+	_push_distance = allowed
+	push_note = "Stopped: %s" % reason if reason != "" else ""
+
+
 func update_extrude(_camera: Camera3D, mouse_pos: Vector2) -> void:
 	if not active:
 		return
@@ -98,11 +198,38 @@ func update_extrude(_camera: Camera3D, mouse_pos: Vector2) -> void:
 	var raw_height := delta_px * HEIGHT_SENSITIVITY * _snap
 	if direction == Direction.DOWN:
 		raw_height = -raw_height
+	if pushing:
+		_push_to(HFFacePush.snapped_distance(raw_height, _push_corners, source_face_normal, _snap))
+		return
 	_current_height = _snap_value(clampf(raw_height, MIN_EXTRUDE_HEIGHT, MAX_EXTRUDE_HEIGHT))
 	_update_preview(_current_height)
 
 
+## Set the depth outright, as a number typed into the HUD does. It is taken as
+## it is rather than rounded to the grid, which is what typing it is for, and the
+## ghost moves to it at once. `end_extrude_info()` then builds this depth.
+func set_height(height: float) -> void:
+	if not active:
+		return
+	if not is_instance_valid(source_brush):
+		cancel_extrude()
+		return
+	if pushing:
+		_push_to(height if direction == Direction.UP else -height)
+		return
+	_current_height = clampf(height, MIN_EXTRUDE_HEIGHT, MAX_EXTRUDE_HEIGHT)
+	_update_preview(_current_height)
+
+
 func end_extrude_info() -> Dictionary:
+	if pushing:
+		_finished_push = {
+			"ids": push_brush_ids(),
+			"moved": active and _push_distance != 0.0,
+			"before": _push_before,
+		}
+		_end_push()
+		return {}
 	if not active or _current_height <= 0.0:
 		cancel_extrude()
 		return {}
@@ -116,10 +243,34 @@ func end_extrude_info() -> Dictionary:
 	return info
 
 
+## How far the extrusion in progress reaches out of its face, 0 with none.
+func get_height() -> float:
+	if pushing:
+		return _push_distance if active else 0.0
+	return _current_height if active else 0.0
+
+
 func cancel_extrude() -> void:
+	if pushing:
+		for target in _push_targets:
+			HFFacePush.restore(target["brush"], target["state"])
+			if is_instance_valid(target["brush"]) and root.has_method("tag_brush_dirty"):
+				root.tag_brush_dirty(str(target["brush"].brush_id))
+		_end_push()
 	_teardown_preview()
 	active = false
 	_current_height = 0.0
+	source_brush = null
+	source_face_idx = -1
+
+
+func _end_push() -> void:
+	pushing = false
+	active = false
+	_push_targets = []
+	_push_before = {}
+	_push_distance = 0.0
+	push_note = ""
 	source_brush = null
 	source_face_idx = -1
 
@@ -147,14 +298,15 @@ func _update_preview(height: float) -> void:
 	_preview_brush.operation = CSGShape3D.OPERATION_UNION
 	_preview_brush.size = made["size"]
 
-	# Semi-transparent preview material
+	# See-through, in the colour the face under the cursor was hovered in.
 	var mat := StandardMaterial3D.new()
-	if direction == Direction.UP:
-		mat.albedo_color = Color(0.3, 0.8, 0.3, 0.4)
-	else:
-		mat.albedo_color = Color(0.8, 0.3, 0.3, 0.4)
+	mat.albedo_color = HFOverlayColors.get_color(
+		HFOverlayColors.EXTRUDE_UP if direction == Direction.UP else HFOverlayColors.EXTRUDE_DOWN
+	)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.roughness = 0.6
+	# A look for the viewport only, as every brush look is.
+	mat.set_meta(DraftBrush.EDITOR_LOOK_META, true)
 	_preview_brush.material_override = mat
 
 	# Inherit material from source if available

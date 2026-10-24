@@ -3,6 +3,12 @@ extends "res://tests/mcp/mcp_dispatcher_case.gd"
 ## hf_batch: several changes as one undo step, all or nothing. A later op can
 ## name a brush an earlier op made as "$N.brush_id".
 
+## Paints two sides of the brush the batch's first op made.
+const PAINT_OP := {
+	"tool": "hf_assign_material",
+	"params": {"brush_id": "$0.brush_id", "material": "palette:1", "faces": ["+x", "+y"]}
+}
+
 
 ## A level whose brush creation makes the brush and then reports failure, the
 ## way an apply can change the level before it fails.
@@ -215,3 +221,65 @@ func test_an_unknown_command_in_a_batch_is_refused_at_its_index():
 	assert_eq(r["error"]["details"]["index"], 1)
 	assert_eq(r["error"]["details"]["error"]["code"], "unknown_command")
 	assert_eq(snapshot(level), before)
+
+
+## What each face of a brush holds.
+func _faces_of(brush: DraftBrush) -> Array:
+	var held: Array = []
+	for face in brush.faces:
+		held.append(face.to_dict())
+	return held
+
+
+## A brush placed off the origin and turned, then `after` in the same batch, which
+## runs in one frame. The turn moves the brush's walls onto the other Box UV axis,
+## and the faces keep their handedness across that by a flip of their scale, made
+## when they hear where the brush stands. They heard it a frame late, after the
+## step had been recorded, so its redo put back faces the batch had not left
+## (#1540). Every face also has to project from where its brush stands.
+func _assert_redo_puts_back_what_the_batch_left(texture_lock: bool, after: Array) -> void:
+	var level := make_level_with_palette()
+	level.texture_lock = texture_lock
+	var ops := [
+		{
+			"tool": "hf_place_brush",
+			"params": {"size": [2, 2, 2], "position": [10, 1, 4], "rotation_degrees": [0, 90, 0]}
+		},
+	]
+	ops.append_array(after)
+	var r := await call_tool("hf_batch", {"ops": ops})
+	assert_true(r["ok"], str(r))
+	if not r.get("ok", false):
+		return
+	var id: String = r["result"]["results"][0]["result"]["brush"]["brush_id"]
+	var made := brush_node(level, id)
+	for face in made.faces:
+		assert_true(
+			face.world_transform.is_equal_approx(made.global_transform),
+			"each face projects from where its brush stands"
+		)
+	var left := _faces_of(made)
+	var placed := made.global_transform
+
+	assert_true((await call_tool("hf_undo"))["ok"])
+	assert_null(brush_node(level, id), "undo takes the brush away")
+	assert_true((await call_tool("hf_redo"))["ok"])
+
+	var back := brush_node(level, id)
+	assert_not_null(back, "redo puts it back")
+	if back == null:
+		return
+	assert_true(back.global_transform.is_equal_approx(placed), "where it was")
+	assert_eq(_faces_of(back), left, "with the faces the batch left")
+
+
+func test_a_brush_placed_and_painted_in_one_batch_comes_back_the_same():
+	await _assert_redo_puts_back_what_the_batch_left(true, [PAINT_OP])
+
+
+func test_a_brush_placed_and_painted_without_texture_lock_comes_back_the_same():
+	await _assert_redo_puts_back_what_the_batch_left(false, [PAINT_OP])
+
+
+func test_a_brush_turned_without_texture_lock_in_a_batch_comes_back_the_same():
+	await _assert_redo_puts_back_what_the_batch_left(false, [_place(20)])

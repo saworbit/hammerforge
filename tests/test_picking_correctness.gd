@@ -373,8 +373,8 @@ func test_a_hidden_face_takes_no_sculpt() -> void:
 		if box.faces[i].normal.y > 0.99:
 			top = i
 	assert_true(level.create_displacement("d", top, 2), "the top face is sculptable")
-	level.face_selection = {"d": [top]}
 	rig.plugin._toggle_paint_mode()
+	rig.plugin.dock._face_tools_section.set_expanded(true)
 	rig.plugin.dock._disp_section.set_expanded(true)
 	var on_top := rig.camera.unproject_position(Vector3(0, 8, 0))
 	var sculpt := func() -> String: return var_to_str(box.faces[top].displacement.to_dict())
@@ -405,6 +405,7 @@ func test_a_hidden_face_takes_no_sculpt() -> void:
 	rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, false, on_top))
 	box.visible = true
 	rig.plugin.dock._disp_section.set_expanded(false)
+	rig.plugin.dock._face_tools_section.set_expanded(false)
 	rig.plugin._toggle_paint_mode()
 	await rig.leave_level(level)
 

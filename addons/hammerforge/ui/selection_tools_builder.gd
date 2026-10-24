@@ -5,6 +5,8 @@ extends RefCounted
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
 const HFCommandRegistryType = preload("../hf_command_registry.gd")
+const HFBakeSplitType = preload("../hf_bake_split.gd")
+const HFSelectionInfoType = preload("hf_selection_info.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -19,6 +21,18 @@ func build(parent: Control) -> void:
 		return
 
 	var hf_collapsible_section = dock.HFCollapsibleSection
+
+	# A section of its own at the top rather than a part of Selection Tools, which
+	# shows only with brushes selected: Face Select puts the object selection
+	# aside, and a picked face still has a centre, a normal and an area to show.
+	dock._selection_info_section = hf_collapsible_section.create("Selection Info", true)
+	dock._selection_info_section.visible = false
+	brush_vbox.add_child(dock._selection_info_section)
+	dock._register_section(dock._selection_info_section, "Selection Info")
+	dock.selection_info = HFSelectionInfoType.new()
+	dock._selection_info_section.get_content().add_child(dock.selection_info)
+	dock.selection_info.vertex_typed.connect(dock.selection_vertex_typed.emit)
+	dock.selection_info.narrow_requested.connect(dock.selection_narrow_requested.emit)
 
 	dock._selection_tools_section = hf_collapsible_section.create("Selection Tools", true)
 	dock._selection_tools_section.visible = false
@@ -77,6 +91,9 @@ func build(parent: Control) -> void:
 	dock.move_ceiling_btn = HFUIFactoryType.make_button("To Ceiling (Ctrl+Shift+C)")
 	dock.move_ceiling_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	move_row.add_child(dock.move_ceiling_btn)
+	dock.snap_to_grid_btn = HFUIFactoryType.make_button("Snap to Grid (Ctrl+B)")
+	dock.snap_to_grid_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	move_row.add_child(dock.snap_to_grid_btn)
 
 	_add_sub_header(sc, "Entity Binding")
 
@@ -98,6 +115,30 @@ func build(parent: Control) -> void:
 	dock.untie_entity_btn = HFUIFactoryType.make_button("Untie")
 	tie_row.add_child(dock.untie_entity_btn)
 
+	# How the selected brushes bake: what a merged mesh cannot mix, so a brush
+	# that differs bakes into a mesh of its own (#1444, #1438).
+	_add_sub_header(sc, "Bake")
+
+	dock.brush_cast_shadow_opt = HFUIFactoryType.make_cast_shadow_option(true)
+	dock.brush_cast_shadow_opt.tooltip_text = (
+		"How these brushes cast shadows once baked. Level Default leaves it to their "
+		+ "visgroups and then to Cast Shadows in Advanced Bake"
+	)
+	sc.add_child(HFUIFactoryType.make_label_row("Cast Shadows:", dock.brush_cast_shadow_opt))
+
+	var lightmap: Dictionary = {
+		"min": HFBakeSplitType.MIN_LIGHTMAP_SCALE,
+		"max": HFBakeSplitType.MAX_LIGHTMAP_SCALE,
+	}
+	dock.brush_lightmap_scale_spin = HFUIFactoryType.make_spin(
+		lightmap["min"], lightmap["max"], 0.125, HFBakeSplitType.DEFAULT_LIGHTMAP_SCALE
+	)
+	dock.brush_lightmap_scale_spin.tooltip_text = (
+		"Lightmap detail on these brushes, against the level's Texel Size: 2 is twice as "
+		+ "fine, 0.5 half. Takes effect with Lightmap UV2 on"
+	)
+	sc.add_child(HFUIFactoryType.make_label_row("Lightmap Scale:", dock.brush_lightmap_scale_spin))
+
 	_add_sub_header(sc, "Transform")
 
 	var xform_row = HBoxContainer.new()
@@ -111,8 +152,10 @@ func build(parent: Control) -> void:
 	var pivot_lbl = Label.new()
 	pivot_lbl.text = "Pivot:"
 	xform_row.add_child(pivot_lbl)
-	dock.transform_pivot_opt = HFUIFactoryType.make_option(["Selection", "World Origin", "Active"])
-	dock.transform_pivot_opt.tooltip_text = ("Selection: the centre of the selected objects. World Origin: (0, 0, 0). Active: the first selected object.")
+	dock.transform_pivot_opt = HFUIFactoryType.make_option(
+		["Selection", "World Origin", "Active", "Pick"]
+	)
+	dock.transform_pivot_opt.tooltip_text = ("Selection: the centre of the selected objects. World Origin: (0, 0, 0). Active: the first selected object. Pick: a brush vertex, edge midpoint or face centre you click in the viewport, marked with a cross; Pick Pivot (Alt+P) picks again, Clear Pivot (Shift+Alt+P) goes back to Selection.")
 	HFUIFactoryType.fit_option(dock.transform_pivot_opt)
 	xform_row.add_child(dock.transform_pivot_opt)
 
@@ -142,6 +185,37 @@ func build(parent: Control) -> void:
 	)
 	dock.reset_rotation_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	flip_row.add_child(dock.reset_rotation_btn)
+	dock.apply_rotation_scale_btn = HFUIFactoryType.make_button(
+		"Apply Rotation and Scale",
+		"Fold rotation and scale into the brush's shape: nothing moves, and size reads in metres"
+	)
+	dock.apply_rotation_scale_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flip_row.add_child(dock.apply_rotation_scale_btn)
+
+	# The boxes are the level's Mirror Copy settings, so Alt+M reads them as they
+	# stand. The dock fills them in from the level when one connects.
+	var mirror_row = HFUIFactoryType.make_wrap_row()
+	sc.add_child(mirror_row)
+	var mirror_lbl = Label.new()
+	mirror_lbl.text = "Mirror:"
+	mirror_row.add_child(mirror_lbl)
+	dock.mirror_copy_x_check = HFUIFactoryType.make_check("X", true)
+	dock.mirror_copy_x_check.tooltip_text = "Mirror Copy across X"
+	mirror_row.add_child(dock.mirror_copy_x_check)
+	dock.mirror_copy_y_check = HFUIFactoryType.make_check("Y", false)
+	dock.mirror_copy_y_check.tooltip_text = "Mirror Copy across Y"
+	mirror_row.add_child(dock.mirror_copy_y_check)
+	dock.mirror_copy_z_check = HFUIFactoryType.make_check("Z", false)
+	dock.mirror_copy_z_check.tooltip_text = "Mirror Copy across Z"
+	mirror_row.add_child(dock.mirror_copy_z_check)
+	dock.mirror_copy_edge_check = HFUIFactoryType.make_check("Selection Edge", true)
+	dock.mirror_copy_edge_check.tooltip_text = ("On: mirror across the far side of the selection's bounds on each axis, so each copy lands flush beside it. Off: mirror through the Pivot.")
+	mirror_row.add_child(dock.mirror_copy_edge_check)
+	dock.mirror_copy_btn = HFUIFactoryType.make_button(
+		"Mirror Copy (Alt+M)", "Keep the selection and add mirrored copies across the ticked axes"
+	)
+	dock.mirror_copy_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mirror_row.add_child(dock.mirror_copy_btn)
 
 	_add_sub_header(sc, "Duplicate Array")
 
@@ -293,18 +367,33 @@ func connect_signals() -> void:
 		dock.flip_btn.pressed.connect(dock._on_flip_selection)
 	if dock.reset_rotation_btn:
 		dock.reset_rotation_btn.pressed.connect(dock._on_reset_rotation)
+	if dock.apply_rotation_scale_btn:
+		dock.apply_rotation_scale_btn.pressed.connect(dock._on_apply_rotation_scale)
+	for check in [dock.mirror_copy_x_check, dock.mirror_copy_y_check, dock.mirror_copy_z_check]:
+		if check:
+			(check as CheckBox).toggled.connect(dock._on_mirror_copy_axes_changed)
+	if dock.mirror_copy_edge_check:
+		dock.mirror_copy_edge_check.toggled.connect(dock._on_mirror_copy_edge_toggled)
+	if dock.mirror_copy_btn:
+		dock.mirror_copy_btn.pressed.connect(dock._on_mirror_copy)
 	if dock.hollow_btn:
 		dock.hollow_btn.pressed.connect(dock._on_hollow)
 	if dock.move_floor_btn:
 		dock.move_floor_btn.pressed.connect(dock._on_move_to_floor)
 	if dock.move_ceiling_btn:
 		dock.move_ceiling_btn.pressed.connect(dock._on_move_to_ceiling)
+	if dock.snap_to_grid_btn:
+		dock.snap_to_grid_btn.pressed.connect(dock._on_snap_to_grid)
 	if dock.tie_entity_btn:
 		dock.tie_entity_btn.pressed.connect(dock._on_tie_entity)
 	if dock.untie_entity_btn:
 		dock.untie_entity_btn.pressed.connect(dock._on_untie_entity)
 	if dock.clip_btn:
 		dock.clip_btn.pressed.connect(dock._on_clip)
+	if dock.brush_cast_shadow_opt:
+		dock.brush_cast_shadow_opt.item_selected.connect(dock._on_brush_cast_shadow_selected)
+	if dock.brush_lightmap_scale_spin:
+		dock.brush_lightmap_scale_spin.value_changed.connect(dock._on_brush_lightmap_scale_changed)
 
 
 ## Keep the array ghost in step with the controls that describe it.

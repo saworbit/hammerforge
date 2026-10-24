@@ -20,7 +20,10 @@ from hammerforge_mcp import __version__
 from hammerforge_mcp.bridge import Bridge, BridgeError
 from hammerforge_mcp.catalogue import PROTOCOL_ERRORS, SHAPES, TOOLS
 from hammerforge_mcp.check import run_check
+from hammerforge_mcp.guide import pages as guide_pages
+from hammerforge_mcp.guide import title_of
 from hammerforge_mcp.prompts import PROMPTS
+from hammerforge_mcp.recording import Recorder
 
 log = logging.getLogger("hammerforge_mcp")
 
@@ -119,8 +122,35 @@ FaceSelector = Annotated[
 ]
 
 
+class MeasureFace(BaseModel):
+    """One face of a brush, for hf_measure."""
+
+    brush_id: BrushId
+    face: FaceSelector
+
+
+class MeasureEntity(BaseModel):
+    """An entity by its path from hf_get_entities, for hf_measure."""
+
+    entity: Annotated[str, Field(min_length=1)]
+
+
+MeasureItem = Annotated[
+    BrushId | MeasureFace | MeasureEntity | Vec3,
+    Field(
+        description=(
+            "A brush_id, {brush_id, face}, {entity} or a point [x, y, z] in metres"
+        )
+    ),
+]
+
+
+#: How a listing's bounds picks: what meets the box, or only what is inside it.
+BoundsTest = Literal["touching", "inside"]
+
+
 class Bounds(BaseModel):
-    """A world-space box: keep brushes that overlap it."""
+    """A world-space box: keep what overlaps it, or what is inside it."""
 
     min: Vec3
     max: Vec3
@@ -535,7 +565,7 @@ def error_result(
     )
 
 
-def build_server(bridge: BridgeLike) -> MCPServer:
+def build_server(bridge: BridgeLike, recorder: Recorder | None = None) -> MCPServer:
     server = MCPServer(
         name="hammerforge",
         title="HammerForge",
@@ -560,8 +590,26 @@ def build_server(bridge: BridgeLike) -> MCPServer:
             )
         except BridgeError as exc:
             log.warning("%s failed: %s: %s", method, exc.code, exc)
+            if recorder is not None:
+                recorder.write(
+                    method,
+                    params,
+                    mutating=spec.mutating,
+                    response=None,
+                    error=exc.code,
+                    took_ms=(time.monotonic() - started) * 1000.0,
+                )
             return error_result(exc.code, str(exc), exc.details)
         took = (time.monotonic() - started) * 1000.0
+        if recorder is not None:
+            recorder.write(
+                method,
+                params,
+                mutating=spec.mutating,
+                response=response,
+                error=None,
+                took_ms=took,
+            )
         if response.get("ok"):
             log.info(
                 "%s ok at revision %s in %.0f ms",
@@ -572,7 +620,7 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         else:
             code = (response.get("error") or {}).get("code")
             log.info("%s refused: %s in %.0f ms", method, code, took)
-        if method == "hf_viewport_screenshot":
+        if method in ("hf_viewport_screenshot", "hf_plan"):
             return image_result(response)
         return to_result(response)
 
@@ -626,14 +674,28 @@ def build_server(bridge: BridgeLike) -> MCPServer:
     async def hf_get_brushes(
         brush_ids: list[str] | None = None,
         bounds: Bounds | None = None,
+        bounds_test: BoundsTest = "touching",
+        filter: Annotated[
+            dict[str, Any] | None, Field(description="Tests every brush must pass")
+        ] = None,
         include_faces: bool = True,
         limit: Annotated[int, Field(ge=1, le=2000)] = 200,
+        offset: Annotated[int, Field(ge=0)] = 0,
+        count_only: bool = False,
     ) -> Annotated[CallToolResult, ToolOutput]:
-        params: dict[str, Any] = {"include_faces": include_faces, "limit": limit}
+        params: dict[str, Any] = {
+            "include_faces": include_faces,
+            "limit": limit,
+            "offset": offset,
+            "count_only": count_only,
+            "bounds_test": bounds_test,
+        }
         if brush_ids is not None:
             params["brush_ids"] = brush_ids
         if bounds is not None:
             params["bounds"] = bounds.model_dump()
+        if filter is not None:
+            params["filter"] = filter
         return await relay("hf_get_brushes", params)
 
     @tool("hf_get_materials")
@@ -742,8 +804,28 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         return await relay("hf_place_entity", params, operation_id)
 
     @tool("hf_get_entities")
-    async def hf_get_entities() -> Annotated[CallToolResult, ToolOutput]:
-        return await relay("hf_get_entities", {})
+    async def hf_get_entities(
+        filter: Annotated[
+            dict[str, Any] | None, Field(description="Tests every entity must pass")
+        ] = None,
+        bounds: Bounds | None = None,
+        limit: Annotated[int, Field(ge=1, le=2000)] = 200,
+        offset: Annotated[int, Field(ge=0)] = 0,
+        count_only: bool = False,
+        count_by_class: bool = False,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {
+            "limit": limit,
+            "offset": offset,
+            "count_only": count_only,
+        }
+        if count_by_class:
+            params["count_by_class"] = True
+        if filter is not None:
+            params["filter"] = filter
+        if bounds is not None:
+            params["bounds"] = bounds.model_dump()
+        return await relay("hf_get_entities", params)
 
     @tool("hf_transform_entity")
     async def hf_transform_entity(
@@ -922,6 +1004,15 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         params: dict[str, Any] = {"cordons": True} if cordons else {}
         return await relay("hf_bake", params, operation_id)
 
+    @tool("hf_measure")
+    async def hf_measure(
+        items: Annotated[list[MeasureItem], Field(min_length=1, max_length=64)],
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        sent = [
+            item.model_dump() if isinstance(item, BaseModel) else item for item in items
+        ]
+        return await relay("hf_measure", {"items": sent})
+
     @tool("hf_validate")
     async def hf_validate() -> Annotated[CallToolResult, ToolOutput]:
         return await relay("hf_validate", {})
@@ -955,6 +1046,26 @@ def build_server(bridge: BridgeLike) -> MCPServer:
             params["show"] = show
         return await relay("hf_viewport_screenshot", params)
 
+    @tool("hf_plan")
+    async def hf_plan(
+        y_min: Annotated[float | None, Field(description="Bottom of the band")] = None,
+        y_max: Annotated[float | None, Field(description="Top of the band")] = None,
+        size: Annotated[int, Field(ge=64, le=4096)] = 1024,
+        format: Literal["png", "svg"] = "png",
+        labels: bool = False,
+        filter: Annotated[
+            dict[str, Any] | None, Field(description="Brush tests, as hf_get_brushes")
+        ] = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {"size": size, "format": format, "labels": labels}
+        if y_min is not None:
+            params["y_min"] = y_min
+        if y_max is not None:
+            params["y_max"] = y_max
+        if filter is not None:
+            params["filter"] = filter
+        return await relay("hf_plan", params)
+
     @tool("hf_batch", _named(BATCH_PARAMS))
     async def hf_batch(
         ops: Annotated[list[BatchOp], Field(min_length=1, max_length=100)],
@@ -981,13 +1092,41 @@ def build_server(bridge: BridgeLike) -> MCPServer:
     for name, (title, description, make) in PROMPTS.items():
         server.prompt(name=name, title=title, description=description)(make)
 
+    # The building guide, for a client that does not load skills (#1650).
+    for uri, path in guide_pages().items():
+        server.resource(
+            uri,
+            name=uri.rsplit("/", 1)[-1],
+            title=title_of(path),
+            description="How to build a HammerForge level with these tools"
+            if path.name == "SKILL.md"
+            else f"The building guide's page on {title_of(path).lower()}",
+            mime_type="text/markdown",
+        )(_page_reader(path))
+
     return server
 
 
+def _page_reader(path: Path):
+    """A resource handler that reads `path` fresh each time, so an edit shows."""
+
+    def read() -> str:
+        return path.read_text(encoding="utf-8")
+
+    return read
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["replay"]:
+        from hammerforge_mcp.replay import main as replay_main
+
+        return replay_main(argv[1:])
     parser = argparse.ArgumentParser(
         prog="hammerforge-mcp",
         description="Let an MCP agent drive a live HammerForge level in Godot.",
+        epilog="hammerforge-mcp replay FILE plays a session --record wrote back "
+        "against the editor; replay --help says how.",
     )
     parser.add_argument(
         "--project",
@@ -1007,6 +1146,12 @@ def main(argv: list[str] | None = None) -> int:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
     )
     parser.add_argument("--log-file", type=Path, help="also write the log here")
+    parser.add_argument(
+        "--record",
+        type=Path,
+        metavar="FILE",
+        help="write each call to FILE as a JSON line, to play back with replay",
+    )
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument(
         "--check",
@@ -1028,5 +1173,11 @@ def main(argv: list[str] | None = None) -> int:
         handlers=handlers,
     )
     log.info("hammerforge-mcp %s for %s", __version__, args.project)
-    build_server(Bridge(args.project, discovery=args.discovery)).run("stdio")
+    recorder = Recorder(args.record) if args.record else None
+    try:
+        bridge = Bridge(args.project, discovery=args.discovery)
+        build_server(bridge, recorder).run("stdio")
+    finally:
+        if recorder is not None:
+            recorder.close()
     return 0

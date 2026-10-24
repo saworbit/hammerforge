@@ -1,11 +1,27 @@
 """An agent builds a room from nothing, paints it, and it survives save and reload."""
 
+import time
+
 DESCRIPTION = (
-    "starter, walls, a cut, paint, extrude, spawn, undo rules, save and reload"
+    "starter, walls, a cut, paint, extrude, spawn, undo rules, save and reload,"
+    " Save Scene As .scn"
 )
 START_SCENE = "other"
 WINDOWED = False
 SAVED = "res://vibe_mcp_scratch/room_saved.tscn"
+SAVED_SCN = "res://vibe_mcp_scratch/room_saved.scn"
+
+
+def _level_file_naming(v, scene: str, seconds: float = 10.0):
+    """The level's `.hflevel` once it records `scene` and nothing is writing."""
+    seen = None
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        seen = v.order("level_file")
+        if isinstance(seen, dict) and seen["recorded"] == scene and not seen["writing"]:
+            break
+        time.sleep(0.25)
+    return seen if isinstance(seen, dict) else {"recorded": seen}
 
 
 async def run(v):
@@ -107,9 +123,9 @@ async def run(v):
     listed = (await v.call("hf_get_brushes"))["result"]
     # The starter's floor is a plain node, not a brush.
     v.expect(
-        listed["total"] == 6,
+        listed["count"] == 6,
         "six brushes: four walls, the cut, the ledge",
-        listed["total"],
+        listed["count"],
     )
     v.order("save_as", path=SAVED)
     v.order("reload", path=SAVED)
@@ -137,3 +153,18 @@ async def run(v):
         "the painted wall kept its material",
         [f["material_id"] for f in wall.get("faces", [])],
     )
+
+    # A .scn saved from the .tscn resolves to the same .hflevel, which went on
+    # naming the .tscn, so every autosave after it was refused (#1591).
+    v.order("save_level")
+    seen = _level_file_naming(v, SAVED)
+    v.expect(seen["recorded"] == SAVED, "Save Level records the scene", seen)
+    v.order("save_as", path=SAVED_SCN)
+    seen = _level_file_naming(v, SAVED_SCN)
+    v.expect(
+        seen["recorded"] == SAVED_SCN,
+        "Save Scene As .scn takes the .hflevel's record with it",
+        seen,
+    )
+    autosaved = v.order("autosave")
+    v.expect(autosaved == 0, "and the autosave after it writes", autosaved)

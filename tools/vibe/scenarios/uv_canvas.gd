@@ -3,8 +3,8 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 ## The UV editor in the Paint tab, against the UVs a real face carries.
 ##
-## `UVEditor` draws a face's `custom_uvs` by multiplying each one by the
-## control's size, and turns a drag back into a UV by dividing by it. Both of
+## `UVEditor` draws the UVs a face shows, `shown_uvs()`, by multiplying each one
+## by the control's size, and turns a drag back into a UV by dividing by it. Both of
 ## those only make sense if a UV is a number between 0 and 1.
 ##
 ## A HammerForge UV is not. `_project_uvs_for_vertices()` reads world
@@ -45,7 +45,7 @@ func _editor() -> Control:
 
 ## The UV bounding box of a face, in UV units.
 func _uv_bounds(face: Variant) -> Rect2:
-	var uvs: PackedVector2Array = face.custom_uvs
+	var uvs: PackedVector2Array = face.shown_uvs()
 	if uvs.is_empty():
 		return Rect2()
 	var lo := uvs[0]
@@ -72,7 +72,8 @@ func _where_the_points_land() -> void:
 		)
 		var inside := 0
 		var drawn: Array = []
-		for uv in face.custom_uvs:
+		var shown: PackedVector2Array = face.shown_uvs()
+		for uv in shown:
 			var screen: Vector2 = ed._uv_to_screen(uv)
 			drawn.append(screen)
 			if (
@@ -84,9 +85,9 @@ func _where_the_points_land() -> void:
 				inside += 1
 		note(
 			"%s brush, points inside the %dx%d canvas" % [str(size.x), CANVAS.x, CANVAS.y],
-			"%d of %d, first at %s" % [inside, face.custom_uvs.size(), drawn[0] if drawn else "-"]
+			"%d of %d, first at %s" % [inside, shown.size(), drawn[0] if drawn else "-"]
 		)
-		if inside == 0 and not face.custom_uvs.is_empty():
+		if inside == 0 and not shown.is_empty():
 			# Nothing drawn inside the control also means nothing clickable:
 			# _find_nearest_uv_index() only accepts a hit within point_radius.
 			var reachable := 0
@@ -94,20 +95,13 @@ func _where_the_points_land() -> void:
 				for y in range(0, int(CANVAS.y), 8):
 					if ed._find_nearest_uv_index(Vector2(x, y)) >= 0:
 						reachable += 1
-			known(
-				506,
+			# Fixed in #506: the canvas maps the face's own UV bounds.
+			flag(
 				(
 					"the UV editor draws a %s brush's face entirely outside its own canvas"
 					% str(size.x)
 				),
-				(
-					(
-						"UVs span %.0f because a projected UV is a world coordinate,"
-						% maxf(bounds.size.x, bounds.size.y)
-					)
-					+ " and _uv_to_screen() multiplies by the control size as though it were 0..1;"
-					+ " %d of %d sampled positions can select a point" % [reachable, 900]
-				)
+				"%d of %d sampled positions can select a point" % [reachable, 900]
 			)
 	ed.queue_free()
 
@@ -120,13 +114,18 @@ func _what_a_drag_does() -> void:
 	await frame()
 	var face = b.faces[0]
 	ed.set_face(face)
-	var before: PackedVector2Array = face.custom_uvs.duplicate()
+	# Showing a face leaves it on its projection; the drag gives it UVs of its
+	# own (#1539).
+	note("a layout of its own once shown", face.has_uv_layout())
+	var before: PackedVector2Array = face.shown_uvs()
 	var before_bounds := _uv_bounds(face)
 	note("before the drag, UV bounds", "%s size %s" % [before_bounds.position, before_bounds.size])
 
 	# The drag path: press picks an index, motion writes the clamped UV.
 	# Pick index 0 directly, because nothing on the canvas can reach it.
 	ed._drag_index = 0
+	# Where the middle of the canvas is on this face, before the drag changes it.
+	var aimed: Vector2 = ed._screen_to_uv(CANVAS * 0.5)
 	var motion := InputEventMouseMotion.new()
 	motion.position = CANVAS * 0.5
 	ed._gui_input(motion)
@@ -134,22 +133,19 @@ func _what_a_drag_does() -> void:
 
 	var after_bounds := _uv_bounds(face)
 	note("after one drag, UV bounds", "%s size %s" % [after_bounds.position, after_bounds.size])
-	note("vertex 0 UV", "%s -> %s" % [before[0], face.custom_uvs[0]])
-	var moved: float = before[0].distance_to(face.custom_uvs[0])
-	if moved > maxf(before_bounds.size.x, before_bounds.size.y) * 0.25:
-		known(
-			506,
-			"dragging a UV point moves it by the whole face rather than by the cursor",
-			(
-				(
-					"the cursor was put at the middle of the canvas and the vertex moved %.1f UV units,"
-					% moved
-				)
-				+ (
-					" because _screen_to_uv() clamps to 0..1 and this face's UVs span %.0f"
-					% maxf(before_bounds.size.x, before_bounds.size.y)
-				)
-			)
+	note("a layout of its own once dragged", face.has_uv_layout())
+	note("vertex 0 UV", "%s -> %s" % [before[0], face.shown_uvs()[0]])
+	# Since #506 the canvas maps the face's own UV bounds, so a point dragged to
+	# the middle of the canvas lands on the middle of the face, which is a long
+	# way from a corner. What matters is that it lands under the cursor.
+	var landed: Vector2 = face.shown_uvs()[0]
+	note(
+		"the middle of the canvas on this face / where vertex 0 landed", "%s / %s" % [aimed, landed]
+	)
+	if landed.distance_to(aimed) > maxf(before_bounds.size.x, before_bounds.size.y) * 0.01:
+		flag(
+			"a dragged UV point does not land under the cursor",
+			"the cursor was over %s and the point went to %s" % [aimed, landed]
 		)
 	ed.queue_free()
 
@@ -164,18 +160,18 @@ func _after_the_dock_reprojects() -> void:
 	await frame()
 	var face = b.faces[0]
 	ed.set_face(face)
-	var shown: PackedVector2Array = face.custom_uvs.duplicate()
+	var shown: PackedVector2Array = face.shown_uvs()
 	var brush_id := str(b.get_meta("brush_id", ""))
 	root.set_face_uv_params(brush_id, 0, Vector2(4.0, 4.0), Vector2(0.5, 0.5), 0.0)
 	await frame()
 	var face_now = b.faces[0]
 	note("UVs the editor was handed", shown[0] if shown.size() > 0 else "-")
 	note(
-		"UVs the face holds after Set UV Params",
-		face_now.custom_uvs[0] if face_now.custom_uvs.size() > 0 else "-"
+		"UVs the face shows after Set UV Params",
+		face_now.shown_uvs()[0] if face_now.shown_uvs().size() > 0 else "-"
 	)
-	if face_now == face and shown.size() > 0 and face_now.custom_uvs.size() > 0:
-		if not shown[0].is_equal_approx(face_now.custom_uvs[0]):
+	if face_now == face and shown.size() > 0 and face_now.shown_uvs().size() > 0:
+		if not shown[0].is_equal_approx(face_now.shown_uvs()[0]):
 			note(
 				"the editor holds the same FaceData, so a redraw shows the new UVs", "no stale copy"
 			)

@@ -2,14 +2,17 @@
 extends RefCounted
 class_name HFLevelIO
 
-## The highest bundle version this build knows how to read.
+## The highest bundle version this build knows how to read, and the one it
+## writes.
 ##
-## `capture_hflevel_state()` stamps this into every `.hflevel`. Nothing read it
-## before, which protects new code reading old files - every key defaults - and
-## does nothing for old code reading new ones, which is the case a version number
-## exists for. Bump it here, in one place, when a format change is not purely
-## additive.
-const FORMAT_VERSION := 1
+## `capture_hflevel_state()` stamps this into every `.hflevel`, and a file whose
+## number is higher is refused, because a build that does not know a key drops it
+## on its next save. So every change to what a level saves raises it (#1638): it
+## is the number `data/format.json` says the last release wrote, plus one while a
+## fragment in `data/format.d/` waits. `test_format_record.gd` holds it to that.
+## The first pull request of a release that saves something new raises it here;
+## the release's compile then makes it the released number.
+const FORMAT_VERSION := 2
 
 const MAGIC := "HFLEVEL1"
 const MAGIC_COMPRESSED := "HFLEVEL1C"
@@ -24,7 +27,19 @@ const COMPRESSION_MODE := FileAccess.COMPRESSION_DEFLATE
 
 
 static func _is_vec3_arr(v: Variant) -> bool:
-	return v is Array and v.size() >= 3
+	return _is_numbers(v, 3)
+
+
+## Whether `v` is a list whose first `count` entries are numbers. A damaged file
+## can hold anything there, and a vector built from a string is a script error
+## mid-load (#1641).
+static func _is_numbers(v: Variant, count: int) -> bool:
+	if not (v is Array) or (v as Array).size() < count:
+		return false
+	for i in count:
+		if not (v[i] is float or v[i] is int):
+			return false
+	return true
 
 
 ## Variant types that carry no data a level file can hold. Anything else the
@@ -89,7 +104,9 @@ static func encode_variant(value: Variant, _depth: int = 0) -> Variant:
 				]
 			}
 		TYPE_COLOR:
-			return {TYPE_KEY: "Color", "value": value.to_html()}
+			# Its four floats. Hex kept 8 bits a channel and clamped to 1, so a
+			# bright light came back dimmed (#1787).
+			return {TYPE_KEY: "Color", "value": [value.r, value.g, value.b, value.a]}
 		TYPE_ARRAY:
 			var out: Array = []
 			for item in value:
@@ -153,20 +170,16 @@ static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
 		match type_name:
 			"Vector2":
 				var vec = value.get("value", [])
-				return Vector2(vec[0], vec[1]) if vec is Array and vec.size() >= 2 else Vector2.ZERO
+				return Vector2(vec[0], vec[1]) if _is_numbers(vec, 2) else Vector2.ZERO
 			"Vector3":
 				var vec3 = value.get("value", [])
-				return (
-					Vector3(vec3[0], vec3[1], vec3[2])
-					if vec3 is Array and vec3.size() >= 3
-					else Vector3.ZERO
-				)
+				return Vector3(vec3[0], vec3[1], vec3[2]) if _is_numbers(vec3, 3) else Vector3.ZERO
 			"Transform3D":
 				var origin_arr = value.get("origin", [])
 				var basis_arr = value.get("basis", [])
 				var origin = (
 					Vector3(origin_arr[0], origin_arr[1], origin_arr[2])
-					if origin_arr is Array and origin_arr.size() >= 3
+					if _is_numbers(origin_arr, 3)
 					else Vector3.ZERO
 				)
 				var basis = Basis.IDENTITY
@@ -199,7 +212,16 @@ static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
 					)
 				return Basis.IDENTITY
 			"Color":
-				return Color(str(value.get("value", "#ffffff")))
+				var channels: Variant = value.get("value", "#ffffff")
+				if channels is Array and (channels as Array).size() == 4:
+					var all_numbers := true
+					for channel in channels:
+						if not (channel is int or channel is float):
+							all_numbers = false
+					if all_numbers:
+						return Color(channels[0], channels[1], channels[2], channels[3])
+				# A file written before #1787 holds hex.
+				return Color.from_string(str(channels), Color.WHITE)
 			"ResourcePath":
 				var path = str(value.get("path", ""))
 				if path != "" and ResourceLoader.exists(path):
@@ -427,11 +449,29 @@ static func parse_payload(payload: PackedByteArray) -> Dictionary:
 	if json == "":
 		HFLog.warn("HFLevelIO: Empty JSON body in payload")
 		return {}
-	var data = JSON.parse_string(json)
-	if data == null:
-		HFLog.warn("HFLevelIO: JSON parse failed")
+	# A JSON object rather than `parse_string()`, which prints an engine error for
+	# a file that does not parse: a damaged file is refused, not an error (#1641).
+	var parser := JSON.new()
+	if parser.parse(json) != OK:
+		if has_merge_conflict(json):
+			HFLog.warn("HFLevelIO: the file has an unresolved merge in it")
+		else:
+			HFLog.warn(
+				(
+					"HFLevelIO: JSON parse failed at line %d: %s"
+					% [parser.get_error_line(), parser.get_error_message()]
+				)
+			)
 		return {}
+	var data = parser.data
 	return data if data is Dictionary else {}
+
+
+## Whether `text` holds the lines a merge leaves where both sides changed it:
+## `<<<<<<<`, `=======` and `>>>>>>>`, each at the start of a line.
+static func has_merge_conflict(text: String) -> bool:
+	var ours := text.begins_with("<<<<<<<") or text.contains("\n<<<<<<<")
+	return ours and text.contains("\n=======") and text.contains("\n>>>>>>>")
 
 
 static func write_bytes_atomic(path: String, payload: PackedByteArray) -> int:
@@ -505,10 +545,20 @@ static func load_from_path(path: String) -> Dictionary:
 	if path == "":
 		return {}
 	if not FileAccess.file_exists(path) and FileAccess.file_exists(path + ".previous"):
-		var recover_err := DirAccess.rename_absolute(path + ".previous", path)
+		# A write stopped after the old file was taken away and before the new one
+		# took its name leaves both beside it. The new one is whole, since it was
+		# written before the old one was copied aside, so it is the one put back:
+		# the save that finished writing is not lost (#1642). The check is for a
+		# `.writing` that is not a level, which no such stop leaves.
+		var source := path + ".previous"
+		if _holds_level(path + ".writing"):
+			source = path + ".writing"
+		var recover_err := DirAccess.rename_absolute(source, path)
 		if recover_err != OK:
 			push_error("HFLevelIO: recovery failed for %s (error: %d)" % [path, recover_err])
 			return {}
+		if source.ends_with(".writing"):
+			DirAccess.remove_absolute(path + ".previous")
 	if not FileAccess.file_exists(path):
 		return {}
 	var file = FileAccess.open(path, FileAccess.READ)
@@ -516,3 +566,16 @@ static func load_from_path(path: String) -> Dictionary:
 		return {}
 	var payload = file.get_buffer(file.get_length())
 	return parse_payload(payload)
+
+
+static func _holds_level(path: String) -> bool:
+	if not FileAccess.file_exists(path):
+		return false
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return false
+	var head := file.get_buffer(mini(file.get_length(), 64)).get_string_from_utf8()
+	file.close()
+	if not (head.begins_with(MAGIC_COMPRESSED) or head.begins_with(MAGIC)):
+		return false
+	return not parse_payload(FileAccess.get_file_as_bytes(path)).is_empty()

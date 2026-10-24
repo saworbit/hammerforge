@@ -9,6 +9,7 @@ extends GutTest
 ## panel that made it.
 
 const PrefabSystem = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
+const HFFileNames = preload("res://addons/hammerforge/hf_file_names.gd")
 
 const _DIR := "res://prefabs"
 
@@ -70,11 +71,14 @@ func test_a_reserved_device_name_still_gets_a_file():
 	# `validate_filename()` replaces characters a filesystem refuses; it does not
 	# know about names it refuses. On Windows these are devices whatever
 	# extension follows, so `CON.hfprefab` could not be opened and the save
-	# failed with nothing on screen.
-	for reserved in ["CON", "con", "NUL", "com1", "LPT9", "aux"]:
+	# failed with nothing on screen. Godot judges a name by what comes before its
+	# first dot, and counts COM0, LPT0 and the superscript digits too (#1464).
+	for reserved in [
+		"CON", "con", "NUL", "com1", "LPT9", "aux", "COM0", "lpt0", "com²", "con.wall"
+	]:
 		var file_name: String = PrefabSystem.prefab_file_name(reserved)
 		assert_false(
-			file_name.get_basename().to_upper() in PrefabSystem._RESERVED_FILE_NAMES,
+			file_name.get_slice(".", 0).to_upper() in HFFileNames.RESERVED_NAMES,
 			"'%s' became '%s', which Windows still refuses" % [reserved, file_name]
 		)
 		assert_true(file_name.ends_with(".hfprefab"))

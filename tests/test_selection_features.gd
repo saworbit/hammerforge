@@ -8,6 +8,7 @@ const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const DraftBrushType = preload("res://addons/hammerforge/brush_instance.gd")
 const DraftEntityType = preload("res://addons/hammerforge/draft_entity.gd")
 const HFToastType = preload("res://addons/hammerforge/ui/hf_toast.gd")
+const HFSimilar = preload("res://addons/hammerforge/hf_similar.gd")
 
 # ===========================================================================
 # Keymap tests for new bindings
@@ -192,9 +193,7 @@ func test_toolbar_entity_selected_label():
 
 ## Similar Brushes has one size test, shared by the popover and the command (#897).
 func _size_similar(a: Vector3, b: Vector3) -> bool:
-	return HFPluginSelectionCommands.size_similar(
-		a, b, HFPluginSelectionCommands.SIMILAR_SIZE_TOLERANCE
-	)
+	return HFSimilar.size_similar(a, b, HFSimilar.SIZE_TOLERANCE)
 
 
 func test_size_similar_identical():
@@ -538,6 +537,7 @@ func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 		"_on_tie_entity",
 		"_on_untie_entity",
 		"_on_justify",
+		"_on_uv_edit",
 		"_on_quick_play_selected_area",
 		"_on_heightmap_convert",
 		"_on_scatter_preview",

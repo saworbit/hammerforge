@@ -8,10 +8,14 @@ class_name LevelRoot
 const BrushManager = preload("brush_manager.gd")
 const Baker = preload("baker.gd")
 const PrefabFactory = preload("prefab_factory.gd")
+const HFNotes = preload("hf_notes.gd")
+const HFMaterialUse = preload("hf_material_use.gd")
 const DraftEntity = preload("draft_entity.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const PlaytestFPS = preload("playtest_fps.gd")
 const HFLevelIO = preload("hflevel_io.gd")
+const HFFormatRecord = preload("hf_format_record.gd")
+const HFViewFiltersType = preload("hf_view_filters.gd")
 const MapIO = preload("map_io.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
@@ -33,10 +37,13 @@ const HFBakeSystemType = preload("systems/hf_bake_system.gd")
 const BakeStatus = HFBakeSystemType.BakeStatus
 const HFPaintSystemType = preload("systems/hf_paint_system.gd")
 const HFFileSystemType = preload("systems/hf_file_system.gd")
+const HFAutosaveSchedulerType = preload("systems/hf_autosave_scheduler.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 const HFIORuntime = preload("hf_io_runtime.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
+const HFOverlayColors = preload("hf_overlay_colors.gd")
+const HFHiddenFaces = preload("hf_hidden_faces.gd")
 ## Both halves of the playtest request live in one leaf script, so neither this
 ## nor the dock handler has to name the other's class (#771).
 const HFPlaytestRequest = preload("hf_playtest_request.gd")
@@ -122,6 +129,9 @@ const MAX_ROTATE_SNAP_DEGREES := 180.0
 ## clamp an assignment from code.
 const MIN_BAKE_MODE := 0
 const MAX_BAKE_MODE := 2
+## `GeometryInstance3D.ShadowCastingSetting`, Off to Shadows Only.
+const MIN_CAST_SHADOWS := GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+const MAX_CAST_SHADOWS := GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 const MIN_BAKE_CHUNK_SIZE := 1.0
 const MAX_BAKE_CHUNK_SIZE := 16384.0
 const MIN_LIGHTMAP_TEXEL_SIZE := 0.001
@@ -167,6 +177,19 @@ var _grid_snap: float = 0.5
 	get:
 		return _grid_snap
 @export var brush_size_default: Vector3 = Vector3(2, 2, 2)
+var _active_material: Material = null
+## The whole-brush material a new brush is made with: a Draw, a Polygon, a Path,
+## a structure and a dropped preset (#1405). None leaves a new brush the
+## translucent default. It describes the next brush, as `brush_size_default`
+## does, so it is saved with the scene and not in the `.hflevel` settings.
+@export var active_material: Material = null:
+	set(value):
+		if value == _active_material:
+			return
+		_active_material = value
+		active_material_changed.emit()
+	get:
+		return _active_material
 
 var _scene_contents: int = SceneContents.BRUSHES_AND_BAKE
 ## What Ctrl+S writes into the `.tscn` (#624). See `SceneContents`.
@@ -295,9 +318,23 @@ var _bake_navmesh_agent_max_slope: float = 45.0
 	get:
 		return _bake_navmesh_agent_max_slope
 @export var bake_visible_only: bool = false
+## The visgroup new brushes, entities, structures and placed prefabs join, or ""
+## for none (#1732). Saved with the level's settings rather than its undo state,
+## so undoing an edit never changes where the next brush goes.
+@export var current_visgroup: String = ""
 @export var bake_use_atlas: bool = false
 @export var bake_auto_connectors: bool = false
 @export var bake_wire_io: bool = true
+## How every baked mesh casts shadows, unless a brush or one of its visgroups says
+## otherwise: a `GeometryInstance3D.ShadowCastingSetting`. On is what every bake
+## made before there was a choice, so a level saved before it bakes the same
+## (#1444).
+var _bake_cast_shadows: int = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+@export_enum("Off", "On", "Double Sided", "Shadows Only") var bake_cast_shadows: int = 1:
+	set(value):
+		_bake_cast_shadows = clampi(value, MIN_CAST_SHADOWS, MAX_CAST_SHADOWS)
+	get:
+		return _bake_cast_shadows
 @export var bake_generate_occluders: bool = false
 ## Minimum face-group area (world units²) to generate an occluder.  Smaller
 ## surfaces rarely block enough pixels to justify the culling overhead.
@@ -441,7 +478,13 @@ const FACE_AXES_VERSION := 1
 	get:
 		if not scene_keeps_brushes():
 			return {}
-		return state_system.capture_registries() if state_system else _pending_registries
+		if not state_system:
+			return _pending_registries
+		var out: Dictionary = state_system.capture_registries()
+		# Beside the records rather than among them, because `capture_state()`
+		# takes the paint itself and an undo snapshot needs it once (#1854).
+		out["floor_paint"] = state_system.capture_floor_paint()
+		return out
 	set(value):
 		_pending_registries = value if value is Dictionary else {}
 ## What a scene handed over before the subsystems existed to take it. Emptied by
@@ -456,6 +499,8 @@ var _pending_registries: Dictionary = {}
 ## home for a level name, which the editor otherwise has no concept of.
 @export_storage var map_worldspawn_properties: Dictionary = {}
 @export var hflevel_compress: bool = true
+## Where the entity classes come from: an `entities.json`, an `.fgd` (#1721), or
+## several of either joined with `;`, read in order, a later class over an earlier.
 @export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
 @export var commit_freeze: bool = true
 ## Run this level's scene on its own and get a debug player in it.
@@ -483,6 +528,15 @@ var _grid_visible: bool = false
 		return _grid_visible
 @export var grid_follow_brush: bool = false
 @export var debug_logging: bool = false
+## Validate lists each open To Do note (#1818). Kept in the level, so everyone's
+## ship check of it agrees. Off by default: a note is a reminder, not a fault.
+@export var validate_warns_open_todos: bool = false
+## The format number, and the waiting format fragments, of the build that last
+## saved this scene (#1638). A build older than the stamp shows the level read
+## only and refuses Save Level and autosave, because both would write the level
+## without what the newer build added.
+@export_storage var format_stamp: int = 0
+@export_storage var format_stamp_pending: PackedStringArray = PackedStringArray()
 var _grid_plane_size: float = 500.0
 @export var grid_plane_size: float = 500.0:
 	set(value):
@@ -513,8 +567,42 @@ var _rotate_snap_degrees: float = 15.0
 		)
 	get:
 		return _rotate_snap_degrees
-## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active object.
-@export_enum("Selection Center", "World Origin", "Active Object") var transform_pivot_mode: int = 0
+## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active
+## object, 3 `transform_pivot_point`, the point Pick Pivot took from a brush.
+var _transform_pivot_mode: int = 0
+@export_enum("Selection Center", "World Origin", "Active Object", "Picked Point")
+var transform_pivot_mode: int = 0:
+	set(value):
+		if value == _transform_pivot_mode:
+			return
+		_transform_pivot_mode = value
+		transform_pivot_changed.emit()
+	get:
+		return _transform_pivot_mode
+## The picked pivot, in world space. Rotate, Flip, the radial array and Mirror
+## Copy through the pivot turn about it while `transform_pivot_mode` is 3, and it
+## stays when the mode changes, so picking the mode again finds it where it was.
+var _transform_pivot_point := Vector3.ZERO
+@export var transform_pivot_point := Vector3.ZERO:
+	set(value):
+		if not value.is_finite():
+			HFLog.warn(
+				"HammerForge: %s is not a pivot, keeping %s" % [value, _transform_pivot_point]
+			)
+			return
+		if value == _transform_pivot_point:
+			return
+		_transform_pivot_point = value
+		transform_pivot_changed.emit()
+	get:
+		return _transform_pivot_point
+## The axes Mirror Copy mirrors across, as bits: 1 X, 2 Y, 4 Z. The boxes in the
+## Transform row write it, and Alt+M runs with it as it is.
+@export_flags("X", "Y", "Z") var mirror_copy_axes: int = 1
+## Where Mirror Copy's planes stand: on the far (+) side of the selection's
+## bounds, so each copy lands flush beside the original, or with this off through
+## the transform pivot.
+@export var mirror_copy_at_edge: bool = true
 @export var cordon_enabled: bool = false
 ## Where a level's one cordon starts: a 256 m box round the origin.
 const DEFAULT_CORDON_AABB := AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
@@ -568,14 +656,25 @@ signal grid_snap_changed(value: float)
 ## The level's settings were set from a file or an undo step, all at once, so
 ## anything showing them has to read them again (#968).
 signal settings_applied
+## The Active Material changed, from the dock, the Inspector or a script.
+signal active_material_changed
+## `transform_pivot_mode` or `transform_pivot_point` changed, from the dock, a
+## pick, a load or the Inspector. The dock's Pivot option and the pivot's mark
+## read them again.
+signal transform_pivot_changed
 
 # Brush lifecycle
 signal brush_added(brush_id: String)
 signal brush_removed(brush_id: String)
 signal brush_changed(brush_id: String)
+## Emitted before a bake reads which brushes changed, so a change check that has
+## been looking at only some brushes can look at all of them first (#1619).
+signal brush_changes_wanted
 
 # Entity lifecycle
 signal entity_added(node: Node)
+## A view filter was turned on or off (#1720).
+signal view_filters_changed
 signal entity_removed(node: Node)
 
 # Selection
@@ -585,11 +684,20 @@ signal paint_layer_changed(layer_index: int)
 signal paint_stroke_committed(changed_cell_count: int)
 signal material_list_changed
 signal face_selection_changed
+## A material was just applied to faces or brushes by an edit: a Paint click, a
+## face assign, a drop from the browser, a favourite, Apply Last Texture, Apply
+## Picked Look or the agent bridge. Each route emits it once it has applied, and
+## undo and redo do not, so the browser's Recent row follows what the mapper did
+## (#1422).
+signal material_used(material: Material)
 
 # I/O
 signal state_saved
 signal state_loaded
 signal autosave_failed(error_message: String)
+## True when a timed autosave is put off until editing pauses, false when it runs
+## or stops waiting (#1736).
+signal autosave_waiting(waiting: bool)
 signal hflevel_save_completed(path: String)
 signal hflevel_save_failed(path: String, error_message: String)
 signal user_message(text: String, level: int)
@@ -604,6 +712,11 @@ var pending_node: Node3D
 var committed_node: Node3D
 var entities_node: Node3D
 var decals_node: Node3D
+## The kinds the View Filters list hides, `{key: true}` (#1720): a kind from
+## `HFViewFilters.KINDS` or a class row such as `entity:light_point`. The editor's
+## own view, like the camera, so it is a plain var, never saved, and empty when a
+## level opens.
+var view_filters: Dictionary = {}
 var brush_manager: BrushManager
 var material_manager: MaterialManager
 var baker: Baker
@@ -630,6 +743,8 @@ var bake_system: HFBakeSystemType
 var paint_system: HFPaintSystemType
 var state_system
 var file_system: HFFileSystemType
+## When the timed autosave runs: not mid gesture, and not when nothing changed.
+var autosave_scheduler: HFAutosaveSchedulerType
 var validation_system
 var visgroup_system
 var snap_system
@@ -651,6 +766,8 @@ var transform_system
 var generator_system
 var structure_preview
 var array_preview
+## Where a draw will land, shown before the click (#1400).
+var draw_hover
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -663,6 +780,9 @@ var array_preview
 # ---------------------------------------------------------------------------
 
 var _dirty_brush_ids: Dictionary = {}  # brush_id -> true
+## How many faces use each palette slot, for the material browser (#1725). View
+## state, never saved: `HFMaterialUse` fills it and every face change empties it.
+var material_use_cache: Dictionary = {}
 var _dirty_paint_chunks: Array[Vector2i] = []
 var _full_reconcile_needed := false
 
@@ -675,6 +795,7 @@ func tag_brush_dirty(brush_id: String) -> void:
 	# every tag rather than only the first: the dirty set is not cleared until
 	# a bake, and a listener watching a drag needs each step, not just the one
 	# that happened to arrive first.
+	HFMaterialUse.invalidate(self)
 	brush_changed.emit(brush_id)
 
 
@@ -936,7 +1057,13 @@ var _autosave_timer: Timer = null
 ## exactly that again.
 var _autosave_was_running := false
 var face_selection: Dictionary = {}
+## The last bake's own work, without the frames it waited through: what the
+## estimate scales from, per brush.
+@warning_ignore("unused_private_class_variable")  # The bake system keeps it.
 var _last_bake_duration_ms: int = 0
+## The last bake from start to result, the waits included: what the mapper
+## waited for, and what the dock shows as Last bake (#1623).
+var _last_bake_wall_ms: int = 0
 @warning_ignore("unused_private_class_variable")  # The bake and state systems keep it.
 var _last_bake_preview_mode: int = 0  # 0 = FULL, 1 = WIREFRAME, 2 = PROXY
 ## Latched by `take_hflevel_freshness_report()` so a level says it once per open.
@@ -974,6 +1101,7 @@ func _ready():
 	bake_system.reconcile_baked_containers()
 	paint_system = HFPaintSystemType.new(self)
 	file_system = HFFileSystemType.new(self)
+	autosave_scheduler = HFAutosaveSchedulerType.new(self)
 	if _should_initialize_editor_systems():
 		_initialize_editor_systems()
 	# After the editor systems, because they are what holds the registries, and
@@ -1034,6 +1162,9 @@ func _keep_old_axes_on_faces_laid_by_hand() -> void:
 func _restore_live_registries() -> void:
 	if state_system and not _pending_registries.is_empty():
 		state_system.restore_registries(_pending_registries)
+		# A scene from before #1854 carries none, and keeps the layers it has.
+		if _pending_registries.get("floor_paint") is Dictionary:
+			state_system.restore_floor_paint(_pending_registries["floor_paint"])
 		_pending_registries = {}
 	# A scene with no records still has boxes that kept their faces as loaded.
 	if brush_system:
@@ -1094,6 +1225,7 @@ func _initialize_editor_systems() -> void:
 	generator_system = load("res://addons/hammerforge/systems/hf_generator_system.gd").new(self)
 	structure_preview = load("res://addons/hammerforge/systems/hf_structure_preview.gd").new(self)
 	array_preview = load("res://addons/hammerforge/systems/hf_array_preview.gd").new(self)
+	draw_hover = load("res://addons/hammerforge/systems/hf_draw_hover.gd").new(self)
 	if show_subtract_preview:
 		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
@@ -1149,15 +1281,37 @@ func _exit_tree() -> void:
 		extrude_tool.cancel_extrude()
 	if drag_system:
 		drag_system._clear_preview()
+	if draw_hover:
+		draw_hover.clear()
 	if file_system:
 		file_system.shutdown()
 
 
 ## A closed tab frees the level with its bake in flight. Whoever awaited that
 ## bake is answered false a frame later, once the level is gone (#1294).
+## A scene saved under a new name takes the `.hflevel`'s record with it (#1591).
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE and bake_system:
 		bake_system.on_level_freeing()
+	elif what == NOTIFICATION_EDITOR_PRE_SAVE and file_system:
+		file_system.scene_save_starting()
+		# A view filter is no part of the level, so the decals go in shown (#1720).
+		if decals_node:
+			decals_node.visible = true
+		# A level a newer build saved keeps its stamp, so that build still knows it.
+		if format_refusal() == "":
+			format_stamp = HFLevelIO.FORMAT_VERSION
+			format_stamp_pending = HFFormatRecord.pending_names()
+	elif what == NOTIFICATION_EDITOR_POST_SAVE and file_system:
+		file_system.scene_save_finished()
+		_apply_view_filter_overlays()
+
+
+## Why this build must not write this level, or "": its scene was saved by a
+## newer build, or by a development build with format changes this one lacks
+## (#1638). The dock shows the level read only while this is said.
+func format_refusal() -> String:
+	return HFFormatRecord.refusal(format_stamp, format_stamp_pending, HFLevelIO.FORMAT_VERSION)
 
 
 func _process(_delta: float) -> void:
@@ -1165,6 +1319,8 @@ func _process(_delta: float) -> void:
 		return
 	_process_hflevel_saves()
 	_release_stuck_signal_batch()
+	if autosave_scheduler:
+		autosave_scheduler.poll()
 	if io_visualizer:
 		io_visualizer.process(_delta)
 	if subtract_preview and subtract_preview.is_enabled():
@@ -1179,6 +1335,8 @@ func _process_hflevel_saves() -> void:
 		var is_autosave := bool(result.get("autosave", false))
 		if write_error != "":
 			if is_autosave:
+				if autosave_scheduler:
+					autosave_scheduler.forget_saved()
 				autosave_failed.emit(write_error)
 			else:
 				hflevel_save_failed.emit(save_path, write_error)
@@ -1250,6 +1408,91 @@ func set_visgroup_visible(vg_name: String, vg_visible: bool) -> void:
 		visgroup_system.set_visgroup_visible(vg_name, vg_visible)
 
 
+## Keep which visgroups are shown under `view_name`, with the level (#1697). The
+## dock's Save View commits it by this name as an undo step.
+func save_visibility_view(view_name: String) -> bool:
+	return visgroup_system.save_view(view_name) if visgroup_system else false
+
+
+func remove_visibility_view(view_name: String) -> bool:
+	return visgroup_system.remove_saved_view(view_name) if visgroup_system else false
+
+
+## How the visgroup's brushes cast shadows when they do not say themselves
+## (#1444). Its brushes are changes for Bake Changed. False when nothing changed.
+## Leave a visgroup's members out of every bake, or put them back (#1732). The
+## bake changes, so they are tagged for Bake Changed.
+func set_visgroup_bakes(vg_name: String, bakes: bool) -> bool:
+	if not visgroup_system or not visgroup_system.set_visgroup_bakes(vg_name, bakes):
+		return false
+	_tag_brushes_dirty(Array(brush_system.brush_ids_of(visgroup_system.get_members_of(vg_name))))
+	return true
+
+
+func set_visgroup_cast_shadow(vg_name: String, value: int) -> bool:
+	if not visgroup_system or not visgroup_system.set_visgroup_cast_shadow(vg_name, value):
+		return false
+	_tag_brushes_dirty(Array(brush_system.brush_ids_of(visgroup_system.get_members_of(vg_name))))
+	return true
+
+
+# ===========================================================================
+# View filters (#1720)
+# ===========================================================================
+
+
+## Hide or show every node of `key`, a kind or a class row. Only the editor's
+## view changes: nothing is saved and the bake does not read it.
+func set_view_filter(key: String, hidden: bool) -> void:
+	if key == "" or view_filters.has(key) == hidden:
+		return
+	if hidden:
+		view_filters[key] = true
+	else:
+		view_filters.erase(key)
+	_refresh_view_filters()
+
+
+## Show every kind again.
+func clear_view_filters() -> void:
+	if view_filters.is_empty():
+		return
+	view_filters.clear()
+	_refresh_view_filters()
+
+
+func is_view_filtered(key: String) -> bool:
+	return view_filters.has(key)
+
+
+func _refresh_view_filters() -> void:
+	if visgroup_system:
+		visgroup_system.refresh_visibility()
+	_apply_view_filter_overlays()
+	view_filters_changed.emit()
+
+
+## The decals, the I/O wires and the cordon box, which are no brush or entity.
+func _apply_view_filter_overlays() -> void:
+	if decals_node:
+		decals_node.visible = not view_filters.has("decal")
+	if io_visualizer and io_visualizer.has_method("set_filtered"):
+		io_visualizer.set_filtered(view_filters.has("wires"))
+	if cordon_wireframe:
+		cordon_wireframe.visible = cordon_enabled and not view_filters.has("cordons")
+	# A face, not a node: every Hidden face of the level wears one look (#1719).
+	if material_manager:
+		HFHiddenFaces.set_shown(
+			material_manager.hidden_face_material(), not view_filters.has("hidden_faces")
+		)
+
+
+## A new visgroup holding `nodes`, made and filled in one step (#1724).
+func new_visgroup_with(vg_name: String, nodes: Array) -> void:
+	create_visgroup(vg_name)
+	add_selection_to_visgroup(vg_name, nodes)
+
+
 func add_selection_to_visgroup(vg_name: String, nodes: Array) -> void:
 	if not visgroup_system:
 		return
@@ -1291,10 +1534,15 @@ func get_group_members(group_name: String) -> Array:
 var cordon_wireframe: MeshInstance3D = null
 var _cordon_mesh: ImmediateMesh = null
 
-## The wireframe round a cordon that bakes.
-const CORDON_COLOR := Color(1.0, 0.8, 0.0, 0.6)
-## And round one switched off: still drawn, so it can be found and switched back.
-const CORDON_OFF_COLOR := Color(1.0, 0.8, 0.0, 0.15)
+
+## The wireframe round a cordon that bakes, in the Cordon wireframe colour
+## (`HFOverlayColors`). One switched off is drawn fainter: still there, so it can
+## be found and switched back.
+static func cordon_color(active: bool) -> Color:
+	var color := HFOverlayColors.get_color(HFOverlayColors.WIREFRAME)
+	if active:
+		return color
+	return HFOverlayColors.with_alpha(color, color.a * HFOverlayColors.CORDON_OFF_SHARE)
 
 
 ## Point cordon `index` at the selection, grown by a unit, and turn it on, both
@@ -1537,7 +1785,7 @@ func update_cordon_visual() -> void:
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.no_depth_test = true
 		cordon_wireframe.material_override = mat
-	cordon_wireframe.visible = cordon_enabled
+	cordon_wireframe.visible = cordon_enabled and not view_filters.has("cordons")
 	if not cordon_enabled:
 		return
 	# The corners below are world coordinates and this hangs off the LevelRoot, so
@@ -1554,7 +1802,7 @@ func update_cordon_visual() -> void:
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
 	var regions := get_all_cordon_regions()
 	for i in range(regions.size()):
-		im.surface_set_color(CORDON_COLOR if is_cordon_active(i) else CORDON_OFF_COLOR)
+		im.surface_set_color(cordon_color(is_cordon_active(i)))
 		_add_cordon_box_lines(im, regions[i])
 	im.surface_end()
 	cordon_wireframe.mesh = im
@@ -1680,6 +1928,20 @@ func set_entity_property(entity: Node3D, prop_name: String, value: Variant) -> v
 		_tag_brush_entity_dirty(node)
 
 
+## Keep a prefab copy's own value of a property through a Pull, or stop (#1734).
+## The Entity panel commits these three by name as undo steps.
+func set_prefab_kept(node: Node, prop_name: String, keep: bool) -> bool:
+	return prefab_system.set_kept(node, prop_name, keep) if prefab_system else false
+
+
+func set_prefab_wiring_kept(node: Node, keep: bool) -> bool:
+	return prefab_system.set_wiring_kept(node, keep) if prefab_system else false
+
+
+func clear_prefab_kept(node: Node) -> bool:
+	return prefab_system.clear_kept(node) if prefab_system else false
+
+
 ## Set several of an entity's properties at once, such as a preset's, so they
 ## are one undo step.
 func set_entity_properties(entity: Node3D, values: Dictionary) -> void:
@@ -1687,6 +1949,22 @@ func set_entity_properties(entity: Node3D, values: Dictionary) -> void:
 		for prop_name in values:
 			HFEntityPropUtils.set_entity_property(node, str(prop_name), values[prop_name])
 		_tag_brush_entity_dirty(node)
+
+
+## Set one property on several entities, as one undo step (#1729). A brush
+## entity's goes on every brush of it.
+func set_property_on_entities(entities: Array, prop_name: String, value: Variant) -> void:
+	for entity in entities:
+		if entity is Node3D and is_instance_valid(entity):
+			set_entity_property(entity, prop_name, value)
+
+
+## Several entities' values, each its own: `[[entity, {name: value}], ...]`, as
+## one undo step: a vector typed into one axis, Reset to Default, Write Defaults.
+func set_properties_on_entities(pairs: Array) -> void:
+	for pair in pairs:
+		if pair is Array and pair.size() == 2 and pair[0] is Node3D and is_instance_valid(pair[0]):
+			set_entity_properties(pair[0], pair[1])
 
 
 ## A brush entity's properties go into the bake, onto a door's mover, so a brush
@@ -1812,6 +2090,19 @@ func nudge_managed_nodes(brush_ids: Array, entity_paths: Array, offset: Vector3)
 	nudge_entities_by_paths(entity_paths, offset)
 
 
+## Snap to Grid: each brush's bounds corner and each entity's origin onto the
+## grid. The commands record their step by this name.
+func snap_managed_nodes_to_grid(brush_ids: Array, entity_paths: Array) -> void:
+	begin_signal_batch()
+	brush_system.snap_brushes_to_grid(brush_ids, grid_snap)
+	entity_system.snap_entities_to_grid(entity_paths, grid_snap)
+	end_signal_batch()
+
+
+func can_snap_to_grid() -> HFOpResult:
+	return grid_system.can_snap_to_grid()
+
+
 # ---------------------------------------------------------------------------
 # Transform API (delegates to transform_system)
 #
@@ -1841,6 +2132,32 @@ func flip_managed_nodes(
 	end_signal_batch()
 
 
+## Mirror Copy: copies of brushes and entities mirrored across each of `axes`
+## (bits: 1 X, 2 Y, 4 Z) and each combination of them, through planes crossing
+## each axis at `pivot`, the originals left as they are. Returns
+## `{"brush_ids", "entity_paths"}` of the copies. Records no undo: the caller
+## does, once it knows what was made.
+func mirror_copy_managed_nodes(
+	brush_ids: Array, entity_paths: Array, axes: int, pivot: Vector3
+) -> Dictionary:
+	if not transform_system:
+		return {"brush_ids": [], "entity_paths": []}
+	begin_signal_batch()
+	var made: Dictionary = transform_system.mirror_copy(brush_ids, entity_paths, axes, pivot)
+	end_signal_batch()
+	return made
+
+
+## Where Mirror Copy's planes cross each axis: the far (+) side of the
+## selection's bounds under `mirror_copy_at_edge`, the transform pivot otherwise.
+func resolve_mirror_copy_pivot(brush_ids: Array, entity_paths: Array) -> Vector3:
+	if not transform_system:
+		return Vector3.ZERO
+	if mirror_copy_at_edge:
+		return transform_system.selection_bounds(brush_ids, entity_paths).end
+	return resolve_transform_pivot(brush_ids, entity_paths)
+
+
 ## Turn a brush to an angle: Euler degrees in Godot's XYZ order, the order
 ## `Basis.get_euler(EULER_ORDER_XYZ)` reads it back in. About the brush's own
 ## centre. Records no undo; the caller does.
@@ -1858,12 +2175,47 @@ func set_brush_rotation_by_id(brush_id: String, degrees: Vector3) -> HFOpResult:
 	return HFOpResult.success()
 
 
+## Shear (#1718): lean brushes and move entities along `along` by `amount` for
+## each unit past `pivot` on `over`. Returns the transform system's report.
+## Records no undo; the caller does.
+func shear_managed_nodes(
+	brush_ids: Array, entity_paths: Array, along: int, over: int, amount: float, pivot: float
+) -> Dictionary:
+	if not transform_system:
+		return {"changed": 0, "refused": [], "entities": 0}
+	begin_signal_batch()
+	var report: Dictionary = transform_system.shear(
+		brush_ids, entity_paths, along, over, amount, pivot
+	)
+	end_signal_batch()
+	return report
+
+
 func reset_managed_rotation(brush_ids: Array) -> void:
 	if not transform_system:
 		return
 	begin_signal_batch()
 	transform_system.reset_rotation(brush_ids)
 	end_signal_batch()
+
+
+## Apply Rotation and Scale on the given brushes (#1435), and say what it did and
+## each brush that could not keep everything. Records no undo; the caller does.
+func apply_managed_rotation_scale(brush_ids: Array) -> void:
+	if not transform_system:
+		return
+	begin_signal_batch()
+	var report: Dictionary = transform_system.apply_rotation_and_scale(brush_ids)
+	end_signal_batch()
+	var changed := int(report.get("changed", 0))
+	var lead := "Applied rotation and scale to %d brush%s" % [changed, "" if changed == 1 else "es"]
+	if changed == 0:
+		var refused: Array = report.get("refused", [])
+		lead = "Nothing applied" if not refused.is_empty() else "No rotation or scale to apply"
+	var lossy := false
+	for key in ["custom", "cylindrical", "structure", "refused"]:
+		lossy = lossy or not (report.get(key, []) as Array).is_empty()
+	user_message.emit(transform_system.fold_report_text(report, lead), 1 if lossy else 0)
 
 
 ## Axis the transform commands act on: the active axis lock when the user has set
@@ -1873,11 +2225,14 @@ func transform_axis_index(fallback: int) -> int:
 	return lock - 1 if lock >= 1 and lock <= 3 else fallback
 
 
-## Pivot for a selection under the current `transform_pivot_mode`.
+## Pivot for a selection under the current `transform_pivot_mode`, the picked
+## point under Pick.
 func resolve_transform_pivot(brush_ids: Array, entity_paths: Array) -> Vector3:
 	if not transform_system:
 		return Vector3.ZERO
-	return transform_system.resolve_pivot(brush_ids, entity_paths, transform_pivot_mode)
+	return transform_system.resolve_pivot(
+		brush_ids, entity_paths, transform_pivot_mode, transform_pivot_point
+	)
 
 
 ## The way the selection is facing, when every part of it faces the same way.
@@ -1932,6 +2287,11 @@ func reconcile_external_brush_structure() -> bool:
 	if brush_system:
 		return brush_system.reconcile_external_structure()
 	return false
+
+
+func drop_faces_of_departed_brushes() -> void:
+	if brush_system:
+		brush_system.drop_faces_of_departed_brushes()
 
 
 func reconcile_external_entity_names(previous_names: Dictionary, current_names: Dictionary) -> void:
@@ -2032,11 +2392,20 @@ func create_arch(settings: Dictionary, centre: Vector3) -> HFOpResult:
 
 
 ## Build a structure and keep a record of it, so it can be rebuilt differently.
-func create_generator(type: String, settings: Dictionary, placement: Transform3D) -> HFOpResult:
+## Every piece gets `material` as its whole-brush material, when there is one. A
+## structure built along a run, a Trim Run, is built along `run`, as
+## `trim_run_from_faces()` reads one (#1414).
+func create_generator(
+	type: String,
+	settings: Dictionary,
+	placement: Transform3D,
+	material: Material = null,
+	run: Dictionary = {}
+) -> HFOpResult:
 	if not generator_system:
-		return HFOpResult.fail("Generator: system unavailable")
+		return HFOpResult.fail("Structure: system unavailable")
 	begin_signal_batch()
-	var result: HFOpResult = generator_system.create(type, settings, placement)
+	var result: HFOpResult = generator_system.create(type, settings, placement, material, run)
 	end_signal_batch()
 	if not result.ok:
 		user_message.emit(result.user_text(), 1)
@@ -2046,13 +2415,45 @@ func create_generator(type: String, settings: Dictionary, placement: Transform3D
 ## Rebuild an existing structure from new settings, in place.
 func regenerate_generator(generator_id: String, settings: Dictionary) -> HFOpResult:
 	if not generator_system:
-		return HFOpResult.fail("Generator: system unavailable")
+		return HFOpResult.fail("Structure: system unavailable")
 	begin_signal_batch()
 	var result: HFOpResult = generator_system.regenerate(generator_id, settings)
 	end_signal_batch()
 	if not result.ok:
 		user_message.emit(result.user_text(), 1)
 	return result
+
+
+## Lay a Trim Run along a new run, read from the faces picked now (#1414):
+## Re-pick. Its settings stay.
+func repick_generator(generator_id: String, run: Dictionary, placement: Transform3D) -> HFOpResult:
+	if not generator_system:
+		return HFOpResult.fail("Structure: system unavailable")
+	begin_signal_batch()
+	var result: HFOpResult = generator_system.repick(generator_id, run, placement)
+	end_signal_batch()
+	if not result.ok:
+		user_message.emit(result.user_text(), 1)
+	return result
+
+
+## The run a Trim Run would follow along the picked faces, read from the level
+## as it stands: `{"run", "placement", "used", "hidden"}`, or `{"refused",
+## "hint"}` (#1414).
+func trim_run_from_faces(picked_faces: Dictionary) -> Dictionary:
+	if not generator_system:
+		return {"refused": "Trim Run: structure system unavailable", "hint": ""}
+	return generator_system.trim_run_from_faces(picked_faces)
+
+
+## Whether a Re-pick along `run` would put back what is there, so it records
+## nothing (#1368).
+func generator_repick_changes_nothing(
+	generator_id: String, run: Dictionary, placement: Transform3D
+) -> bool:
+	if not generator_system:
+		return false
+	return generator_system.repick_changes_nothing(generator_id, run, placement)
 
 
 ## Forget a structure's record, leaving its brushes as ordinary geometry.
@@ -2071,7 +2472,13 @@ func edited_generator_pieces(generator_id: String) -> int:
 
 
 ## Whether these settings would build. Asked before an undo action is opened.
-func can_build_generator(type: String, settings: Dictionary) -> HFOpResult:
+## With `generator_id`, whether that structure would rebuild with them, which a
+## structure built along a run needs its run to answer (#1414).
+func can_build_generator(
+	type: String, settings: Dictionary, generator_id: String = ""
+) -> HFOpResult:
+	if generator_id != "" and generator_system and generator_system.generators.has(generator_id):
+		return generator_system.can_rebuild(generator_id, settings)
 	return HFGeneratorSystem.can_build(type, settings)
 
 
@@ -2123,11 +2530,14 @@ func generator_rebuild_placement(generator_id: String) -> Transform3D:
 
 
 ## Draw a wireframe of what these settings would build, without building it.
-## Returns the number of pieces shown; zero means the settings do not build.
-func preview_structure(type: String, settings: Dictionary, placement: Transform3D) -> int:
+## Returns the number of pieces shown; zero means the settings do not build. A
+## structure built along a run is drawn along `run`.
+func preview_structure(
+	type: String, settings: Dictionary, placement: Transform3D, run: Dictionary = {}
+) -> int:
 	if not structure_preview:
 		return 0
-	return structure_preview.show_preview(type, settings, placement)
+	return structure_preview.show_preview(type, settings, placement, run)
 
 
 func clear_structure_preview() -> void:
@@ -2181,6 +2591,13 @@ func clip_brushes_by_plane(brush_ids: Array, plane: Plane) -> int:
 	return brush_system.clip_brushes_by_plane(brush_ids, plane)
 
 
+## The Clip tool's cut, keeping one side or both (#1711).
+func clip_brushes_keeping(
+	brush_ids: Array, plane: Plane, keep: int = 0, cap_material: int = -1
+) -> int:
+	return brush_system.clip_brushes_keeping(brush_ids, plane, keep, cap_material)
+
+
 func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
 	return brush_system.clip_brush_by_id(brush_id, axis, split_pos)
 
@@ -2191,6 +2608,22 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 
 func can_carve_brush(brush_id: String) -> HFOpResult:
 	return carve_system.can_carve_brush(brush_id)
+
+
+func intersect_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	return carve_system.intersect_brushes_by_ids(brush_ids)
+
+
+func can_intersect_brushes(brush_ids: Array) -> HFOpResult:
+	return carve_system.can_intersect_brushes(brush_ids)
+
+
+func hull_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	return carve_system.hull_brushes_by_ids(brush_ids)
+
+
+func can_hull_brushes(brush_ids: Array) -> HFOpResult:
+	return carve_system.can_hull_brushes(brush_ids)
 
 
 ## The tie decides which brushes the bake makes one entity of, so each brush tied
@@ -2206,6 +2639,18 @@ func tie_brushes_to_entity(
 func untie_brushes_from_entity(brush_ids: Array) -> void:
 	brush_system.untie_brushes_from_entity(brush_ids)
 	_tag_brushes_dirty(brush_ids)
+
+
+## How these brushes cast shadows once baked, or `HFBakeSplit.LEVEL_DEFAULT` to
+## leave it to their visgroups and the level (#1444). Each brush that changed is
+## a change for Bake Changed, as a tie is.
+func set_brush_cast_shadow(brush_ids: Array, value: int) -> void:
+	_tag_brushes_dirty(brush_system.set_brushes_cast_shadow(brush_ids, value))
+
+
+## How fine these brushes' lightmap is, against the level's texel size (#1438).
+func set_brush_lightmap_scale(brush_ids: Array, value: float) -> void:
+	_tag_brushes_dirty(brush_system.set_brushes_lightmap_scale(brush_ids, value))
 
 
 func _tag_brushes_dirty(brush_ids: Array) -> void:
@@ -2298,6 +2743,61 @@ func inset_face(brush_id: String, face_index: int, inset_distance: float, height
 
 func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 	brush_system.justify_selected_faces(mode, treat_as_one)
+
+
+## Align to Edge, Fit Repeats and Fit Strip on the face selection (#1727).
+func align_selected_faces_to_edge(near: Variant = null) -> int:
+	return brush_system.align_selected_faces_to_edge(near)
+
+
+func fit_selected_faces_repeats(u: int, v: int) -> int:
+	return brush_system.fit_selected_faces_repeats(u, v)
+
+
+func fit_selected_faces_strip(index: int, count: int) -> int:
+	return brush_system.fit_selected_faces_strip(index, count)
+
+
+func edit_selected_face_uvs(edit: String) -> void:
+	brush_system.edit_selected_face_uvs(edit)
+
+
+## Wrap one face's texture onto a face beside it. See
+## `HFBrushSystem.wrap_face_texture()`.
+func wrap_face_texture(
+	source_key: String, source_idx: int, target_key: String, target_idx: int
+) -> Dictionary:
+	return brush_system.wrap_face_texture(source_key, source_idx, target_key, target_idx)
+
+
+## Link: the selected faces in one texture group, one surface (#1437). Returns how
+## many faces it linked, 0 for fewer than two.
+func link_selected_faces() -> int:
+	return brush_system.link_selected_faces()
+
+
+## Unlink: the selected faces out of their texture groups. Returns how many were in
+## one.
+func unlink_selected_faces() -> int:
+	return brush_system.unlink_selected_faces()
+
+
+## Select Group: every face of the selected face's texture group. Returns how many,
+## 0 when it is in none.
+func select_texture_group() -> int:
+	var count := brush_system.select_texture_group()
+	if count > 0:
+		face_selection_changed.emit()
+	return count
+
+
+## Align to Face (the Face projection) or Align to World (Box UV) on the face
+## selection. Returns how many faces changed projection.
+func align_selected_faces(projection: int) -> int:
+	if not FaceData.is_valid_projection(projection):
+		HFLog.warn("LevelRoot: %d is not a UV projection" % projection)
+		return 0
+	return brush_system.align_selected_faces(projection)
 
 
 func create_duplicate_array(brush_ids: PackedStringArray, count: int, p_offset: Vector3) -> Variant:
@@ -2399,8 +2899,8 @@ func array_copies_follow_a_moved_source(duplicator_id: String) -> bool:
 	return dup.copies_follow_a_moved_source(brush_system)
 
 
-func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = false) -> Material:
-	return brush_system._make_brush_material(operation, solid, unshaded)
+func _make_brush_material(operation: int) -> Material:
+	return brush_system._make_brush_material(operation)
 
 
 func _make_pending_cut_material() -> Material:
@@ -2432,8 +2932,9 @@ func reset_uv_on_face(brush_id: String, face_idx: int) -> void:
 		return
 	var face: FaceData = draft.faces[face_idx]
 	var before := face.to_dict()
+	# Back on its projection, with no layout. Filling one in from the projection
+	# froze the face where it stood (#1539).
 	face.custom_uvs = PackedVector2Array()
-	face.ensure_custom_uvs()
 	draft.rebuild_preview()
 	if face.to_dict() != before:
 		tag_brush_dirty(brush_id)
@@ -2497,10 +2998,11 @@ func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> voi
 	# Laid on afresh, so on the axes every new face gets (#907).
 	face.legacy_wall_axes = false
 	face.custom_uvs = PackedVector2Array()
-	face.ensure_custom_uvs()
 	draft.rebuild_preview()
 	if face.to_dict() != before:
 		tag_brush_dirty(brush_id)
+		# The face's texture group lays on the same (#1437).
+		brush_system.spread_texture_groups([face])
 
 
 ## Set UV transform params on a specific face. Used by undo-capable state actions.
@@ -2517,16 +3019,40 @@ func set_face_uv_params(
 		return
 	var face: FaceData = draft.faces[face_idx]
 	var before := face.to_dict()
+	var was := face.uv_transform()
 	face.uv_scale = uv_scale
 	face.uv_offset = offset
 	# Stored wrapped so two faces that look the same compare the same, and so a
 	# run of turns cannot walk the angle off to where a float has no fraction left.
 	face.uv_rotation = wrapf(uv_rotation, -PI, PI)
-	face.custom_uvs = PackedVector2Array()
-	face.ensure_custom_uvs()
+	# A layout dragged out by hand moves the way the new values move the
+	# projection, as x2, Flip and Rotate 90 move it, so a Justify on it is kept.
+	# A face with none stays on its projection. Filling one in here froze the face,
+	# and the next Justify moved that copy and left these values behind (#1539).
+	# A scale of zero has no inverse, so a layout under one is dropped.
+	if face.has_uv_layout() and not is_zero_approx(was.determinant()):
+		face.custom_uvs = face.uv_transform() * was.affine_inverse() * face.custom_uvs
+	else:
+		face.custom_uvs = PackedVector2Array()
 	draft.rebuild_preview()
 	if face.to_dict() != before:
 		tag_brush_dirty(brush_id)
+		# The face's texture group lays on the same (#1437).
+		brush_system.spread_texture_groups([face])
+
+
+## Several faces' scale, offset and turn at once (#1728), each change as
+## `[brush_id, face_idx, scale, offset, rotation]`, through `set_face_uv_params()`
+## so a layout laid by hand and a texture group follow as they do for one face.
+## Returns how many faces it set. Records no undo; the caller does.
+func set_uv_params_on_faces(changes: Array) -> int:
+	var count := 0
+	for change in changes:
+		if not (change is Array) or (change as Array).size() != 5:
+			continue
+		set_face_uv_params(str(change[0]), int(change[1]), change[2], change[3], float(change[4]))
+		count += 1
+	return count
 
 
 func clip_brush_to_convex(brush_id: String) -> bool:
@@ -2683,12 +3209,32 @@ func assign_material_to_faces_by_id(
 		if (
 			face_idx >= 0
 			and face_idx < brush.faces.size()
-			and brush.faces[face_idx].material_idx != material_index
+			and (
+				brush.faces[face_idx].material_idx != material_index
+				or brush.faces[face_idx].is_hidden()
+			)
 		):
 			changed = true
 	brush.assign_material_to_faces(material_index, typed_indices)
 	if changed:
 		tag_brush_dirty(brush_key)
+
+
+## The faces that wear palette slot `from_index`, by brush key, across the level
+## or within `scope` (`HFBrushSystem.faces_wearing()`, #1726).
+func faces_wearing_material(from_index: int, scope: Dictionary = {}) -> Dictionary:
+	return brush_system.faces_wearing(from_index, scope)
+
+
+## Replace Material (#1726): every face wearing slot `from_index` in `scope` takes
+## slot `to_index`, its UVs kept or with `reset_uv` put back to none. Returns the
+## faces changed, by brush key, which become the face selection.
+func replace_material(
+	from_index: int, to_index: int, scope: Dictionary = {}, reset_uv := false
+) -> Dictionary:
+	if not is_usable_material_slot(to_index):
+		return {}
+	return brush_system.replace_material(from_index, to_index, scope, reset_uv)
 
 
 func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> int:
@@ -2703,7 +3249,7 @@ func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> 
 		var changed := false
 		for i in range(brush.faces.size()):
 			all_indices.append(i)
-			if brush.faces[i].material_idx != material_index:
+			if brush.faces[i].material_idx != material_index or brush.faces[i].is_hidden():
 				changed = true
 		brush.assign_material_to_faces(material_index, all_indices)
 		if changed:
@@ -2733,6 +3279,7 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 			if face_idx >= 0 and face_idx < brush.faces.size():
 				before_by_index[face_idx] = brush.faces[face_idx].to_dict()
 		brush.assign_material_to_faces(material_index, typed_indices)
+		var laid: Array = []
 		for fi in typed_indices:
 			if fi >= 0 and fi < brush.faces.size():
 				var face: FaceData = brush.faces[fi]
@@ -2742,8 +3289,10 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 				face.uv_rotation = 0.0
 				face.legacy_wall_axes = false
 				face.custom_uvs = PackedVector2Array()
-				face.ensure_custom_uvs()
+				laid.append(face)
 		brush.rebuild_preview()
+		# Their texture groups lay on the same (#1437).
+		brush_system.spread_texture_groups(laid)
 		var changed := false
 		for fi in before_by_index:
 			if brush.faces[int(fi)].to_dict() != before_by_index[fi]:
@@ -2755,8 +3304,118 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 	return count
 
 
+## Give every selected face the look of `look`, through `copy_appearance_from()`,
+## so a field added to the look is carried here too. Stored UVs the new settings
+## would not give, a layout laid by hand or a projection of the old settings, are
+## dropped, or the copied settings would not show. Stored UVs that are already
+## the new projection stay, so a face that has the look is not changed. Paint
+## layers and a sculpt are left as they are. Returns how many faces took it, or 0
+## when the look cannot go on a face: a slot the palette no longer has, say.
+func apply_look_to_selected_faces(look: FaceData) -> int:
+	if look == null:
+		return 0
+	# A Hidden look makes the faces Hidden and leaves each its own slot (#1719).
+	if look.is_hidden():
+		return set_selected_faces_hidden(true)
+	if not is_usable_material_slot(look.material_idx):
+		return 0
+	if not FaceData.is_valid_projection(look.uv_projection):
+		HFLog.warn("LevelRoot: %d is not a UV projection" % look.uv_projection)
+		return 0
+	if not is_usable_uv_transform(look.uv_scale, look.uv_offset, look.uv_rotation):
+		return 0
+	var count := 0
+	var laid: Array = []
+	for key in face_selection.keys():
+		var brush: DraftBrush = brush_system._find_brush_by_key(str(key))
+		if not brush or not is_instance_valid(brush):
+			continue
+		var changed := false
+		for fi in face_selection.get(key, []):
+			var face_idx := int(fi)
+			if face_idx < 0 or face_idx >= brush.faces.size():
+				continue
+			var face: FaceData = brush.faces[face_idx]
+			var before := face.to_dict()
+			face.copy_appearance_from(look)
+			if face.has_hand_layout():
+				face.custom_uvs = PackedVector2Array()
+			if face.to_dict() != before:
+				changed = true
+				laid.append(face)
+			count += 1
+		if changed:
+			brush.rebuild_preview()
+			brush_system._tag_brush_node_dirty(brush)
+	# A texture group lays on the look's mapping too; the material stays each
+	# face's own (#1437).
+	brush_system.spread_texture_groups(laid)
+	return count
+
+
+## Put every selected face in smoothing group `group` (#1429): 0 shades it flat,
+## and faces in one group above 0 shade round where they meet. Returns how many
+## faces are now in it, or 0 when `group` is not a group.
+func set_smoothing_group_on_selected_faces(group: int) -> int:
+	if group < 0 or group > FaceData.MAX_SMOOTHING_GROUP:
+		HFLog.warn("LevelRoot: %d is not a smoothing group" % group)
+		return 0
+	var count := 0
+	for key in face_selection.keys():
+		var brush: DraftBrush = brush_system._find_brush_by_key(str(key))
+		if not brush or not is_instance_valid(brush):
+			continue
+		var changed := false
+		for fi in face_selection.get(key, []):
+			var face_idx := int(fi)
+			if face_idx < 0 or face_idx >= brush.faces.size() or brush.faces[face_idx] == null:
+				continue
+			var face: FaceData = brush.faces[face_idx]
+			changed = changed or face.smoothing_group != group
+			face.smoothing_group = group
+			count += 1
+		if changed:
+			brush.rebuild_preview()
+			brush_system._tag_brush_node_dirty(brush)
+	return count
+
+
+## Make the selected faces Hidden, or Normal again (#1719). A Hidden face draws
+## its pattern in the editor, and the bake leaves it out of the mesh and the
+## lightmap while it still holds the brush. Returns the faces set.
+func set_selected_faces_hidden(hidden: bool) -> int:
+	return set_faces_hidden(face_selection, hidden)
+
+
+## The same for `faces`, brush key -> face indices.
+func set_faces_hidden(faces: Dictionary, hidden: bool) -> int:
+	var wanted: int = FaceData.FaceType.HIDDEN if hidden else FaceData.FaceType.NORMAL
+	var count := 0
+	for key in faces.keys():
+		var brush: DraftBrush = brush_system._find_brush_by_key(str(key))
+		if not brush or not is_instance_valid(brush):
+			continue
+		var changed := false
+		for fi in faces.get(key, []):
+			var face_idx := int(fi)
+			if face_idx < 0 or face_idx >= brush.faces.size() or brush.faces[face_idx] == null:
+				continue
+			var face: FaceData = brush.faces[face_idx]
+			changed = changed or face.face_type != wanted
+			face.face_type = wanted
+			count += 1
+		if changed:
+			brush.rebuild_preview()
+			brush_system._tag_brush_node_dirty(brush)
+	return count
+
+
 func _find_brush_by_key(key: String) -> DraftBrush:
 	return brush_system._find_brush_by_key(key)
+
+
+func picked_face_count() -> int:
+	return brush_system.picked_face_count()
 
 
 # ===========================================================================
@@ -2765,9 +3424,15 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 
 
 func begin_drag(
-	camera: Camera3D, mouse_pos: Vector2, operation: int, size: Vector3, shape: int, sides: int = 4
+	camera: Camera3D,
+	mouse_pos: Vector2,
+	operation: int,
+	size: Vector3,
+	shape: int,
+	sides: int = 4,
+	on_face: bool = false
 ) -> bool:
-	return drag_system.begin_drag(camera, mouse_pos, operation, size, shape, sides)
+	return drag_system.begin_drag(camera, mouse_pos, operation, size, shape, sides, on_face)
 
 
 func update_drag(camera: Camera3D, mouse_pos: Vector2) -> void:
@@ -2823,9 +3488,38 @@ func begin_extrude(camera: Camera3D, mouse_pos: Vector2, extrude_direction: int)
 	return started
 
 
+## Start moving a face along its normal rather than stamping a brush off it
+## (#1712). The Extrude tools do this with Shift held at the press.
+func begin_face_push(
+	camera: Camera3D, mouse_pos: Vector2, extrude_direction: int, selected: Array = []
+) -> bool:
+	var started: bool = extrude_tool.begin_push(camera, mouse_pos, extrude_direction, selected)
+	if started and drag_system:
+		drag_system.input_state.begin_extrude()
+	return started
+
+
+## What the face push that last ended did, once, for its undo step.
+func take_finished_push() -> Dictionary:
+	return extrude_tool.take_finished_push()
+
+
 func update_extrude(camera: Camera3D, mouse_pos: Vector2) -> void:
-	extrude_tool.update_extrude(camera, mouse_pos)
+	# A depth typed into the HUD holds until the buffer empties, as a Draw's typed
+	# height does in `update_drag()`, so the mouse moving under it cannot take it back.
+	if drag_system and drag_system.input_state.has_numeric_override():
+		extrude_tool.set_height(drag_system.input_state.numeric_override)
+	else:
+		extrude_tool.update_extrude(camera, mouse_pos)
 	# If the tool self-cancelled (e.g. source brush deleted), sync input_state
+	if not extrude_tool.active and drag_system and drag_system.input_state.is_extruding():
+		drag_system.input_state.end_extrude()
+
+
+## Set the extrusion in progress to `height` out of its face, as a depth typed
+## into the HUD does; `end_extrude_info()` then builds that depth.
+func set_extrude_height(height: float) -> void:
+	extrude_tool.set_height(height)
 	if not extrude_tool.active and drag_system and drag_system.input_state.is_extruding():
 		drag_system.input_state.end_extrude()
 
@@ -3069,13 +3763,22 @@ func remove_active_paint_layer() -> void:
 	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
-## Apply serialized face data to brushes (used by vertex edit undo/redo).
-func _apply_vertex_faces(face_map: Dictionary) -> void:
-	for brush_id in face_map:
+## Put brushes back as a vertex edit's undo step recorded them, by brush id: their
+## faces, and the shape, size and sides the edit took them from (#1538).
+func _apply_vertex_faces(states: Dictionary) -> void:
+	for brush_id in states:
 		var brush = brush_system.find_brush_by_id(brush_id)
-		if brush and brush.has_method("apply_serialized_faces"):
-			brush.apply_serialized_faces(face_map[brush_id])
+		if brush and brush.has_method("apply_geometry_state"):
+			brush.apply_geometry_state(states[brush_id])
 			tag_brush_dirty(str(brush_id))
+
+
+## Put the vertex selection back as the same undo step recorded it, naming the
+## vertices of the faces `_apply_vertex_faces()` put back (#1561). Not once
+## vertex mode is left: leaving it cleared the selection.
+func _apply_vertex_selection(state: Dictionary) -> void:
+	if vertex_system and input_state and input_state.is_vertex_editing():
+		vertex_system.restore_selection(state)
 
 
 func handle_surface_paint_input(
@@ -3274,8 +3977,9 @@ func get_bake_chunk_count() -> int:
 	return bake_system.get_bake_chunk_count() if bake_system else 0
 
 
+## How long the last bake took from start to result, as the mapper waited for it.
 func get_last_bake_duration_ms() -> int:
-	return _last_bake_duration_ms
+	return _last_bake_wall_ms
 
 
 func get_entity_count() -> int:
@@ -3317,15 +4021,23 @@ func get_recommended_chunk_size() -> float:
 	return snappedf(extent / 4.0, grid_snap)
 
 
+## The thresholds are `HFStatusBoard.GEOMETRY_WARN` and `GEOMETRY_PROBLEM`, set from
+## the measurements in docs/HammerForge_Performance.md. Written out here because a
+## level does not load the console's board, and a test holds the two together.
 func get_level_health() -> Dictionary:
 	var brush_count := get_live_brush_count()
 	var entity_count := get_entity_count()
 	var total := brush_count + entity_count
-	if total <= 50:
-		return {"label": "Healthy", "severity": 0}
+	# What grows with the count is the pause after each edit, not the bake (#1622).
+	var why := (
+		"After every edit the editor checks each brush, so the pause after an edit "
+		+ "grows with the count. Measured in docs/HammerForge_Performance.md."
+	)
 	if total <= 100:
-		return {"label": "Consider Chunking", "severity": 1}
-	return {"label": "Optimize Brush Count", "severity": 2}
+		return {"label": "Healthy", "severity": 0, "detail": "Edits settle within a frame."}
+	if total <= 1000:
+		return {"label": "Edits Slowing", "severity": 1, "detail": why}
+	return {"label": "Edits Pause", "severity": 2, "detail": why}
 
 
 ## Each brush as it stands, turned and scaled, so a ramp turned a quarter counts
@@ -3402,10 +4114,10 @@ func export_playtest_scene(
 				dup.transform = child.global_transform
 				_own_tree(dup, scene_root)
 
-	# Copy entities (spawn points, lights, etc.)
+	# Copy entities (spawn points, lights, etc.). A note stays in the editor (#1700).
 	if entities_node:
 		for child in entities_node.get_children():
-			if child is Node3D:
+			if child is Node3D and not HFNotes.is_editor_only(self, child):
 				var built := _playtest_node_for_entity(child as Node3D)
 				var dup: Node = built if built else child.duplicate()
 				if built == null and child is DraftEntity:
@@ -3598,7 +4310,9 @@ func _shipped_entity_data(draft: DraftEntity) -> Dictionary:
 			continue
 		var declared := str(prop.get("name", ""))
 		if declared != "" and not data.has(declared):
-			data[declared] = draft._parse_default_value(str(prop.get("type", "")), prop["default"])
+			data[declared] = HFEntityPropUtils.coerce_default(
+				str(prop.get("type", "")), prop["default"]
+			)
 	return data
 
 
@@ -3634,7 +4348,7 @@ func _apply_entity_properties_to_node(
 		if draft.entity_data.has(declared):
 			value = draft.entity_data[declared]
 		elif prop.has("default"):
-			value = draft._parse_default_value(str(prop.get("type", "")), prop["default"])
+			value = HFEntityPropUtils.coerce_default(str(prop.get("type", "")), prop["default"])
 		else:
 			continue
 		node.set(target, _entity_property_value(definition, declared, value))
@@ -4224,12 +4938,35 @@ func _setup_highlight() -> void:
 	# the twelve semantic box edges explicitly so hover remains a quiet outline.
 	hover_highlight.mesh = HFOutlineUtil.line_mesh(HFOutlineUtil.box_lines())
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 1.0, 0.0, 0.5)
+	mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.HOVER)
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.no_depth_test = true
 	hover_highlight.material_override = mat
 	hover_highlight.visible = false
+
+
+## Draw what this level shows in the overlay colours again, after a mapper
+## changes one (#1446): the hover outline and the cordon wireframe, and with
+## [param brushes] every brush's editor look and outline. Each is made in the
+## colours of the moment it is drawn, so without this they kept the old ones
+## until the scene was reopened. The brushes are the costly part, so the plugin
+## asks for them only when a colour drawn on them changed.
+func refresh_overlay_colors(brushes: bool = true) -> void:
+	if hover_highlight and hover_highlight.material_override is StandardMaterial3D:
+		var hover_mat := hover_highlight.material_override as StandardMaterial3D
+		hover_mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.HOVER)
+	if cordon_wireframe:
+		update_cordon_visual()
+	if not brushes:
+		return
+	for brush in _iter_managed_brush_nodes():
+		(brush as DraftBrush).refresh_editor_look()
+	# An entity's outline is drawn in the selected brush colour too.
+	if entities_node and is_inside_tree() and Engine.is_editor_hint():
+		for entity in entities_node.get_children():
+			if entity is Node3D:
+				(entity as Node3D).update_gizmos()
 
 
 ## Highlight the face under the cursor for extrude preview.
@@ -4391,7 +5128,7 @@ func _setup_autosave() -> void:
 func _on_autosave_timeout() -> void:
 	if not hflevel_autosave_enabled:
 		return
-	save_hflevel(resolved_hflevel_path(), true, true)
+	autosave_scheduler.on_timer()
 
 
 func _set_hflevel_autosave_enabled(value: bool) -> void:
@@ -4550,6 +5287,11 @@ func _run_entities_as_nodes() -> void:
 	var swapped := false
 	for child in entities_node.get_children():
 		if not (child is Node3D):
+			continue
+		# A note has no place in a running game (#1700).
+		if HFNotes.is_editor_only(self, child):
+			entities_node.remove_child(child)
+			child.free()
 			continue
 		var built := _playtest_node_for_entity(child as Node3D)
 		if built == null:
@@ -4926,9 +5668,31 @@ func _snap_point(point: Vector3, exclude_ids: Array = []) -> Vector3:
 	return point.snapped(Vector3(grid_snap, grid_snap, grid_snap))
 
 
+## Where a point a drag holds lands: `_snap_point()` with the drag's grid (#1431).
+func _snap_drag_point(point: Vector3) -> Vector3:
+	if snap_system:
+		return snap_system.snap_drag_point(point, grid_snap)
+	return _snap_point(point)
+
+
+## The grid step a drag lands on, or 0 when it lands where the cursor puts it:
+## G, turned the other way while the invert key is held (#1431). The draw
+## height, the resize handles and the vertex drags all ask here.
+func drag_grid_step() -> float:
+	if snap_system:
+		return snap_system.drag_grid_step(grid_snap)
+	return maxf(0.0, grid_snap)
+
+
 func _layer_from_index(index: int) -> int:
 	var clamped = clamp(index, 1, 32)
 	return 1 << (clamped - 1)
+
+
+## Set on the hit `_raycast()` returns when the ray met no surface and fell back
+## to the construction plane. Physics and draft-face hits never carry it, so a
+## held drawing plane overrides a draw's height only where the plane answered.
+const CONSTRUCTION_PLANE_HIT := "construction_plane"
 
 
 func _raycast(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
@@ -4953,7 +5717,7 @@ func _raycast(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 			return face_hit
 	var plane_hit = construction_plane_hit(camera, mouse_pos, from, to)
 	if plane_hit is Vector3:
-		return {"position": plane_hit}
+		return {"position": plane_hit, CONSTRUCTION_PLANE_HIT: true}
 	return {}
 
 

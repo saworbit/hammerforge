@@ -284,6 +284,30 @@ func test_move_to_ceiling_and_reset_rotation():
 	)
 
 
+func test_snap_to_grid_puts_a_brush_corner_on_the_grid_as_one_step():
+	var level := make_level()
+	level.grid_snap = 0.5
+	box(level, "a", Vector3(0.3, 0, 0.1), Vector3.ONE)
+	var r := await run("snap_to_grid", ["a"])
+	assert_true(r.get("ok", false), str(r))
+	assert_eq(top_step(), "MCP: snap to grid")
+	var node: DraftBrush = brush_node(level, "a")
+	assert_true(node.global_position.is_equal_approx(Vector3(0.5, 0, 0)), str(node.global_position))
+	assert_eq(node.size, Vector3.ONE, "the same size")
+	var again := await run("snap_to_grid", ["a"])
+	assert_true(again["result"].get("no_change", false), "on the grid already: %s" % str(again))
+	var undone := await call_tool("hf_undo")
+	assert_true(undone.get("ok", false), str(undone))
+	assert_true(
+		brush_node(level, "a").global_position.is_equal_approx(Vector3(0.3, 0, 0.1)),
+		"undo puts it back"
+	)
+	level.grid_snap = 0.0
+	var before := snapshot(level)
+	var refused := await run("snap_to_grid", ["a"])
+	assert_checked_refusal(refused, "operation_failed", before, "no grid to snap to")
+
+
 ## On brushes already where the command would put them, the command changes
 ## nothing: no step, the revision where it was, and an answer that says so. The
 ## agent's undo chain then still ends at its last real step (#1365).
@@ -382,7 +406,7 @@ func test_a_command_never_falls_back_to_the_selection():
 
 
 # ===========================================================================
-# Hollow, Clip, Clip to Face, Carve, Merge
+# Hollow, Clip, Clip to Face, Carve, Merge, Intersect
 # ===========================================================================
 
 
@@ -457,6 +481,7 @@ func test_clip_splits_through_the_middle_or_where_it_is_told():
 	r = await run("clip", ["c"], {"axis": "x", "position": 100.0})
 	assert_checked_refusal(r, "operation_failed", before, "outside the brush")
 	assert_eq(r["error"]["message"], level.can_clip_brush("c", 0, 100.0).user_text())
+	assert_eq(r["error"]["details"].get("param"), "params.position", "naming the field to change")
 	r = await run("clip", ["c"], {"axis": "w"})
 	assert_checked_refusal(r, "invalid_argument", before, "no such axis")
 
@@ -530,6 +555,57 @@ func test_a_merge_that_is_not_convex_says_what_the_palette_says():
 	var r := await run("merge", ["a", "b"])
 	assert_checked_refusal(r, "operation_failed", before, "an L")
 	assert_eq(r["error"]["message"], level.can_merge_brushes(["a", "b"]).user_text())
+
+
+func test_intersect_keeps_what_the_brushes_share_in_one_step_that_undo_takes_back():
+	var level := make_level()
+	box(level, "a", Vector3(0, 2, 0))
+	box(level, "b", Vector3(2, 4, 2))
+	var before := ids_of(level)
+	var r := await run("intersect", ["a", "b"])
+	assert_true(r.get("ok", false), str(r))
+	assert_eq(top_step(), "MCP: intersect")
+	assert_eq(r["result"]["removed"], ["a", "b"])
+	assert_true(r["result"].has("brush"), "the one brush made is named")
+	var kept: Dictionary = r["result"]["brush"]
+	assert_eq(kept["shape"], "box", "two boxes share a box")
+	for axis in 3:
+		assert_almost_eq(float(kept["bounds"]["min"][axis]), [0.0, 2.0, 0.0][axis], 0.001)
+		assert_almost_eq(float(kept["bounds"]["max"][axis]), [2.0, 4.0, 2.0][axis], 0.001)
+	var made := ids_of(level)
+	await call_tool("hf_undo")
+	assert_eq(ids_of(level), before, "undo puts both boxes back under their ids")
+	await call_tool("hf_redo")
+	assert_eq(ids_of(level), made, "redo puts the same brush back")
+
+
+func test_an_intersect_of_brushes_that_share_nothing_says_what_the_palette_says():
+	var level := make_level()
+	box(level, "a", Vector3(0, 2, 0))
+	box(level, "b", Vector3(20, 2, 0))
+	var before := snapshot(level)
+	var r := await run("intersect", ["a", "b"])
+	assert_checked_refusal(r, "operation_failed", before, "two boxes apart")
+	assert_eq(r["error"]["message"], level.can_intersect_brushes(["a", "b"]).user_text())
+	assert_checked_refusal(await run("intersect", ["a"]), "invalid_argument", before, "one brush")
+
+
+func test_hull_wraps_brushes_apart_in_one_step_that_undo_takes_back():
+	var level := make_level()
+	box(level, "a", Vector3(0, 2, 0))
+	box(level, "b", Vector3(20, 2, 0))
+	var before := ids_of(level)
+	var r := await run("hull", ["a", "b"])
+	assert_true(r.get("ok", false), str(r))
+	assert_eq(top_step(), "MCP: hull of selection")
+	assert_eq(r["result"]["removed"], ["a", "b"])
+	var made: Dictionary = r["result"]["brush"]
+	for axis in 3:
+		assert_almost_eq(float(made["bounds"]["min"][axis]), [-2.0, 0.0, -2.0][axis], 0.001)
+		assert_almost_eq(float(made["bounds"]["max"][axis]), [22.0, 4.0, 2.0][axis], 0.001)
+	await call_tool("hf_undo")
+	assert_eq(ids_of(level), before, "undo puts both boxes back under their ids")
+	assert_checked_refusal(await run("hull", ["a"]), "invalid_argument", snapshot(level), "one")
 
 
 # ===========================================================================

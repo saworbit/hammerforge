@@ -12,6 +12,8 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFPrefabSystem = preload("systems/hf_prefab_system.gd")
+const HFUndoHelper = preload("undo_helper.gd")
+const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 # ---------------------------------------------------------------------------
@@ -20,38 +22,49 @@ const HFPrefabSystem = preload("systems/hf_prefab_system.gd")
 
 
 static func quick_save(plugin: Object, root: Node, linked: bool) -> void:
-	var brush_nodes: Array = []
-	var entity_nodes: Array = []
-	for node in plugin.hf_selection:
-		if root.is_brush_node(node):
-			brush_nodes.append(node)
-		elif root.is_entity_node(node):
-			entity_nodes.append(node)
-	if brush_nodes.is_empty() and entity_nodes.is_empty():
+	var split: Dictionary = HFPrefabSystem.split_selection(root, plugin.hf_selection)
+	if split["brushes"].is_empty() and split["entities"].is_empty():
 		return
 	# Never over an existing file: there is no dialog here to ask in (#929).
 	var suggested: String = root.prefab_system.unused_prefab_name(
-		root.prefab_system.suggest_prefab_name(brush_nodes, entity_nodes)
+		root.prefab_system.suggest_prefab_name(split["brushes"], split["entities"])
 	)
-	var before: Dictionary = root.capture_state() if linked else {}
-	var path: String = root.prefab_system.quick_save_prefab(
-		brush_nodes, entity_nodes, suggested, linked
+	var path := save_selection(
+		plugin.undo_redo_manager,
+		root,
+		plugin.hf_selection,
+		suggested,
+		linked,
+		Callable(plugin, "_record_history")
 	)
 	if path == "":
 		return
-	# Linking the selection changes the level, so undo takes it back. The file is
-	# the library's and stays written, as an unlinked save's does (#1276).
-	if linked:
-		HFUndoHelper.commit_completed(
-			plugin.undo_redo_manager,
-			root,
-			"Save Linked Prefab",
-			before,
-			Callable(plugin, "_record_history")
-		)
 	_refresh_prefab_library(plugin)
 	if plugin.dock:
 		plugin.dock.show_toast("Saved prefab: %s%s" % [suggested, " (linked)" if linked else ""], 0)
+
+
+## Save the brushes and entities among `nodes` as the prefab `prefab_name`, and
+## with `linked` make them a linked copy of it. Quick Save and the library
+## panel's Save and Save Linked all come here (#1451).
+##
+## Linking tags the nodes, so it changes the level and undo takes it back,
+## whichever surface asked. The file is the library's and stays written, as an
+## unlinked save's does (#1276). Returns the saved path, or "" when nothing in
+## `nodes` was savable or the prefab system reported a failed write.
+static func save_selection(
+	undo_redo, root: Node, nodes: Array, prefab_name: String, linked: bool, history_cb: Callable
+) -> String:
+	var split: Dictionary = HFPrefabSystem.split_selection(root, nodes)
+	if split["brushes"].is_empty() and split["entities"].is_empty():
+		return ""
+	var before: Dictionary = root.capture_state() if linked else {}
+	var path: String = root.prefab_system.quick_save_prefab(
+		split["brushes"], split["entities"], prefab_name, linked
+	)
+	if path != "" and linked:
+		HFUndoHelper.commit_completed(undo_redo, root, "Save Linked Prefab", before, history_cb)
+	return path
 
 
 static func cycle_variant(plugin: Object, root: Node) -> void:
@@ -99,6 +112,56 @@ static func propagate(plugin: Object, root: Node) -> void:
 	_commit_state_change(plugin, root, "Propagate Prefab", before_state)
 
 
+## Make the selected copy ordinary brushes and entities, as one undo step
+## (#1734). Later Pulls leave it alone.
+static func unlink_copy(plugin: Object, root: Node) -> void:
+	var iid := selected_meta(plugin, HFPrefabSystem.INSTANCE_META)
+	if iid == "":
+		return
+	var before_state: Dictionary = root.state_system.capture_state(true)
+	if not root.prefab_system.unlink_instance(iid):
+		return
+	if plugin.dock:
+		plugin.dock.show_toast("Unlinked: the copy is ordinary brushes and entities now", 0)
+	_commit_state_change(plugin, root, "Unlink Prefab Copy", before_state)
+	plugin._update_hud_context()
+
+
+## Rebuild the selected copy from its prefab, throwing away what it changed
+## outside what it keeps, as one undo step (#1734).
+static func discard_changes(plugin: Object, root: Node) -> void:
+	var iid := selected_meta(plugin, HFPrefabSystem.INSTANCE_META)
+	if iid == "":
+		return
+	var before_state: Dictionary = root.state_system.capture_state(true)
+	if not root.prefab_system.discard_changes(iid):
+		if plugin.dock:
+			plugin.dock.show_toast("The prefab file could not be read", 1)
+		return
+	if plugin.dock:
+		plugin.dock.show_toast("Discarded: the copy matches its prefab again", 0)
+	_commit_state_change(plugin, root, "Discard Prefab Changes", before_state)
+	plugin._update_hud_context()
+
+
+## Select every copy in the level of the prefab the selection is a copy of, and
+## only those (#1734).
+static func select_linked_copies(plugin: Object, root: Node) -> void:
+	var iid := selected_meta(plugin, HFPrefabSystem.INSTANCE_META)
+	if iid == "":
+		return
+	var copies: Array = root.prefab_system.copies_like(iid)
+	var nodes: Array = []
+	for rec in copies:
+		nodes.append_array(root.prefab_system.pieces_of(rec))
+	HFPluginSelectionCommands.select_nodes(
+		plugin,
+		root,
+		nodes,
+		"Selected %d cop%s of this prefab" % [copies.size(), "y" if copies.size() == 1 else "ies"]
+	)
+
+
 # ---------------------------------------------------------------------------
 # Shared pieces
 # ---------------------------------------------------------------------------
@@ -123,19 +186,21 @@ static func selected_meta(plugin: Object, meta_key: String) -> String:
 
 
 ## Prefab pushes rewrite brushes and entities across the level, so undo has to
-## restore the whole captured state rather than a per-node diff.
+## restore the whole captured state rather than a per-node diff. Through the
+## helper, so the step is in History and ends a run of nudges (#1677).
 static func _commit_state_change(
 	plugin: Object, root: Node, action_name: String, before_state: Dictionary
 ) -> void:
-	var undo_redo = plugin.undo_redo_manager
-	if not undo_redo:
-		return
-	undo_redo.create_action(action_name)
-	undo_redo.add_do_method(
-		root.state_system, "restore_state", root.state_system.capture_state(true)
+	HFUndoHelper.commit_completed(
+		plugin.undo_redo_manager, root, action_name, before_state, _history_of(plugin)
 	)
-	undo_redo.add_undo_method(root.state_system, "restore_state", before_state)
-	undo_redo.commit_action(false)
+
+
+## The plugin's History entry, or nothing for a caller without one.
+static func _history_of(plugin: Object) -> Callable:
+	return (
+		Callable(plugin, "_record_history") if plugin.has_method("_record_history") else Callable()
+	)
 
 
 static func _refresh_prefab_library(plugin: Object) -> void:

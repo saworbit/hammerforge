@@ -10,12 +10,23 @@ const ROOT_SIGNALS := {
 	"grid_snap_changed": "_on_root_grid_snap_changed",
 	"settings_applied": "_on_root_settings_applied",
 	"autosave_failed": "_on_autosave_failed",
+	"autosave_waiting": "_on_autosave_waiting",
 	"hflevel_save_completed": "_on_hflevel_save_completed",
 	"hflevel_save_failed": "_on_hflevel_save_failed",
 	"paint_layer_changed": "_on_root_paint_layer_changed",
 	"material_list_changed": "_on_root_material_list_changed",
 	"face_selection_changed": "_on_root_face_selection_changed",
+	"view_filters_changed": "_on_root_view_filters_changed",
 	"user_message": "_on_root_user_message",
+	"active_material_changed": "_sync_active_material_from_root",
+	"transform_pivot_changed": "_on_root_transform_pivot_changed",
+	"material_used": "_on_root_material_used",
+	# The findings list checks what an edit changed once it settles (#1731).
+	"brush_added": "_on_root_brush_findings_changed",
+	"brush_removed": "_on_root_brush_findings_changed",
+	"brush_changed": "_on_root_brush_findings_changed",
+	"entity_added": "_on_root_entity_findings_changed",
+	"entity_removed": "_on_root_entity_findings_changed",
 }
 
 
@@ -81,12 +92,29 @@ static func connect_settings(dock: Object) -> void:
 					dock.level_root.set("bake_connector_mode", index)
 					dock._tag_bake_setting_change("bake_connector_mode")
 		)
+	if dock.bake_cast_shadows_opt:
+		dock.bake_cast_shadows_opt.item_selected.connect(
+			func(index: int) -> void:
+				if dock.syncing_grid or dock._bake_option_held("bake_cast_shadows"):
+					return
+				if dock.level_root and dock._root_has_property("bake_cast_shadows"):
+					dock.level_root.set(
+						"bake_cast_shadows",
+						HFUIFactory.cast_shadow_at(dock.bake_cast_shadows_opt, index)
+					)
+					dock._tag_bake_setting_change("bake_cast_shadows")
+		)
 	if dock.debug_logs:
 		dock.debug_logs.toggled.connect(dock._on_debug_toggled)
 
 
 static func connect_root(dock: Object) -> void:
-	if dock == null or not dock.connected_root:
+	if dock == null:
+		return
+	# Before the level check: a scene with no level has no Active Material to
+	# show either, and the button must not go on naming the last level's.
+	dock._sync_active_material_from_root()
+	if not dock.connected_root:
 		return
 	dock._cache_root_properties()
 	for signal_name in ROOT_SIGNALS:
@@ -103,6 +131,8 @@ static func connect_root(dock: Object) -> void:
 	dock._sync_surface_paint_from_root()
 	dock._setup_io_wiring_panel()
 	HFDockFileHandler.report_hflevel_freshness(dock)
+	# The rows and the chip read the level now connected (#1720).
+	dock._on_root_view_filters_changed()
 	dock._hints_dirty = true
 
 

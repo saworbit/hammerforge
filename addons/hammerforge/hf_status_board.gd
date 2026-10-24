@@ -14,6 +14,8 @@ extends RefCounted
 ## threshold is, and the one button that resolves it — a light with no next
 ## action is just an alarm.
 
+const HFNotesType = preload("hf_notes.gd")
+
 enum Severity {
 	OK,  ## Green. Nothing to do.
 	WARN,  ## Amber. Works, but will bite later or is a known compromise.
@@ -21,11 +23,17 @@ enum Severity {
 	UNKNOWN,  ## Grey. Not measurable yet — usually because nothing is loaded.
 }
 
-## Above this many brushes + entities the editor's per-frame reconcile starts to
-## show; above PROBLEM it is visible on every drag. Mirrors LevelRoot's own
-## get_level_health() thresholds so the dock and the console cannot disagree.
-const GEOMETRY_WARN := 50
-const GEOMETRY_PROBLEM := 100
+## Above WARN brushes + entities an edit takes longer than a frame to settle, and
+## above PROBLEM every edit pauses the editor for several. What grows with the
+## count is the pass over every brush that follows each undo step, and the whole
+## level that placing, deleting and undoing record; a resize and a pick barely move.
+## Both are measured by `tools/benchmark_level_scale.gd` and published, with the
+## machine they ran on, in docs/HammerForge_Performance.md. They were 50 and 100,
+## which turned the board red at a size nothing had measured as slow.
+## Mirrors LevelRoot's own get_level_health() thresholds so the dock and the
+## console cannot disagree.
+const GEOMETRY_WARN := 100
+const GEOMETRY_PROBLEM := 1000
 
 ## A handful of validation issues is ordinary mid-edit. A pile of them means the
 ## next bake will not produce what the viewport is showing.
@@ -73,6 +81,7 @@ static func collect_context(
 		return ctx
 
 	ctx["has_root"] = true
+	ctx["notes"] = HFNotesType.summary(level_root)
 	ctx["root_name"] = str(level_root.name)
 	if level_root.has_method("get_live_brush_count"):
 		ctx["brush_count"] = int(level_root.get_live_brush_count())
@@ -171,6 +180,9 @@ static func _empty_context() -> Dictionary:
 		"validation_run": false,
 		"validation_issues": [],
 		"validation_stamp": "",
+		"crash_report": {},
+		"crash_test": false,
+		"update_notice": {},
 	}
 
 
@@ -191,8 +203,16 @@ static func _empty_context() -> Dictionary:
 ##   action_id     "" when the row has nothing actionable
 ##   action_label  the button's text
 ##   help          tooltip: what this measures and where the thresholds come from
+##   more_actions  optional further buttons, each {id, label}
 static func evaluate(ctx: Dictionary) -> Array[Dictionary]:
 	var checks: Array[Dictionary] = []
+	# Only after a session that died, and first, so it is seen (#1654).
+	var crash: Variant = ctx.get("crash_report", {})
+	if crash is Dictionary and not (crash as Dictionary).is_empty():
+		checks.append(_check_crash(crash))
+	var update: Variant = ctx.get("update_notice", {})
+	if update is Dictionary and not (update as Dictionary).is_empty():
+		checks.append(_check_update(update))
 	checks.append(_check_level_root(ctx))
 	checks.append(_check_geometry(ctx))
 	checks.append(_check_bake(ctx))
@@ -201,6 +221,11 @@ static func evaluate(ctx: Dictionary) -> Array[Dictionary]:
 	checks.append(_check_spawn(ctx))
 	checks.append(_check_autosave(ctx))
 	checks.append(_check_log(ctx))
+	var notes: Variant = ctx.get("notes", {})
+	if notes is Dictionary and int((notes as Dictionary).get("total", 0)) > 0:
+		checks.append(_check_notes(notes))
+	if ctx.get("crash_test", false) == true:
+		checks.append(_check_crash_test())
 	return checks
 
 
@@ -284,9 +309,12 @@ static func _check_level_root(ctx: Dictionary) -> Dictionary:
 
 static func _check_geometry(ctx: Dictionary) -> Dictionary:
 	var help := (
-		"Live brushes plus entities. The editor re-solves brush geometry as you drag,\n"
-		+ "so this count governs editing smoothness — not the baked mesh.\n"
-		+ "Amber above %d, red above %d." % [GEOMETRY_WARN, GEOMETRY_PROBLEM]
+		"Live brushes plus entities. After every edit the editor checks each brush,\n"
+		+ "so this count sets how long it pauses after an edit, not the baked mesh.\n"
+		+ (
+			"Amber above %d, red above %d. Measured in docs/HammerForge_Performance.md."
+			% [GEOMETRY_WARN, GEOMETRY_PROBLEM]
+		)
 	)
 	if not ctx.get("has_root", false):
 		return _row("geometry", "Geometry budget", Severity.UNKNOWN, "-", "No level loaded.", help)
@@ -302,14 +330,14 @@ static func _check_geometry(ctx: Dictionary) -> Dictionary:
 	if total > GEOMETRY_PROBLEM:
 		severity = Severity.PROBLEM
 		detail = (
-			"%d objects is past the %d where dragging starts to stutter. Split the level, or bake in chunks."
+			"%d objects is past the %d where every edit pauses the editor. Split the level into scenes."
 			% [total, GEOMETRY_PROBLEM]
 		)
 	elif total > GEOMETRY_WARN:
 		severity = Severity.WARN
 		detail = (
-			"%d objects. Past %d the editor stays usable but bakes get noticeably slower."
-			% [total, GEOMETRY_PROBLEM]
+			"%d objects. Past %d an edit takes longer than a frame to settle."
+			% [total, GEOMETRY_WARN]
 		)
 	var action_id := ""
 	var action_label := ""
@@ -372,7 +400,7 @@ static func _check_bake(ctx: Dictionary) -> Dictionary:
 static func _check_validation(ctx: Dictionary) -> Dictionary:
 	var help := (
 		"Scans for the faults that survive into a bake: zero-size and non-planar\n"
-		+ "brushes, missing materials and shaders, subtracts that cut nothing.\n"
+		+ "brushes, missing materials and shaders, cut brushes that cut nothing.\n"
 		+ "Amber for any issue, red at %d or more." % VALIDATION_PROBLEM
 	)
 	if not ctx.get("has_root", false):
@@ -593,6 +621,102 @@ static func _check_log(ctx: Dictionary) -> Dictionary:
 		)
 	return _row(
 		"log", "Session log", Severity.OK, "Quiet", "No warnings or errors this session.", help
+	)
+
+
+static func _check_crash(report: Dictionary) -> Dictionary:
+	var help := (
+		"The last editor session ended without closing HammerForge. Its journal of\n"
+		+ "undo steps and bridge calls and the newest autosave of each level it\n"
+		+ "touched are in the report folder. Nothing is sent anywhere."
+	)
+	var count := int(report.get("count", 1))
+	var stage := str(report.get("stage", ""))
+	var last_step := str(report.get("last_step", ""))
+	var detail := "Its last step is not known."
+	if stage == "exit_tree":
+		detail = "It stopped while closing."
+	elif stage != "" and stage != "ready":
+		detail = "It stopped while starting up, at %s." % stage
+	elif last_step != "":
+		detail = "Its last step was %s." % last_step
+	var row := _row(
+		"crash",
+		"Did not close cleanly",
+		Severity.WARN,
+		"%d times" % count if count > 1 else "Last session",
+		detail,
+		help,
+		"crash_open",
+		"Open Folder"
+	)
+	row["more_actions"] = [
+		{"id": "crash_copy", "label": "Copy Report"},
+		{"id": "crash_dismiss", "label": "Dismiss"},
+	]
+	return row
+
+
+## A newer HammerForge is out (#1656). Grey, as news rather than a fault, so it
+## never colours the headline.
+static func _check_update(notice: Dictionary) -> Dictionary:
+	var row := _row(
+		"update",
+		"HammerForge %s is out" % str(notice.get("latest", "")),
+		Severity.UNKNOWN,
+		"You have %s" % str(notice.get("current", "")),
+		"Install it from the Asset Library, as you installed this one.",
+		(
+			"Asked of the Asset Library once a day, when the editor is online and its own\n"
+			+ "update check is on. Turn it off under Safety net in Controls."
+		),
+		"update_notes",
+		"What's New"
+	)
+	row["more_actions"] = [
+		{"id": "update_skip", "label": "Skip This Version"},
+		{"id": "update_later", "label": "Later"},
+	]
+	return row
+
+
+static func _check_crash_test() -> Dictionary:
+	return _row(
+		"crash_test",
+		"Crash test",
+		Severity.UNKNOWN,
+		"On",
+		"End Editor stops the editor at once, as a crash would, to try the crash report.",
+		"Shown because HAMMERFORGE_CRASH_TEST is set.",
+		"crash_test_end",
+		"End Editor"
+	)
+
+
+## The notes left in the level (#1700). Grey: an open To Do is work, not a
+## fault, and never colours the headline.
+static func _check_notes(notes: Dictionary) -> Dictionary:
+	var open: Dictionary = notes.get("open", {})
+	var parts := PackedStringArray()
+	var open_total := 0
+	for kind in HFNotesType.KINDS:
+		var count := int(open.get(kind, 0))
+		open_total += count
+		if count > 0:
+			parts.append("%s %d" % [kind, count])
+	var total := int(notes.get("total", 0))
+	var detail := "%d note%s, none open." % [total, "" if total == 1 else "s"]
+	if not parts.is_empty():
+		detail = "Open: %s, of %d in all." % [", ".join(parts), total]
+	return _row(
+		"notes",
+		"Notes",
+		Severity.UNKNOWN,
+		"%d open" % open_total,
+		detail,
+		"Notes left in the level for the people working on it. They never bake or export.",
+		"show_notes",
+		"Show Notes"
 	)
 
 

@@ -82,6 +82,11 @@ class FakeToolRegistry:
 		activations.append(tool_id)
 		settings_callbacks.append(p_settings)
 
+	## The plugin hands the tool that became active the editor's selection
+	## (#1711). None does here.
+	func get_active_tool() -> Object:
+		return null
+
 
 class FakeDock:
 	extends RefCounted
@@ -134,6 +139,7 @@ class FakePlugin:
 	var _vertex_mode := false
 	var _vertex_drag_active := false
 	var _texture_picker_active := false
+	var _pivot_pick_armed := false
 
 	var gizmo_active := false
 	var stale_paint_result := false

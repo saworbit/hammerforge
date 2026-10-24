@@ -9,6 +9,8 @@ extends PanelContainer
 ## - Empty/drag mode → drawing primitives, operation toggle, numeric input
 
 const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
+const HFMaterialBrowserType = preload("res://addons/hammerforge/ui/hf_material_browser.gd")
+const HFShapeIconsType = preload("res://addons/hammerforge/ui/hf_shape_icons.gd")
 
 signal action_requested(action: String, args: Array)
 signal operation_toggle_requested
@@ -35,8 +37,9 @@ var _auto_hint_label: Label
 var _auto_hint_btn: Button
 var _auto_hint_tween: Tween
 var _sections: Dictionary = {}  # Context -> Control
+var _favorites_strip: HBoxContainer
 var _material_thumbs: Array[Button] = []
-var _favorite_materials: Array = []  # Array of {index, material, texture}
+var _favorite_materials: Array = []  # Array of {index, name}
 var _keymap = null  # HFKeymap
 
 
@@ -75,6 +78,7 @@ func _build_content() -> void:
 	var sep = VSeparator.new()
 	_content.add_child(sep)
 
+	_build_favorites_strip()
 	# Build context-specific sections (all hidden initially)
 	_build_brush_section()
 	_build_face_section()
@@ -160,6 +164,28 @@ func _build_auto_hint_bar() -> void:
 # --- Section Builders ---
 
 
+## The favourites, numbered 1 to 9 as Alt+1 to Alt+9 apply them (#1439). Its own
+## row rather than part of the face section, because a favourite goes on a brush
+## selection too: the selected faces, or else the selected brushes.
+func _build_favorites_strip() -> void:
+	_favorites_strip = HBoxContainer.new()
+	_favorites_strip.name = "FavoritesStrip"
+	_favorites_strip.add_theme_constant_override("separation", 2)
+	_favorites_strip.visible = false
+	_content.add_child(_favorites_strip)
+	for i in range(HFMaterialBrowserType.FAVORITE_SLOTS):
+		var btn = Button.new()
+		btn.custom_minimum_size = Vector2(28, 28)
+		btn.tooltip_text = "Apply material"
+		btn.flat = true
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.pressed.connect(_on_material_thumb.bind(i))
+		btn.visible = false
+		_favorites_strip.add_child(btn)
+		_material_thumbs.append(btn)
+	_add_sep(_favorites_strip)
+
+
 func _build_brush_section() -> void:
 	var section = HFlowContainer.new()
 	# Wraps to a second row rather than running off the sides of the viewport.
@@ -194,6 +220,10 @@ func _build_brush_section() -> void:
 	)
 	_add_tool_button(section, "Carve", "Carve ({carve})", "carve")
 	_add_tool_button(section, "Mrg", "Merge Brushes ({merge})", "merge")
+	_add_tool_button(
+		section, "Isect", "Intersect ({intersect}) — keep only what the brushes share", "intersect"
+	)
+	_add_tool_button(section, "Hull", "Hull of Selection — one brush around them all", "hull")
 	_add_sep(section)
 	_add_group_label(section, "Transform")
 	_add_tool_button(
@@ -213,6 +243,12 @@ func _build_brush_section() -> void:
 		"Rst",
 		"Reset Rotation ({reset_rotation}) — re-enables Hollow, Clip and Carve",
 		"reset_rotation"
+	)
+	_add_tool_button(
+		section,
+		"Snap",
+		"Snap to Grid ({snap_to_grid}) — each brush's corner onto the grid, size and rotation kept",
+		"snap_to_grid"
 	)
 	_add_sep(section)
 	_add_tool_button(section, "Dup", "Duplicate ({duplicate})", "duplicate")
@@ -247,6 +283,9 @@ func _build_brush_section() -> void:
 	_add_tool_button(section, "Var\u25b6", "Cycle Variant ({cycle_variant})", "cycle_variant").name = "PfbVarBtn"
 	_add_tool_button(section, "Push", "Push changes to prefab source", "push_to_source").name = "PfbPushBtn"
 	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
+	_add_tool_button(section, "Copies", "Select every copy of this prefab in the level", "select_linked_copies").name = "PfbCopiesBtn"
+	_add_tool_button(section, "Unlink", "Make this copy ordinary brushes and entities", "unlink_prefab_copy").name = "PfbUnlinkBtn"
+	_add_tool_button(section, "Discard", "Rebuild this copy from its prefab, keeping what it keeps", "discard_prefab_changes").name = "PfbDiscardBtn"
 	_set_prefab_buttons_visible(section, false)
 	# Structure buttons, hidden until a piece of a structure is selected.
 	_add_sep(section).name = "StrSep"
@@ -276,19 +315,6 @@ func _build_face_section() -> void:
 	_content.add_child(section)
 	_sections[Context.FACE_SELECTED] = section
 
-	# Material thumbnail strip (up to 5 favorites)
-	for i in range(5):
-		var btn = Button.new()
-		btn.custom_minimum_size = Vector2(28, 28)
-		btn.tooltip_text = "Apply material"
-		btn.flat = true
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.pressed.connect(_on_material_thumb.bind(i))
-		btn.visible = false
-		section.add_child(btn)
-		_material_thumbs.append(btn)
-
-	_add_sep(section)
 	_add_group_label(section, "UV")
 	_add_tool_button(section, "Fit", "UV Fit", "justify_fit")
 	_add_tool_button(section, "Ctr", "UV Center", "justify_center")
@@ -296,6 +322,20 @@ func _build_face_section() -> void:
 	_add_tool_button(section, "\u2192", "UV Right", "justify_right")
 	_add_tool_button(section, "\u2191", "UV Top", "justify_top")
 	_add_tool_button(section, "\u2193", "UV Bottom", "justify_bottom")
+	# The Texture Gizmo, beside the buttons that place the same texture (#1420).
+	var gizmo_btn := Button.new()
+	gizmo_btn.text = "Giz"
+	gizmo_btn.tooltip_text = ("Texture Gizmo: drag in the viewport to slide, stretch and turn the texture")
+	gizmo_btn.toggle_mode = true
+	gizmo_btn.flat = true
+	gizmo_btn.focus_mode = Control.FOCUS_NONE
+	gizmo_btn.add_theme_font_size_override("font_size", 11)
+	gizmo_btn.custom_minimum_size = Vector2(32, 0)
+	gizmo_btn.toggled.connect(
+		func(pressed: bool): action_requested.emit("texture_gizmo", [pressed])
+	)
+	gizmo_btn.name = "TextureGizmoBtn"
+	section.add_child(gizmo_btn)
 	_add_sep(section)
 	_add_group_label(section, "Apply")
 	_add_tool_button(section, "All", "Apply to Whole Brush", "apply_to_brush")
@@ -354,6 +394,9 @@ func _build_entity_section() -> void:
 	_add_tool_button(section, "Var\u25b6", "Cycle Variant ({cycle_variant})", "cycle_variant").name = "PfbVarBtn"
 	_add_tool_button(section, "Push", "Push changes to prefab source", "push_to_source").name = "PfbPushBtn"
 	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
+	_add_tool_button(section, "Copies", "Select every copy of this prefab in the level", "select_linked_copies").name = "PfbCopiesBtn"
+	_add_tool_button(section, "Unlink", "Make this copy ordinary brushes and entities", "unlink_prefab_copy").name = "PfbUnlinkBtn"
+	_add_tool_button(section, "Discard", "Rebuild this copy from its prefab, keeping what it keeps", "discard_prefab_changes").name = "PfbDiscardBtn"
 	_set_prefab_buttons_visible(section, false)
 
 
@@ -376,8 +419,8 @@ func _build_draw_section() -> void:
 	_add_tool_button(section, "Cone", "Cone brush", "shape_cone")
 	_add_sep(section)
 	var toggle = Button.new()
-	toggle.text = "Add"
-	toggle.tooltip_text = "Toggle Add/Subtract — click to switch"
+	toggle.text = "Solid"
+	toggle.tooltip_text = "Toggle Solid/Cut: click to switch"
 	toggle.flat = true
 	toggle.focus_mode = Control.FOCUS_NONE
 	toggle.add_theme_font_size_override("font_size", 11)
@@ -385,6 +428,16 @@ func _build_draw_section() -> void:
 	toggle.pressed.connect(func(): operation_toggle_requested.emit())
 	toggle.name = "OpToggle"
 	section.add_child(toggle)
+	# The brush the last Draw made, again (#1407). Shows that brush once there is one.
+	_add_sep(section).name = "RepeatSep"
+	var repeat_btn := _add_tool_button(
+		section,
+		"Repeat",
+		"Repeat the last brush ({repeat_brush}): each click places one, Esc or right-click stops",
+		"repeat_brush"
+	)
+	repeat_btn.name = "RepeatBtn"
+	repeat_btn.disabled = true
 	# Pending cuts actions — hidden by default, shown when pending cuts exist
 	var cuts_sep = _add_sep(section)
 	cuts_sep.name = "CutsSep"
@@ -461,6 +514,12 @@ func _build_vertex_section() -> void:
 	_add_tool_button(section, "Merge", "Merge vertices ({vertex_merge})", "vertex_merge")
 	_add_tool_button(section, "Split", "Split edge ({vertex_split_edge})", "vertex_split")
 	_add_tool_button(section, "Convex", "Clip to convex hull", "vertex_clip_convex")
+	_add_tool_button(
+		section,
+		"Snap",
+		"Snap selected vertices to the grid ({vertex_snap_to_grid})",
+		"vertex_snap_to_grid"
+	)
 	_add_sep(section)
 	_add_tool_button(section, "Grid", "Align Grid to Selection ({grid_align})", "grid_align")
 	_add_tool_button(section, "Exit", "Exit vertex mode ({vertex_edit})", "vertex_exit")
@@ -631,6 +690,7 @@ func _apply_context(state: Dictionary) -> void:
 	# Show active section
 	if _sections.has(_context):
 		_sections[_context].visible = true
+	_update_favorites_strip()
 
 	# Prefab instance info badge
 	var pfb_src: String = state.get("prefab_source", "")
@@ -660,7 +720,23 @@ func _apply_context(state: Dictionary) -> void:
 			badge += " (%s)" % pfb_variant
 		if pfb_linked:
 			badge += " [linked]"
+		var changes: Array = state.get("prefab_changes", [])
+		if not changes.is_empty():
+			badge += " [changed]"
 		_label.text = badge
+		var copies: int = state.get("prefab_copies", 0)
+		var tip := PackedStringArray()
+		if copies > 0:
+			tip.append(
+				"%d cop%s of %s in the level" % [copies, "y" if copies == 1 else "ies", pfb_name]
+			)
+		if not changes.is_empty():
+			tip.append("Changed from its prefab, Push to keep or Discard to throw away:")
+			for change in changes.slice(0, 8):
+				tip.append("  %s" % str(change.get("field", "")))
+			if changes.size() > 8:
+				tip.append("  and %d more" % (changes.size() - 8))
+		_label.tooltip_text = "\n".join(tip)
 		return
 
 	# Update label with selection count badge
@@ -724,6 +800,13 @@ func _update_dynamic_content(state: Dictionary) -> void:
 				if hl_btn.button_pressed != hl_state:
 					hl_btn.set_pressed_no_signal(hl_state)
 
+	# The Texture Gizmo button shows the UV Editor's box.
+	if _context == Context.FACE_SELECTED and state.has("texture_gizmo"):
+		var face_section = _sections.get(Context.FACE_SELECTED)
+		var gizmo_btn = face_section.get_node_or_null("TextureGizmoBtn") if face_section else null
+		if gizmo_btn and gizmo_btn.button_pressed != bool(state["texture_gizmo"]):
+			gizmo_btn.set_pressed_no_signal(bool(state["texture_gizmo"]))
+
 	# Sync bake preview toggle button and disable during active bake
 	if _context == Context.BRUSH_SELECTED:
 		var section = _sections.get(Context.BRUSH_SELECTED)
@@ -743,9 +826,10 @@ func _update_dynamic_content(state: Dictionary) -> void:
 			var toggle = section.get_node_or_null("OpToggle")
 			if toggle:
 				var is_sub: bool = state.get("is_subtract", false)
-				toggle.text = "Sub" if is_sub else "Add"
+				toggle.text = "Cut" if is_sub else "Solid"
 				var c = Color(0.9, 0.5, 0.4) if is_sub else Color(0.5, 0.9, 0.5)
 				toggle.add_theme_color_override("font_color", c)
+			_update_repeat_button(section.get_node_or_null("RepeatBtn") as Button, state)
 			# Show/hide pending cuts actions
 			var pcount: int = state.get("pending_cut_count", 0)
 			var show_cuts: bool = pcount > 0
@@ -774,6 +858,23 @@ func _update_dynamic_content(state: Dictionary) -> void:
 				dim_label.text = dims if dims != "" else "..."
 
 
+## Repeat names the brush it would place, "Cyl 2 x 3 x 2" beside the shape's icon,
+## and waits for the first Draw before it can be pressed.
+func _update_repeat_button(button: Button, state: Dictionary) -> void:
+	if button == null:
+		return
+	var label := str(state.get("repeat_label", ""))
+	button.disabled = label == ""
+	button.text = label if label != "" else "Repeat"
+	button.icon = (
+		HFShapeIconsType.get_icon(str(state.get("repeat_shape", ""))) if label != "" else null
+	)
+	if bool(state.get("repeat_armed", false)):
+		button.add_theme_color_override("font_color", HFThemeUtils.accent())
+	else:
+		button.remove_theme_color_override("font_color")
+
+
 func _update_auto_hint(state: Dictionary) -> void:
 	var mode: int = state.get("input_mode", 0)
 	var tool_id: int = state.get("tool", 0)
@@ -782,12 +883,10 @@ func _update_auto_hint(state: Dictionary) -> void:
 	if mode == 1 and tool_id == 0:
 		var is_sub: bool = state.get("is_subtract", false)
 		if is_sub:
-			_show_auto_hint("Drawing in Subtract mode", "Switch to Add", "toggle_add")
+			_show_auto_hint("Drawing cut brushes", "Switch to Solid", "toggle_add")
 		else:
 			_show_auto_hint(
-				"Drawing in Add mode \u2014 press Subtract to toggle",
-				"Switch to Subtract",
-				"toggle_subtract"
+				"Drawing solid brushes. Press Cut to switch", "Switch to Cut", "toggle_subtract"
 			)
 		return
 
@@ -839,7 +938,15 @@ func _on_material_thumb(index: int) -> void:
 
 
 func _set_prefab_buttons_visible(section: Control, vis: bool) -> void:
-	for child_name in ["PfbSep", "PfbVarBtn", "PfbPushBtn", "PfbPullBtn"]:
+	for child_name in [
+		"PfbSep",
+		"PfbVarBtn",
+		"PfbPushBtn",
+		"PfbPullBtn",
+		"PfbCopiesBtn",
+		"PfbUnlinkBtn",
+		"PfbDiscardBtn"
+	]:
 		var child = section.get_node_or_null(child_name)
 		if child:
 			child.visible = vis
@@ -858,7 +965,24 @@ func _refresh_material_thumbs() -> void:
 		if i < _favorite_materials.size():
 			var info = _favorite_materials[i]
 			btn.text = str(i + 1)
-			btn.tooltip_text = "Apply: %s" % info.get("name", "Material %d" % info.get("index", i))
+			btn.tooltip_text = (
+				"Apply: %s (%s)"
+				% [
+					info.get("name", "Material %d" % info.get("index", i)),
+					_chords("{apply_favorite_%d}" % (i + 1)),
+				]
+			)
 			btn.visible = true
 		else:
 			btn.visible = false
+	_update_favorites_strip()
+
+
+## The strip shows for a face or a brush selection, and only with a favourite.
+func _update_favorites_strip() -> void:
+	if not _favorites_strip:
+		return
+	_favorites_strip.visible = (
+		(_context == Context.FACE_SELECTED or _context == Context.BRUSH_SELECTED)
+		and not _favorite_materials.is_empty()
+	)

@@ -117,7 +117,7 @@ toggle_mode = true
 
 [node name="ModeSubtract" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/OperationRow"]
 size_flags_horizontal = 3
-text = "Cutout"
+text = "Cut"
 tooltip_text = "Draw a volume that cuts through solid geometry"
 toggle_mode = true
 
@@ -210,6 +210,10 @@ text = "Material"
 [node name="ActiveMaterial" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow"]
 text = "Active Material"
 size_flags_horizontal = 3
+
+[node name="ClearActiveMaterial" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow"]
+text = "Clear"
+disabled = true
 
 [node name="PhysicsLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 

@@ -594,6 +594,63 @@ func test_postprocess_without_lods_returns_the_same_mesh():
 	assert_eq(out, mesh, "Leaving the option off must not rebuild the mesh")
 
 
+## A 4 m box, as BoxMesh hands it over, or as the CSG does: every corner a loose
+## vertex with no index array.
+func _box_array_mesh(indexed: bool) -> ArrayMesh:
+	var box := BoxMesh.new()
+	box.size = Vector3(4, 4, 4)
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, box.get_mesh_arrays())
+	if indexed:
+		return mesh
+	var st := SurfaceTool.new()
+	st.create_from(mesh, 0)
+	st.deindex()
+	return st.commit()
+
+
+## The UV2 unwrap writes the mesh's lightmap size hint, which LightmapGI sizes
+## its lightmap from. The LOD rebuild made a new mesh without it, so with Generate
+## LODs on every mesh fell back to 64 x 64 whatever the texel size (#1566).
+func test_lods_keep_the_lightmap_size_hint():
+	for indexed in [true, false]:
+		var plain: Mesh = baker._postprocess_mesh(_box_array_mesh(indexed), false, true, 0.1)
+		var lods: Mesh = baker._postprocess_mesh(_box_array_mesh(indexed), true, true, 0.1)
+		var what := "indexed" if indexed else "a triangle soup"
+		assert_ne(plain.lightmap_size_hint, Vector2i.ZERO, "fixture: the unwrap wrote a hint")
+		assert_eq(lods.lightmap_size_hint, plain.lightmap_size_hint, "LODs keep it, %s" % what)
+
+
+# ===========================================================================
+# A CSG pass with nothing in it (#1562)
+# ===========================================================================
+
+
+## What Bake Selected of brush entities alone hands the baker: a combiner with no
+## structural brush in it, whose `get_meshes()` is a placement and a mesh with no
+## surfaces. It draws nothing and holds nothing, so it builds no mesh and no body,
+## and the node it hands back is there for the entities to bake into.
+func test_an_empty_csg_pass_builds_no_mesh_and_no_body():
+	var csg := CSGCombiner3D.new()
+	add_child_autoqfree(csg)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var entries: Array = csg.get_meshes()
+	assert_eq(entries.size(), 2, "fixture: a placement and a mesh")
+	if entries.size() == 2:
+		assert_eq((entries[1] as Mesh).get_surface_count(), 0, "fixture: with no surfaces")
+	for options in [{}, {"merge_meshes": true}, {"generate_lods": true, "unwrap_uv2": true}]:
+		var baked: Node3D = baker.bake_from_csg(csg, null, 1, 1, options)
+		assert_not_null(baked, "still a bake, for the entities beside it: %s" % [options])
+		if baked == null:
+			continue
+		var names: Array = []
+		for child in baked.get_children():
+			names.append(str(child.name))
+		assert_eq(names, [], "no empty mesh and no shapeless body: %s" % [options])
+		baked.free()
+
+
 # ===========================================================================
 # CSG output carries its own placement (#252)
 # ===========================================================================
@@ -623,17 +680,22 @@ func test_a_flat_transform_and_mesh_pair_keeps_its_transform():
 
 
 func test_flat_pair_collision_verts_are_moved_into_place():
+	# The hull pieces come in the CSG node's space, as its mesh does, so they take
+	# the placement the mesh takes (#1513).
 	var placement := Transform3D(Basis.IDENTITY, Vector3(100, 0, 50))
+	var piece := PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(1, 1, 0)]
+	)
 
-	var per_entry: Array = baker._collect_entry_verts([placement, _a_triangle_mesh()])
+	var per_piece: Array = BakerScript._placed_like_csg_mesh(
+		[piece], [placement, _a_triangle_mesh()]
+	)
 
-	assert_eq(per_entry.size(), 1)
-	var verts: Array = per_entry[0]
-	assert_gt(verts.size(), 0, "the mesh has vertices to move")
+	assert_eq(per_piece.size(), 1)
+	var verts: PackedVector3Array = per_piece[0]
+	assert_eq(verts.size(), piece.size(), "every point of the piece moves")
 	for vertex in verts:
-		assert_almost_eq(
-			(vertex as Vector3).z, 50.0, 0.001, "convex hulls stand where the CSG node does"
-		)
+		assert_almost_eq(vertex.z, 50.0, 0.001, "convex hulls stand where the CSG node does")
 
 
 func test_a_bare_list_of_meshes_is_still_read():
@@ -855,6 +917,54 @@ func _normal_drift(mesh: Mesh) -> Dictionary:
 	return {"off": off, "triangles": triangles, "worst": worst}
 
 
+## How far each corner of a smoothed face shades from the average of the normals
+## square to the faces that meet there, each face once (#1429). Carried by the
+## basis rather than its inverse transpose, a stretched brush's corners lean here
+## as a flat brush's faces lean in `_normal_drift()`. The caps shade flat and are
+## left out; they are flat on the axis this stretches along.
+func _smoothing_drift(mesh: Mesh) -> Dictionary:
+	var faces_at := {}
+	var corners: Array = []
+	for s in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var raw = arrays[Mesh.ARRAY_INDEX]
+		var idx: PackedInt32Array = raw if raw is PackedInt32Array else PackedInt32Array()
+		if idx.is_empty():
+			idx = PackedInt32Array(range(verts.size()))
+		for t in range(0, idx.size(), 3):
+			var a := verts[idx[t]]
+			var geometric := (verts[idx[t + 2]] - a).cross(verts[idx[t + 1]] - a)
+			if geometric.length() < 1e-6:
+				continue
+			geometric = geometric.normalized()
+			if absf(geometric.y) > 0.99:
+				continue
+			for k in 3:
+				var at := verts[idx[t + k]].snapped(Vector3.ONE * 0.001)
+				if not faces_at.has(at):
+					faces_at[at] = []
+				# Both triangles of a face lie in its plane, so a face counts once.
+				var seen := false
+				for other: Vector3 in faces_at[at]:
+					seen = seen or other.dot(geometric) > 0.99999
+				if not seen:
+					faces_at[at].append(geometric)
+				corners.append([at, normals[idx[t + k]]])
+	var off := 0
+	var worst := 0.0
+	for corner in corners:
+		var total := Vector3.ZERO
+		for square: Vector3 in faces_at[corner[0]]:
+			total += square
+		var angle := rad_to_deg(total.angle_to(corner[1]))
+		worst = maxf(worst, angle)
+		if angle > 1.0:
+			off += 1
+	return {"off": off, "corners": corners.size(), "worst": worst}
+
+
 func _face_bake_mesh(brush: DraftBrush) -> Mesh:
 	var mat_mgr = MaterialManager.new()
 	add_child_autoqfree(mat_mgr)
@@ -864,9 +974,16 @@ func _face_bake_mesh(brush: DraftBrush) -> Mesh:
 	return inst.mesh if inst else null
 
 
+## Every face of `brush` shading flat, as every face did before #1429.
+static func _flat(brush: DraftBrush) -> DraftBrush:
+	for face in brush.faces:
+		face.smoothing_group = 0
+	return brush
+
+
 func test_an_unscaled_cylinder_bakes_normals_square_to_its_faces():
 	var drift := _normal_drift(
-		_face_bake_mesh(_stretched_brush(DraftBrush.BrushShape.CYLINDER, Vector3.ONE, 16))
+		_face_bake_mesh(_flat(_stretched_brush(DraftBrush.BrushShape.CYLINDER, Vector3.ONE, 16)))
 	)
 	assert_gt(drift["triangles"], 0, "the cylinder baked no triangles")
 	assert_eq(drift["off"], 0, "worst %.1f degrees" % drift["worst"])
@@ -874,7 +991,9 @@ func test_an_unscaled_cylinder_bakes_normals_square_to_its_faces():
 
 func test_a_stretched_cylinder_bakes_normals_square_to_its_faces():
 	var drift := _normal_drift(
-		_face_bake_mesh(_stretched_brush(DraftBrush.BrushShape.CYLINDER, Vector3(4, 1, 1), 16))
+		_face_bake_mesh(
+			_flat(_stretched_brush(DraftBrush.BrushShape.CYLINDER, Vector3(4, 1, 1), 16))
+		)
 	)
 	assert_gt(drift["triangles"], 0, "the cylinder baked no triangles")
 	assert_eq(
@@ -885,6 +1004,24 @@ func test_a_stretched_cylinder_bakes_normals_square_to_its_faces():
 			% [drift["off"], drift["triangles"], drift["worst"]]
 		)
 	)
+
+
+## A new cylinder's sides are smoothed (#1429). Each corner then shades with the
+## average of the square normals of the sides that meet there, stretched or not.
+func test_a_round_cylinder_bakes_the_average_of_its_square_normals():
+	for stretch in [Vector3.ONE, Vector3(4, 1, 1)]:
+		var drift := _smoothing_drift(
+			_face_bake_mesh(_stretched_brush(DraftBrush.BrushShape.CYLINDER, stretch, 16))
+		)
+		assert_gt(drift["corners"], 0, "the cylinder baked no sides at %s" % stretch)
+		assert_eq(
+			drift["off"],
+			0,
+			(
+				"at %s, %d of %d corners lean, worst %.1f degrees"
+				% [stretch, drift["off"], drift["corners"], drift["worst"]]
+			)
+		)
 
 
 func test_a_stretched_wedge_bakes_its_slope_facing_the_way_it_slopes():
@@ -979,3 +1116,101 @@ func test_a_brush_squashed_flat_still_bakes_without_an_error():
 		Vector3.UP
 	)
 	assert_eq((group["normals"] as PackedVector3Array).size(), 3)
+
+
+# ===========================================================================
+# What a baked mesh carries as a whole (#1444, #1438)
+# ===========================================================================
+
+
+## One face of `material` on its own brush, baked with `options`.
+func _one_face_bake(material: Material, options: Dictionary) -> Node3D:
+	var mat_mgr = MaterialManager.new()
+	add_child_autoqfree(mat_mgr)
+	mat_mgr.add_material(material)
+	var parent = Node3D.new()
+	add_child_autoqfree(parent)
+	var brush = _make_brush_with_faces(parent, [_make_face(Vector3.UP, 0)])
+	var result: Node3D = baker.bake_from_faces([brush], mat_mgr, null, 1, 1, options)
+	return result
+
+
+func test_a_mesh_casts_shadows_and_takes_the_lightmap_scale_it_is_baked_with():
+	var plain := _one_face_bake(_make_colored_material(Color.RED), {})
+	add_child_autoqfree(plain)
+	var inst: MeshInstance3D = plain.get_node("BakedMesh_0")
+	assert_eq(
+		inst.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_ON, "On, as every bake was"
+	)
+	assert_eq(inst.gi_lightmap_texel_scale, 1.0)
+
+	var split := _one_face_bake(
+		_make_colored_material(Color.RED),
+		{
+			"cast_shadow": GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY,
+			"lightmap_scale": 4.0,
+		}
+	)
+	add_child_autoqfree(split)
+	inst = split.get_node("BakedMesh_0")
+	assert_eq(inst.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+	assert_eq(inst.gi_lightmap_texel_scale, 4.0)
+
+
+func test_gathered_parts_number_their_meshes_on_and_keep_every_surface_named():
+	var red := _make_colored_material(Color.RED)
+	red.resource_name = "red"
+	var blue := _make_colored_material(Color.BLUE)
+	blue.resource_name = "blue"
+	var first := _one_face_bake(red, {})
+	var second := _one_face_bake(
+		blue, {"cast_shadow": GeometryInstance3D.SHADOW_CASTING_SETTING_OFF}
+	)
+
+	var gathered := BakerScript.gather_parts([first, null, second])
+
+	assert_same(gathered, first, "the first part takes in the rest")
+	add_child_autoqfree(gathered)
+	var meshes: Array = []
+	for child in gathered.get_children():
+		if child is MeshInstance3D:
+			meshes.append(child.name)
+	assert_eq(meshes, [&"BakedMesh_0", &"BakedMesh_1"], "numbered on from the first")
+	var off := gathered.get_node("BakedMesh_1") as MeshInstance3D
+	assert_eq(off.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "and keep theirs")
+	var bodies := gathered.find_children("*", "StaticBody3D", true, false)
+	assert_eq(bodies.size(), 1, "one collision body")
+	var body := bodies[0] as StaticBody3D
+	assert_eq(BakerScript._shape_count(body), 2, "with the shapes of both")
+	assert_eq(
+		body.get_meta(BakerScript.SURFACE_NAMES_META),
+		PackedStringArray(["red", "blue"]),
+		"each named for the surface it was cut from, in order"
+	)
+
+
+func test_a_hull_gathered_before_a_surface_keeps_its_place_with_no_name():
+	var hull := Node3D.new()
+	var hull_body := StaticBody3D.new()
+	hull_body.name = "FaceCollision"
+	hull.add_child(hull_body)
+	var col := CollisionShape3D.new()
+	col.shape = BoxShape3D.new()
+	hull_body.add_child(col)
+	var red := _make_colored_material(Color.RED)
+	red.resource_name = "red"
+	var surface := _one_face_bake(red, {})
+
+	var gathered := BakerScript.gather_parts([hull, surface])
+
+	add_child_autoqfree(gathered)
+	assert_eq(
+		hull_body.get_meta(BakerScript.SURFACE_NAMES_META),
+		PackedStringArray(["", "red"]),
+		"a shot at the hull reads as unknown, and the surface keeps its own name"
+	)
+
+
+func test_gathering_nothing_is_nothing():
+	assert_null(BakerScript.gather_parts([]))
+	assert_null(BakerScript.gather_parts([null, null]))

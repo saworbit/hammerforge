@@ -33,10 +33,24 @@ const PaletteSweep = preload("res://tests/test_palette_action_sweep.gd")
 ## paint grid follows it. They must still raise nothing.
 const SETTING_ACTIONS := ["grid_decrease", "grid_increase"]
 
+## Actions that change what is shown: which visgroups, which of them locked, and
+## what Hide Selection hides. A view change is kept apart from the undo history
+## on purpose, with Previous Visibility to step back through it (#1697), so these
+## rightly leave no step either.
+const VIEW_ACTIONS := [
+	"hide_selection",
+	"show_hidden",
+	"isolate_selection",
+	"isolate_visgroups",
+	"end_isolate",
+	"previous_visibility",
+]
+
 ## Failures this sweep found that are filed and not fixed yet, as
 ## "action|state": issue. Their errors are let through and the case is marked
 ## pending; once one stops failing, the sweep says to take it off.
 const KNOWN := {}
+const KnownFailures = preload("res://tests/support/known_failures.gd")
 
 
 func test_the_sweep_reads_its_actions():
@@ -46,6 +60,7 @@ func test_the_sweep_reads_its_actions():
 		var parts: PackedStringArray = str(key).split("|")
 		assert_has(actions, parts[0], "KNOWN names a real action: %s" % key)
 		assert_has(STATES, parts[1], "KNOWN names a real state: %s" % key)
+	KnownFailures.check_shape(self, KNOWN)
 
 
 func test_undo_and_redo_every_action(action = use_parameters(PaletteSweep.dispatch_actions())):
@@ -179,7 +194,7 @@ func _check_undo(action: String, state: String) -> void:
 	var steps: int = undo.step_count()
 	var problems: Array = []
 	if steps == 0:
-		if not SETTING_ACTIONS.has(action):
+		if not SETTING_ACTIONS.has(action) and not VIEW_ACTIONS.has(action):
 			problems.append_array(_differences("left no step, and changed", before, after))
 	else:
 		for _i in steps:
@@ -198,12 +213,7 @@ func _check_undo(action: String, state: String) -> void:
 	if KNOWN.has(known):
 		for e in errors:
 			e.handled = true
-		if problems.is_empty():
-			fail_test("%s no longer fails; take it off KNOWN (%s)" % [label, KNOWN[known]])
-		else:
-			pending("%s: %s" % [label, KNOWN[known]])
-	else:
-		assert_eq(problems, [], "%s undid and redid cleanly" % label)
+	KnownFailures.settle(self, KNOWN, known, "%s undid and redid cleanly" % label, problems)
 	_escape_to_idle(root)
 	# No step may hold the level once it is gone.
 	undo.clear()

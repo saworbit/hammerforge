@@ -1,8 +1,8 @@
 @tool
 extends Control
-## Radial (pie) menu triggered by backtick (`) key in the 3D viewport.
+## Radial (pie) menu opened by its key in the 3D viewport, backtick (`) by default.
 ## Shows 8 tool/shape actions in a circle around the cursor. Move mouse
-## to highlight a sector, LMB to select; Escape/backtick/RMB to cancel.
+## to highlight a sector, LMB to select; Escape, RMB or its key again to cancel.
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -70,10 +70,11 @@ func is_active() -> bool:
 ## _forward_3d_gui_input. The radial center, hover hit-test, and drawing all
 ## stay in that one space.
 ##
-## Interaction model (triggered by backtick key, NOT RMB):
+## Interaction model (opened by its key, NOT RMB):
 ##   - Mouse motion: hover highlight
 ##   - LMB click: select hovered sector (or cancel if in dead zone)
-##   - Escape / backtick / RMB: cancel without selecting
+##   - Escape / RMB: cancel without selecting. Its own key, which is a binding,
+##     is read by the plugin before the event reaches here.
 func _gui_input(event: InputEvent) -> void:
 	if not _active:
 		return
@@ -91,7 +92,7 @@ func _gui_input(event: InputEvent) -> void:
 			# RMB: cancel
 			hide_menu()
 	elif event is InputEventKey and event.pressed:
-		if event.keycode == KEY_ESCAPE or event.keycode == KEY_QUOTELEFT:
+		if event.keycode == KEY_ESCAPE:
 			hide_menu()
 
 

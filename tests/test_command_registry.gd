@@ -9,7 +9,19 @@ const DockScene = preload("res://addons/hammerforge/dock.tscn")
 
 ## The keys the selection guard reads (`managed_action_surface_allowed`).
 const SELECTION_KEYS := ["brushes_only", "minimum", "label", "allow_faces", "mixed_only"]
-const ENTRY_KEYS := ["id", "label", "category", "needs_level", "selection", "guard_only", "bridge"]
+const ENTRY_KEYS := [
+	"id",
+	"label",
+	"help",
+	"aliases",
+	"category",
+	"needs_level",
+	"selection",
+	"guard_only",
+	"bridge",
+	"palette",
+	"repeat",
+]
 const BRIDGE_KEYS := ["form", "description", "targets", "params", "undo"]
 ## Commands an agent must not run: they undo a human's work, leave the level, or
 ## write files no undo step records.
@@ -43,10 +55,15 @@ func test_every_entry_is_well_formed():
 			assert_has(ENTRY_KEYS, key, "%s: %s is a field the table has" % [id, key])
 		assert_true(entry.get("label") is String and entry["label"] != "", "%s has a label" % id)
 		assert_true(
+			entry.get("help") is String and entry["help"] != "", "%s says what it does" % id
+		)
+		assert_true(
 			entry.get("category") is String and entry["category"] != "", "%s has a category" % id
 		)
 		assert_true(entry.get("needs_level") is bool, "%s says whether it needs a level" % id)
 		assert_true(entry.get("selection") is Dictionary, "%s has a selection entry" % id)
+		if entry.has("palette"):
+			assert_true(entry["palette"] is bool, "%s: palette says yes or no" % id)
 		var selection: Dictionary = entry.get("selection", {})
 		for key in selection:
 			assert_has(SELECTION_KEYS, key, "%s: the guard reads %s" % [id, key])

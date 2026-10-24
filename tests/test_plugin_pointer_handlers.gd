@@ -9,7 +9,8 @@ func test_displacement_start_is_null_safe() -> void:
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
-	assert_false(HFPluginPaintInput.should_start_displacement(null, press, null))
+	assert_false(HFPluginPaintInput.should_start_displacement(null, press, null, null))
+	assert_true(HFPluginPaintInput.displaced_face_under(null, null, Vector2.ZERO).is_empty())
 
 
 func test_polygon_margin_accepts_inside_and_rejects_distant_points() -> void:
@@ -150,15 +151,16 @@ func test_paint_mode_paints_before_draw_can_draw() -> void:
 	await _leave_pointer_level(level)
 
 
-## With a sculpted face selected and the Displacement section open, a press on
-## the face sculpts it rather than painting the floor.
+## With the Displacement section open, a press on a sculpted face sculpts it
+## rather than painting the floor. No pick is needed: Paint mode closes Face
+## Select, and the stroke goes to the face under the cursor (#1527).
 func test_displacement_sculpts_before_floor_paint_can_paint() -> void:
 	var level = await _pointer_level()
 	var box = rig.box(level, "d", Vector3.ZERO, Vector3(16, 16, 16))
 	var top := _top_face(box)
 	assert_true(level.create_displacement("d", top, 2), "the top face is sculptable")
-	level.face_selection = {"d": [top]}
 	rig.plugin._toggle_paint_mode()
+	rig.plugin.dock._face_tools_section.set_expanded(true)
 	rig.plugin.dock._disp_section.set_expanded(true)
 	var before := var_to_str(box.faces[top].displacement.to_dict())
 	watch_signals(level)
@@ -168,6 +170,7 @@ func test_displacement_sculpts_before_floor_paint_can_paint() -> void:
 	assert_ne(var_to_str(box.faces[top].displacement.to_dict()), before, "and sculpts the face")
 	assert_signal_not_emitted(level, "user_message", "instead of going to the floor paint")
 	rig.plugin.dock._disp_section.set_expanded(false)
+	rig.plugin.dock._face_tools_section.set_expanded(false)
 	rig.plugin._toggle_paint_mode()
 	await _leave_pointer_level(level)
 
@@ -180,8 +183,8 @@ func test_a_finished_sculpt_stroke_goes_to_the_paint_module_for_its_undo() -> vo
 	var box = rig.box(level, "d", Vector3.ZERO, Vector3(16, 16, 16))
 	var top := _top_face(box)
 	assert_true(level.create_displacement("d", top, 2), "the top face is sculptable")
-	level.face_selection = {"d": [top]}
 	rig.plugin._toggle_paint_mode()
+	rig.plugin.dock._face_tools_section.set_expanded(true)
 	rig.plugin.dock._disp_section.set_expanded(true)
 	var sculpt := func() -> String:
 		return var_to_str(level.find_brush_by_id("d").faces[top].displacement.to_dict())
@@ -208,6 +211,7 @@ func test_a_finished_sculpt_stroke_goes_to_the_paint_module_for_its_undo() -> vo
 	assert_eq(sculpt.call(), after, "which Ctrl+Z takes back")
 	rig.plugin._hotkey_palette.action_invoked.emit("tool_draw")
 	rig.plugin.dock._disp_section.set_expanded(false)
+	rig.plugin.dock._face_tools_section.set_expanded(false)
 	rig.plugin._toggle_paint_mode()
 	await _leave_pointer_level(level)
 

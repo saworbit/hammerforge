@@ -4,23 +4,69 @@ description: "Moving level data in and out of HammerForge safely: the .hflevel s
 
 # HammerForge Data Portability
 
-Last updated: October 2, 2026
+Last updated: October 25, 2026
 
 This document describes how to move data in and out of HammerForge safely.
+
+## What Each Format Keeps
+
+One row for each thing a level holds, one column for each file it goes through. The `.map` column is an export and then an import into an empty level. The `.glb` column is the bake, exported. The `.hfprefab` column is every piece of the level saved as one prefab and placed again. `tests/test_format_table.gd` takes a level that holds every row through each file and holds every cell to what comes back, so a change to an exporter that this table does not follow fails the tests. An export that loses something names it in the Console, for example ".map export left out 2 cordons, 1 note".
+
+| What the level holds | `.hflevel` | `.tscn` | `.map` | `.glb` | `.hfprefab` |
+|---|---|---|---|---|---|
+| Brushes | Kept | Kept | Kept | Kept as mesh | Kept |
+| Brush shapes | Kept | Kept | Lost | Kept as mesh | Kept |
+| Cuts | Kept | Kept | Lost | Kept as mesh | Kept |
+| Face materials | Kept | Kept | Kept | Kept | Kept |
+| Texture settings | Kept | Kept | Kept as the map's texture axes | Kept as mesh UVs | Kept |
+| Hand laid UVs | Kept | Kept | Lost | Kept as mesh UVs | Kept |
+| Face paint | Kept | Kept | Lost | Kept as a baked texture | Kept |
+| Sculpts | Kept | Kept | Lost | Kept as mesh | Kept |
+| Smoothing groups | Kept | Kept | Lost | Kept as mesh normals | Kept |
+| Hidden faces | Kept | Kept | Kept as the `skip` texture | Kept as faces the mesh leaves out | Kept |
+| Texture groups | Kept | Kept | Lost | Not applicable | Kept |
+| Point entities | Kept | Kept | Kept | Lost | Kept |
+| Entity properties | Kept | Kept | Kept as text | Lost | Kept |
+| I/O wires | Kept | Kept | Kept | Lost | Kept |
+| Brush entities | Kept | Kept | Kept | Kept as named nodes | Kept |
+| Visgroups | Kept | Kept | Lost | Not applicable | Lost |
+| Groups | Kept | Kept | Lost | Not applicable | Lost |
+| Structures | Kept | Kept | Lost | Not applicable | Lost |
+| Prefab copies | Kept | Kept | Lost | Not applicable | Lost |
+| Cordons | Kept | Kept | Lost | Not applicable | Not applicable |
+| Bake options | Kept | Kept | Lost | Not applicable | Not applicable |
+| A brush's bake options | Kept | Kept | Lost | Not applicable | Kept |
+| Floor paint | Kept | Kept | Lost | Kept as mesh | Not applicable |
+| Notes | Kept | Kept | Lost | Lost | Kept |
+
+- **Kept as mesh.** A `.glb` holds what the bake built, so a row arrives as the triangles it made and not as something you can still edit. A cylinder, a cut or a sculpt cannot be got back from it; keep the `.hflevel` for that.
+- **Not applicable.** The format has no place for the row, and the export leaves out nothing by not having one. A `.glb` has no visgroups or structures, and the bake has applied the cordons and the bake options already. A prefab is a set of pieces rather than a level, so it holds no cordons, level bake options or floor paint.
+- **The `.map` column.** A brush keeps its faces and loses the shape it was made as, so a cylinder comes back as a plain brush with a cylinder's faces. A cut is left out rather than written as a solid that would fill its hole. Texture settings come back as the map's own texture axes, so a face draws the same while its numbers differ, and entity properties come back as text, which is how the format writes every value.
+- **Structures and prefab copies** keep their brushes wherever brushes are kept. What is lost is the record that can still change them: a staircase comes back as its steps.
+- The `.tscn` column is the default **Scene Keeps** setting, Brushes and bake. A scene set to keep only its bake loads its `.hflevel` when it opens, below.
+- Bake profiles are editor preferences rather than part of a level, and no file here carries them.
 
 ## Source of Truth: `.hflevel`
 - `.hflevel` files are the canonical save format for brushes, paint layers, materials, entities, decals, and settings.
 - When region streaming is enabled, per-region paint data is stored in a sibling `<level>.hfregions/` folder as one `.hfr` file per region.
 - A region is written before its chunks are streamed out of memory. If that write fails the region stays loaded and you are told, so unsaved paint is not dropped by moving the cursor.
 - A region is only listed in the `.hflevel` index once its `.hfr` file exists on disk.
-- Files include a version field and default missing keys on load for backward compatibility. The bundle version is `HFLevelIO.FORMAT_VERSION` (current: 1). A file stamped higher than this build reads is refused before anything is applied, with a message, rather than clearing the open level and restoring what it can parse. A file with no version, or version 0, is an older one and still loads, because every key defaults.
+- A region file holds every paint layer that has paint in that region, each as `{"id", "chunks"}`. A rewrite keeps the entries of a layer the level no longer has, so undoing the layer's removal brings its paint back from disk. A region erased to nothing is written without that paint, and removed with its `.previous` copy once no layer, current or removed, has paint there, so it does not come back when it streams in again (#1550).
+- An undo of paint in a streamed region rewrites the region files it changed, or removes them, so the undone paint does not stream back in (#1514). A new paint layer never takes the id of one removed this session or found in a region file, so it never loads another layer's paint (#1564).
+- Files include a version field and default missing keys on load for backward compatibility. The bundle version is `HFLevelIO.FORMAT_VERSION` (current: 2), raised by every change to what a level saves (#1638). A file stamped higher than this build reads is refused before anything is applied, with a message, rather than clearing the open level and restoring what it can parse. A file also names the format fragments the development build that wrote it was waiting on, in `format_pending`, and a build at the same number that lacks one refuses it too. A file with no version, or version 0, is an older one and still loads, because every key defaults.
 - Per-face UV data includes `uv_format_version` (current: 3). Version 2 data keeps the old wall axes on every face laid on by hand (#907). Legacy data (version 0, pre-April 2026) used a different UV transform order (scale+offset before rotation). On load, legacy faces are auto-migrated: uniform-scale faces get their offset adjusted; non-uniform-scale faces with rotation are baked to `custom_uvs`. No manual intervention is needed.
 - Per-face vertex winding includes `winding_version` (current: 3). Legacy data (version 0, pre-April 2026) used CCW vertex winding for manually-created faces, which rendered inside-out under Godot 4's CW front-face convention. On load, `apply_serialized_faces()` detects v0 faces and runs a centroid-based migration: each face's normal is checked against the outward direction from the brush center, and faces pointing inward have their vertices reversed to CW. Mesh-extracted faces (already CW) are left unchanged. Version 1 data is correct except on the five shapes whose builders wound every face inside out before September 2026: `PRISM_TRI`, `PRISM_PENT`, `OCTAHEDRON`, `DODECAHEDRON` and `ICOSAHEDRON`. A v1 brush of one of those shapes runs the same centroid migration, which is exact because all five are convex; every other v1 face is left alone, so a torus or another concave brush is never touched. Version 2 data is correct except for path tool brushes, whose two builders wound every face inside out before September 2026. Those are `CUSTOM` brushes, so there is no shape to key the migration on; instead a brush saved below version 3 whose every face points at its own centroid runs the same centroid migration. That is what an inverted convex solid looks like and what a correctly wound closed solid cannot look like, concave or not, because the faces on its convex hull always point away from the centre. No manual intervention is needed.
+- Per-face `smoothing_group` says which faces shade as one smooth surface, 0 for flat. Every face writes it. A file from before it loads every face flat, which is how such a brush baked. New round brushes and the curved faces of arches and domes start in group 1 (#1429).
+- Per-face `uv_group` and `uv_group_justify` record a linked surface and the Justify last used on it. They are written only on a face in a group, so a level with no linked faces writes what it did before (#1437).
+- Per-face `uv_projection` 5 is the Face projection (#1419). A build from before it reads 5 as a projection it does not know and puts the face on Box UV.
 - Per-face displacement data writes `flip_diagonals: true` only on a sculpt whose cells now split along the other diagonal: one that Flip or the negative-scale repair mirrored, or one that a resize turned a quarter round to put its face back in the corner order its shape generates. The second happens to a box face saved starting at a turned corner, which older flips left behind. The key records which diagonal splits each grid cell, so the surface folds the way it did. Every other sculpt saves without the key, exactly as before. A build without the key loads such a sculpt with every grid point in place but splits its cells the original way, so cells that are not flat fold the other way.
 - Autosaves write to `res://.hammerforge/<scene name>.hflevel` by default, derived from the scene the level was opened from. A level whose scene has never been saved has no name to derive from and uses `res://.hammerforge/autosave.hflevel` until it does.
-- Files carry a `scene` field naming the `.tscn` they were saved from. It is what lets a file say which level it holds when every level shares the default autosave path. Files written before September 2026 do not have it, and every key defaults, so they still load.
-- Store `.hflevel` in version control for reliable recovery.
+- Files carry a `scene` field naming the scene they were saved from, a `.tscn` or a binary `.scn` alike. It is what lets a file say which level it holds when every level shares the default autosave path. Files written before September 2026 do not have it, and every key defaults, so they still load.
+- Store `.hflevel` in version control for reliable recovery. **Compare With...** in the dock shows what changed since another version, an older save or one taken out of git with `git show HEAD~3:level.hflevel > old.hflevel`, and `godot --headless -s res://tools/compare_levels.gd --path . -- old.hflevel new.hflevel` prints the same list, exiting 1 when something changed (#1701).
 - A `WorldEnvironment` you add to the level for its sky or fog is a node in the `.tscn`, not part of the `.hflevel`. Only the **Include Level Environment** switch (`export_level_environment`) is a level setting.
+- The level settings include `bake_cast_shadows`, the Cast Shadows of every brush that sets none (#1444), and the picked pivot and Mirror Copy's choices: `transform_pivot_point`, `mirror_copy_axes` and `mirror_copy_at_edge`. The Active Material is saved with the scene and not in the `.hflevel`, since it is the material of the next brush rather than anything in the level.
+- A brush record carries `bake_cast_shadow` and `bake_lightmap_scale` when the brush sets its own Cast Shadows or Lightmap Scale, and a visgroup record carries `cast_shadow` beside `visible`. A file without them bakes on the level's default, as before. A `.map` export leaves them out (#1444, #1438).
+- A structure's record carries `run` for a Trim Run: the wall edges and doorway outlines it was built along, as plain data, so an Update after a reopen or an undo follows the same walls. It is empty for every other type (#1414).
 - Visgroups and groups are saved with the order they were made in, beside the registry itself. The registries are JSON objects and `JSON.stringify` sorts object keys, so without it the panel came back alphabetised on every reload. A file written before September 2026 has no order recorded and loads the way it always did.
 - **Save compression** (Console > Controls) decides the form on disk. On, the default, the bundle is deflated: a 45-brush level is about 3 KB. Off, it is plain JSON written one value per line with keys in a stable order, which is the form to use when the level is reviewed and merged like any other file in the repository. The same level is about 250 KB that way, and the loader reads either form without being told which.
 - A `.hflevel` records `saved_at`, stamped as the file is written rather than when the level was captured. An autosave of a level nothing has changed therefore writes nothing, because what decides that is the level and not the clock.
@@ -37,6 +83,8 @@ A `.hflevel` records the scene it was saved from, so a file that belongs to anot
 
 The same record is what stops an autosave landing on someone else's file. An autosave is a write nobody asked for, on a timer, so it is refused when the target `.hflevel` says it holds a different scene, and the refusal is said once. **Save Level** is never refused: writing over another level's file on purpose is a thing you are allowed to do.
 
+**Save Scene As** takes the record with it. A scene saved under a new name keeps its `.hflevel` path when only the extension changes (`level.tscn` to `level.scn`) or when the level has a path of its own, so the file would go on naming the old scene and every autosave after it would be refused. Instead, when that file names the scene as it was a moment before the save, the level autosaves as soon as the scene is saved, and the file names the new scene. The copy left under the old name is then the other level: if you open it, its autosave is the one refused. With autosave off nothing is written, and there is no autosave to refuse.
+
 The one exception is a level set to keep only its baked geometry, below: that scene has no brushes to win with, so it loads its `.hflevel` when it opens.
 
 ### What the Scene Keeps
@@ -52,7 +100,11 @@ HammerForge gives an `owner` to almost everything it makes, so Ctrl+S writes the
 
 Changing the setting re-owns what is already in the level, so the next Ctrl+S writes what the setting says rather than what the level happened to be built with.
 
-Whichever setting is on, the scene also carries the records that describe the brushes without being brushes: visgroups and their visibility, groups, arrays, hollows, generators and prefab instances. They are not nodes, so they ride in a `live_registries` property on the `LevelRoot` rather than as children. Before September 2026 they did not ride anywhere, and a level reopened from its scene came back as loose geometry the structure panels could no longer edit. A scene saved back then is repaired on open as far as it can be: a visgroup is put back from the members that still name it, and comes back visible.
+Each setting's scene size and open time, as `.tscn` and as `.scn`, from 100 to 3,000 brushes, are measured on [Performance and Limits](HammerForge_Performance.md#files).
+
+Whichever setting is on, the scene also carries the records that describe the brushes without being brushes: visgroups and their visibility, groups, arrays, hollows, structures and prefab instances. They are not nodes, so they ride in a `live_registries` property on the `LevelRoot` rather than as children. Before September 2026 they did not ride anywhere, and a level reopened from its scene came back as loose geometry the structure panels could no longer edit. A scene saved back then is repaired on open as far as it can be: a visgroup is put back from the members that still name it, and comes back visible.
+
+Floor paint rides there too since October 2026: each paint layer's cells, heightmap, terrain slots and wall heights, and the layer in use (#1854). Before that the scene kept the layer nodes and none of their paint, so a level reopened from its scene had empty layers under floors nothing could edit. A streamed level carries the index of its region files, and its cells stay in those files. A scene saved before the change opens with what it has; **Load .hflevel** brings the paint back from a file saved after it was painted.
 
 A brush's faces go into the scene with everything on them: material, UV settings, custom UVs, paint layers and, since October 2026, the sculpt (#854). Before that the scene dropped every sculpt and only the `.hflevel` kept it; **Load .hflevel** brings one back from a file saved after the sculpt was made. A build from before the change still reads a sculpt from a newer scene, but drops it again the next time it saves.
 
@@ -77,8 +129,8 @@ What *is* a defect is one level holding two brushes with the same id. The brush 
 - Missing `io_outputs` key on load = no connections (backward-compatible).
 
 ### Brush Entity Class Serialization
-- Brush entity class (`func_detail`, `func_wall`, `trigger_once`, `trigger_multiple`) is stored in the `brush_entity_class` key of each brush record.
-- `func_detail` brushes bake into one mesh per material and one collision body, the way the structural path groups, with a convex hull per brush so a pile of clutter still collides as the separate solids it is. A detail brush that carries an entity name, I/O outputs or a node name you typed keeps a node of its own instead, because that is the address the runtime finds it by. The `Box_3` style name every brush starts with does not count, whatever shape it names, so a detail brush that was bevelled or vertex-edited still groups (#1144).
+- Brush entity class (any class `entities.json` marks `is_brush_entity`: `func_detail`, `func_wall`, `func_clip`, `func_door`, `func_button`, `door_basic`, `trigger_once` and `trigger_multiple`) is stored in the `brush_entity_class` key of each brush record.
+- `func_detail` brushes bake into one mesh per material and one collision body, the way the structural path groups and split by Cast Shadows and Lightmap Scale as it splits, with a convex hull per brush so a pile of clutter still collides as the separate solids it is. A detail brush that carries an entity name, I/O outputs or a node name you typed keeps a node of its own instead, because that is the address the runtime finds it by. The `Box_3` style name every brush starts with does not count, whatever shape it names, so a detail brush that was bevelled or vertex-edited still groups (#1144).
 - Missing key on load = no entity class (standard structural brush).
 
 ## `.map` Import / Export
@@ -97,9 +149,10 @@ What *is* a defect is one level holding two brushes with the same id. The brush 
   - The Valve 220 texture axes take the turn as well. The reader computes the texture coordinate by projecting the point onto those axes, and rotating both by the same rotation leaves that projection unchanged, so the UVs come out of the conversion exactly as they went in.
   - An export records which way up it wrote, in `worldspawn`, as `_hf_axis_convention`: `quake` for the format's own axes and `godot` for this project's. A file that says `godot` is left alone on import. A file that says nothing is turned, because every editor other than this one writes the format's axes.
   - **A `.map` exported by a HammerForge build from before this change carries this project's axes and does not say so**, and there is nothing in such a file to tell it apart from one another editor wrote. Export it again from a current build, which records the convention, rather than relying on the import to guess.
-- Axis-aligned boxes use the optimized primitive path; tilted, clipped, and other non-axis-aligned convex brushes import and export as CUSTOM face geometry.
+- Axis-aligned boxes use the optimized primitive path; tilted, clipped, and other non-axis-aligned convex brushes import and export as CUSTOM face geometry. An axis-aligned brush thinner than 0.1 on a side imports as CUSTOM at its real thickness, since a box that thin would be widened to 0.1 ([#1635](https://github.com/saworbit/hammerforge/issues/1635)).
 - Import works the face polygons out rather than reading them off the file. A `.map` face line names three points on an infinite plane, not the corners of a face, and the solid is the intersection of the half spaces behind its planes. A set of planes that closes nothing still imports, on the old reading of the points as corners, so an ill-formed brush arrives wrong rather than not at all.
 - Key/value properties round-trip through the supported Classic Quake and Valve 220 adapters, on all three kinds of block: point entities, brush entities, and `worldspawn`. A `func_door` keeps its `speed`, `wait` and `angle`, a trigger keeps the `target` it points at, and the map keeps its `wad` list, its `message` and its `mapversion`. `worldspawn`'s keys live on `LevelRoot.map_worldspawn_properties` and travel in the `.hflevel`.
+- A point entity keeps every key on it, including those its class does not name, and since October 2026 the scene saves them all (#1855). Before that a Ctrl+S kept only the keys the class names, so an imported key was gone after a reopen.
   - `target`/`targetname` is kept as an ordinary property rather than translated into HammerForge's own I/O. The reverse mapping is not one-to-one, so the pair survives a round trip without the editor guessing what it means.
 - Per-face material names round-trip. Each face line names the material its `material_idx` points at, and an import maps that name back to a palette slot by name.
   - The texture field is positional and whitespace delimited, so a palette name with a space in it is written with underscores (`Red Brick` becomes `Red_Brick`). Import matches on the same token.
@@ -110,6 +163,8 @@ What *is* a defect is one level holding two brushes with the same id. The brush 
   - Import reads the offset, rotation and scale back from any file, the same conversion in reverse, against the palette texture of the same name or 64 pixels when the palette has none. A round trip keeps every face's alignment in both formats (#885), and a file from another editor arrives aligned the way that editor showed it, given the same textures (#894). A scale written in place of zero comes back as 1. The Valve 220 axes are not read back; the face keeps its own projection.
 - Authored entity names round-trip as `targetname`, on both point entities and brush entities. The authored name is the address every I/O connection is aimed at, so without it a wired level comes back inert.
 - Brushes tied as one entity export as one entity block with a brush block for each brush, named or not, and an import gives the brushes of a block back tied as one entity, so an unnamed two-leaf door comes back as one door.
+- A `func_clip` is the exception. It exports into `worldspawn` with every face named clip, whatever its faces are painted with, which is how Hammer and TrenchBroom write clip collision; a face that came in as `common/clip` or `tools/toolsclip` keeps that spelling. An import gives a world brush whose every face is named `clip`, `common/clip` or `tools/toolsclip`, in any case, back as a `func_clip`. A clip with a Physics Layer, a name or another property off its default goes out as a `func_clip` block instead, so it comes back with them (#1409).
+- A Hidden face exports named `skip`, the name map compilers drop, or under the name of that kind it came in with. An import gives a face named `skip`, `nodraw`, `null`, `common/nodraw`, `common/caulk` or `tools/toolsnodraw`, in any case, back as a Hidden face, with no palette slot made for it (#1719).
 - A wire aimed at a brush by its node name, as the Objects tab can aim one, is written aimed at its entity's address in the file: the entity's name, or for an entity with no name the node name of its first brush, which the block then carries as its `targetname`. Nothing in the file answers to a brush's node name, so the wire would otherwise dangle (#1155). When another entity in the file already answers to that name, the block gets the next free one instead, `Box_1` for `Box_0`, so the wire does not reach both (#1229).
 - **Entity I/O connections round-trip, one key/value line per connection.** The key is the output name and the value is `target,input,parameter,delay,fire_once`, which is the order Hammer writes a VMF connection:
 
@@ -128,7 +183,7 @@ What *is* a defect is one level holding two brushes with the same id. The brush 
   - The format defines no escape for a comma, so a comma inside a field is written as a space rather than escaped. A reader splitting on the comma would otherwise get a different number of fields than the writer wrote.
 - HammerForge surface-paint layers are not preserved, so `.hflevel` remains the editable source of truth.
 - Treat `.map` as a blockout exchange format, not a full fidelity export.
-- Cutters are not exported. A `.map` worldspawn holds additive solids only, so a subtraction brush written into one would fill the hole it was made for instead of cutting it. Carved shapes export uncut; bake or export `.glb` when the carve has to come with them.
+- Cutters are not exported. A `.map` worldspawn holds additive solids only, so a cut brush written into one would fill the hole it was made for instead of cutting it. Carved shapes export uncut; bake or export `.glb` when the carve has to come with them.
 - Face planes are written in `.map` winding, which is the reverse of the clockwise-from-outside order `FaceData` stores, so exported hulls are the right way out for compilers and other editors. Import applies the same conversion in reverse. Cylinders used to be written the other way round and now match the box and custom-face writers.
 - One plane per flat surface. A `.map` brush is an intersection of half spaces, so a cylinder cap is a single plane rather than one plane per fan wedge: a prism exports as `sides + 2` planes. Writing the fan produced `3 * sides`, most of them exact duplicates, which several external compilers report as a degenerate brush.
 - A cylinder exports the prism on screen at any side count, and each plane carries the texture of the face that lies on it under any scale. The planes come from the same ring as Godot's `CylinderMesh`, starting on +Z, and each plane's face is found by its direction in the brush's own frame, before the transform. The export used to start on +X, so a 5, 6 or 7 sided cylinder came out turned against the one drawn, and it compared transformed normals, which lean towards the stretched axis, so a cylinder at a scale of (4, 1, 1) wrote 12 of its 18 planes with a neighbouring face's texture (#880).
@@ -158,7 +213,9 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - Use `Bake -> Export .glb` when you need DCC or engine interoperability.
 
 ## Project Presets: `hammerforge_presets/`
-- Brush presets (`.tres`) and the team's bake profiles (`bake_profiles.json`) live in `res://hammerforge_presets/`, outside the addon, so an upgrade does not delete them. Commit the folder.
+- Brush presets (`.tres`), the team's bake profiles (`bake_profiles.json`) and structure presets (`structure_presets.json`) live in `res://hammerforge_presets/`, outside the addon, so an upgrade does not delete them. Commit the folder.
+- `structure_presets.json` is `{"version": 1, "presets": {type: {name: {setting: value}}}}`, named Structure settings by type. A preset is read through the type's settings: a value out of range refuses that preset by name, a setting the type no longer has is dropped, and a missing one takes its default. A type this version does not know is kept on write, and a file that does not parse is never written over (#1415).
+- A preset or prefab name is turned into a file name one way (`HFFileNames`): characters a file name cannot hold are replaced, leading dots are dropped, a name Windows reserves for a device, such as `CON` or `LPT1`, gets the kind after it (`CON_preset`), and a name already taken is numbered `_2`, `_3` (#1464).
 - `bake_profiles.json` is `{"version": 1, "profiles": {name: {setting: value}}}`, written with sorted keys and one option a line so a change reads as a small diff. A value this version cannot use is left out with a warning on read and kept in the file on write, for anyone whose version can. A number past its setting's range is held to the range on read, with a warning. A file that does not parse, such as one with merge conflict markers, is never written over: Save and Delete refuse until it is fixed.
 
 ## Material Library
@@ -175,6 +232,7 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 ## Entity Definitions
 - Entity types and brush entity classes are loaded from `entities.json` (data-driven, not hardcoded).
 - Add your own in `res://hammerforge_entities.json`. That file overlays the plugin's `entities.json`, and an entry with the same classname replaces the plugin one. Prefer it over editing `res://addons/hammerforge/entities.json`, which is overwritten when the plugin is upgraded.
+- `entity_definitions_path` can also name an `.fgd` file, or several files joined with `;`, a later class over an earlier one; see Entity classes from an FGD in the user guide (#1721).
 - A `LevelRoot` can point somewhere else through its `entity_definitions_path` export. The point entity palette and the brush entity dropdown both read the same merged result, so a custom point entity is placeable and a custom brush class is assignable without further setup.
 - Definitions include `classname`, `description`, `color`, `is_brush_entity`, `properties`, optional `scene_path`, the optional `class` and `scene` which name the Godot node or `PackedScene` that Test Level and the exports build for the entity, and optional `outputs` and `inputs` naming the I/O the class fires and answers to. A property may carry `maps_to` naming the engine property its value is written to. An entity that stores no value for a property, such as one placed before the class gained it, is exported with the property's `default`. The dock also reads presentation keys straight from the JSON: `label`, `preview`, and `category`.
 - `scene_property` names the property an *instance* uses to choose its own model, where `scene` names one for the whole class. `prop_static` uses it: the path a mapper types is instantiated as the entity's preview in the viewport and as the node the bake and the playtest export carry. A path that does not resolve leaves the class's own preview in place and says so in the log.
@@ -196,18 +254,28 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - A `.hfprefab` written before the `materials` block existed has none, and is placed exactly as it was before.
 - Data encoding uses the same `HFLevelIO.encode_variant()` / `decode_variant()` pipeline as `.hflevel` (handles Vector3, Transform3D, Basis, etc.).
 - Prefab files are saved to `res://prefabs/` by default. The directory is created automatically on first save.
+- A prefab is written whole, as a level is: to a `.writing` file first, with the old one kept as `.previous` until the new one is in place. A save cut short, or a Push to Source that fails, leaves the old prefab for every linked copy to read, and a prefab left only as `.previous` still loads. The `.map` export and Settings Export write the same way (#1758).
 - Prefabs are portable between projects — just copy `.hfprefab` files to another project's `res://prefabs/` folder.
 
 ## Autosave Safety
 - Autosave serializes and writes on a background thread. The editor blocks only for the part that has to read the live level: walking the scene and resolving the materials it references. At 400 brushes that is about 50 ms, against about 125 ms of encoding that happens on the thread.
 - Saves first write a `.writing` sidecar, then replace the destination.
-- The existing file is copied to `<level>.hflevel.previous` before it is replaced, and that copy is restored if the rename fails. On load, a missing destination with a `.previous` beside it is promoted automatically.
+- The existing file is copied to `<level>.hflevel.previous` before it is replaced, and that copy is restored if the rename fails. On load, a missing destination with a `.previous` beside it is promoted automatically. When a whole `.writing` is beside them too, the save stopped after the old file was taken away and before the new one took its name, and the `.writing` is promoted instead: it was written in full before the old file was copied aside, so a crash at that moment does not cost the last save (#1642).
 - If a write fails (e.g., disk full, permissions), `autosave_failed` fires for autosaves and `hflevel_save_failed` for manual saves, and the dock shows a red warning label.
 - The next autosave interval retries automatically.
 - Manual save is always available via Test tab → File section. Success is reported only after the matching background write finishes, not when the work is queued.
 - Queued writes run in the order they were requested, so two saves to the same path in quick succession leave the newer one on disk.
 - When region streaming is on, a failed `.hfregions` sidecar fails the whole save rather than writing a `.hflevel` whose index points at region files that are missing or stale.
 - Keep `.hflevel` files in version control and treat the warning state as the authoritative failure signal.
+
+## Damaged Level Files
+A level file reaches the loader from disk, git merges, sync tools and hand edits, so the loader reads it as untrusted ([#1641](https://github.com/saworbit/hammerforge/issues/1641)):
+- A file that does not parse is refused with a warning, and the open level is left as it was. The file is checked whole before anything is applied, the settings included.
+- A file with an unresolved merge in it (`<<<<<<<`, `=======` and `>>>>>>>` lines) is refused with a message that says so. Keep one side of each block and open it again.
+- One brush record that cannot be read costs that brush, not the load: a size, transform or centre that is not a finite number, or a field of the wrong kind, leaves that brush out with a warning naming it.
+- A primitive brush whose face corners are damaged (a corner that is not three finite numbers, a face with fewer than three, or a corner moved so the faces no longer close) is built again from its shape and size, without its faces' materials, and says so. A custom brush in that state is left out. Corners within a millimetre count as one, and a corner on the middle of a face's edge is not a seam, so no brush this build saves is touched ([#1769](https://github.com/saworbit/hammerforge/issues/1769)).
+- A setting of the wrong kind is left as it was, with a warning naming it.
+- `tests/test_damaged_level_files.gd` feeds the loader over a hundred damaged copies of real levels from a fixed seed on every run.
 
 ## Recommended Pipeline
 1. Design and iterate in HammerForge.

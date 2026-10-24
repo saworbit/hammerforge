@@ -78,7 +78,7 @@ func test_the_clip_shortcut_offers_the_middle_of_a_brush_on_the_floor():
 	assert_signal_not_emitted(root, "user_message", "no refusal")
 	assert_eq(plugin.dialogs.size(), 1, "the confirmation opened")
 	if plugin.dialogs.size() == 1:
-		assert_string_contains(plugin.dialogs[0].dialog_text, "at 2.0")
+		assert_string_contains(plugin.dialogs[0].dialog_text, "at 2?")
 	if root.clip_preview:
 		root.clip_preview.clear()
 
@@ -96,6 +96,6 @@ func test_the_dock_clip_button_offers_the_middle_too():
 			dialog = child
 	assert_not_null(dialog, "the confirmation opened rather than a refusal")
 	if dialog:
-		assert_string_contains(dialog.dialog_text, "at 2.0")
+		assert_string_contains(dialog.dialog_text, "at 2?")
 	if root.clip_preview:
 		root.clip_preview.clear()

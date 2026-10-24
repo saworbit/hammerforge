@@ -316,7 +316,9 @@ const SEW_MATCH := 0.001
 ## interleave, as where a 3 m tile meets a 4 m one at one power, each waits on
 ## the other, and Sew leaves them where they are. So does a vertex on two faces'
 ## edges that draw different lines through its place, and one that cannot reach
-## the line, as a wall's foot vertex between two sculpted floor vertices.
+## the line, as a wall's foot vertex between two sculpted floor vertices. Where
+## two finer tiles share such a place they still meet each other there, and both
+## are counted, since neither is on the edge.
 var unmatched_seam_vertices := 0
 
 
@@ -398,7 +400,8 @@ func _collect_displacements_in_group(sg_id: int) -> Array:
 ## where the normals differ, as where a floor meets a wall, the vertices meet at
 ## the place itself, the one point every one of them reaches. A place on the edge
 ## of a face with no vertex there, a T junction, then goes onto that edge,
-## whether one vertex is there or the corner two finer tiles share.
+## whether one vertex is there or the corner two finer tiles share. Where it
+## cannot, the finer tiles still meet each other there.
 func _sew_faces(entries: Array) -> int:
 	if entries.size() < 2:
 		return 0
@@ -461,10 +464,7 @@ func _sew_faces(entries: Array) -> int:
 	# T junctions, by place, each with the other faces' edges it lies on.
 	var waiting := {}
 	for p in places.size():
-		var members: Array = places[p]["members"]
-		var faces_here := {}
-		for i in members:
-			faces_here[vertices[i]["entry"]] = true
+		var faces_here := _faces_at(places[p], vertices)
 		# A place on the edge of a face that has no vertex there goes onto that
 		# edge below, whether it is one tile's vertex or the corner two finer
 		# tiles share: their average is no more on the coarser edge (#1337).
@@ -474,31 +474,15 @@ func _sew_faces(entries: Array) -> int:
 			continue
 		if faces_here.size() < 2:
 			continue
-		var target := Vector3.ZERO
-		for i in members:
-			var drawn: Vector3 = vertices[i]["drawn"]
-			target += drawn
-		target /= float(members.size())
-		# A wall's foot cannot take the height a floor's seam vertex averages
-		# with it to: the floor went halfway there, the wall stayed, and the next
-		# Sew went halfway again (#1346). The place is the one point every face
-		# reaches, so the floor comes down to the foot.
-		for i in members:
-			if not _reaches(vertices[i], target):
-				target = places[p]["base"]
-				break
-		for i in members:
-			var entry: Dictionary = entries[vertices[i]["entry"]]
-			_sew_vertex_to(entry, vertices[i]["row"], vertices[i]["col"], target)
-			touched[entry["brush"]] = true
+		_meet(places[p], vertices, entries, touched)
 		sewn += 1
 	# The other face draws a straight line between its vertices either side of a
 	# T junction, so the vertex goes onto that line or the seam keeps a crack. The
 	# coarser edge wins whichever tile was sculpted, since it has no vertex there
 	# to bend. A place waits until both ends of its edge have settled, which the
 	# shared vertices sewn above already have. On two edges that draw different
-	# lines through it, no one point closes both cracks, so it stays and is
-	# counted. So does a vertex that cannot reach its line, a wall's foot vertex
+	# lines through it, no one point closes both cracks, so it stays off them and
+	# is counted. So does a vertex that cannot reach its line, a wall's foot vertex
 	# between two sculpted floor vertices: the floor has no vertex there to bend.
 	var settled_one := true
 	while settled_one:
@@ -535,8 +519,15 @@ func _sew_faces(entries: Array) -> int:
 			waiting.erase(p)
 			sewn += 1
 			settled_one = true
+	# A place left off the edge is still a corner its own faces share. Two finer
+	# tiles there meet each other, as they would anywhere else, and close their
+	# own crack; each still misses the coarser edge, so both stay counted (#1474).
 	for p in waiting:
 		unmatched_seam_vertices += (places[p]["members"] as Array).size()
+		if _faces_at(places[p], vertices).size() < 2:
+			continue
+		_meet(places[p], vertices, entries, touched)
+		sewn += 1
 	for brush in touched:
 		_mark_brush_dirty(brush)
 	return sewn
@@ -549,6 +540,36 @@ func _sew_corners(face: FaceData) -> Array[Vector3]:
 		face.local_verts[0], face.local_verts[1], face.local_verts[3], face.local_verts[2]
 	]
 	return corners
+
+
+## The faces, by entry, that have a vertex at one place of `_sew_faces`.
+func _faces_at(place: Dictionary, vertices: Array) -> Dictionary:
+	var faces := {}
+	for i in place["members"]:
+		faces[vertices[i]["entry"]] = true
+	return faces
+
+
+## Moves every vertex at one place of `_sew_faces` to their average, and marks
+## their brushes touched. A wall's foot cannot take the height a floor's seam
+## vertex averages with it to: the floor went halfway there, the wall stayed, and
+## the next Sew went halfway again (#1346). The place is the one point every face
+## reaches, so where one of them cannot reach the average, all go to the place.
+func _meet(place: Dictionary, vertices: Array, entries: Array, touched: Dictionary) -> void:
+	var members: Array = place["members"]
+	var target := Vector3.ZERO
+	for i in members:
+		var drawn: Vector3 = vertices[i]["drawn"]
+		target += drawn
+	target /= float(members.size())
+	for i in members:
+		if not _reaches(vertices[i], target):
+			target = place["base"]
+			break
+	for i in members:
+		var entry: Dictionary = entries[vertices[i]["entry"]]
+		_sew_vertex_to(entry, vertices[i]["row"], vertices[i]["col"], target)
+		touched[entry["brush"]] = true
 
 
 ## Moves one boundary vertex along its face's normal to the height of `target`,

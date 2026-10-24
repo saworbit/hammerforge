@@ -59,10 +59,22 @@ func test_corridor_has_subtract():
 	var brushes: Array = data.get("brushes", [])
 	var has_subtract := false
 	for brush in brushes:
-		if brush.get("operation", 0) == 1:
+		# The loader hands this to Godot, where 1 is Intersection (#1814).
+		if brush.get("operation", 0) == CSGShape3D.OPERATION_SUBTRACTION:
 			has_subtract = true
 			break
 	assert_true(has_subtract)
+
+
+func test_every_example_brush_adds_or_cuts():
+	var allowed := [CSGShape3D.OPERATION_UNION, CSGShape3D.OPERATION_SUBTRACTION]
+	for example in library._examples:
+		for brush in example.get("brushes", []):
+			assert_has(
+				allowed,
+				int(brush.get("operation", 0)),
+				"%s.%s adds or cuts" % [example["id"], brush.get("id", "?")]
+			)
 
 
 func test_jump_puzzle_has_entities():

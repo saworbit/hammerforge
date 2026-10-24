@@ -28,10 +28,11 @@ const FIXED_KEYS := {
 	"palette_f1": {"keycode": KEY_F1},
 	"palette_question_mark": {"keycode": KEY_SLASH, "shift": true},
 	"palette_ctrl_k": {"keycode": KEY_K, "ctrl": true},
-	"operation_replay": {"keycode": KEY_T, "ctrl": true, "shift": true},
 	"nudge_left": {"keycode": KEY_LEFT},
 	"nudge_page_up": {"keycode": KEY_PAGEUP},
 	"global_nudge_right": {"keycode": KEY_RIGHT, "ctrl": true},
+	"tenth_nudge_right": {"keycode": KEY_RIGHT, "alt": true},
+	"tenth_nudge_page_up": {"keycode": KEY_PAGEUP, "shift": true, "alt": true},
 }
 
 ## Keys that work on the level as a whole, so may change it with nothing
@@ -41,9 +42,11 @@ const FIXED_KEYS := {
 const WHOLE_LEVEL_KEYS := ["create_arch", "grid_decrease", "grid_increase", "quick_play"]
 
 ## Failures this sweep found that are filed and not fixed yet, as
-## "action|state": issue. Their errors are let through and the case is marked
-## pending; once one stops failing, the sweep says to take it off.
+## "key|state": "#N: reason". Their errors are let through and the case is
+## marked pending; once one stops failing, the sweep says to take it off
+## (`tests/support/known_failures.gd`).
 const KNOWN := {}
+const KnownFailures = preload("res://tests/support/known_failures.gd")
 
 var _viewport: SubViewport
 var _surface: Control
@@ -61,10 +64,19 @@ func test_the_sweep_reads_every_binding():
 	assert_gt(keys.size(), 50, "the keymap's bindings were read")
 	for key in FIXED_KEYS:
 		assert_false(_keymap.has_action(key), "%s is not a keymap action as well" % key)
+		# The keymap reports a binding on any of them as taken (#1614).
+		var chord: Dictionary = FIXED_KEYS[key]
+		var event := InputEventKey.new()
+		event.keycode = int(chord["keycode"])
+		event.ctrl_pressed = bool(chord.get("ctrl", false))
+		event.shift_pressed = bool(chord.get("shift", false))
+		event.alt_pressed = bool(chord.get("alt", false))
+		assert_ne(HFKeymapScript.fixed_key(event), "", "the keymap knows %s is taken" % key)
 	for known in KNOWN:
 		var parts: PackedStringArray = str(known).split("|")
 		assert_has(keys, parts[0], "KNOWN names a real key: %s" % known)
 		assert_has(STATES, parts[1], "KNOWN names a real state: %s" % known)
+	KnownFailures.check_shape(self, KNOWN)
 
 
 func test_every_key_in_every_state(key = use_parameters(swept_keys())):
@@ -102,12 +114,7 @@ func _check(key: String, state: String) -> bool:
 	if KNOWN.has(known):
 		for e in errors:
 			e.handled = true
-		if errors.is_empty():
-			fail_test("%s no longer fails; take it off KNOWN (%s)" % [label, KNOWN[known]])
-		else:
-			pending("%s: %s" % [label, KNOWN[known]])
-	else:
-		assert_eq(_describe(errors), [], "%s raised no error" % label)
+	KnownFailures.settle(self, KNOWN, known, "%s raised no error" % label, _describe(errors))
 	if state == "no_level":
 		assert_eq(_level_roots(), 0, "%s made no level" % label)
 	elif state == "nothing_selected" and not WHOLE_LEVEL_KEYS.has(key):

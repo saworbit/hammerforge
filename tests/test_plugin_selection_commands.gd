@@ -3,6 +3,7 @@ extends GutTest
 
 const HFPluginSelectionCommands = preload("res://addons/hammerforge/plugin_selection_commands.gd")
 const DraftBrushScript = preload("res://addons/hammerforge/brush_instance.gd")
+const HFSimilar = preload("res://addons/hammerforge/hf_similar.gd")
 
 
 class FakeDock:
@@ -120,8 +121,10 @@ class FakePlugin:
 	func _apply_selection_list(nodes: Array, _additive: bool, _toggle: bool = false) -> void:
 		selection_lists.append(nodes.duplicate())
 
-	func _paint_brush_with_undo(_root: Node, brush: Node, mat: Material) -> void:
-		painted.append({"brush": brush, "material": mat})
+	## One call per command, as the real plugin records one undo step for it.
+	func _paint_brushes_with_undo(_root: Node, brushes: Array, mat: Material) -> int:
+		painted.append({"brushes": brushes.duplicate(), "material": mat})
+		return brushes.size()
 
 	func _get_level_root() -> Node:
 		return active_root
@@ -173,26 +176,26 @@ func _face_list(faces: Array) -> Array[FaceData]:
 
 
 func test_sorted_vec_orders_components_ascending():
-	assert_eq(HFPluginSelectionCommands.sorted_vec(Vector3(30, 10, 20)), [10.0, 20.0, 30.0])
+	assert_eq(HFSimilar.sorted_vec(Vector3(30, 10, 20)), [10.0, 20.0, 30.0])
 
 
 func test_size_similar_ignores_axis_order():
 	assert_true(
-		HFPluginSelectionCommands.size_similar(Vector3(10, 20, 30), Vector3(30, 10, 20), 0.2),
+		HFSimilar.size_similar(Vector3(10, 20, 30), Vector3(30, 10, 20), 0.2),
 		"A rotated brush of the same dimensions should still count as similar"
 	)
 
 
 func test_size_similar_rejects_outside_tolerance():
 	assert_false(
-		HFPluginSelectionCommands.size_similar(Vector3(10, 10, 10), Vector3(20, 20, 20), 0.2),
+		HFSimilar.size_similar(Vector3(10, 10, 10), Vector3(20, 20, 20), 0.2),
 		"Doubling every dimension is well outside a 20 percent tolerance"
 	)
 
 
 func test_size_similar_guards_against_zero_reference():
 	# maxf(ref, 0.01) keeps a flat brush from dividing by zero.
-	assert_false(HFPluginSelectionCommands.size_similar(Vector3(1, 1, 1), Vector3.ZERO, 0.2))
+	assert_false(HFSimilar.size_similar(Vector3(1, 1, 1), Vector3.ZERO, 0.2))
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +262,7 @@ func test_select_similar_matches_brushes_by_size():
 
 func test_select_similar_with_nothing_selected_warns():
 	HFPluginSelectionCommands.select_similar(plugin, root)
-	assert_eq(plugin.dock.last_toast().get("message"), "Select a face or brush first")
+	assert_eq(plugin.dock.last_toast().get("message"), "Select a face, brush or entity first")
 	assert_eq(plugin.dock.last_toast().get("level"), 1)
 
 
@@ -339,7 +342,25 @@ func test_apply_last_texture_paints_selected_brushes_when_no_faces():
 
 	assert_eq(plugin.dock.assign_calls, 0)
 	assert_eq(plugin.painted.size(), 1, "The selected brush should be painted")
+	assert_eq(plugin.painted[0]["brushes"], [brush])
 	assert_eq(plugin.dock.last_toast().get("message"), "Applied last texture to 1 brush")
+
+
+## Several brushes go in one call, so the plugin records one undo step (#1565).
+func test_apply_last_texture_paints_several_brushes_in_one_call():
+	plugin._last_picked_material_index = 3
+	var first = _make_brush(Vector3.ONE, "b1")
+	var second = _make_brush(Vector3.ONE, "b2")
+	var third = _make_brush(Vector3.ONE, "b3")
+	plugin.hf_selection = [first, Node3D.new(), second, third]
+	autofree(plugin.hf_selection[1])
+
+	HFPluginSelectionCommands.apply_last_texture(plugin, root)
+
+	assert_eq(plugin.painted.size(), 1, "One call for the selection, not one per brush")
+	assert_eq(plugin.painted[0]["brushes"], [first, second, third], "Only the brushes")
+	assert_eq(plugin.painted[0]["material"], root.material_manager.material)
+	assert_eq(plugin.dock.last_toast().get("message"), "Applied last texture to 3 brushes")
 
 
 # ---------------------------------------------------------------------------

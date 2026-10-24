@@ -11,6 +11,24 @@ const HFBakeSystemType = preload("hf_bake_system.gd")
 const HFSpawnSystemType = preload("hf_spawn_system.gd")
 const HFTraversalCheck = preload("hf_traversal_check.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
+const HFVertexWeld = preload("../hf_vertex_weld.gd")
+const HFBakeSplit = preload("../hf_bake_split.gd")
+const HFConvexClip = preload("../hf_convex_clip.gd")
+const HFHiddenFaceSearch = preload("../hf_hidden_face_search.gd")
+const HFSolidMeasure = preload("../hf_solid_measure.gd")
+const HFNotes = preload("../hf_notes.gd")
+const HFAcceptedFindings = preload("../hf_accepted_findings.gd")
+const HFValidationChecks = preload("../hf_validation_checks.gd")
+
+## Two brushes this close everywhere are the same brush, for the near duplicate
+## finding (#1708). A solid brush inside another to within this is inside it.
+const NEAR_DUPLICATE := 0.001
+
+## The kinds of finding a row can carry for the Test tab to select together.
+const KIND_CUTS_NOTHING := "cut_cuts_nothing"
+const KIND_INSIDE := "solid_inside_solid"
+const KIND_NEAR_DUPLICATE := "near_duplicate"
+const KIND_HIDDEN_IN_THE_OPEN := "hidden_face_in_the_open"
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -42,6 +60,22 @@ var _connector_memo: Variant = null
 
 ## The findings of the `validate()` call in flight, each naming its object.
 var _findings: Array = []
+
+## Findings accepted for this level, key to `{message, note, date, fingerprint}`
+## (#1731). `HFAcceptedFindings` reads and writes it; it travels in the level's
+## registries.
+var accepted: Dictionary = {}
+## How many whole passes `validate()` has made, and how many `recheck()` passes
+## over changed brushes. Read by the tests that hold an edit to a recheck.
+var full_passes := 0
+var rechecks := 0
+## How many brushes the last `recheck()` looked at: the changed ones and those
+## near them.
+var last_recheck_brushes := 0
+## The kind of check in flight, which `_found()` stamps on each finding, and the
+## kinds the project leaves out, read once a pass (`HFValidationChecks`).
+var _check := ""
+var _skipped := PackedStringArray()
 
 
 func _init(level_root: Node3D) -> void:
@@ -129,14 +163,22 @@ func _any_face_names_a_material() -> bool:
 ## and `findings`, the same findings as `{type, severity, message, node}` with the
 ## object each names, as `check_bake_issues()` gives them, for the Test tab's list
 ## (#1004).
+##
+## Each finding carries its `check`, one of `HFValidationChecks.KINDS`, and the
+## kinds the project leaves out are not run. Findings accepted for this level
+## come back under `accepted` and are left out of `issues` and `findings`, unless
+## what they name has changed since (#1731).
 func validate(auto_fix: bool = false) -> Dictionary:
 	var issues: Array = []
 	var fixed := 0
 	_findings = []
 	if not root:
-		return {"issues": issues, "fixed": fixed, "findings": _findings}
+		return {"issues": issues, "fixed": fixed, "findings": _findings, "accepted": []}
+	full_passes += 1
+	_skipped = HFValidationChecks.skipped()
 
 	# Dependencies
+	_check = "data"
 	for warning in check_missing_dependencies():
 		_found(issues, "Dependency: %s" % str(warning))
 
@@ -150,41 +192,13 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		brush_nodes.append_array(root.committed_node.get_children())
 	var geometry_repairs: Array[DraftBrush] = []
 	var brushes_to_delete: Array[DraftBrush] = []
-	for node in brush_nodes:
-		if not (node is DraftBrush):
-			continue
-		var brush := node as DraftBrush
-		var size = brush.size
-		# Finite first, then the sign. Every comparison against NaN is false and
-		# an infinite size is legitimately `> 0.0`, so the sign test below could
-		# not see either — and this is the backstop: a mapper with a NaN-sized
-		# brush saw a clean badge, baked, and got a mesh with a poisoned AABB
-		# with nothing anywhere naming the brush responsible. The brush cannot be
-		# found by eye either, because a NaN size draws nothing.
-		if not size.is_finite():
-			_found(issues, "Brush size is not a number: %s" % brush.name, brush)
-			if auto_fix:
-				brush.size = root.brush_size_default
-				fixed += 1
-		elif size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
-			# A negative size is not a zero size. It builds the brush inside out,
-			# with every face normal pointing the opposite way from the vertices
-			# it holds, and saying "zero" sends the reader looking for the wrong
-			# thing.
-			var negative: bool = size.x < 0.0 or size.y < 0.0 or size.z < 0.0
-			var label: String = "Inverted brush" if negative else "Zero-size brush"
-			_found(issues, "%s: %s" % [label, brush.name], brush)
-			if auto_fix:
-				var next = Vector3(
-					max(0.1, abs(size.x)), max(0.1, abs(size.y)), max(0.1, abs(size.z))
+	_check = "geometry"
+	if _runs("geometry"):
+		for node in brush_nodes:
+			if node is DraftBrush:
+				fixed += _check_brush_basics(
+					node, issues, auto_fix, geometry_repairs, brushes_to_delete
 				)
-				brush.size = next
-				fixed += 1
-		# The transform has the same effect and nothing checked it either. There
-		# is no honest repair for a non-finite origin or basis, so this reports.
-		if not brush.global_transform.is_finite():
-			_found(issues, "Brush position is not a number: %s" % brush.name, brush)
-		_check_brush_geometry(brush, issues, geometry_repairs, brushes_to_delete)
 
 	# The repairs and the deletion happen after the walk, so the loop is not
 	# mutating the list it is reading.
@@ -200,7 +214,13 @@ func validate(auto_fix: bool = false) -> Dictionary:
 				root.brush_system.delete_brush(brush)
 				fixed += 1
 
+	# Hidden faces with open space in front of them (#1719): a hint that one may be
+	# seen, not a fault, so it is a row and not in the count.
+	if _runs("geometry"):
+		_hint_hidden_faces_in_the_open()
+
 	# Invalid face indices in selection
+	_check = "data"
 	var invalid_indices := 0
 	var next_selection: Dictionary = {}
 	for key in root.face_selection.keys():
@@ -264,6 +284,189 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			if root.brush_system:
 				root.brush_system._refresh_brush_previews()
 
+	_check = "entities"
+	if _runs("entities"):
+		_check_entities(issues)
+
+	_check = "data"
+	# Paint layers without grid
+	if root.paint_layers:
+		var grid_template: HFPaintGrid = root.paint_layers.base_grid
+		for layer in root.paint_layers.layers:
+			if layer == null:
+				continue
+			if layer.grid == null:
+				_found(issues, "Paint layer %s has no grid" % str(layer.layer_id))
+				if auto_fix:
+					if grid_template == null:
+						grid_template = HFPaintGrid.new()
+						root.paint_layers.base_grid = grid_template
+					var grid = grid_template.duplicate() as HFPaintGrid
+					if grid == null:
+						grid = HFPaintGrid.new()
+					grid.layer_y = root.grid_plane_origin.y
+					layer.grid = grid
+					fixed += 1
+
+	_check = "geometry"
+	if _runs("geometry"):
+		_check_convexity(brush_nodes, issues)
+	_check = "overlap"
+	if _runs("overlap"):
+		_check_coincident_brushes(brush_nodes, issues)
+		_check_brushes_that_add_nothing(brush_nodes, issues)
+	_check = "data"
+	_check_duplicate_brush_ids(brush_nodes, issues)
+	_check = "spawn"
+	if _runs("spawn"):
+		_check_spawn(issues)
+	_check = "notes"
+	if _runs("notes"):
+		_check_open_todo_notes(issues)
+	# Stairs, doorways and ramps built from brushes, against the player (#1046).
+	_check = "traversal"
+	if _runs("traversal"):
+		for finding in HFTraversalCheck.findings(root, brush_nodes):
+			finding["check"] = "traversal"
+			issues.append(finding["message"])
+			_findings.append(finding)
+	_check = ""
+
+	return _set_aside_accepted(issues, fixed)
+
+
+## The findings accepted for this level, taken out of `issues` and `findings`
+## and handed back under `accepted` (#1731).
+func _set_aside_accepted(issues: Array, fixed: int) -> Dictionary:
+	var sorted := HFAcceptedFindings.sort(root, _findings)
+	_findings = sorted["open"]
+	for finding in sorted["accepted"]:
+		var at := issues.find(finding.get("message", ""))
+		if at >= 0:
+			issues.remove_at(at)
+	return {"issues": issues, "fixed": fixed, "findings": _findings, "accepted": sorted["accepted"]}
+
+
+## Whether the project runs `kind` this pass.
+func _runs(kind: String) -> bool:
+	return not _skipped.has(kind)
+
+
+## Check again only what an edit touched (#1731): the changed brushes' own size,
+## place and faces, and the overlap checks between them and the brushes near
+## them, and with `entities_changed` the entity names and wiring. Level wide
+## checks, the spawn, the traversal and the To Do notes wait for the next full
+## pass. Returns `{open, accepted}`, as `HFAcceptedFindings.sort()` splits them,
+## holding only findings that name a changed brush, or any entity finding.
+func recheck(changed_ids: Array, entities_changed: bool = false) -> Dictionary:
+	var issues: Array = []
+	_findings = []
+	rechecks += 1
+	last_recheck_brushes = 0
+	if not root:
+		return {"open": [], "accepted": []}
+	_skipped = HFValidationChecks.skipped()
+	var changed: Array = []
+	var everything: Array = []
+	for container in [root.draft_brushes_node, root.pending_node, root.committed_node]:
+		if container:
+			everything.append_array(container.get_children())
+	for node in everything:
+		if node is DraftBrush and changed_ids.has(str(node.brush_id)):
+			changed.append(node)
+	var none_repaired: Array[DraftBrush] = []
+	var none_deleted: Array[DraftBrush] = []
+	_check = "geometry"
+	if _runs("geometry"):
+		for brush in changed:
+			_check_brush_basics(brush, issues, false, none_repaired, none_deleted)
+		_check_convexity(changed, issues)
+	var near := _with_neighbours(changed, everything)
+	last_recheck_brushes = near.size()
+	_check = "overlap"
+	if _runs("overlap") and not changed.is_empty():
+		var before := _findings.size()
+		_check_coincident_brushes(near, issues)
+		_check_brushes_that_add_nothing(near, issues)
+		var kept: Array = _findings.slice(0, before)
+		for finding in _findings.slice(before):
+			if changed.has(finding.get("node")) or changed.has(finding.get("other_node")):
+				kept.append(finding)
+		_findings = kept
+	_check = "entities"
+	if entities_changed and _runs("entities"):
+		_check_entities(issues)
+	_check = ""
+	var sorted := HFAcceptedFindings.sort(root, _findings)
+	_findings = []
+	return sorted
+
+
+## `brushes` and every brush in `among` whose box reaches one of theirs.
+func _with_neighbours(brushes: Array, among: Array) -> Array:
+	var out: Array = brushes.duplicate()
+	if brushes.is_empty():
+		return out
+	var boxes: Array = []
+	for brush in brushes:
+		boxes.append(HFSolidMeasure.bounds(HFSolidMeasure.world_faces(brush)).grow(NEAR_DUPLICATE))
+	for node in among:
+		if not (node is DraftBrush) or out.has(node):
+			continue
+		var box := HFSolidMeasure.bounds(HFSolidMeasure.world_faces(node))
+		for other in boxes:
+			if other.intersects(box):
+				out.append(node)
+				break
+	return out
+
+
+## One brush's size, place and faces, as `validate()` and `recheck()` check them.
+## Returns how many repairs it made; the geometry repairs and deletions it
+## gathers are made by the caller, after the walk.
+func _check_brush_basics(
+	brush: DraftBrush,
+	issues: Array,
+	auto_fix: bool,
+	geometry_repairs: Array[DraftBrush],
+	brushes_to_delete: Array[DraftBrush]
+) -> int:
+	var repaired := 0
+	var size = brush.size
+	# Finite first, then the sign. Every comparison against NaN is false and
+	# an infinite size is legitimately `> 0.0`, so the sign test below could
+	# not see either — and this is the backstop: a mapper with a NaN-sized
+	# brush saw a clean badge, baked, and got a mesh with a poisoned AABB
+	# with nothing anywhere naming the brush responsible. The brush cannot be
+	# found by eye either, because a NaN size draws nothing.
+	if not size.is_finite():
+		_found(issues, "Brush size is not a number: %s" % brush.name, brush)
+		if auto_fix:
+			brush.size = root.brush_size_default
+			repaired += 1
+	elif size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
+		# A negative size is not a zero size. It builds the brush inside out,
+		# with every face normal pointing the opposite way from the vertices
+		# it holds, and saying "zero" sends the reader looking for the wrong
+		# thing.
+		var negative: bool = size.x < 0.0 or size.y < 0.0 or size.z < 0.0
+		var label: String = "Inverted brush" if negative else "Zero-size brush"
+		_found(issues, "%s: %s" % [label, brush.name], brush)
+		if auto_fix:
+			var next = Vector3(max(0.1, abs(size.x)), max(0.1, abs(size.y)), max(0.1, abs(size.z)))
+			brush.size = next
+			repaired += 1
+	# The transform has the same effect and nothing checked it either. There
+	# is no honest repair for a non-finite origin or basis, so this reports.
+	if not brush.global_transform.is_finite():
+		_found(issues, "Brush position is not a number: %s" % brush.name, brush)
+	_check_brush_geometry(brush, issues, geometry_repairs, brushes_to_delete)
+	return repaired
+
+
+## Entity names and wiring: two entities answering to one name, a wire with a
+## field missing, and a wire aimed at a name nothing answers to.
+func _check_entities(issues: Array) -> void:
 	# Two entities answering to the same authored name, and wiring with a field
 	# missing. A level can get either from a paste, a `.map` import or a hand
 	# edit, so the check at the setter is not enough on its own.
@@ -338,43 +541,57 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	for report in dangling_targets:
 		_found(issues, report, dangling_targets[report])
 
-	# Paint layers without grid
-	if root.paint_layers:
-		var grid_template: HFPaintGrid = root.paint_layers.base_grid
-		for layer in root.paint_layers.layers:
-			if layer == null:
-				continue
-			if layer.grid == null:
-				_found(issues, "Paint layer %s has no grid" % str(layer.layer_id))
-				if auto_fix:
-					if grid_template == null:
-						grid_template = HFPaintGrid.new()
-						root.paint_layers.base_grid = grid_template
-					var grid = grid_template.duplicate() as HFPaintGrid
-					if grid == null:
-						grid = HFPaintGrid.new()
-					grid.layer_y = root.grid_plane_origin.y
-					layer.grid = grid
-					fixed += 1
-
-	_check_convexity(brush_nodes, issues)
-	_check_coincident_brushes(brush_nodes, issues)
-	_check_duplicate_brush_ids(brush_nodes, issues)
-	_check_spawn(issues)
-	# Stairs, doorways and ramps built from brushes, against the player (#1046).
-	for finding in HFTraversalCheck.findings(root, brush_nodes):
-		issues.append(finding["message"])
-		_findings.append(finding)
-
-	return {"issues": issues, "fixed": fixed, "findings": _findings}
-
 
 ## Say one thing `validate()` found: its text into `issues`, which is what the
 ## Console, the status board and Validate's count read, and the finding with the
 ## object it names into `_findings`, for the rows under the Test tab.
-func _found(issues: Array, message: String, node: Node = null) -> void:
+## `extra` is merged into the finding: a `kind` the Test tab selects together,
+## and an `other_node` for a finding about a pair.
+func _found(issues: Array, message: String, node: Node = null, extra: Dictionary = {}) -> void:
+	if _skipped.has(_check):
+		return
 	issues.append(message)
-	_findings.append({"type": "validate", "severity": 1, "message": message, "node": node})
+	var finding := {
+		"type": "validate", "severity": 1, "message": message, "node": node, "check": _check
+	}
+	finding.merge(extra)
+	_findings.append(finding)
+
+
+## One Info row for each brush with a Hidden face no brush is right in front of
+## (#1719). Such a face may be one somebody sees, and the bake leaves it out.
+func _hint_hidden_faces_in_the_open() -> void:
+	if _skipped.has(_check):
+		return
+	var counts: Dictionary = {}
+	var order: Array = []
+	for entry in HFHiddenFaceSearch.facing_open_space(root):
+		if not counts.has(entry[0]):
+			order.append(entry[0])
+		counts[entry[0]] = int(counts.get(entry[0], 0)) + 1
+	for brush in order:
+		var count := int(counts[brush])
+		(
+			_findings
+			. append(
+				{
+					"type": "validate",
+					"severity": 0,
+					"message":
+					(
+						"Hidden face%s on '%s' with open space in front: %s may be seen"
+						% [
+							"s" if count > 1 else "",
+							brush.name,
+							"they" if count > 1 else "it",
+						]
+					),
+					"node": brush,
+					"check": _check,
+					"kind": KIND_HIDDEN_IN_THE_OPEN,
+				}
+			)
+		)
 
 
 ## Two brushes in the same place.
@@ -396,23 +613,9 @@ func _check_coincident_brushes(brush_nodes: Array, issues: Array) -> void:
 		if not (node is DraftBrush):
 			continue
 		var brush := node as DraftBrush
-		# `auto_fix` deletes brushes on its way through, and this runs afterwards,
-		# so some of what it was handed is gone or out of the tree by now - and
-		# `global_position` on a node outside the tree is an error, not a position.
-		if not is_instance_valid(brush) or not brush.is_inside_tree():
+		var key := _coincidence_key(brush)
+		if key == "":
 			continue
-		if root.is_entity_node(brush):
-			continue
-		if not brush.size.is_finite() or not brush.global_position.is_finite():
-			continue
-		var key := (
-			"%s|%s|%d"
-			% [
-				_quantised(brush.global_position),
-				_quantised(brush.size),
-				int(brush.shape) if "shape" in brush else -1,
-			]
-		)
 		if not groups.has(key):
 			groups[key] = []
 		groups[key].append(brush)
@@ -426,6 +629,232 @@ func _check_coincident_brushes(brush_nodes: Array, issues: Array) -> void:
 		# The row selects the second, the copy a Ctrl+D left in place.
 		var message := "%d brushes occupy the same space: %s" % [names.size(), ", ".join(names)]
 		_found(issues, message, brushes[1])
+
+
+## What `_check_coincident_brushes()` groups a brush by, or "" for one it skips.
+func _coincidence_key(brush: DraftBrush) -> String:
+	# `auto_fix` deletes brushes on its way through, and this runs afterwards,
+	# so some of what it was handed is gone or out of the tree by now - and
+	# `global_position` on a node outside the tree is an error, not a position.
+	if not is_instance_valid(brush) or not brush.is_inside_tree():
+		return ""
+	if root.is_entity_node(brush):
+		return ""
+	if not brush.size.is_finite() or not brush.global_position.is_finite():
+		return ""
+	return (
+		"%s|%s|%d"
+		% [
+			_quantised(brush.global_position),
+			_quantised(brush.size),
+			int(brush.shape) if "shape" in brush else -1,
+		]
+	)
+
+
+## Brushes that add nothing to the bake (#1708), none of which shows in the
+## viewport:
+##
+## - a cut that cuts no solid brush, left behind when the wall it cut moved or
+##   placed a little off. It removes nothing, and it still counts as a cutter, so
+##   it still sends the whole bake down the CSG path;
+## - a solid brush wholly inside another, which adds nothing to the outside and
+##   leaves faces inside the solid;
+## - two brushes the same to within a millimetre, which the exact check above
+##   does not catch.
+##
+## The cut is measured against each solid it could reach as convex solids, as
+## `hf_measure` measures them, so a turned cut whose box crosses a wall it misses
+## is still found. No `auto_fix`, for the reason the exact check gives. The Test
+## tab selects every brush of a kind, and offers Keep First for the near pairs.
+func _check_brushes_that_add_nothing(brush_nodes: Array, issues: Array) -> void:
+	var records: Array = []
+	for node in brush_nodes:
+		var record := _solid_record(node)
+		if not record.is_empty():
+			records.append(record)
+	var solids := records.filter(func(r): return not r["subtract"])
+	for record in records:
+		if record["subtract"] and _cut_reaches(record, solids).is_empty():
+			var brush: DraftBrush = record["brush"]
+			_found(
+				issues,
+				"Cut brush cuts no solid brush: %s" % brush.name,
+				brush,
+				{"kind": KIND_CUTS_NOTHING}
+			)
+	for pair in _box_pairs(records):
+		var a: Dictionary = records[pair[0]]
+		var b: Dictionary = records[pair[1]]
+		if a["subtract"] != b["subtract"]:
+			continue
+		var first: DraftBrush = a["brush"]
+		var second: DraftBrush = b["brush"]
+		if _same_within(a, b, NEAR_DUPLICATE):
+			# The exact check has said this pair already.
+			if _coincidence_key(first) != _coincidence_key(second):
+				# On the later one, as the exact check does: the copy.
+				_found(
+					issues,
+					"Brushes are the same to within 1 mm: %s, %s" % [first.name, second.name],
+					second,
+					{"kind": KIND_NEAR_DUPLICATE, "other_node": first}
+				)
+		elif not a["subtract"]:
+			for inner_outer in [[a, b], [b, a]]:
+				if _inside(inner_outer[0], inner_outer[1], NEAR_DUPLICATE):
+					var inner: DraftBrush = inner_outer[0]["brush"]
+					var outer: DraftBrush = inner_outer[1]["brush"]
+					_found(
+						issues,
+						(
+							"Solid brush is wholly inside another: %s inside %s"
+							% [inner.name, outer.name]
+						),
+						inner,
+						{"kind": KIND_INSIDE, "other_node": outer}
+					)
+
+
+## The cuts in the level that cut no solid brush, for the bake to name (#1708).
+func cuts_that_cut_nothing() -> Array:
+	var records: Array = []
+	# A committed cut still cuts while the level freezes them, as the bake counts.
+	var containers: Array = [root.draft_brushes_node, root.pending_node]
+	if root.commit_freeze:
+		containers.append(root.committed_node)
+	for container in containers:
+		if container:
+			for node in container.get_children():
+				var record := _solid_record(node, true)
+				if not record.is_empty():
+					records.append(record)
+	var solids := records.filter(func(r): return not r["subtract"])
+	var out: Array = []
+	for record in records:
+		if record["subtract"] and _cut_reaches(record, solids).is_empty():
+			out.append(record["brush"])
+	return out
+
+
+## A brush as the checks above measure it: its world faces and their box, and
+## whether it cuts. `{}` for one they leave alone: a brush tied to an entity
+## class, which no cut reaches, one that cannot be measured, and unless
+## `with_committed` one of the cuts Commit Cuts froze, which Validate leaves be.
+func _solid_record(node: Variant, with_committed: bool = false) -> Dictionary:
+	if not (node is DraftBrush) or not is_instance_valid(node):
+		return {}
+	var brush := node as DraftBrush
+	if root.is_entity_node(brush) or not HFBakeSystemType.is_structural_brush(brush):
+		return {}
+	var committed: bool = root.committed_node and brush.get_parent() == root.committed_node
+	if committed and not with_committed:
+		return {}
+	if not _brush_is_measurable(brush):
+		return {}
+	var faces := HFSolidMeasure.world_faces(brush)
+	if faces.size() < 4:
+		return {}
+	return {
+		"brush": brush,
+		"faces": faces,
+		"aabb": HFSolidMeasure.bounds(faces),
+		"subtract": committed or brush.operation == CSGShape3D.OPERATION_SUBTRACTION,
+	}
+
+
+## The solids `cut` goes into, past touching.
+func _cut_reaches(cut: Dictionary, solids: Array) -> Array:
+	var reached: Array = []
+	var box: AABB = cut["aabb"]
+	for solid in solids:
+		if not box.intersects((solid["aabb"] as AABB).grow(HFSolidMeasure.TOUCH)):
+			continue
+		if HFSolidMeasure.solid_gap(cut["faces"], solid["faces"]) < 0.0:
+			reached.append(solid)
+	return reached
+
+
+## The pairs of `records` whose boxes meet, as index pairs, by the sweep
+## `_sweep_subtract_pairs()` uses, so a big level is not every pair.
+func _box_pairs(records: Array) -> Array:
+	var axis := _widest_axis(records)
+	var order: Array = range(records.size())
+	order.sort_custom(
+		func(a: int, b: int) -> bool:
+			return (
+				(records[a]["aabb"] as AABB).position[axis]
+				< (records[b]["aabb"] as AABB).position[axis]
+			)
+	)
+	var pairs: Array = []
+	var active: Array = []
+	for index: int in order:
+		var aabb: AABB = (records[index]["aabb"] as AABB).grow(NEAR_DUPLICATE)
+		var still_open: Array = []
+		for other: int in active:
+			var other_aabb: AABB = (records[other]["aabb"] as AABB).grow(NEAR_DUPLICATE)
+			if other_aabb.end[axis] < aabb.position[axis]:
+				continue
+			still_open.append(other)
+			if other_aabb.intersects(aabb):
+				pairs.append([mini(other, index), maxi(other, index)])
+		still_open.append(index)
+		active = still_open
+	pairs.sort()
+	return pairs
+
+
+## Whether every corner of each is within `tolerance` of a corner of the other.
+func _same_within(a: Dictionary, b: Dictionary, tolerance: float) -> bool:
+	var box_a: AABB = a["aabb"]
+	var box_b: AABB = b["aabb"]
+	if not _near(box_a.position, box_b.position, tolerance):
+		return false
+	if not _near(box_a.end, box_b.end, tolerance):
+		return false
+	var points_a := _corners(a["faces"])
+	var points_b := _corners(b["faces"])
+	return _all_near(points_a, points_b, tolerance) and _all_near(points_b, points_a, tolerance)
+
+
+## Whether every corner of `inner` is inside `outer`, or within `tolerance` out.
+func _inside(inner: Dictionary, outer: Dictionary, tolerance: float) -> bool:
+	if not (outer["aabb"] as AABB).grow(tolerance).encloses(inner["aabb"]):
+		return false
+	for point in _corners(inner["faces"]):
+		if HFSolidMeasure.point_gap(point, outer["faces"]) > tolerance:
+			return false
+	return true
+
+
+static func _near(a: Vector3, b: Vector3, tolerance: float) -> bool:
+	return (
+		absf(a.x - b.x) <= tolerance
+		and absf(a.y - b.y) <= tolerance
+		and absf(a.z - b.z) <= tolerance
+	)
+
+
+static func _corners(faces: Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for face in faces:
+		out.append_array(HFSolidMeasure.ring(face))
+	return out
+
+
+static func _all_near(
+	points: PackedVector3Array, others: PackedVector3Array, tolerance: float
+) -> bool:
+	for point in points:
+		var found := false
+		for other in others:
+			if point.distance_to(other) <= tolerance:
+				found = true
+				break
+		if not found:
+			return false
+	return true
 
 
 ## Two brushes in one level answering to the same id.
@@ -596,6 +1025,17 @@ func _check_spawn(issues: Array) -> void:
 	)
 
 
+## Each To Do note not marked Done, when the level asks for it (#1818), so a ship
+## check names what is left to do. Its row selects the note. Plain and Playtest
+## notes never warn, and nothing is said with the setting off.
+func _check_open_todo_notes(issues: Array) -> void:
+	if not bool(root.get("validate_warns_open_todos")):
+		return
+	for note in HFNotes.notes(root):
+		if note["kind"] == "To Do" and not note["done"]:
+			_found(issues, "Open To Do note: %s" % note["title"], note["node"])
+
+
 # ---------------------------------------------------------------------------
 # Bake-specific issue detection
 # ---------------------------------------------------------------------------
@@ -634,6 +1074,7 @@ func check_bake_issues() -> Array:
 		_check_floating_subtract(brush, overlaps["grounded"], issues)
 		_check_non_manifold(brush, issues)
 		_check_non_planar_faces(brush, issues)
+		_check_visgroup_cast_shadows(brush, issues)
 
 	_report_overlapping_subtracts(records, overlaps["subtract_pairs"], issues)
 	_check_micro_gaps(brush_nodes, issues)
@@ -875,10 +1316,45 @@ func _ramp_slope_degrees(definition: Object, layer_list: Array) -> float:
 	return slope
 
 
+## A brush whose visgroups disagree about how it casts shadows (#1444). The first
+## of them in the visgroup list decides, which is a rule and not something the
+## mapper chose, so the brush is named. A brush that chose for itself is not:
+## its own setting beats every visgroup's. A cut makes no mesh to cast one.
+func _check_visgroup_cast_shadows(brush: DraftBrush, issues: Array) -> void:
+	if brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	if HFBakeSplit.brush_cast_shadow(brush) != HFBakeSplit.LEVEL_DEFAULT:
+		return
+	var visgroups: Variant = root.get("visgroup_system")
+	if visgroups == null or not visgroups.has_method("cast_shadow_overrides_of"):
+		return
+	var overrides: Array = visgroups.cast_shadow_overrides_of(brush)
+	if overrides.size() < 2:
+		return
+	var said := PackedStringArray()
+	var differ := false
+	for entry: Array in overrides:
+		said.append("'%s' says %s" % [entry[0], HFBakeSplit.cast_shadow_name(int(entry[1]))])
+		differ = differ or int(entry[1]) != int(overrides[0][1])
+	if not differ:
+		return
+	var decides := "'%s'" % overrides[0][0]
+	var bakes := HFBakeSplit.cast_shadow_name(int(overrides[0][1]))
+	var message := (
+		"Brush '%s' is in visgroups that disagree on Cast Shadows (%s). It bakes %s, from %s, "
+		% [brush.name, ", ".join(said), bakes, decides]
+	)
+	message += "the first of them in the visgroup list"
+	issues.append(
+		{"type": "visgroup_cast_shadow_conflict", "severity": 1, "message": message, "node": brush}
+	)
+
+
 func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
 	var size = brush.size
 	var min_dim := minf(size.x, minf(size.y, size.z))
-	if min_dim < 0.01 and (size.x > 0.0 or size.y > 0.0 or size.z > 0.0):
+	var thin := min_dim < HFConvexClip.NEAR_ZERO_THICKNESS
+	if thin and (size.x > 0.0 or size.y > 0.0 or size.z > 0.0):
 		issues.append(
 			{
 				"type": "degenerate",
@@ -924,7 +1400,7 @@ func _build_brush_records(brush_nodes: Array) -> Array:
 					"subtract": brush.operation == CSGShape3D.OPERATION_SUBTRACTION,
 					# A brush tied to an entity class bakes from its own faces and
 					# no cutter reaches it, so it cannot be what a cut lands on (#942).
-					"ground": str(brush.get_meta("brush_entity_class", "")) == "",
+					"ground": HFBakeSystemType.is_structural_brush(brush),
 				}
 			)
 		)
@@ -1017,7 +1493,7 @@ func _check_floating_subtract(brush: DraftBrush, grounded: Dictionary, issues: A
 		{
 			"type": "floating_subtract",
 			"severity": 1,
-			"message": "Subtraction '%s' doesn't intersect any additive brush" % brush.name,
+			"message": "Cut brush '%s' does not overlap any solid brush" % brush.name,
 			"node": brush
 		}
 	)
@@ -1041,7 +1517,7 @@ func _report_overlapping_subtracts(records: Array, pairs: Array, issues: Array) 
 			{
 				"type": "overlapping_subtract",
 				"severity": 1,
-				"message": "Overlapping subtractions: '%s' and '%s'" % [a.name, b.name],
+				"message": "Overlapping cut brushes: '%s' and '%s'" % [a.name, b.name],
 				"node": a
 			}
 		)
@@ -1111,8 +1587,8 @@ func _check_non_manifold(brush: DraftBrush, issues: Array) -> void:
 ## every edge of every face of every brush, and building the string cost more
 ## than everything it was a key for.
 func _edge_key(a: Vector3, b: Vector3) -> Array:
-	var ai := _quantise(a, 0.001)
-	var bi := _quantise(b, 0.001)
+	var ai := HFVertexWeld.cell(a, 0.001)
+	var bi := HFVertexWeld.cell(b, 0.001)
 	if (
 		ai.x < bi.x
 		or (ai.x == bi.x and ai.y < bi.y)
@@ -1338,65 +1814,32 @@ func _touching_distance(at: Vector3) -> float:
 
 
 ## Snap vertices that are within weld_tolerance of each other to a shared position.
-## Operates on face local_verts in local space.  Uses BFS over a spatial hash with
-## 27-cell neighbor lookup so pairs straddling a bucket boundary are never missed.
-## Returns number of vertices welded.
+## Operates on face local_verts in local space. `HFVertexWeld` decides which
+## vertices join, the same way the `.map` import does, and each group moves to
+## its average. Returns number of vertices welded.
 func weld_brush_vertices(brush: DraftBrush) -> int:
 	if not brush or brush.faces.is_empty():
 		return 0
-	var tol: float = weld_tolerance
-	# Collect every vertex reference into a flat list + spatial hash
-	var entries: Array = []  # Array of {fi: int, vi: int, pos: Vector3}
-	var cells: Dictionary = {}  # cell_key -> Array[int]
+	# Every corner in one flat list, with the face and slot it came from.
+	var points := PackedVector3Array()
+	var face_of := PackedInt32Array()
+	var slot_of := PackedInt32Array()
 	for fi in range(brush.faces.size()):
 		var face = brush.faces[fi]
 		if not face:
 			continue
-		for vi in range(face.local_verts.size()):
-			var idx: int = entries.size()
-			var pos: Vector3 = face.local_verts[vi]
-			entries.append({"fi": fi, "vi": vi, "pos": pos})
-			var key: Vector3i = _snap_key(pos, tol)
-			if not cells.has(key):
-				cells[key] = []
-			(cells[key] as Array).append(idx)
-	# BFS grouping: vertices within tolerance are transitively merged
-	var group_of: PackedInt32Array = PackedInt32Array()
-	group_of.resize(entries.size())
-	group_of.fill(-1)
-	var groups: Array = []  # Array of Array[int]
-	for seed_idx in range(entries.size()):
-		if group_of[seed_idx] >= 0:
-			continue
-		var gid: int = groups.size()
-		var members: Array = [seed_idx]
-		group_of[seed_idx] = gid
-		var queue: Array = [seed_idx]
-		while not queue.is_empty():
-			var cur: int = queue.pop_front()
-			var cur_pos: Vector3 = entries[cur]["pos"]
-			for cell_key: Vector3i in _cell_keys(cur_pos, tol):
-				for neighbor_idx: int in cells.get(cell_key, []):
-					if group_of[neighbor_idx] >= 0:
-						continue
-					if cur_pos.distance_to(entries[neighbor_idx]["pos"]) <= tol:
-						group_of[neighbor_idx] = gid
-						members.append(neighbor_idx)
-						queue.append(neighbor_idx)
-		groups.append(members)
-	# Compute group averages and write back
+		var verts: PackedVector3Array = face.local_verts
+		for vi in range(verts.size()):
+			points.append(verts[vi])
+			face_of.append(fi)
+			slot_of.append(vi)
 	var welded := 0
 	var dirty_faces: Dictionary = {}  # fi -> true
-	for members: Array in groups:
-		if members.size() < 2:
-			continue
-		var avg := Vector3.ZERO
-		for idx: int in members:
-			avg += entries[idx]["pos"]
-		avg /= float(members.size())
-		for idx: int in members:
-			var fi: int = entries[idx]["fi"]
-			var vi: int = entries[idx]["vi"]
+	for group: PackedInt32Array in HFVertexWeld.cluster(points, weld_tolerance):
+		var avg := HFVertexWeld.average(points, group)
+		for i in group:
+			var fi: int = face_of[i]
+			var vi: int = slot_of[i]
 			var face = brush.faces[fi]
 			var verts: PackedVector3Array = face.local_verts
 			if verts[vi].distance_to(avg) > 0.0:
@@ -1441,21 +1884,10 @@ func fix_non_planar_faces(brush: DraftBrush) -> int:
 	return fixed
 
 
-## The grid cell a point falls in, at `tol` spacing.
-##
-## The index rather than the formatted position: same buckets, no allocation.
-## `snapped()` is kept in the middle so the bucket boundaries are exactly the
-## ones this used to produce.
-func _quantise(v: Vector3, tol: float) -> Vector3i:
-	return Vector3i(
-		roundi(snapped(v.x, tol) / tol),
-		roundi(snapped(v.y, tol) / tol),
-		roundi(snapped(v.z, tol) / tol)
-	)
-
-
+## The grid cell a point falls in, at `tol` spacing. `HFVertexWeld` owns the
+## grid, so the micro-gap scan buckets a point exactly where the weld does.
 func _snap_key(v: Vector3, tol: float) -> Vector3i:
-	return _quantise(v, tol)
+	return HFVertexWeld.cell(v, tol)
 
 
 ## Return all 27 cell keys (self + 26 neighbors) for a spatial hash lookup.
@@ -1467,7 +1899,7 @@ func _snap_key(v: Vector3, tol: float) -> Vector3i:
 ## that mattered: the old version formatted 27 strings for every vertex of every
 ## brush, and that was almost the whole cost of a Check Issues pass.
 func _cell_keys(v: Vector3, cell_size: float) -> Array:
-	var c := _quantise(v, cell_size)
+	var c := HFVertexWeld.cell(v, cell_size)
 	var keys: Array = []
 	for dx in [-1, 0, 1]:
 		for dy in [-1, 0, 1]:

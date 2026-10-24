@@ -4,7 +4,7 @@ description: "Taking a finished HammerForge level into a game: which file is the
 
 # Shipping a Level
 
-Last updated: October 18, 2026
+Last updated: October 22, 2026
 
 Every other guide covers building a level. This one covers the last hour of its
 life: turning the thing you have been editing into something a game loads.
@@ -26,7 +26,7 @@ A HammerForge level lives in three files, and they do different jobs.
 
 | File | What it holds | Who reads it |
 |---|---|---|
-| `<level>.tscn` | The editing scene: the `LevelRoot`, the source brushes, the baked geometry | You, in the editor |
+| `<level>.tscn` | The editing scene: the `LevelRoot`, the source brushes, the baked geometry. A big level can be saved as a binary `<level>.scn` instead ([Performance and Limits](HammerForge_Performance.md#scn-or-tscn)) | You, in the editor |
 | `<level>.hflevel` | The canonical save: brushes, faces, materials, entities, visgroups, settings | HammerForge, on load |
 | `<level>_game.tscn` | The export: baked geometry and real entity nodes | **Your game** |
 
@@ -57,8 +57,12 @@ they stand for is what the export is for.
 named after it. It contains:
 
 - the baked geometry and its collision;
-- `Nonstructural`, holding `func_detail` meshes and the `Area3D` for every
-  trigger volume;
+- `Nonstructural`, holding `func_detail` meshes, the `Area3D` for every
+  trigger volume, and the `ClipCollision` body that holds every `func_clip` on
+  the level's Physics Layer, with a `ClipCollision_Layer<N>` beside it for each
+  other layer a clip names;
+- `RampCollision`, the slope a stair set to Ramp collision is walked on, in
+  place of its steps' collision;
 - every point entity as the real node its class names: `light_point` as an
   `OmniLight3D` and `light_spot` as a `SpotLight3D`, hidden at load when its
   Start On Load is off, `logic_timer` as a `Timer` that starts when the scene
@@ -101,7 +105,15 @@ Export Game Scene leaves it out, because a game usually sets its own, unless you
 tick **Include Level Environment** under the button.
 
 `bake_lightmap_texel_size` (default `0.1`) is the lightmap density. Smaller is
-sharper and slower to bake.
+sharper and slower to bake. A brush's own **Lightmap Scale**, 0.125 to 8 under
+Build > Selection Tools, multiplies that density for the meshes it bakes into,
+so a floor the player looks at can have more texels than a ceiling nobody does.
+
+**Cast Shadows** is On for the whole level by default. Set it for the level in
+the bake options, for a visgroup in the Visgroups section, or for the selected
+brushes in Selection Tools: Off, Double Sided, or Shadows Only for a caster that
+is not drawn. A brush's own choice beats its visgroups', and theirs beats the
+level's. The bake splits meshes so no mesh mixes two choices.
 
 ## Bake options for a shipped level
 
@@ -116,7 +128,7 @@ frame. For an export:
 | Use face materials | on | on | This is what keeps your texturing |
 | Navmesh | off | on, if anything pathfinds | See the agent settings below |
 | Occluders | off | on, for interiors | Occlusion culling needs them |
-| Chunk size | 0 | above ~100 brushes | Lets Godot cull parts of the level |
+| Chunk size | 0 | above ~100 brushes | Lets Godot cull parts of the level. It does not make the bake shorter ([Performance and Limits](HammerForge_Performance.md#baking)) |
 
 Merge meshes and per-face materials work together: merging combines the meshes,
 and the materials stay as separate surfaces on the merged mesh.
@@ -128,7 +140,7 @@ rows in one step. **Shipping** turns Merge meshes and Generate LODs on, and
 name and press **Save**, and your own profile holds every option, ready for the
 next level. The list says **Custom** when the options match no profile.
 
-One thing to know: a level with **any** subtractive brush in it falls back to the
+One thing to know: a level with **any** cut brush in it falls back to the
 CSG bake path, because independent face triangulation has no boolean stage. Your
 texturing goes with it. A textured brush enters the boolean as a mesh with one
 surface per material and comes out still wearing them, so cutting a window does
@@ -230,7 +242,7 @@ Before you call a level done:
 - [ ] **Export Game Scene**, not Export Playtest Build
 - [ ] The exported scene loads in your game with no second player in it
 - [ ] Lightmaps baked, if you are baking lighting
-- [ ] `.tscn` and `.hflevel` both committed; the exported scene need not be
+- [ ] The level scene (`.tscn` or `.scn`) and `.hflevel` both committed; the exported scene need not be
 
 ## Knowing What the Player Is Standing On
 

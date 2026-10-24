@@ -29,6 +29,7 @@ const FaceData = preload("../face_data.gd")
 const HFDisplacementData = preload("../displacement_data.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFDoorRuntime = preload("../hf_door_runtime.gd")
+const HFGeneratorSystem = preload("hf_generator_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 enum PivotMode { SELECTION_CENTER, WORLD_ORIGIN, ACTIVE, CUSTOM }
@@ -390,6 +391,7 @@ func rotate(
 		if lock_textures:
 			adjust_face_uvs_for_rotation(draft, local_rot)
 			draft.rebuild_preview()
+		_refit_texture_groups(draft)
 		# A door's angle turns with it, as a point entity's does below. Left
 		# behind, a door turned with its wall slid out of the wall (#1210).
 		if axis_index == 1:
@@ -435,6 +437,7 @@ func set_rotation(brush_ids: Array, rotation: Basis) -> int:
 		if lock_textures:
 			adjust_face_uvs_for_rotation(draft, local_rot)
 			draft.rebuild_preview()
+		_refit_texture_groups(draft)
 		# The Agent Bridge turns a brush through here, and a door it turned slid
 		# out of its wall (#1256).
 		turn_brush_entity_angle(draft, rot)
@@ -444,9 +447,13 @@ func set_rotation(brush_ids: Array, rotation: Basis) -> int:
 
 
 ## Mirror brushes and entities across the plane through `pivot` whose normal is
-## `axis_index`. A sculpted displacement is mirrored with its face. Returns the
-## number changed.
-func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3) -> int:
+## `axis_index`. A sculpted displacement is mirrored with its face. A texture group
+## last fitted is fitted again across its mirrored faces, unless `refit_groups` is
+## off, as for Mirror Copy's copies, which extend a surface as a duplicate does.
+## Returns the number changed.
+func flip(
+	brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3, refit_groups := true
+) -> int:
 	if not is_valid_axis(axis_index):
 		HFLog.warn("HFTransformSystem: flip needs an axis of 0, 1 or 2")
 		return 0
@@ -459,6 +466,8 @@ func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3
 		if draft == null:
 			continue
 		_flip_brush(draft, axis_index, pivot)
+		if refit_groups:
+			_refit_texture_groups(draft)
 		_set_brush_entity_angle(draft, mirrored_bearing(_brush_entity_angle(draft), axis_index))
 		changed += 1
 	for entity_path in entity_paths:
@@ -472,6 +481,98 @@ func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3
 		_set_entity_angle(entity, mirrored_angle(_entity_angle(entity), axis_index))
 		changed += 1
 	return changed
+
+
+## Mirrored copies of brushes and entities, the originals left as they are: one
+## across each axis in `axes` (bits: 1 X, 2 Y, 4 Z) and one across each
+## combination of them, so n axes make 2^n - 1 copies and X with Z makes three.
+## Each plane crosses its axis at `pivot`.
+##
+## A copy is what Duplicate makes, put through `flip()` once for each of its
+## axes: a brush id of its own and a brush entity of its own (#1161), then Flip's
+## fold, so it keeps a positive determinant and stays one convex brush, its faces'
+## look, paint and sculpts land on the faces the mirror sends them to, and an
+## entity's angle is mirrored. Texture Lock decides the texture as it does for a
+## move: on, it is mirrored with the copy; off, the copy reads the level's
+## projection where it lands, as Flip leaves it.
+##
+## Returns `{"brush_ids", "entity_paths"}` of the copies, empty when it made none.
+func mirror_copy(brush_ids: Array, entity_paths: Array, axes: int, pivot: Vector3) -> Dictionary:
+	var made := {"brush_ids": [], "entity_paths": []}
+	if axes < 1 or axes > 7:
+		HFLog.warn("HFTransformSystem: mirror_copy needs axes from 1 to 7")
+		return made
+	if not pivot.is_finite():
+		HFLog.warn("HFTransformSystem: mirror_copy needs a finite pivot")
+		return made
+	if not is_instance_valid(root):
+		return made
+	var lock_textures := _texture_lock_enabled()
+	for combination in range(1, 8):
+		if (combination & ~axes) != 0:
+			continue
+		var copy := _copy_in_place(brush_ids, entity_paths)
+		for axis_index in 3:
+			if (combination & (1 << axis_index)) == 0:
+				continue
+			flip(copy["brush_ids"], copy["entity_paths"], axis_index, pivot, false)
+			if lock_textures:
+				for brush_id in copy["brush_ids"]:
+					_lock_mirrored_texture(
+						_brush_at_id(str(brush_id)), axis_index, pivot[axis_index]
+					)
+		(made["brush_ids"] as Array).append_array(copy["brush_ids"])
+		(made["entity_paths"] as Array).append_array(copy["entity_paths"])
+	return made
+
+
+## One copy of each brush and entity, standing where its original stands:
+## Duplicate's records with no offset and fresh identities, built at once. Built
+## one combination at a time, so the names a copy is given are free of the
+## copies made before it.
+func _copy_in_place(brush_ids: Array, entity_paths: Array) -> Dictionary:
+	var infos: Array = []
+	for brush_id in brush_ids:
+		var draft := _brush_at_id(str(brush_id))
+		if draft == null:
+			continue
+		var info: Dictionary = root.build_duplicate_info(draft, Vector3.ZERO)
+		if not info.is_empty():
+			infos.append(info)
+	HFBrushEntity.fresh_identities(infos, [], root.entity_system)
+	var copy_ids: Array = []
+	for info in infos:
+		if root.create_brush_from_info(info) != null:
+			copy_ids.append(str(info["brush_id"]))
+	var copy_paths: Array = []
+	for entity_path in entity_paths:
+		var entity := _entity_at_path(entity_path)
+		if entity == null:
+			continue
+		var info: Dictionary = root.build_duplicate_entity_info(entity, Vector3.ZERO)
+		var copied: Node = root.entity_system.restore_entity_from_info(info)
+		if copied != null:
+			copy_paths.append(root.get_path_to(copied))
+	return {"brush_ids": copy_ids, "entity_paths": copy_paths}
+
+
+## Texture Lock for a mirror: every face reads the mirror image of what it read,
+## the way a moved face keeps its texture on the brush.
+func _lock_mirrored_texture(draft: DraftBrush, axis_index: int, plane: float) -> void:
+	if draft == null:
+		return
+	# The Box UV axis is read where the brush is now, and a moved node tells its
+	# faces only when the frame's transform notifications go out.
+	draft.sync_face_world_transform()
+	var adjusted := false
+	for face in draft.faces:
+		# A face in a texture group keeps its group's mapping (#1437).
+		if face == null or face.uv_group != 0:
+			continue
+		if face.adjust_uvs_for_mirror(axis_index, plane):
+			adjusted = true
+	if adjusted:
+		draft.rebuild_preview()
 
 
 ## Clear each brush's rotation, keeping its position and its size.
@@ -542,6 +643,397 @@ static func permuted_size(size: Vector3, mapping: PackedInt32Array) -> Vector3:
 
 
 # ---------------------------------------------------------------------------
+# Apply Rotation and Scale
+# ---------------------------------------------------------------------------
+
+## Fold each brush's rotation and scale into its shape and faces, leaving it in
+## the world exactly where it stood with an identity basis (#1435). A brush
+## stretched with Godot's gizmo kept its old `size`, so typed sizes, resize
+## handles and Hollow's wall thickness all worked in units that were not metres.
+##
+# ---------------------------------------------------------------------------
+# Shear
+# ---------------------------------------------------------------------------
+
+
+## The shear that moves every point along axis `along` by `amount` for each unit
+## it stands past `pivot` on axis `over`, so the plane at `pivot` stays put
+## (#1718). A leaning wall is `along` X `over` Y; 0.5 m over 3 m is 1/6.
+static func shear_transform(along: int, over: int, amount: float, pivot: float) -> Transform3D:
+	var basis := Basis.IDENTITY
+	basis[over] = axis_vector(over) + axis_vector(along) * amount
+	return Transform3D(basis, -axis_vector(along) * amount * pivot)
+
+
+## The shear amount, metres per metre, that leans by `degrees`.
+static func shear_amount_for_degrees(degrees: float) -> float:
+	return tan(deg_to_rad(degrees))
+
+
+## Why a shear `along` `over` by `amount` cannot be made, or "" when it can.
+static func shear_problem(along: int, over: int, amount: float) -> String:
+	if not is_valid_axis(along) or not is_valid_axis(over):
+		return "Shear: the axes are X, Y or Z"
+	if along == over:
+		return "Shear: the axis that moves and the axis it leans over must differ"
+	if not is_finite(amount):
+		return "Shear: the amount must be a number"
+	return ""
+
+
+## Lean `brush_ids` and move `entity_paths` by `shear_transform()` (#1718).
+##
+## Every corner of every brush moves by the one shear, so brushes that met still
+## meet, and a shear keeps a flat face flat and a convex brush convex. Each brush
+## keeps its turn, with the lean folded into its faces as Apply Rotation and Scale
+## folds a scale, so a box becomes custom. With Texture Lock on, each face keeps
+## the texture where it showed, written into its custom UVs; otherwise its
+## projection is laid on the new corners afresh. A brush with a sculpt is left
+## alone, since a lean would stretch it. A point entity moves with its origin and
+## keeps its turn. Returns `fold_report_text()`'s report: `changed`, `custom`,
+## `cylindrical`, `structure` and `refused`, plus `entities`, how many moved.
+func shear(
+	brush_ids: Array, entity_paths: Array, along: int, over: int, amount: float, pivot: float
+) -> Dictionary:
+	var report := {
+		"changed": 0,
+		"custom": [],
+		"cylindrical": [],
+		"structure": [],
+		"refused": [],
+		"entities": 0,
+	}
+	if shear_problem(along, over, amount) != "" or not is_finite(pivot):
+		return report
+	if is_zero_approx(amount):
+		return report
+	var lean := shear_transform(along, over, amount, pivot)
+	var lock_textures := _texture_lock_enabled()
+	for brush_id in brush_ids:
+		var draft := _brush_at_id(str(brush_id))
+		if draft == null:
+			continue
+		_ensure_faces(draft)
+		var label := str(draft.name)
+		if _has_sculpt(draft):
+			(report["refused"] as Array).append("%s (a lean would stretch its sculpt)" % label)
+			continue
+		var locked: Array = []
+		if lock_textures:
+			for face in draft.get_faces():
+				var data := face as FaceData
+				if data != null and not data.has_uv_layout() and data.local_verts.size() >= 3:
+					data.custom_uvs = data.shown_uvs()
+					locked.append(data)
+		var before := draft.global_transform
+		draft.global_transform = lean * before
+		var outcome := fold_basis(draft, before.basis)
+		if str(outcome["refused"]) != "":
+			# Left as it was, lean and locked UVs both.
+			draft.global_transform = before
+			for data in locked:
+				(data as FaceData).custom_uvs = PackedVector2Array()
+			(report["refused"] as Array).append("%s %s" % [label, outcome["refused"]])
+			continue
+		if not outcome["folded"]:
+			continue
+		report["changed"] = int(report["changed"]) + 1
+		if outcome["custom"]:
+			(report["custom"] as Array).append(label)
+		if int(outcome["cylindrical"]) > 0:
+			(report["cylindrical"] as Array).append(label)
+		if str(draft.get_meta(HFGeneratorSystem.GENERATOR_META, "")) != "":
+			(report["structure"] as Array).append(label)
+		_refit_texture_groups(draft)
+	for entity_path in entity_paths:
+		var entity := _entity_at_path(entity_path)
+		if entity == null:
+			continue
+		entity.global_position = lean * entity.global_position
+		report["entities"] = int(report["entities"]) + 1
+	return report
+
+
+## Returns what happened, for the toast: `changed`, how many were folded, and the
+## names of those that became custom (`custom`), had Cylindrical faces written into
+## custom UVs (`cylindrical`), are structure pieces that now read as edited
+## (`structure`), and `refused`, each with why.
+func apply_rotation_and_scale(brush_ids: Array) -> Dictionary:
+	var report := {"changed": 0, "custom": [], "cylindrical": [], "structure": [], "refused": []}
+	for brush_id in brush_ids:
+		var draft := _brush_at_id(str(brush_id))
+		if draft == null:
+			continue
+		var outcome := fold_basis(draft, Basis.IDENTITY)
+		var label := str(draft.name)
+		if str(outcome["refused"]) != "":
+			(report["refused"] as Array).append("%s %s" % [label, outcome["refused"]])
+			continue
+		if not outcome["folded"]:
+			continue
+		report["changed"] = int(report["changed"]) + 1
+		if outcome["custom"]:
+			(report["custom"] as Array).append(label)
+		if int(outcome["cylindrical"]) > 0:
+			(report["cylindrical"] as Array).append(label)
+		if str(draft.get_meta(HFGeneratorSystem.GENERATOR_META, "")) != "":
+			(report["structure"] as Array).append(label)
+	return report
+
+
+## The toast for an `apply_rotation_and_scale()` report, or for the fold a
+## Convert to Brushes made: what was applied, and each case that could not keep
+## everything, by name.
+static func fold_report_text(report: Dictionary, lead: String) -> String:
+	var parts := PackedStringArray([lead])
+	var custom: Array = report.get("custom", [])
+	if not custom.is_empty():
+		parts.append(
+			(
+				"%s became custom, with no resize handles or Sides"
+				% ", ".join(PackedStringArray(custom))
+			)
+		)
+	var cylindrical: Array = report.get("cylindrical", [])
+	if not cylindrical.is_empty():
+		parts.append(
+			(
+				"Cylindrical faces of %s keep their look as custom UVs"
+				% ", ".join(PackedStringArray(cylindrical))
+			)
+		)
+	var structure: Array = report.get("structure", [])
+	if not structure.is_empty():
+		parts.append(
+			(
+				"%s now read as edited structure pieces, which Update rebuilds over"
+				% ", ".join(PackedStringArray(structure))
+			)
+		)
+	var refused: Array = report.get("refused", [])
+	if not refused.is_empty():
+		parts.append("Left alone: %s" % ", ".join(PackedStringArray(refused)))
+	return ". ".join(parts)
+
+
+## Fold the part of a brush's basis that is not `keep` into its shape and faces,
+## so the brush stands in `keep` and every corner stays where it is in the world.
+## Apply Rotation and Scale folds the whole basis (`keep` the identity); Convert
+## to Brushes folds a node's scale and keeps its turn.
+##
+## A linear map keeps a flat face flat and a convex brush convex, so the folded
+## faces are the brush exactly. A primitive stays one when a primitive of some
+## size has those corners: a box under a scale or a quarter turn, which `size`
+## takes, a sphere scaled unevenly, which is an ellipsoid. Its faces are built as
+## the shape builds them and take the folded faces' data by their corners, as a
+## flip moves a face's look to the face that takes its place. Anything else turns
+## CUSTOM with the folded faces as its geometry.
+##
+## A mirror reverses each face's winding, as `mirror_face()` does, so the faces
+## stay clockwise from outside. A Cylindrical face is projected in the brush's own
+## space, which the fold changes, so what it shows is written into its custom UVs
+## first; every other projection is taken in the level and reads the same. Box UV
+## is told the fold is no turn (`FaceData.keep_uv_layout_in()`). A sculpt keeps its
+## heights under a turn and an even scale, its distances scaled with the brush and
+## its offset directions turned; under an uneven one the brush is refused.
+##
+## Returns `{"folded": bool, "custom": bool, "cylindrical": int, "refused": String}`:
+## whether anything changed, whether a primitive became custom, how many
+## Cylindrical faces were written into custom UVs, and why the brush was left alone.
+func fold_basis(draft: DraftBrush, keep: Basis) -> Dictionary:
+	var outcome := {"folded": false, "custom": false, "cylindrical": 0, "refused": ""}
+	if draft == null or not is_instance_valid(draft):
+		return outcome
+	if not keep.is_finite() or is_zero_approx(keep.determinant()):
+		HFLog.warn("HFTransformSystem: fold_basis needs a basis to keep that has an inverse")
+		return outcome
+	var xform := draft.global_transform
+	var fold := keep.inverse() * xform.basis
+	if _same_basis(fold, Basis.IDENTITY):
+		return outcome
+	if not fold.is_finite() or absf(fold.determinant()) < FLAT_DETERMINANT:
+		outcome["refused"] = "(it is squashed flat)"
+		return outcome
+	_ensure_faces(draft)
+	if not is_similarity(fold) and _has_sculpt(draft):
+		outcome["refused"] = "(an uneven scale would stretch its sculpted faces)"
+		return outcome
+	var folded := _folded_faces(draft.get_faces(), fold)
+	var faces: Array[FaceData] = folded["faces"]
+	if faces.is_empty():
+		outcome["refused"] = "(it has no faces to fold into)"
+		return outcome
+	outcome["cylindrical"] = folded["cylindrical"]
+	var was_custom := draft.shape == DraftBrush.BrushShape.CUSTOM
+	var kept := {} if was_custom else _primitive_after_fold(draft, fold, faces)
+	var final_faces: Array[FaceData] = faces
+	if not kept.is_empty():
+		final_faces = kept["faces"]
+	for face in final_faces:
+		face.keep_uv_layout_in(keep)
+	draft.global_transform = Transform3D(keep, xform.origin)
+	if kept.is_empty():
+		if not was_custom:
+			draft.shape = DraftBrush.BrushShape.CUSTOM
+		draft.faces = final_faces
+		draft.size = DraftBrush._vertex_bounds(final_faces).size
+	else:
+		if int(kept["shape"]) != draft.shape:
+			draft.shape = int(kept["shape"])
+		draft.size = kept["size"]
+		draft.faces = final_faces
+	draft.geometry_dirty = false
+	draft.rebuild_preview()
+	_tag_dirty(draft)
+	outcome["folded"] = true
+	outcome["custom"] = not was_custom and kept.is_empty()
+	return outcome
+
+
+## The smallest determinant a fold is made through. Anything flatter has squashed
+## the brush to nothing along some axis, and its faces would fold onto each other.
+const FLAT_DETERMINANT := 0.000001
+
+
+## Whether a basis is a turn, possibly mirrored, and one scale on every axis:
+## the maps that carry a sculpt's heights and a face's angles along unchanged.
+static func is_similarity(basis: Basis) -> bool:
+	var lengths := Vector3(basis.x.length(), basis.y.length(), basis.z.length())
+	var scale := (lengths.x + lengths.y + lengths.z) / 3.0
+	if scale <= 0.0:
+		return false
+	for axis in 3:
+		if absf(lengths[axis] - scale) > ROTATION_EPSILON * scale:
+			return false
+	var unit := Basis(basis.x / lengths.x, basis.y / lengths.y, basis.z / lengths.z)
+	return (
+		absf(unit.x.dot(unit.y)) <= ROTATION_EPSILON
+		and absf(unit.y.dot(unit.z)) <= ROTATION_EPSILON
+		and absf(unit.z.dot(unit.x)) <= ROTATION_EPSILON
+	)
+
+
+## The turn in a basis with its scale and any mirror taken out: its columns made
+## unit length, and the first one reversed when they mirror. What a node's
+## transform keeps when its scale is folded into a brush (#1440). The identity
+## when the columns are not square with each other, a shear from a skewed parent,
+## which no turn and scale describe; the whole basis is folded then.
+static func rotation_part(basis: Basis) -> Basis:
+	var lengths := Vector3(basis.x.length(), basis.y.length(), basis.z.length())
+	if lengths.x <= 0.0 or lengths.y <= 0.0 or lengths.z <= 0.0 or not basis.is_finite():
+		return Basis.IDENTITY
+	var unit := Basis(basis.x / lengths.x, basis.y / lengths.y, basis.z / lengths.z)
+	if (
+		absf(unit.x.dot(unit.y)) > ROTATION_EPSILON
+		or absf(unit.y.dot(unit.z)) > ROTATION_EPSILON
+		or absf(unit.z.dot(unit.x)) > ROTATION_EPSILON
+	):
+		return Basis.IDENTITY
+	if unit.determinant() < 0.0:
+		unit.x = -unit.x
+	return unit.orthonormalized()
+
+
+static func _has_sculpt(draft: DraftBrush) -> bool:
+	for face in draft.get_faces():
+		if face != null and face.displacement != null:
+			return true
+	return false
+
+
+## Copies of `faces` with `fold` applied to every corner, reversed when it
+## mirrors, and what is laid against the corners carried with them. A Cylindrical
+## face without UVs of its own takes the ones it shows. Returns
+## `{"faces": Array[FaceData], "cylindrical": int}`.
+static func _folded_faces(faces: Array, fold: Basis) -> Dictionary:
+	var mirrored := fold.determinant() < 0.0
+	var scale := pow(absf(fold.determinant()), 1.0 / 3.0)
+	var turn := Basis(fold.x / scale, fold.y / scale, fold.z / scale)
+	var out: Array[FaceData] = []
+	var cylindrical := 0
+	for face in faces:
+		var source := face as FaceData
+		if source == null:
+			continue
+		var count := source.local_verts.size()
+		var uvs := PackedVector2Array()
+		if source.has_uv_layout():
+			uvs = source.custom_uvs
+		elif source.uv_projection == FaceData.UVProjection.CYLINDRICAL and count >= 3:
+			uvs = source.shown_uvs()
+			cylindrical += 1
+		var verts := PackedVector3Array()
+		verts.resize(count)
+		var carried := PackedVector2Array()
+		if uvs.size() == count:
+			carried.resize(count)
+		for i in count:
+			var from := count - 1 - i if mirrored else i
+			verts[i] = fold * source.local_verts[from]
+			if not carried.is_empty():
+				carried[i] = uvs[from]
+		var copy := FaceData.new()
+		copy.copy_appearance_from(source)
+		# The same face folded, so it stays in its linked surface (#1437).
+		copy.copy_texture_group_from(source)
+		copy.local_verts = verts
+		copy.custom_uvs = carried
+		copy.paint_layers = source.paint_layers.duplicate()
+		copy.displacement = _folded_sculpt(
+			source.displacement, turn, scale, mirrored and count == 4
+		)
+		copy.ensure_geometry()
+		out.append(copy)
+	return {"faces": out, "cylindrical": cylindrical}
+
+
+## A sculpt for a face folded through `turn` and an even `scale`: its distances
+## scaled, its offset directions turned, and its grid relabelled when the face's
+## corners were reversed. A new resource, since an undo step or another face can
+## hold the old one.
+static func _folded_sculpt(sculpt: Resource, turn: Basis, scale: float, reversed: bool) -> Resource:
+	var data := sculpt as HFDisplacementData
+	if data == null:
+		return sculpt
+	if reversed:
+		var relabelled := data.remapped(PackedInt32Array([3, 2, 1, 0]))
+		if relabelled != null:
+			data = relabelled
+	var out := data.duplicate() as HFDisplacementData
+	var distances := out.distances
+	for i in distances.size():
+		distances[i] *= scale
+	out.distances = distances
+	var offsets := out.offsets
+	for i in offsets.size():
+		offsets[i] = turn * offsets[i]
+	out.offsets = offsets
+	return out
+
+
+## The primitive a brush still is once `fold` is in its corners, as
+## `{"shape", "size", "faces"}` with the faces built and given the folded faces'
+## data, or empty when no primitive has those corners. Only a fold whose columns
+## each lie along a world axis can leave one: a scale, a quarter turn, a mirror.
+func _primitive_after_fold(draft: DraftBrush, fold: Basis, folded: Array) -> Dictionary:
+	var mapping := axis_permutation(fold)
+	if mapping.is_empty():
+		return {}
+	var stretch := Vector3(fold.x.length(), fold.y.length(), fold.z.length())
+	var size := permuted_size(draft.size * stretch, mapping)
+	var shape: int = draft.shape
+	if (
+		shape == DraftBrush.BrushShape.SPHERE
+		and not (is_equal_approx(size.x, size.y) and is_equal_approx(size.y, size.z))
+	):
+		shape = DraftBrush.BrushShape.ELLIPSOID
+	var built := DraftBrush.generated_faces(shape, size, draft.sides)
+	if not DraftBrush.take_face_data_by_corners(folded, built):
+		return {}
+	return {"shape": shape, "size": size, "faces": built}
+
+
+# ---------------------------------------------------------------------------
 # Pivots and bounds
 # ---------------------------------------------------------------------------
 
@@ -569,17 +1061,25 @@ func resolve_pivot(
 ## selection that has been mirrored or scaled, which is a basis nothing should be
 ## built through.
 func resolve_selection_basis(brush_ids: Array, entity_paths: Array) -> Basis:
-	var shared := Basis.IDENTITY
-	var seen := false
+	var shared: Variant = shared_selection_basis(brush_ids, entity_paths)
+	return shared if shared is Basis else Basis.IDENTITY
+
+
+## The same walk, answering null where `resolve_selection_basis()` falls back to
+## the world axes: a selection whose parts disagree, or that has a mirrored or
+## scaled part, or that is empty. The Offset popup says when its Local axes are
+## the world's for that reason, which the identity on its own cannot tell apart
+## from a selection that faces the world axes.
+func shared_selection_basis(brush_ids: Array, entity_paths: Array) -> Variant:
+	var shared: Variant = null
 	for node in _selected_nodes(brush_ids, entity_paths):
 		var basis: Basis = node.global_transform.basis
 		if not is_rotation_basis(basis):
-			return Basis.IDENTITY
-		if not seen:
+			return null
+		if shared == null:
 			shared = basis
-			seen = true
 		elif not _same_basis(basis, shared):
-			return Basis.IDENTITY
+			return null
 	return shared
 
 
@@ -742,7 +1242,8 @@ static func mirrored_local_axis(draft: DraftBrush) -> int:
 ## matching what `texture_lock` already means for moving and resizing a brush.
 static func adjust_face_uvs_for_rotation(draft: DraftBrush, local_rot: Basis) -> void:
 	for face in draft.faces:
-		if face == null:
+		# A face in a texture group keeps its group's mapping (#1437).
+		if face == null or face.uv_group != 0:
 			continue
 		face.adjust_uvs_for_rotation(local_rot)
 
@@ -1025,6 +1526,13 @@ static func _set_brush_entity_angle(draft: DraftBrush, angle_degrees: float) -> 
 	var data: Dictionary = (stored as Dictionary).duplicate() if stored is Dictionary else {}
 	data["angle"] = angle_degrees
 	draft.set_meta(HFBrushEntity.DATA_META, data)
+
+
+## A texture group last fitted is fitted again across the surface the turn or the
+## mirror reshaped (#1437).
+func _refit_texture_groups(draft: DraftBrush) -> void:
+	if is_instance_valid(root) and root.brush_system:
+		root.brush_system.refit_texture_groups([draft])
 
 
 func _texture_lock_enabled() -> bool:

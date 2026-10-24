@@ -327,13 +327,15 @@ func test_build_bake_options_reflects_changed_values():
 
 
 # ===========================================================================
-# _is_structural_brush
+# is_structural_brush
 # ===========================================================================
 
 
 func test_is_structural_no_meta():
 	var b = _make_brush(root.draft_brushes_node)
-	assert_true(bake_sys._is_structural_brush(b), "Brush with no brush_entity_class is structural")
+	assert_true(
+		HFBakeSystem.is_structural_brush(b), "Brush with no brush_entity_class is structural"
+	)
 
 
 func test_func_wall_is_not_structural():
@@ -341,25 +343,25 @@ func test_func_wall_is_not_structural():
 	# Enable and Disable, which nothing could reach once it was (#827).
 	var b = _make_brush(root.draft_brushes_node)
 	b.set_meta("brush_entity_class", "func_wall")
-	assert_false(bake_sys._is_structural_brush(b), "func_wall is not structural")
+	assert_false(HFBakeSystem.is_structural_brush(b), "func_wall is not structural")
 
 
 func test_is_not_structural_func_detail():
 	var b = _make_brush(root.draft_brushes_node)
 	b.set_meta("brush_entity_class", "func_detail")
-	assert_false(bake_sys._is_structural_brush(b), "func_detail is not structural")
+	assert_false(HFBakeSystem.is_structural_brush(b), "func_detail is not structural")
 
 
 func test_is_not_structural_trigger_once():
 	var b = _make_brush(root.draft_brushes_node)
 	b.set_meta("brush_entity_class", "trigger_once")
-	assert_false(bake_sys._is_structural_brush(b), "trigger_once is not structural")
+	assert_false(HFBakeSystem.is_structural_brush(b), "trigger_once is not structural")
 
 
 func test_is_not_structural_trigger_multiple():
 	var b = _make_brush(root.draft_brushes_node)
 	b.set_meta("brush_entity_class", "trigger_multiple")
-	assert_false(bake_sys._is_structural_brush(b), "trigger_multiple is not structural")
+	assert_false(HFBakeSystem.is_structural_brush(b), "trigger_multiple is not structural")
 
 
 # ===========================================================================
@@ -847,15 +849,40 @@ func test_estimate_bake_time_uses_last_bake_ratio():
 	_make_brush(root.draft_brushes_node)
 	_make_brush(root.draft_brushes_node)
 	root._last_bake_duration_ms = 200  # 200ms for 2 brushes = 100ms/brush
+	bake_sys._last_bake_brush_count = 2
 	var est = bake_sys.estimate_bake_time()
 	assert_eq(est["estimated_ms"], 200, "Should estimate 2 * 100ms = 200ms")
+
+
+## A bake is timed over the brushes it took, so a Bake Selected of one brush does
+## not make the whole level's estimate one brush's time spread over all of them
+## (#1590).
+func test_the_estimate_scales_each_bake_by_the_brushes_it_took():
+	var brushes: Array = []
+	for i in range(20):
+		var info := {
+			"shape": LevelRoot.BrushShape.BOX,
+			"size": Vector3.ONE,
+			"center": Vector3(i * 2, 0.5, 0),
+			"operation": CSGShape3D.OPERATION_UNION,
+		}
+		brushes.append(root.create_brush_from_info(info))
+	assert_true(await root.bake_selected([brushes[0]]), "fixture: one brush bakes")
+	assert_eq(bake_sys._last_bake_brush_count, 1, "a Bake Selected is timed over its brush")
+	root._last_bake_duration_ms = 50
+	var est = bake_sys.estimate_bake_time()
+	assert_eq(est["brush_count"], 20)
+	assert_eq(est["estimated_ms"], 1000, "50 ms for the one brush, so 1,000 for twenty")
+	assert_true(await root.bake(true, false, 0), "fixture: the level bakes")
+	assert_eq(bake_sys._last_bake_brush_count, 20, "a full bake is timed over the level")
 
 
 func test_estimate_bake_time_tip_for_many_brushes():
 	for i in range(510):
 		_make_brush(root.draft_brushes_node)
 	var est = bake_sys.estimate_bake_time()
-	assert_string_contains(est["tip"], "Chunking recommended")
+	assert_string_contains(est["tip"], "Chunk the bake")
+	assert_false(est["tip"].contains("faster"), "chunking does not shorten a bake")
 
 
 # ===========================================================================
@@ -2026,6 +2053,15 @@ func test_a_func_detail_still_cuts_the_navmesh():
 		assert_eq(_polygon_under(nav, Vector3(0, 0.5, 0)), -1, "clutter is in the way")
 
 
+func test_a_func_clip_cuts_the_navmesh():
+	# A clip is on the world's layer unless told otherwise, so an agent's body meets
+	# it as the player's does, and a path through it would end against it (#1409).
+	var nav := _navmesh_of(_corridor_with("func_clip"))
+	assert_not_null(nav)
+	if nav:
+		assert_eq(_polygon_under(nav, Vector3(0, 0.5, 0)), -1, "an agent cannot walk through it")
+
+
 const _NAV_SOLID_PROP := "user://hf_test_nav_solid_prop.tscn"
 const _NAV_HOLLOW_PROP := "user://hf_test_nav_hollow_prop.tscn"
 const _NAV_EXPORT := "user://hf_test_nav_export.tscn"
@@ -2424,8 +2460,18 @@ func test_set_parsed_geometry_type_neither_property():
 
 
 # ===========================================================================
-# _collect_brush_collision_data
+# _csg_collision_pieces: what the convex collision modes hull (#1513)
 # ===========================================================================
+
+
+## The pieces of whatever brushes `brushes` hands the CSG, as a bake hands them.
+func _pieces_of(brushes: Array) -> Dictionary:
+	var csg := CSGCombiner3D.new()
+	csg.use_collision = false
+	root.add_child(csg)
+	autofree(csg)
+	bake_sys.append_brush_list_to_csg(brushes, csg)
+	return bake_sys._csg_collision_pieces(csg)
 
 
 func test_collect_collision_data_skips_subtractive_brushes():
@@ -2433,42 +2479,268 @@ func test_collect_collision_data_skips_subtractive_brushes():
 	additive.operation = CSGShape3D.OPERATION_UNION
 	var subtractive = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
 	subtractive.operation = CSGShape3D.OPERATION_SUBTRACTION
-	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
+	var data := _pieces_of(root.draft_brushes_node.get_children())
 	assert_eq(data["hull_verts"].size(), 1, "Only additive brush should contribute hull verts")
 
 
 func test_collect_collision_data_uses_real_mesh_verts():
 	# A cylinder brush should not produce 8 AABB-corner verts;
-	# it should have more points from the actual cylinder mesh.
+	# it should have more points from the actual cylinder faces.
 	var cyl = _make_brush(root.draft_brushes_node, Vector3.ZERO)
 	cyl.shape = 1  # BrushShape.CYLINDER — has radial segments
 	cyl.size = Vector3(4, 4, 4)
-	# Force visual rebuild so mesh_instance is populated
+	# Force visual rebuild so the faces are the cylinder's
 	cyl._update_visuals()
-	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
+	var data := _pieces_of([cyl])
 	assert_eq(data["hull_verts"].size(), 1, "Should collect one brush")
 	var verts: PackedVector3Array = data["hull_verts"][0]
-	assert_gt(verts.size(), 8, "Cylinder mesh should produce more than 8 box-corner verts")
+	assert_gt(verts.size(), 8, "Cylinder faces should produce more than 8 box-corner verts")
 
 
 func test_collect_collision_data_flat_brush_list():
+	# A chunk hands over its own brushes, not a container's.
 	var b1 = _make_brush(root.draft_brushes_node, Vector3.ZERO)
 	var b2 = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
-	var data: Dictionary = bake_sys._collect_brush_collision_data([b1, b2])
+	_make_brush(root.draft_brushes_node, Vector3(20, 0, 0))
+	var data := _pieces_of([b1, b2])
 	assert_eq(data["hull_verts"].size(), 2, "Flat brush list should collect both brushes")
 
 
 func test_collect_collision_data_skips_entity_brushes():
 	var entity_brush = _make_brush(root.draft_brushes_node, Vector3.ZERO)
 	entity_brush.set_meta("is_entity", true)
-	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
+	var data := _pieces_of(root.draft_brushes_node.get_children())
 	assert_eq(data["hull_verts"].size(), 0, "Entity brushes should be excluded")
 
 
 func test_collect_collision_data_empty_with_no_brushes():
-	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
+	var data := _pieces_of([])
 	assert_eq(data["hull_verts"].size(), 0)
 	assert_eq(data["visgroups"].size(), 0)
+
+
+func test_a_cut_leaves_the_pieces_round_it():
+	# A box with a hole through its middle is four boxes round the hole, and none
+	# of them reaches into it.
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(8, 8, 8))
+	var hole := _make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(2, 2, 10))
+	hole.operation = CSGShape3D.OPERATION_SUBTRACTION
+	var data := _pieces_of(root.draft_brushes_node.get_children())
+	assert_false(data.has("error"), "a box cutter carves")
+	assert_eq(data["hull_verts"].size(), 4, "one piece on each side of the hole")
+	for verts: PackedVector3Array in data["hull_verts"]:
+		var bounds := AABB(verts[0], Vector3.ZERO)
+		for point in verts:
+			bounds = bounds.expand(point)
+		assert_false(
+			bounds.grow(-0.001).intersects(AABB(Vector3(-1, -1, -5), Vector3(2, 2, 10))),
+			"no piece reaches into the hole"
+		)
+
+
+func test_a_cut_that_is_not_convex_is_refused():
+	# A torus carved by its planes would carve out its hull, and fill or open
+	# space the mesh does not. The bake keeps the triangles instead.
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(8, 8, 8))
+	var ring := _make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(6, 2, 6))
+	ring.shape = LevelRoot.BrushShape.TORUS
+	ring.operation = CSGShape3D.OPERATION_SUBTRACTION
+	ring._update_visuals()
+	var data := _pieces_of(root.draft_brushes_node.get_children())
+	assert_eq(data.get("error", ""), "a cut is not convex")
+
+
+func test_a_cut_that_reaches_nothing_need_not_be_convex():
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(4, 4, 4))
+	var ring := _make_brush(root.draft_brushes_node, Vector3(50, 0, 0), Vector3(6, 2, 6))
+	ring.shape = LevelRoot.BrushShape.TORUS
+	ring.operation = CSGShape3D.OPERATION_SUBTRACTION
+	ring._update_visuals()
+	var data := _pieces_of(root.draft_brushes_node.get_children())
+	assert_false(data.has("error"), "it cuts nothing, so nothing has to follow it")
+	assert_eq(data["hull_verts"].size(), 1)
+
+
+# ===========================================================================
+# append_brush_list_to_csg: an untextured shape keeps its brush's size (#1523)
+# ===========================================================================
+
+## The shapes `PrefabFactory.create_prefab()` sized through the operand's own
+## scale, which placing the operand replaced, each with a size that differs
+## from axis to axis. A capsule's is kept round across, as the brush keeps it.
+const PREFAB_SIZED_SHAPES := {
+	LevelRoot.BrushShape.ELLIPSOID: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.CAPSULE: Vector3(2, 6, 2),
+	LevelRoot.BrushShape.TORUS: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.TETRAHEDRON: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.OCTAHEDRON: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.ICOSAHEDRON: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.DODECAHEDRON: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.WEDGE: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.PRISM_TRI: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.PRISM_PENT: Vector3(6, 2, 4),
+}
+
+
+## The world bounds of `brush`'s own faces.
+func _face_bounds(brush: DraftBrush) -> AABB:
+	var points := PackedVector3Array()
+	for face in brush.get_faces():
+		points.append_array(brush.global_transform * (face as FaceData).local_verts)
+	var bounds := AABB(points[0], Vector3.ZERO)
+	for point in points:
+		bounds = bounds.expand(point)
+	return bounds
+
+
+## The world bounds of what the CSG builds from the operand a bake makes of
+## `brush`. A cut is measured as a solid: on its own it leaves nothing, and it
+## is placed the same way either way.
+func _operand_bounds(brush: DraftBrush) -> AABB:
+	var csg := CSGCombiner3D.new()
+	root.add_child(csg)
+	bake_sys.append_brush_list_to_csg([brush], csg)
+	for operand in csg.get_children():
+		(operand as CSGShape3D).operation = CSGShape3D.OPERATION_UNION
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var meshes := csg.get_meshes()
+	var bounds := AABB()
+	if meshes.size() >= 2:
+		bounds = csg.global_transform * (meshes[1] as Mesh).get_aabb()
+	csg.free()
+	return bounds
+
+
+func test_an_untextured_shape_the_factory_sizes_bakes_at_its_brush_size():
+	# Turned and moved, so the operand's own scale has to go inside the
+	# placement, and not be lost or land on the brush's position.
+	var placed := Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(5, 1, -3))
+	for shape in PREFAB_SIZED_SHAPES:
+		for operation in [CSGShape3D.OPERATION_UNION, CSGShape3D.OPERATION_SUBTRACTION]:
+			var info := {
+				"shape": shape,
+				"size": PREFAB_SIZED_SHAPES[shape],
+				"transform": placed,
+				"operation": operation,
+			}
+			var brush := root.create_brush_from_info(info) as DraftBrush
+			var label := (
+				"%s %s"
+				% [
+					LevelRoot.BrushShape.find_key(shape),
+					"cut" if operation == CSGShape3D.OPERATION_SUBTRACTION else "solid",
+				]
+			)
+			var wanted := _face_bounds(brush)
+			var baked: AABB = await _operand_bounds(brush)
+			assert_almost_eq(baked.size, wanted.size, Vector3.ONE * 0.01, label + " size")
+			assert_almost_eq(baked.position, wanted.position, Vector3.ONE * 0.01, label + " place")
+
+
+# ===========================================================================
+# A flat round brush bakes its own faces on the CSG path (#1596)
+# ===========================================================================
+
+## Every round shape, at a size that differs across where the shape allows, and
+## a side count. Six is not a multiple of four, so a ring that starts a quarter
+## turn round from the brush's lands between its corners.
+const ROUND_CASES := [
+	[LevelRoot.BrushShape.SPHERE, Vector3(6, 6, 6), 16],
+	[LevelRoot.BrushShape.ELLIPSOID, Vector3(6, 2, 4), 16],
+	[LevelRoot.BrushShape.CAPSULE, Vector3(2, 6, 2), 16],
+	[LevelRoot.BrushShape.TORUS, Vector3(6, 2, 4), 16],
+	[LevelRoot.BrushShape.CYLINDER, Vector3(4, 6, 4), 6],
+	[LevelRoot.BrushShape.CONE, Vector3(4, 6, 4), 6],
+]
+
+
+## The corners of `points`, those closer than a thousandth taken as one.
+static func _distinct_corners(points: PackedVector3Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for point in points:
+		var seen := false
+		for kept in out:
+			if point.distance_to(kept) < 0.001:
+				seen = true
+				break
+		if not seen:
+			out.append(point)
+	return out
+
+
+## The corners `level` baked inside `region`.
+static func _baked_corners_in(level: LevelRoot, region: AABB) -> PackedVector3Array:
+	var points := PackedVector3Array()
+	for node in level.baked_container.find_children("*", "MeshInstance3D", true, false):
+		var drawn := node as MeshInstance3D
+		if drawn.mesh == null:
+			continue
+		for s in drawn.mesh.get_surface_count():
+			for point: Vector3 in drawn.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]:
+				var placed := drawn.global_transform * point
+				if region.has_point(placed):
+					points.append(placed)
+	return _distinct_corners(points)
+
+
+func _assert_same_corners(got: PackedVector3Array, want: PackedVector3Array, what: String) -> void:
+	assert_eq(got.size(), want.size(), "%s: as many corners" % what)
+	var strays := 0
+	for point in got:
+		var found := false
+		for wanted in want:
+			found = found or point.distance_to(wanted) < 0.001
+		if not found:
+			strays += 1
+	assert_eq(strays, 0, "%s: every corner where one of the brush's is" % what)
+
+
+## A cut anywhere puts the whole level on the CSG path. A round brush in group 0,
+## which every one saved before smoothing groups is, went into the boolean as
+## Godot's own shape at Godot's own counts, so one doorway reshaped every sphere.
+func test_a_flat_round_brush_bakes_its_own_faces_whether_or_not_a_cut_is_anywhere():
+	for case: Array in ROUND_CASES:
+		var level := LevelRoot.new()
+		level.auto_spawn_player = false
+		level.hflevel_autosave_enabled = false
+		add_child_autoqfree(level)
+		var info := {
+			"shape": case[0], "size": case[1], "center": Vector3(3, 4, -2), "sides": case[2]
+		}
+		var brush := level.create_brush_from_info(info) as DraftBrush
+		for face in brush.faces:
+			face.smoothing_group = 0
+		var far := {
+			"shape": LevelRoot.BrushShape.BOX, "size": Vector3(8, 2, 8), "center": Vector3(60, 0, 0)
+		}
+		level.create_brush_from_info(far)
+		var label := "%s, %d sides" % [LevelRoot.BrushShape.find_key(case[0]), case[2]]
+		var own := PackedVector3Array()
+		for face: FaceData in brush.faces:
+			own.append_array(brush.global_transform * face.local_verts)
+		own = _distinct_corners(own)
+		var region := _face_bounds(brush).grow(0.01)
+
+		assert_true(await level.bake(true, false), "fixture: %s bakes" % label)
+		_assert_same_corners(_baked_corners_in(level, region), own, label + ", no cut")
+
+		var cut := far.duplicate()
+		cut["size"] = Vector3(2, 4, 2)
+		cut["operation"] = CSGShape3D.OPERATION_SUBTRACTION
+		level.create_brush_from_info(cut)
+		assert_true(await level.bake(true, false), "fixture: %s bakes with the cut" % label)
+		var round_it := AABB(Vector3(55, -2, -5), Vector3(10, 4, 10))
+		assert_gt(_baked_corners_in(level, round_it).size(), 8, "fixture: the cut went through")
+		_assert_same_corners(
+			_baked_corners_in(level, region), own, label + ", a cut elsewhere in the level"
+		)
+
+		level.bake_use_face_materials = false
+		assert_true(await level.bake(true, false), "fixture: %s bakes bare" % label)
+		_assert_same_corners(
+			_baked_corners_in(level, region), own, label + ", a cut and Use Face Materials off"
+		)
 
 
 # ===========================================================================
@@ -2607,6 +2879,10 @@ class MockVisgroupSystem:
 
 	func get_visgroups_of(node: Node) -> PackedStringArray:
 		return assignments.get(node.name, PackedStringArray())
+
+	## The bake asks this of every brush since #1732; these visgroups all bake.
+	func is_left_out_of_bake(_node: Node) -> bool:
+		return false
 
 
 func _setup_mock_baker() -> MockBaker:
@@ -3316,6 +3592,42 @@ func test_bake_dirty_with_no_changes_reports_nothing_to_do():
 
 
 # ===========================================================================
+# Finding the nonstructural brushes costs the same whatever the brush count
+# ===========================================================================
+
+
+## A level that counts how often its property list is read.
+class PropertyListCountingLevel:
+	extends LevelRoot
+
+	var property_list_reads := 0
+
+	func _get_property_list() -> Array[Dictionary]:
+		property_list_reads += 1
+		return []
+
+
+func test_finding_detail_brushes_reads_the_bake_settings_once_not_once_a_brush():
+	# Each setting read scans the level's whole property list, and this pass read
+	# two settings for every brush in the level, after the time the dock reports
+	# as the last bake had stopped: a 1,000 brush bake took 2,855 ms, not 237 ms.
+	var level := PropertyListCountingLevel.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	for i in range(20):
+		_make_brush(level.draft_brushes_node, Vector3(i * 8, 0, 0))
+	level.property_list_reads = 0
+
+	var found: Array = level.bake_system._collect_nonstructural_brushes()
+
+	assert_eq(found.size(), 0, "plain brushes are structural")
+	assert_lt(
+		level.property_list_reads, 20, "the settings are read once for the pass, not for each brush"
+	)
+
+
+# ===========================================================================
 # Nonstructural bake keeps authored names and places its collision body
 # (#140, #158)
 # ===========================================================================
@@ -3592,8 +3904,30 @@ func test_a_custom_brush_goes_into_the_csg_as_its_own_mesh():
 	var shape: Node3D = _only_csg_child([brush])
 
 	assert_true(shape is CSGMesh3D, "a shape the prefab factory cannot build is cut with its mesh")
+	var drawn: Mesh = brush.mesh_instance.mesh
+	var cut: Mesh = (shape as CSGMesh3D).mesh
 	assert_eq(
-		(shape as CSGMesh3D).mesh, brush.mesh_instance.mesh, "and it is the mesh it is drawing"
+		cut.get_surface_count(), drawn.get_surface_count(), "and it is the mesh it is drawing"
+	)
+	for i in drawn.get_surface_count():
+		assert_eq(
+			cut.surface_get_arrays(i)[Mesh.ARRAY_VERTEX],
+			drawn.surface_get_arrays(i)[Mesh.ARRAY_VERTEX],
+			"surface %d is where the brush draws it" % i
+		)
+		# Less the editor's see-through tint on a face with nothing to draw with,
+		# which went into the boolean and came out the other side (#1518).
+		assert_null(cut.surface_get_material(i), "surface %d goes in bare" % i)
+
+
+func test_a_custom_brush_with_nothing_to_leave_behind_goes_in_as_the_mesh_itself():
+	var brush := _make_wedge(root.draft_brushes_node)
+	brush.material_override = StandardMaterial3D.new()
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	assert_eq(
+		(shape as CSGMesh3D).mesh, brush.mesh_instance.mesh, "no copy of a mesh that needs none"
 	)
 
 
@@ -4197,3 +4531,586 @@ func test_bake_selected_bakes_in_full_over_a_bake_that_kept_no_record():
 
 	assert_true(_selection_pieces().is_empty())
 	assert_almost_eq(_baked_x_span().x, 9.0, 0.01)
+
+
+## A brush with no id yet, as one added other than through HammerForge has: made
+## the usual way, then with its id taken off, the property and the meta both.
+func _brush_with_no_id(center: Vector3) -> DraftBrush:
+	var brush := (
+		root.create_brush_from_info({"size": Vector3(2, 2, 2), "center": center}) as DraftBrush
+	)
+	brush.brush_id = ""
+	if brush.has_meta("brush_id"):
+		brush.remove_meta("brush_id")
+	return brush
+
+
+func test_bake_selected_twice_replaces_the_bake_of_a_brush_with_no_id():
+	# The record left out a brush with no id, so the second bake found nothing of
+	# the first to replace and baked the brush again beside it (#1455).
+	var wall := _brush_with_no_id(Vector3.ZERO)
+	assert_true(await root.bake_selected([wall]))
+	assert_ne(wall.brush_id, "", "the bake gave the brush an id to record it by")
+
+	assert_true(await root.bake_selected([wall]))
+
+	assert_eq(_selection_pieces().size(), 1, "the second bake replaced the first")
+
+
+func test_a_full_bake_records_a_brush_with_no_id():
+	# Left out of the record, the brush counted as new once it had an id, and Bake
+	# Selected baked it beside the full bake that already held it (#1455).
+	var wall := _brush_with_no_id(Vector3.ZERO)
+	assert_true(await root.bake(false, false))
+	# Selecting the brush in the dock asks for its id, which mints one.
+	root.get_brush_info_from_node(wall)
+	wall.global_position = Vector3(10, 0, 0)
+
+	assert_true(await root.bake_selected([wall]))
+
+	assert_true(_selection_pieces().is_empty(), "no selection beside the full bake")
+	assert_almost_eq(_baked_x_span().x, 9.0, 0.01, "nothing is left where the wall was")
+
+
+# ===========================================================================
+# Cast Shadows and Lightmap Scale split the merge (#1444, #1438)
+# ===========================================================================
+
+const HFBakeSplitScript = preload("res://addons/hammerforge/hf_bake_split.gd")
+const HFLevelIOScript = preload("res://addons/hammerforge/hflevel_io.gd")
+const MapIOScript = preload("res://addons/hammerforge/map_io.gd")
+const SHADOWS_ON := GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+const SHADOWS_OFF := GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+const SHADOWS_DOUBLE := GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED
+const SHADOWS_ONLY := GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+
+
+func _baked_meshes() -> Array:
+	if root.baked_container == null:
+		return []
+	return root.baked_container.find_children("*", "MeshInstance3D", true, false)
+
+
+## The baked meshes by how they cast shadows.
+func _meshes_by_cast_shadow() -> Dictionary:
+	var out := {}
+	for mesh: MeshInstance3D in _baked_meshes():
+		if not out.has(mesh.cast_shadow):
+			out[mesh.cast_shadow] = []
+		out[mesh.cast_shadow].append(mesh)
+	return out
+
+
+func _world_bounds(mesh: MeshInstance3D) -> AABB:
+	return mesh.global_transform * mesh.get_aabb()
+
+
+func _cut(brush_id: String, center: Vector3, sz: Vector3) -> DraftBrush:
+	return (
+		(
+			root
+			. create_brush_from_info(
+				{
+					"size": sz,
+					"center": center,
+					"brush_id": brush_id,
+					"operation": CSGShape3D.OPERATION_SUBTRACTION,
+				}
+			)
+		)
+		as DraftBrush
+	)
+
+
+func _bake_through_csg() -> bool:
+	return await bake_sys.bake(false, false, 0, HFBakeSystem.PreviewMode.FULL, true)
+
+
+func test_a_level_bakes_with_shadows_on_until_told_otherwise():
+	assert_eq(
+		root.bake_cast_shadows, SHADOWS_ON, "so a level from before the choice bakes the same"
+	)
+	_id_brush("a", Vector3.ZERO)
+	_id_brush("b", Vector3(4, 0, 0))
+
+	assert_true(await root.bake(false, false))
+
+	var meshes := _baked_meshes()
+	assert_eq(meshes.size(), 1, "the brushes still merge into one mesh")
+	assert_eq(meshes[0].cast_shadow, SHADOWS_ON)
+	assert_eq(meshes[0].gi_lightmap_texel_scale, 1.0)
+
+
+## World, grouped detail, a named crate with a mesh of its own, and painted
+## ground, which is no brush at all.
+func _level_with_world_and_detail() -> void:
+	_id_brush("wall", Vector3.ZERO)
+	var crate := _id_brush("crate", Vector3(4, 0, 0))
+	crate.set_meta("brush_entity_class", "func_detail")
+	var named := _id_brush("named", Vector3(8, 0, 0))
+	named.set_meta("brush_entity_class", "func_detail")
+	named.set_meta("entity_name", "named_crate")
+	var heightmaps := Node3D.new()
+	heightmaps.name = "GeneratedHeightmapFloors"
+	root.add_child(heightmaps)
+	root.generated_heightmap_floors = heightmaps
+	var ground := MeshInstance3D.new()
+	ground.name = "HeightmapFloor_0"
+	ground.mesh = PlaneMesh.new()
+	heightmaps.add_child(ground)
+
+
+func test_a_level_default_of_off_bakes_every_mesh_off():
+	root.bake_cast_shadows = SHADOWS_OFF
+	_level_with_world_and_detail()
+
+	assert_true(await root.bake(false, false))
+
+	var meshes := _baked_meshes()
+	assert_eq(meshes.size(), 4, "the world, the grouped detail, the named crate and the ground")
+	for mesh: MeshInstance3D in meshes:
+		assert_eq(mesh.cast_shadow, SHADOWS_OFF, "%s casts no shadow" % mesh.name)
+
+
+func test_a_level_default_of_off_bakes_every_mesh_off_through_csg():
+	root.bake_cast_shadows = SHADOWS_OFF
+	_level_with_world_and_detail()
+
+	assert_true(await _bake_through_csg())
+
+	var meshes := _baked_meshes()
+	assert_eq(meshes.size(), 4)
+	for mesh: MeshInstance3D in meshes:
+		assert_eq(mesh.cast_shadow, SHADOWS_OFF, "%s casts no shadow" % mesh.name)
+
+
+func test_one_brush_shadows_only_bakes_its_own_mesh_and_the_rest_merge():
+	_id_brush("a", Vector3.ZERO)
+	_id_brush("b", Vector3(4, 0, 0))
+	_id_brush("blocker", Vector3(8, 0, 0))
+	root.set_brush_cast_shadow(["blocker"], SHADOWS_ONLY)
+
+	assert_true(await root.bake(false, false))
+
+	var by_setting := _meshes_by_cast_shadow()
+	assert_eq(_baked_meshes().size(), 2, "one mesh for the blocker, one for the rest")
+	assert_eq(by_setting.get(SHADOWS_ONLY, []).size(), 1)
+	assert_eq(by_setting.get(SHADOWS_ON, []).size(), 1)
+	if by_setting.size() != 2:
+		return
+	var blocker: AABB = _world_bounds(by_setting[SHADOWS_ONLY][0])
+	assert_almost_eq(blocker.get_center().x, 8.0, 0.01, "the blocker's mesh holds the blocker")
+	var rest: AABB = _world_bounds(by_setting[SHADOWS_ON][0])
+	assert_almost_eq(rest.size.x, 6.0, 0.01, "and the other two share one mesh")
+
+
+func test_a_split_csg_bake_cuts_every_part():
+	# Each part is a CSG pass of its own, and the cut goes into each of them.
+	_id_brush("a", Vector3.ZERO)
+	_id_brush("blocker", Vector3(4, 0, 0))
+	root.set_brush_cast_shadow(["blocker"], SHADOWS_ONLY)
+	_cut("cut", Vector3(2, 1, 0), Vector3(10, 2, 4))
+
+	assert_true(await _bake_through_csg())
+
+	var by_setting := _meshes_by_cast_shadow()
+	assert_eq(_baked_meshes().size(), 2, "one mesh a part")
+	for setting in [SHADOWS_ON, SHADOWS_ONLY]:
+		var meshes: Array = by_setting.get(setting, [])
+		assert_eq(meshes.size(), 1)
+		if meshes.size() == 1:
+			var bounds := _world_bounds(meshes[0])
+			assert_almost_eq(bounds.size.y, 1.0, 0.01, "the cut took the top off part %d" % setting)
+
+
+func test_a_split_csg_bake_is_one_pass_a_part_each_with_every_cut():
+	var mock := _setup_mock_baker()
+	_id_brush("a", Vector3.ZERO)
+	_id_brush("blocker", Vector3(4, 0, 0))
+	root.set_brush_cast_shadow(["blocker"], SHADOWS_ONLY)
+	_cut("cut", Vector3(2, 1, 0), Vector3(10, 2, 4))
+
+	var baked: Node3D = await bake_sys.bake_single(1, bake_sys.build_bake_options())
+
+	assert_not_null(baked)
+	add_child_autoqfree(baked)
+	assert_eq(mock.call_count, 2, "a pass for each part")
+	for operations in mock.csg_operations:
+		assert_eq(
+			operations,
+			[CSGShape3D.OPERATION_UNION, CSGShape3D.OPERATION_SUBTRACTION],
+			"each pass holds its own solid and the cut"
+		)
+	var names: Array = []
+	for child in baked.get_children():
+		if child is MeshInstance3D:
+			names.append(str(child.name))
+	assert_eq(names, ["BakedMesh_0", "BakedMesh_1"], "the parts gathered into one node")
+	assert_eq(baked.find_children("*", "StaticBody3D", true, false).size(), 1, "with one body")
+
+
+func test_a_level_with_one_set_of_settings_is_one_csg_pass():
+	var mock := _setup_mock_baker()
+	_id_brush("a", Vector3.ZERO)
+	_id_brush("b", Vector3(4, 0, 0))
+	root.set_brush_cast_shadow(["a", "b"], SHADOWS_OFF)
+
+	var baked: Node3D = await bake_sys.bake_single(1, bake_sys.build_bake_options())
+
+	add_child_autoqfree(baked)
+	assert_eq(mock.call_count, 1, "nothing to split, so the level is one pass as it was")
+
+
+func test_a_visgroup_off_applies_to_its_brushes_unless_a_brush_says_otherwise():
+	var sky := _id_brush("sky", Vector3.ZERO)
+	var lit := _id_brush("lit", Vector3(4, 0, 0))
+	var plain := _id_brush("plain", Vector3(8, 0, 0))
+	root.create_visgroup("backdrop")
+	root.add_selection_to_visgroup("backdrop", [sky, lit])
+	assert_true(root.set_visgroup_cast_shadow("backdrop", SHADOWS_OFF))
+	root.set_brush_cast_shadow(["lit"], SHADOWS_DOUBLE)
+
+	assert_eq(bake_sys._split_settings(sky)["cast_shadow"], SHADOWS_OFF, "the visgroup's")
+	assert_eq(bake_sys._split_settings(lit)["cast_shadow"], SHADOWS_DOUBLE, "the brush's beats it")
+	assert_eq(bake_sys._split_settings(plain)["cast_shadow"], SHADOWS_ON, "the level's")
+	assert_true(await root.bake(false, false))
+	var by_setting := _meshes_by_cast_shadow()
+	assert_eq(by_setting.keys().size(), 3, "a mesh for each")
+	for setting in [SHADOWS_OFF, SHADOWS_DOUBLE, SHADOWS_ON]:
+		assert_eq(by_setting.get(setting, []).size(), 1, "one mesh casting %d" % setting)
+
+
+func _issues_of_type(kind: String) -> Array:
+	var out: Array = []
+	for issue in root.validation_system.check_bake_issues():
+		if issue is Dictionary and issue.get("type", "") == kind:
+			out.append(issue)
+	return out
+
+
+func test_two_visgroups_that_disagree_the_first_in_the_list_decides_and_check_issues_says():
+	var ceiling := _id_brush("ceiling", Vector3.ZERO)
+	root.create_visgroup("upper")
+	root.create_visgroup("lights")
+	# Joined the other way round, so the list decides and not the brush's own order.
+	root.add_selection_to_visgroup("lights", [ceiling])
+	root.add_selection_to_visgroup("upper", [ceiling])
+	root.set_visgroup_cast_shadow("upper", SHADOWS_OFF)
+	root.set_visgroup_cast_shadow("lights", SHADOWS_ONLY)
+
+	assert_eq(bake_sys._split_settings(ceiling)["cast_shadow"], SHADOWS_OFF, "upper is first")
+	var found := _issues_of_type("visgroup_cast_shadow_conflict")
+	assert_eq(found.size(), 1, "Check Issues names the brush")
+	if found.size() == 1:
+		assert_same(found[0]["node"], ceiling)
+		assert_string_contains(found[0]["message"], str(ceiling.name))
+		assert_string_contains(found[0]["message"], "'upper'")
+
+	root.set_brush_cast_shadow(["ceiling"], SHADOWS_ON)
+	assert_true(
+		_issues_of_type("visgroup_cast_shadow_conflict").is_empty(),
+		"a brush that chose for itself is not in doubt"
+	)
+
+
+func test_two_visgroups_that_agree_are_not_an_issue():
+	var ceiling := _id_brush("ceiling", Vector3.ZERO)
+	for vg_name in ["upper", "lights"]:
+		root.create_visgroup(vg_name)
+		root.add_selection_to_visgroup(vg_name, [ceiling])
+		root.set_visgroup_cast_shadow(vg_name, SHADOWS_OFF)
+
+	assert_true(_issues_of_type("visgroup_cast_shadow_conflict").is_empty())
+
+
+func test_a_named_brush_entity_honours_its_own_settings():
+	var crate := _id_brush("crate", Vector3.ZERO)
+	root.tie_brushes_to_entity(["crate"], "func_detail", "named_crate")
+	root.set_brush_cast_shadow(["crate"], SHADOWS_ONLY)
+	root.set_brush_lightmap_scale(["crate"], 2.0)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+
+	bake_sys._append_nonstructural_brushes(container)
+
+	var mesh := _first_under(container, "MeshInstance3D") as MeshInstance3D
+	assert_not_null(mesh, "a named crate keeps a mesh of its own")
+	if mesh:
+		assert_eq(str(mesh.name), "named_crate")
+		assert_eq(mesh.cast_shadow, SHADOWS_ONLY)
+		assert_eq(mesh.gi_lightmap_texel_scale, 2.0)
+
+
+func test_grouped_detail_splits_as_the_world_does():
+	for i in 3:
+		var crate := _id_brush("crate_%d" % i, Vector3(i * 4, 0, 0))
+		crate.set_meta("brush_entity_class", "func_detail")
+	root.set_brush_cast_shadow(["crate_2"], SHADOWS_OFF)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+
+	bake_sys._append_nonstructural_brushes(container)
+
+	var detail := container.get_node_or_null("Nonstructural/DetailGeometry")
+	assert_not_null(detail)
+	if detail == null:
+		return
+	var casts: Array = []
+	for mesh: MeshInstance3D in detail.find_children("*", "MeshInstance3D", true, false):
+		casts.append(mesh.cast_shadow)
+	assert_eq(casts, [SHADOWS_ON, SHADOWS_OFF], "two crates in one mesh and one in another")
+	var body := _first_under(detail, "StaticBody3D") as StaticBody3D
+	assert_eq(Baker._shape_count(body), 3, "one hull a crate, in one body")
+
+
+func test_each_cast_shadows_choice_makes_the_bake_out_of_date():
+	var brush := _id_brush("a", Vector3.ZERO)
+	root.create_visgroup("vg")
+	root.add_selection_to_visgroup("vg", [brush])
+	var before := bake_sys.bake_settings_signature()
+	root.bake_cast_shadows = SHADOWS_OFF
+	assert_ne(bake_sys.bake_settings_signature(), before, "the level's is a bake setting")
+	assert_true(HFBakeSystem.is_bake_setting("bake_cast_shadows"))
+	root.bake_cast_shadows = SHADOWS_ON
+
+	root.consume_dirty_tags()
+	root.set_brush_cast_shadow(["a"], SHADOWS_OFF)
+	assert_true(root._dirty_brush_ids.has("a"), "a brush's own is a change for Bake Changed")
+	root.consume_dirty_tags()
+	root.set_brush_lightmap_scale(["a"], 2.0)
+	assert_true(root._dirty_brush_ids.has("a"), "and so is its lightmap scale")
+	root.consume_dirty_tags()
+	root.set_brush_lightmap_scale(["a"], 2.0)
+	assert_false(root._dirty_brush_ids.has("a"), "the same again is no change")
+
+	before = bake_sys.bake_settings_signature()
+	assert_true(root.set_visgroup_cast_shadow("vg", SHADOWS_ONLY))
+	assert_true(root._dirty_brush_ids.has("a"), "a visgroup's makes its brushes changes")
+	assert_ne(
+		bake_sys.bake_settings_signature(),
+		before,
+		"and the signature, which undo and a load change without tagging a brush"
+	)
+	assert_false(root.set_visgroup_cast_shadow("vg", SHADOWS_ONLY), "the same again is no change")
+
+
+func test_two_lightmap_scales_bake_two_meshes_whose_density_differs_by_that_factor():
+	root.bake_lightmap_uv2 = true
+	_id_brush("plain", Vector3.ZERO, Vector3(4, 4, 4))
+	_id_brush("fine", Vector3(10, 0, 0), Vector3(4, 4, 4))
+	root.set_brush_lightmap_scale(["fine"], 4.0)
+
+	assert_true(await root.bake(false, false))
+
+	var meshes := _baked_meshes()
+	assert_eq(meshes.size(), 2, "a mesh for each scale")
+	if meshes.size() != 2:
+		return
+	var plain: MeshInstance3D = meshes[0]
+	var fine: MeshInstance3D = meshes[1]
+	if plain.gi_lightmap_texel_scale > fine.gi_lightmap_texel_scale:
+		plain = meshes[1]
+		fine = meshes[0]
+	assert_eq(plain.gi_lightmap_texel_scale, 1.0)
+	assert_eq(fine.gi_lightmap_texel_scale, 4.0)
+	# LightmapGI gives a mesh a lightmap of its size hint, which the unwrap wrote
+	# from the level's texel size, times the instance's texel scale.
+	var plain_hint: Vector2i = plain.mesh.lightmap_size_hint
+	var fine_hint: Vector2i = fine.mesh.lightmap_size_hint
+	assert_gt(plain_hint.x, 0, "the unwrap gave the lightmap a size to scale")
+	assert_eq(fine_hint, plain_hint, "one unwrap at one texel size, not a second scaling")
+	var density := (
+		float(fine_hint.x)
+		* fine.gi_lightmap_texel_scale
+		/ (float(plain_hint.x) * plain.gi_lightmap_texel_scale)
+	)
+	assert_almost_eq(density, 4.0, 0.001, "four times the texels across the same wall")
+
+
+func test_brushes_with_the_same_lightmap_scale_still_merge():
+	_id_brush("a", Vector3.ZERO)
+	_id_brush("b", Vector3(4, 0, 0))
+	root.set_brush_lightmap_scale(["a", "b"], 2.0)
+
+	assert_true(await root.bake(false, false))
+
+	var meshes := _baked_meshes()
+	assert_eq(meshes.size(), 1, "one mesh, as before there was a scale")
+	if meshes.size() == 1:
+		assert_eq(meshes[0].gi_lightmap_texel_scale, 2.0)
+
+
+func test_a_lightmap_scale_is_held_to_its_range():
+	var brush := _id_brush("a", Vector3.ZERO)
+	root.set_brush_lightmap_scale(["a"], 100.0)
+	assert_eq(HFBakeSplitScript.brush_lightmap_scale(brush), HFBakeSplitScript.MAX_LIGHTMAP_SCALE)
+	root.set_brush_lightmap_scale(["a"], 0.0)
+	assert_eq(HFBakeSplitScript.brush_lightmap_scale(brush), HFBakeSplitScript.MIN_LIGHTMAP_SCALE)
+	_capture_warning("is not a scale")
+	root.set_brush_lightmap_scale(["a"], NAN)
+	_assert_captured_warning("is not a scale")
+	assert_eq(
+		HFBakeSplitScript.brush_lightmap_scale(brush),
+		HFBakeSplitScript.MIN_LIGHTMAP_SCALE,
+		"a scale that is no number is left alone"
+	)
+	root.set_brush_lightmap_scale(["a"], 1.0)
+	assert_false(brush.has_meta(HFBakeSplitScript.LIGHTMAP_SCALE_META), "1.0 is no choice at all")
+
+
+func test_a_brush_keeps_its_settings_through_the_hflevel_undo_and_duplicate():
+	var brush := _id_brush("a", Vector3.ZERO)
+	root.set_brush_cast_shadow(["a"], SHADOWS_ONLY)
+	root.set_brush_lightmap_scale(["a"], 4.0)
+
+	# A .hflevel is JSON, where a whole number comes back as a float.
+	var state: Dictionary = HFLevelIOScript.decode_variant(
+		JSON.parse_string(JSON.stringify(HFLevelIOScript.encode_variant(root.capture_state())))
+	)
+	var reloaded := LevelRoot.new()
+	reloaded.auto_spawn_player = false
+	reloaded.hflevel_autosave_enabled = false
+	add_child_autoqfree(reloaded)
+	reloaded.restore_state(state)
+	var loaded: Node = reloaded.find_brush_by_id("a")
+	assert_not_null(loaded)
+	if loaded:
+		assert_eq(HFBakeSplitScript.brush_cast_shadow(loaded), SHADOWS_ONLY, "the .hflevel")
+		assert_eq(HFBakeSplitScript.brush_lightmap_scale(loaded), 4.0)
+
+	var copy: Node = root.duplicate_brush(brush)
+	assert_eq(HFBakeSplitScript.brush_cast_shadow(copy), SHADOWS_ONLY, "a duplicate")
+	assert_eq(HFBakeSplitScript.brush_lightmap_scale(copy), 4.0)
+
+	var scope := root.capture_brush_scope(["a"])
+	root.set_brush_cast_shadow(["a"], HFBakeSplitScript.LEVEL_DEFAULT)
+	root.set_brush_lightmap_scale(["a"], 1.0)
+	root.restore_brush_scope(scope)
+	var restored: Node = root.find_brush_by_id("a")
+	assert_eq(HFBakeSplitScript.brush_cast_shadow(restored), SHADOWS_ONLY, "an undo")
+	assert_eq(HFBakeSplitScript.brush_lightmap_scale(restored), 4.0)
+
+
+func test_a_map_export_leaves_the_settings_out():
+	# A .map has no key for either, and a brush entity's keys are what the game
+	# reads, so a door with its own Cast Shadows exports as the door it is.
+	_id_brush("a", Vector3.ZERO)
+	_id_brush("door", Vector3(4, 0, 0))
+	root.tie_brushes_to_entity(["door"], "func_door", "gate")
+	root.set_brush_cast_shadow(["a", "door"], SHADOWS_ONLY)
+	root.set_brush_lightmap_scale(["a", "door"], 4.0)
+
+	var text: String = MapIOScript.export_map_from_level(root)
+
+	assert_string_contains(text, "func_door", "fixture: the door is exported")
+	assert_false(text.contains("cast_shadow"), "no Cast Shadows key")
+	assert_false(text.contains("lightmap_scale"), "no Lightmap Scale key")
+
+
+func test_a_visgroup_keeps_its_cast_shadows_through_the_hflevel():
+	root.create_visgroup("sky")
+	root.set_visgroup_cast_shadow("sky", SHADOWS_OFF)
+	var state: Dictionary = HFLevelIOScript.decode_variant(
+		JSON.parse_string(JSON.stringify(HFLevelIOScript.encode_variant(root.capture_state())))
+	)
+	var reloaded := LevelRoot.new()
+	reloaded.auto_spawn_player = false
+	reloaded.hflevel_autosave_enabled = false
+	add_child_autoqfree(reloaded)
+	reloaded.restore_state(state)
+	assert_eq(reloaded.visgroup_system.get_visgroup_cast_shadow("sky"), SHADOWS_OFF)
+
+
+func test_the_level_default_is_kept_by_bake_profiles_and_the_hflevel():
+	assert_true("bake_cast_shadows" in HFBakeSystem.profile_setting_names(), "a profile sets it")
+	root.bake_cast_shadows = SHADOWS_ONLY
+	assert_eq(root.capture_bake_options()["bake_cast_shadows"], SHADOWS_ONLY)
+	var settings = JSON.parse_string(JSON.stringify(root.state_system.capture_hflevel_settings()))
+	var reloaded := LevelRoot.new()
+	reloaded.auto_spawn_player = false
+	reloaded.hflevel_autosave_enabled = false
+	add_child_autoqfree(reloaded)
+	reloaded.state_system.apply_hflevel_settings(settings)
+	assert_eq(reloaded.bake_cast_shadows, SHADOWS_ONLY, "the .hflevel keeps it")
+	root.bake_cast_shadows = 9
+	assert_eq(root.bake_cast_shadows, SHADOWS_ONLY, "held to the four settings")
+	root.bake_cast_shadows = -4
+	assert_eq(root.bake_cast_shadows, SHADOWS_OFF)
+
+
+func test_a_split_face_bake_keeps_one_body_with_every_surface_named():
+	_id_brush("a", Vector3.ZERO)
+	_id_brush("blocker", Vector3(4, 0, 0))
+	root.set_brush_cast_shadow(["blocker"], SHADOWS_ONLY)
+
+	assert_true(await root.bake(false, false))
+
+	var bodies := root.baked_container.find_children("*", "StaticBody3D", true, false)
+	assert_eq(bodies.size(), 1, "one body for the level, as before the split")
+	var body := bodies[0] as StaticBody3D
+	var surfaces := 0
+	for mesh: MeshInstance3D in _baked_meshes():
+		surfaces += mesh.mesh.get_surface_count()
+	assert_eq(Baker._shape_count(body), surfaces, "a shape for each surface of each part")
+	assert_eq(
+		(body.get_meta(Baker.SURFACE_NAMES_META) as PackedStringArray).size(),
+		surfaces,
+		"and a name for each, so a hit still says what it hit"
+	)
+
+
+func test_a_split_bake_hulls_every_brush_once():
+	root.bake_collision_mode = 1
+	_id_brush("a", Vector3.ZERO)
+	_id_brush("b", Vector3(4, 0, 0))
+	_id_brush("blocker", Vector3(8, 0, 0))
+	root.set_brush_cast_shadow(["blocker"], SHADOWS_ONLY)
+
+	assert_true(await root.bake(false, false))
+
+	var body := _first_under(root.baked_container, "StaticBody3D") as StaticBody3D
+	var hulls := 0
+	for child in body.get_children():
+		if child is CollisionShape3D and (child as CollisionShape3D).shape is ConvexPolygonShape3D:
+			hulls += 1
+	assert_eq(hulls, 3, "a hull a brush, whichever part it baked in")
+
+
+func test_a_split_csg_bake_still_partitions_collision_by_visgroup():
+	root.bake_collision_mode = 2
+	var a := _id_brush("a", Vector3.ZERO)
+	var blocker := _id_brush("blocker", Vector3(4, 0, 0))
+	root.create_visgroup("room")
+	root.create_visgroup("lights")
+	root.add_selection_to_visgroup("room", [a])
+	root.add_selection_to_visgroup("lights", [blocker])
+	root.set_brush_cast_shadow(["blocker"], SHADOWS_ONLY)
+	_cut("cut", Vector3(0, 1.5, 0), Vector3(1, 1, 1))
+
+	assert_true(await _bake_through_csg())
+
+	assert_eq(_baked_meshes().size(), 2)
+	assert_not_null(root.baked_container.get_node_or_null("Collision_room"))
+	assert_not_null(root.baked_container.get_node_or_null("Collision_lights"))
+	assert_null(root.baked_container.get_node_or_null("FloorCollision"))
+
+
+func test_bake_selected_splits_the_selection_too():
+	var a := _id_brush("a", Vector3.ZERO)
+	var blocker := _id_brush("blocker", Vector3(4, 0, 0))
+	root.set_brush_cast_shadow(["blocker"], SHADOWS_OFF)
+
+	assert_true(await root.bake_selected([a, blocker]))
+
+	var pieces := _selection_pieces()
+	assert_eq(pieces.size(), 1)
+	if pieces.size() == 1:
+		var casts: Array = []
+		for mesh: MeshInstance3D in (pieces[0] as Node).find_children(
+			"*", "MeshInstance3D", true, false
+		):
+			casts.append(mesh.cast_shadow)
+		casts.sort()
+		assert_eq(casts, [SHADOWS_OFF, SHADOWS_ON], "a mesh for each in the one piece")

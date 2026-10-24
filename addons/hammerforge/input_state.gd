@@ -2,6 +2,12 @@
 extends RefCounted
 class_name HFInputState
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFNumberFormat = preload("hf_number_format.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 enum Mode { IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT, EXTRUDE, VERTEX_EDIT }
 
 var mode := Mode.IDLE
@@ -20,6 +26,13 @@ var drag_shape: int = 0  # BrushShape.BOX
 var drag_sides: int = 4
 var drag_height: float = 2.0
 var drag_size_default := Vector3(2, 2, 2)
+## A Draw on Face builds on the plane of the face it started on (#1401). While
+## one runs, `drag_origin` and `drag_end` are in this frame, not the world: local
+## X and Z lie on the face and local Y is its normal, so everything that reads the
+## base as X and Z (the size readouts, a typed size, Shift's square base) reads
+## the face's own axes. Identity for a draw on the grid.
+var drag_on_face := false
+var drag_frame := Transform3D.IDENTITY
 
 # Axis locking
 var axis_lock: int = 0  # AxisLock.NONE
@@ -43,6 +56,15 @@ var height_stage_start_height: float = 2.0
 ## very next `update_drag()`, so the number appeared on screen and the brush
 ## under it ignored it until the gesture was committed.
 var numeric_override: float = -1.0
+## Which sides of a draw's base the typed numbers hold, X for the width and Z for
+## the depth (#1693). `6` and `6,4` hold both; `6,` holds the width and leaves
+## the depth to the mouse.
+var typed_lock_x := true
+var typed_lock_z := true
+## Which way the drag headed on X and Z when each side was first typed, 1 or -1,
+## or 0 before then. Kept while the entry stands, so a side typed with a minus is
+## not turned back by the next key.
+var typed_heading := Vector3.ZERO
 
 
 ## True while a typed dimension is standing and the mouse must not overwrite it.
@@ -52,6 +74,9 @@ func has_numeric_override() -> bool:
 
 func clear_numeric_override() -> void:
 	numeric_override = -1.0
+	typed_lock_x = true
+	typed_lock_z = true
+	typed_heading = Vector3.ZERO
 
 
 func is_idle() -> bool:
@@ -81,13 +106,16 @@ func begin_drag(
 	sides: int,
 	height: float,
 	size_default: Vector3,
-	mouse_pos: Vector2
+	mouse_pos: Vector2,
+	face_frame: Variant = null
 ) -> void:
 	if mode != Mode.IDLE:
 		push_warning("HFInputState: begin_drag called while in %s — forcing reset" % _mode_name())
 		_force_reset()
 	mode = Mode.DRAG_BASE
-	numeric_override = -1.0
+	clear_numeric_override()
+	drag_on_face = face_frame is Transform3D
+	drag_frame = face_frame if drag_on_face else Transform3D.IDENTITY
 	drag_origin = origin
 	drag_end = origin
 	drag_operation = operation
@@ -110,7 +138,7 @@ func advance_to_height(mouse_pos: Vector2) -> void:
 		)
 		return
 	mode = Mode.DRAG_HEIGHT
-	numeric_override = -1.0
+	clear_numeric_override()
 	height_stage_start_mouse = mouse_pos
 	height_stage_start_height = drag_height
 
@@ -118,13 +146,20 @@ func advance_to_height(mouse_pos: Vector2) -> void:
 func end_drag() -> void:
 	mode = Mode.IDLE
 	lock_axis_active = 0
-	numeric_override = -1.0
+	clear_numeric_override()
+	_leave_face()
 
 
 func cancel() -> void:
 	mode = Mode.IDLE
 	lock_axis_active = 0
-	numeric_override = -1.0
+	clear_numeric_override()
+	_leave_face()
+
+
+func _leave_face() -> void:
+	drag_on_face = false
+	drag_frame = Transform3D.IDENTITY
 
 
 func begin_surface_paint() -> void:
@@ -147,10 +182,14 @@ func begin_extrude() -> void:
 		)
 		_force_reset()
 	mode = Mode.EXTRUDE
+	clear_numeric_override()
 
 
+## A typed depth goes with the extrusion it was typed for, as a drag's typed
+## size does, or it would hold the next extrusion's depth off the mouse.
 func end_extrude() -> void:
 	mode = Mode.IDLE
+	clear_numeric_override()
 
 
 func is_extruding() -> bool:
@@ -195,20 +234,10 @@ func get_drag_dimensions() -> Vector3:
 	return Vector3.ZERO
 
 
-static func format_dimensions(dims: Vector3) -> String:
-	if dims == Vector3.ZERO:
-		return ""
-	# Show W x H x D, omitting decimals if whole numbers
-	var w := _fmt_num(dims.x)
-	var h := _fmt_num(dims.y)
-	var d := _fmt_num(dims.z)
-	return "%s x %s x %s" % [w, h, d]
-
-
-static func _fmt_num(v: float) -> String:
-	if absf(v - roundf(v)) < 0.01:
-		return str(int(v))
-	return "%.1f" % v
+## W x H x D to the precision of a grid of [param step]. It printed one decimal
+## place at most, so a quarter of a unit, a grid preset, read 0.3 (#1402).
+static func format_dimensions(dims: Vector3, step: float = 0.0) -> String:
+	return HFNumberFormat.dimensions(dims, step)
 
 
 # Backward-compat: map to legacy drag_stage int
@@ -229,7 +258,8 @@ func _force_reset() -> void:
 	# Ensure mode is IDLE even if the callback forgot to call cancel()
 	mode = Mode.IDLE
 	lock_axis_active = 0
-	numeric_override = -1.0
+	clear_numeric_override()
+	_leave_face()
 
 
 func _mode_name() -> String:

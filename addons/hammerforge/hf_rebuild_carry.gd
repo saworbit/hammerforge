@@ -44,8 +44,8 @@ const PROPERTIES := [NODE_NAME, ENTITY_NAME, MEMBERSHIP, ENTITY, APPEARANCE]
 ## A name is an address, so it is kept for one node only, and "" is no name.
 const _ADDRESSES := [NODE_NAME, ENTITY_NAME]
 ## What a node a rebuild adds, or puts back in place of one deleted, joins: what
-## every node had.
-const _SHARED := [MEMBERSHIP, ENTITY]
+## every node had, and the whole-brush material most of them had (#1526).
+const _SHARED := [MEMBERSHIP, ENTITY, APPEARANCE]
 
 var _properties: Array = []
 var _visgroups = null
@@ -90,6 +90,8 @@ static func capture(pieces: Array, properties: Array, visgroups = null) -> HFReb
 		carry._shared[MEMBERSHIP] = visgroups.shared_membership(everyone[MEMBERSHIP])
 	if everyone.has(ENTITY):
 		carry._shared[ENTITY] = _entity_every_node_shared(everyone[ENTITY])
+	if everyone.has(APPEARANCE):
+		carry._shared[APPEARANCE] = {"override": _material_most_had(everyone[APPEARANCE])}
 	return carry
 
 
@@ -125,6 +127,7 @@ func restore(made: Array) -> void:
 ## give, so a piece moved or deleted does not move the rest. What counts as the
 ## same answer, and how many must give it, is each path's own: see
 ## `HFPrefabSystem._instance_frame()` and `HFGeneratorSystem._relocation_vote()`.
+## `_material_most_had()` asks it of the material a node a rebuild adds takes.
 static func most_agreed(frames: Array, same: Callable) -> Array:
 	var groups: Array = []
 	for frame in frames:
@@ -212,6 +215,20 @@ static func _entity_every_node_shared(entities: Array) -> Dictionary:
 	return shared
 
 
+## The whole-brush material most nodes had, the earliest node's when as many had
+## another. A node with none counts too, so a structure left mostly plain does not
+## spread one painted piece's material over every piece an Update adds. A node
+## added takes only this, since it has no faces of its own to take a look from.
+static func _material_most_had(looks: Array) -> Material:
+	var materials: Array = []
+	for look in looks:
+		if look is Dictionary and not look.is_empty():
+			materials.append(look.get("override"))
+	if materials.is_empty():
+		return null
+	return most_agreed(materials, func(a, b): return a == b)[0]
+
+
 ## What a brush looks like. The override material is the whole-brush one. The face
 ## entries are what the Paint tab writes, which is per face and is the work most
 ## worth not losing: painting a generated arch and then nudging its radius should
@@ -226,14 +243,15 @@ static func _appearance_of(brush) -> Dictionary:
 
 
 ## A face's look, held on a face of its own so `copy_appearance_from()` decides
-## what that is, `.map` name included (#859). Custom UVs and paint are kept with it,
-## since the Paint tab writes those per face too, and so is the way the face
-## pointed, which is how a box piece finds it again.
+## what that is, `.map` name included (#859). Custom UVs, paint and the texture
+## group are kept with it, since the Paint tab writes those per face too, and so is
+## the way the face pointed, which is how a box piece finds it again.
 static func _face_appearance(face) -> FaceData:
 	if face == null:
 		return null
 	var held := FaceData.new()
 	held.copy_appearance_from(face)
+	held.copy_texture_group_from(face)
 	held.custom_uvs = face.custom_uvs
 	held.paint_layers = face.paint_layers
 	held.normal = face.normal
@@ -248,7 +266,7 @@ static func _face_appearance(face) -> FaceData:
 ## changed keeps the whole-brush material and takes default faces, and
 ## `HFGeneratorSystem.appearance_at_risk()` is what says so before an Update.
 static func _apply_appearance(brush, appearance) -> void:
-	if not (appearance is Dictionary) or appearance.is_empty():
+	if not (appearance is Dictionary) or appearance.is_empty() or not ("faces" in brush):
 		return
 	if appearance.get("override", null) != null:
 		brush.material_override = appearance["override"]
@@ -294,6 +312,7 @@ static func _restore_face(face, stored) -> void:
 	if face == null or not (stored is FaceData):
 		return
 	face.copy_appearance_from(stored)
+	face.copy_texture_group_from(stored)
 	if stored.custom_uvs.size() == face.local_verts.size():
 		face.custom_uvs = stored.custom_uvs
 	if not stored.paint_layers.is_empty():

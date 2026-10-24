@@ -35,6 +35,10 @@ const WALL := 0.25
 const WEST := Vector3(-11, 2, 0)
 const EAST := Vector3(11, 2, 0)
 const DOOR := Vector2(2.0, 2.5)
+## The top of a hall's floor. The hollow keeps the floor slab inside the hall's
+## box, so what stands in a hall stands on this, not on y = 0, or it is buried in
+## the slab (#1815).
+const FLOOR := WALL
 
 ## One texture scale for the whole map, so an offset taken from world space lines
 ## two surfaces up wherever they meet.
@@ -185,8 +189,11 @@ func _corridor() -> void:
 	var h := DOOR.y
 	_box(Vector3(length, WALL, w), Vector3(0, 0, 0), "corridor")
 	_box(Vector3(length, WALL, w), Vector3(0, h, 0), "corridor")
-	_box(Vector3(length, h, WALL), Vector3(0, h * 0.5, -DOOR.x * 0.5 - WALL * 0.5), "corridor")
-	_box(Vector3(length, h, WALL), Vector3(0, h * 0.5, DOOR.x * 0.5 + WALL * 0.5), "corridor")
+	# The walls stand between the floor and the ceiling slabs rather than through
+	# them, or the doorway carve leaves slab pieces buried in the walls (#1815).
+	var wall_h := h - WALL
+	_box(Vector3(length, wall_h, WALL), Vector3(0, h * 0.5, -DOOR.x * 0.5 - WALL * 0.5), "corridor")
+	_box(Vector3(length, wall_h, WALL), Vector3(0, h * 0.5, DOOR.x * 0.5 + WALL * 0.5), "corridor")
 	level.create_visgroup("corridor")
 	level.add_selection_to_visgroup("corridor", _nodes_for(_shell_ids_since(mark)))
 
@@ -215,9 +222,9 @@ func _colonnade(centre: Vector3) -> void:
 		var z := -4.0 + float(i) * 4.0
 		for sx in [-1.0, 1.0]:
 			var x: float = centre.x + inset * sx
-			_box(Vector3(1.0, 0.25, 1.0), Vector3(x, 0.125, z), "pillar")
-			_box(Vector3(0.6, 3.0, 0.6), Vector3(x, 1.75, z), "pillar")
-			_box(Vector3(1.0, 0.25, 1.0), Vector3(x, 3.375, z), "pillar")
+			_box(Vector3(1.0, 0.25, 1.0), Vector3(x, FLOOR + 0.125, z), "pillar")
+			_box(Vector3(0.6, 3.0, 0.6), Vector3(x, FLOOR + 1.75, z), "pillar")
+			_box(Vector3(1.0, 0.25, 1.0), Vector3(x, FLOOR + 3.375, z), "pillar")
 
 
 func _beams(centre: Vector3) -> void:
@@ -229,19 +236,27 @@ func _beams(centre: Vector3) -> void:
 func _skirting(centre: Vector3) -> void:
 	var half := HALL.x * 0.5 - WALL
 	for sz in [-1.0, 1.0]:
-		_box(Vector3(HALL.x - WALL * 2.0, 0.2, 0.1), Vector3(centre.x, 0.1, half * sz), "trim")
+		_box(
+			Vector3(HALL.x - WALL * 2.0, 0.2, 0.1),
+			Vector3(centre.x, FLOOR + 0.1, half * sz),
+			"trim"
+		)
 	for sx in [-1.0, 1.0]:
-		_box(Vector3(0.1, 0.2, HALL.z - WALL * 2.0), Vector3(centre.x + half * sx, 0.1, 0), "trim")
+		_box(
+			Vector3(0.1, 0.2, HALL.z - WALL * 2.0),
+			Vector3(centre.x + half * sx, FLOOR + 0.1, 0),
+			"trim"
+		)
 
 
 ## A flight up to a ledge in the west hall. Eight steps at 0.25, the rise the
 ## connector generator is tuned for, so the navmesh bake has something to climb.
 func _stairs() -> void:
 	for i in range(8):
-		var y := 0.125 + float(i) * 0.25
+		var y := FLOOR + 0.125 + float(i) * 0.25
 		var z := -5.5 + float(i) * 0.5
 		_box(Vector3(3.0, 0.25, 0.5), Vector3(WEST.x - 4.0, y, z), "stair")
-	_box(Vector3(3.0, 0.25, 2.5), Vector3(WEST.x - 4.0, 2.125, -0.75), "stair")
+	_box(Vector3(3.0, 0.25, 2.5), Vector3(WEST.x - 4.0, FLOOR + 2.125, -0.75), "stair")
 
 
 func _crates() -> void:

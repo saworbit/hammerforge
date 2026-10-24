@@ -31,6 +31,10 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "tools"))
+
+from capture_ui import prefs_change_since, prefs_fingerprint  # noqa: E402,F401
+
 HELPER_SOURCE = Path(__file__).resolve().parent / "editor_helper"
 HELPER_ADDON = REPO / "addons" / "hf_mcp_vibe"
 HELPER_CFG = "res://addons/hf_mcp_vibe/plugin.cfg"
@@ -220,6 +224,8 @@ class Editor:
             self.backup.unlink()
         shutil.rmtree(HELPER_ADDON, ignore_errors=True)
         shutil.rmtree(SCRATCH, ignore_errors=True)
+        # Where a scratch scene's level saves and autosaves its `.hflevel`.
+        shutil.rmtree(REPO / ".hammerforge" / SCRATCH.name, ignore_errors=True)
         for leftover in (CMD, OUT):
             leftover.unlink(missing_ok=True)
         rewritten = sorted(_modified_imports() - self._imports_before)

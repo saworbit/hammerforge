@@ -12,8 +12,16 @@ const LOD_NORMAL_SPLIT_ANGLE := 60.0
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
+const HFBakeSplit = preload("hf_bake_split.gd")
+const HFSmoothing = preload("hf_smoothing.gd")
+const HFHiddenFaces = preload("hf_hidden_faces.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFMaterialAtlasScript = preload("hf_material_atlas.gd")
+
+## The bake option `bake_from_csg()` reads an `HFSmoothing` from, holding every
+## smoothed face the boolean was handed, to put their shading back on what it
+## made (#1429). Left out when no face is in a smoothing group.
+const SHADING_OPTION := "smoothing"
 
 ## What the last atlas pass did, for the Console and for tests. The pass was the
 ## only one in the bake with no output at all: a mapper ticked Use atlas once and
@@ -49,6 +57,11 @@ func bake_from_csg(
 	var entries = csg_node.get_meshes()
 	if entries.is_empty():
 		return null
+	# Before anything reads the normals: the LODs simplify by them, and the UV2
+	# unwrap splits its charts by them.
+	var shading: Variant = options.get(SHADING_OPTION, null)
+	if shading is HFSmoothing:
+		entries = _reshaded_entries(entries, shading as HFSmoothing)
 
 	var merge_meshes = bool(options.get("merge_meshes", false))
 	var generate_lods = bool(options.get("generate_lods", false))
@@ -69,87 +82,103 @@ func bake_from_csg(
 	var collision_mode: int = int(options.get("collision_mode", 0))
 	var convex_clean: bool = bool(options.get("convex_clean", true))
 	var convex_simplify: float = float(options.get("convex_simplify", 0.0))
+	# The convex modes hull the brushes, never this output (#1513). It is the
+	# whole level as one mesh, so a hull of it filled every gap between brushes
+	# and every cut. Whoever built the CSG knows its brushes and hands their
+	# pieces over as `per_brush_verts`; without them the triangles stand in.
+	var hull_verts: Array = []
+	if collision_mode >= 1:
+		hull_verts = _placed_like_csg_mesh(options.get("per_brush_verts", []), entries)
 
 	if merge_meshes:
-		var merged = _merge_entries(entries, use_thread_pool)
-		if merged:
-			merged = _postprocess_mesh(
-				merged, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
-			)
-			if merged:
-				var mesh_inst = MeshInstance3D.new()
-				mesh_inst.name = "BakedMesh_0"
-				mesh_inst.mesh = merged
-				mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-				if material_override:
-					mesh_inst.material_override = material_override
-				result.add_child(mesh_inst)
-				if collision_mode >= 1:
-					# Build per-entry convex hulls even when visual meshes are merged
-					var per_entry_verts: Array = _collect_entry_verts(entries)
-					var shapes: Array = build_convex_collision_shapes(
-						per_entry_verts, convex_clean, convex_simplify
-					)
-					if shapes.is_empty():
-						var col := CollisionShape3D.new()
-						col.shape = merged.create_trimesh_shape()
-						static_body.add_child(col)
-					else:
-						for shape in shapes:
-							var col := CollisionShape3D.new()
-							col.shape = shape
-							static_body.add_child(col)
-				else:
-					var col := CollisionShape3D.new()
-					col.shape = merged.create_trimesh_shape()
-					static_body.add_child(col)
+		var raw = _merge_entries(entries, use_thread_pool)
+		if raw:
+			# Hidden faces draw nothing and hold what they held (#1719).
+			var shown := HFHiddenFaces.without_hidden(raw)
+			var merged: Mesh = null
+			if shown:
+				merged = _postprocess_mesh(
+					shown, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
+				)
+			var solid: Mesh = raw if shown != raw else merged
+			if solid:
+				if merged:
+					var mesh_inst = MeshInstance3D.new()
+					mesh_inst.name = "BakedMesh_0"
+					mesh_inst.mesh = merged
+					HFBakeSplit.apply(mesh_inst, options)
+					if material_override:
+						mesh_inst.material_override = material_override
+					result.add_child(mesh_inst)
+				_add_collision(
+					static_body,
+					solid,
+					Transform3D.IDENTITY,
+					hull_verts,
+					collision_mode,
+					convex_clean,
+					convex_simplify
+				)
 				return result
 
 	var mesh_count := 0
+	var hulled := false
+	var empty_only := false
+	var held := false
 	for pair in _csg_mesh_pairs(entries):
 		var mesh: Mesh = pair["mesh"]
 		var mesh_xform: Transform3D = pair["transform"]
-
-		var processed = _postprocess_mesh(
-			mesh, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
-		)
-		if not processed:
+		# A pass with no structural brush in it, such as Bake Selected of brush
+		# entities alone, still hands back a mesh, with no surfaces. It draws nothing
+		# and holds nothing, so it gets no mesh node and no collision (#1562).
+		if mesh != null and mesh.get_surface_count() == 0:
+			empty_only = true
 			continue
 
-		var mesh_inst = MeshInstance3D.new()
-		mesh_inst.name = "BakedMesh_%d" % mesh_count
-		mesh_inst.mesh = processed
-		mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-		mesh_inst.transform = mesh_xform
-		if material_override:
-			mesh_inst.material_override = material_override
-		result.add_child(mesh_inst)
-
-		if collision_mode >= 1:
-			var mesh_verts: PackedVector3Array = _extract_mesh_verts(processed, mesh_xform)
-			var shapes: Array = build_convex_collision_shapes(
-				[mesh_verts], convex_clean, convex_simplify
+		# Hidden faces draw nothing, so they are not in the mesh and get no
+		# lightmap, and the collision is still taken from all of it (#1719).
+		var shown := HFHiddenFaces.without_hidden(mesh)
+		var processed: Mesh = null
+		if shown:
+			processed = _postprocess_mesh(
+				shown, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
 			)
-			if shapes.is_empty():
-				var col := CollisionShape3D.new()
-				col.shape = processed.create_trimesh_shape()
-				col.transform = mesh_xform
-				static_body.add_child(col)
-			else:
-				for shape in shapes:
-					var col := CollisionShape3D.new()
-					col.shape = shape
-					static_body.add_child(col)
-		else:
-			var col := CollisionShape3D.new()
-			col.shape = processed.create_trimesh_shape()
-			col.transform = mesh_xform
-			static_body.add_child(col)
+		var solid: Mesh = mesh if shown != mesh else processed
+		if not solid:
+			continue
 
-		mesh_count += 1
+		if processed:
+			var mesh_inst = MeshInstance3D.new()
+			mesh_inst.name = "BakedMesh_%d" % mesh_count
+			mesh_inst.mesh = processed
+			HFBakeSplit.apply(mesh_inst, options)
+			mesh_inst.transform = mesh_xform
+			if material_override:
+				mesh_inst.material_override = material_override
+			result.add_child(mesh_inst)
+			mesh_count += 1
 
-	if mesh_count == 0:
-		return null
+		# The hulls are the whole level's, so once they are on, a later mesh
+		# needs nothing more.
+		if not hulled:
+			hulled = _add_collision(
+				static_body,
+				solid,
+				mesh_xform,
+				hull_verts,
+				collision_mode,
+				convex_clean,
+				convex_simplify
+			)
+		held = true
+
+	if mesh_count == 0 and not held:
+		if not empty_only:
+			result.free()
+			return null
+		# Still a bake: the brush entities beside it bake into this node.
+		result.remove_child(static_body)
+		static_body.free()
 
 	return result
 
@@ -166,16 +195,21 @@ func bake_from_faces(
 		return null
 	var use_atlas: bool = bool(options.get("use_atlas", false))
 	var collision_mode: int = int(options.get("collision_mode", 0))
-	var groups: Dictionary = {}
-	var per_brush_verts: Array = []
+	var snapshots: Array = []
 	for brush in brushes:
 		if brush is DraftBrush:
-			collect_brush_face_groups(brush, material_manager, material_override, use_atlas, groups)
-			if collision_mode >= 1:
-				var snap = snapshot_brush_faces(
-					brush, material_manager, material_override, use_atlas
-				)
-				per_brush_verts.append(snap.get("hull_verts", PackedVector3Array()))
+			snapshots.append(
+				snapshot_brush_faces(brush, material_manager, material_override, use_atlas)
+			)
+	# A smoothing group runs across every brush baked here, so a curve built of
+	# several brushes is one curve (#1429).
+	shade_snapshots(snapshots)
+	var groups: Dictionary = {}
+	var per_brush_verts: Array = []
+	for snapshot: Dictionary in snapshots:
+		collect_snapshot_groups(snapshot, use_atlas, groups)
+		if collision_mode >= 1:
+			per_brush_verts.append(snapshot.get("hull_verts", PackedVector3Array()))
 	if collision_mode >= 1 and not per_brush_verts.is_empty():
 		options["per_brush_verts"] = per_brush_verts
 	return build_mesh_from_groups(groups, collision_layer, collision_mask, options)
@@ -238,7 +272,9 @@ func _add_group_surface(
 
 ## Collect triangulated face geometry from a single brush into material groups.
 ## Call once per brush; pass the same [param groups] dictionary across all brushes
-## so that faces sharing a material key are merged into a single group.
+## so that faces sharing a material key are merged into a single group. A
+## smoothing group is shared within the brush only; a bake that takes several
+## brushes snapshots them all and hands them to `shade_snapshots()` together.
 func collect_brush_face_groups(
 	brush: DraftBrush,
 	material_manager: MaterialManager,
@@ -246,61 +282,9 @@ func collect_brush_face_groups(
 	use_atlas: bool,
 	groups: Dictionary
 ) -> void:
-	var faces: Array = brush.get_faces()
-	if faces.is_empty():
-		return
-	_collect_face_groups(
-		faces,
-		brush.global_transform.basis,
-		brush.global_transform.origin,
-		brush.material_override,
-		material_manager,
-		material_override,
-		use_atlas,
-		groups
-	)
-
-
-## Low-level face-group collector that operates on already-extracted data rather
-## than a live brush node.  Used by [method collect_brush_face_groups] and by
-## [code]HFBakeSystem[/code] when processing pre-snapshotted brush state.
-func _collect_face_groups(
-	faces: Array,
-	basis: Basis,
-	origin: Vector3,
-	brush_material: Material,
-	material_manager: MaterialManager,
-	material_override: Material,
-	use_atlas: bool,
-	groups: Dictionary
-) -> void:
-	for face in faces:
-		if face == null:
-			continue
-		face.ensure_geometry()
-		var tri = face.triangulate()
-		var verts: PackedVector3Array = tri.get("verts", PackedVector3Array())
-		var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
-		if verts.is_empty():
-			continue
-		var mat = _resolve_face_material(face, material_manager, brush_material, material_override)
-		var face_tiles: bool = use_atlas and HFMaterialAtlasScript.group_has_tiling_uvs(uvs)
-		var key: Variant = "_default"
-		if mat != null:
-			key = mat
-		if face_tiles:
-			key = [key, "_tiling"]
-		if not groups.has(key):
-			groups[key] = {
-				"material": mat,
-				"verts": PackedVector3Array(),
-				"uvs": PackedVector2Array(),
-				"normals": PackedVector3Array(),
-				"tiling": face_tiles,
-			}
-		var group = groups[key]
-		var tri_normals: PackedVector3Array = tri.get("normals", PackedVector3Array())
-		_append_transformed_face(group, verts, uvs, tri_normals, origin, basis, face.normal)
+	var snapshot := snapshot_brush_faces(brush, material_manager, material_override, use_atlas)
+	shade_snapshots([snapshot])
+	collect_snapshot_groups(snapshot, use_atlas, groups)
 
 
 ## Synchronously capture a brush's face geometry and resolved materials into plain
@@ -337,6 +321,9 @@ func snapshot_brush_faces(
 					"face_normal": face.normal,
 					"material": mat,
 					"tiling": face_tiles,
+					# What `shade_snapshots()` reads: 0 for a face that shades flat.
+					"smoothing_group": face.smoothing_group if HFSmoothing.smooths(face) else 0,
+					"corners": face.local_verts.duplicate(),
 				}
 			)
 		)
@@ -354,6 +341,32 @@ func snapshot_brush_faces(
 		"origin": origin,
 		"hull_verts": hull_verts,
 	}
+
+
+## Give every face in `snapshots` that is in a smoothing group the normals it
+## shades with (#1429), shared with the faces of its group it meets in any of
+## them: `world_normals` on its record, one per triangle corner, in the level, as
+## `collect_snapshot_groups()` writes them. A face shares only with faces handed
+## over in the same call, so a bake hands over every brush it takes at once.
+## Plain data in and out, so it runs before the yields with the snapshots.
+static func shade_snapshots(snapshots: Array) -> void:
+	var shading := HFSmoothing.new()
+	var shaded: Array = []
+	for snapshot: Dictionary in snapshots:
+		var basis: Basis = snapshot.get("basis", Basis.IDENTITY)
+		var origin: Vector3 = snapshot.get("origin", Vector3.ZERO)
+		var place := Transform3D(basis, origin)
+		var to_normal := FaceData.normal_basis(basis)
+		for record: Dictionary in snapshot.get("records", []):
+			var group := int(record.get("smoothing_group", 0))
+			if group <= 0:
+				continue
+			var corners: PackedVector3Array = record["corners"]
+			var normal: Vector3 = to_normal * (record["face_normal"] as Vector3)
+			shaded.append([record, shading.add(place * corners, normal, group)])
+	for entry: Array in shaded:
+		var record: Dictionary = entry[0]
+		record["world_normals"] = HFSmoothing.fan(shading.corner_normals(entry[1]))
 
 
 ## Append pre-snapshotted face records (from [method snapshot_brush_faces]) into
@@ -387,7 +400,8 @@ func collect_snapshot_groups(snapshot: Dictionary, _use_atlas: bool, groups: Dic
 			rec["normals"] as PackedVector3Array,
 			origin,
 			basis,
-			rec["face_normal"] as Vector3
+			rec["face_normal"] as Vector3,
+			rec.get("world_normals", PackedVector3Array()) as PackedVector3Array
 		)
 
 
@@ -399,6 +413,16 @@ func build_mesh_from_groups(
 ) -> Node3D:
 	if groups.is_empty():
 		return null
+	# Hidden faces go into the collision and nothing else (#1719): not the mesh,
+	# so not the lightmap, and not the atlas.
+	var hidden_groups: Array = []
+	var shown_groups: Dictionary = {}
+	for key in groups:
+		if HFHiddenFaces.is_hidden_material(groups[key].get("material")):
+			hidden_groups.append(groups[key])
+		else:
+			shown_groups[key] = groups[key]
+	groups = shown_groups
 	var result = Node3D.new()
 	result.name = "BakedGeometry"
 
@@ -466,7 +490,8 @@ func build_mesh_from_groups(
 		for group in groups.values():
 			_add_group_surface(combined_mesh, surface_materials, group)
 
-	if combined_mesh.get_surface_count() == 0:
+	if combined_mesh.get_surface_count() == 0 and hidden_groups.is_empty():
+		result.free()
 		return null
 
 	for i in range(surface_materials.size()):
@@ -476,44 +501,169 @@ func build_mesh_from_groups(
 	# The same finishing pass the CSG path runs. `bake_use_face_materials` is the
 	# default since #491, so without this every default bake silently dropped the
 	# LODs and the lightmap UV2 the Bake Options asked for.
-	combined_mesh = _postprocess_mesh(
-		combined_mesh,
-		bool(options.get("generate_lods", false)),
-		bool(options.get("unwrap_uv2", false)),
-		float(options.get("uv2_texel_size", DEFAULT_UV2_TEXEL_SIZE)),
-		bool(options.get("unwrap_uv0", false))
-	)
-	if combined_mesh == null:
-		return null
-
-	var mesh_inst = MeshInstance3D.new()
-	mesh_inst.name = "BakedMesh_0"
-	mesh_inst.mesh = combined_mesh
-	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	result.add_child(mesh_inst)
+	if combined_mesh.get_surface_count() > 0:
+		combined_mesh = _postprocess_mesh(
+			combined_mesh,
+			bool(options.get("generate_lods", false)),
+			bool(options.get("unwrap_uv2", false)),
+			float(options.get("uv2_texel_size", DEFAULT_UV2_TEXEL_SIZE)),
+			bool(options.get("unwrap_uv0", false))
+		)
+		if combined_mesh == null:
+			result.free()
+			return null
+		var mesh_inst = MeshInstance3D.new()
+		mesh_inst.name = "BakedMesh_0"
+		mesh_inst.mesh = combined_mesh
+		# How it casts shadows and how fine its lightmap is: the level's, or the
+		# settings of the part of the bake these groups were collected for.
+		HFBakeSplit.apply(mesh_inst, options)
+		result.add_child(mesh_inst)
 
 	var collision_mode: int = int(options.get("collision_mode", 0))
 	var per_brush_verts: Array = options.get("per_brush_verts", [])
 	var convex_clean: bool = bool(options.get("convex_clean", true))
 	var convex_simplify: float = float(options.get("convex_simplify", 0.0))
 
-	if collision_mode >= 1 and not per_brush_verts.is_empty():
-		var convex_shapes: Array = build_convex_collision_shapes(
-			per_brush_verts, convex_clean, convex_simplify
-		)
-		if convex_shapes.is_empty():
-			var col := CollisionShape3D.new()
-			col.shape = combined_mesh.create_trimesh_shape()
-			static_body.add_child(col)
-		else:
-			for shape in convex_shapes:
-				var col := CollisionShape3D.new()
-				col.shape = shape
-				static_body.add_child(col)
-	else:
-		_add_per_surface_trimesh(static_body, combined_mesh)
+	_add_collision(
+		static_body,
+		_with_groups(combined_mesh, hidden_groups),
+		Transform3D.IDENTITY,
+		per_brush_verts,
+		collision_mode,
+		convex_clean,
+		convex_simplify
+	)
 
 	return result
+
+
+## `mesh` with a surface more for each of `groups`, for a collision that holds
+## the Hidden faces the mesh leaves out (#1719). `mesh` itself when there are none.
+func _with_groups(mesh: ArrayMesh, groups: Array) -> ArrayMesh:
+	if groups.is_empty():
+		return mesh
+	var out := ArrayMesh.new()
+	var materials: Array[Material] = []
+	for i in mesh.get_surface_count():
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(i))
+		materials.append(mesh.surface_get_material(i))
+	for group in groups:
+		_add_group_surface(out, materials, group)
+	for i in materials.size():
+		if materials[i]:
+			out.surface_set_material(i, materials[i])
+	return out
+
+
+## One baked node from the nodes the parts of one bake made, each a
+## `BakedGeometry` with its meshes and one collision body (#1444, #1438). A bake
+## splits its brushes by the settings a mesh carries as a whole and bakes each
+## part as it baked the level, and the first part's node then takes in the rest:
+## their meshes, numbered on from its own, and their collision shapes, into its
+## body, each with the name of the surface it was cut from, so a hit still names
+## its material (#707). A part that made nothing is skipped. Null when none made
+## anything. One part comes back as it was.
+static func gather_parts(parts: Array) -> Node3D:
+	var made: Array = []
+	for part in parts:
+		if part is Node3D:
+			made.append(part)
+	if made.is_empty():
+		return null
+	var into: Node3D = made[0]
+	var body := _collision_body(into)
+	var mesh_count := 0
+	for child in into.get_children():
+		if child is MeshInstance3D:
+			mesh_count += 1
+	for i in range(1, made.size()):
+		var part: Node3D = made[i]
+		var part_body := _collision_body(part)
+		for child in part.get_children():
+			if child == part_body:
+				continue
+			part.remove_child(child)
+			if child is MeshInstance3D:
+				if str(child.name).begins_with("BakedMesh_"):
+					child.name = "BakedMesh_%d" % mesh_count
+				mesh_count += 1
+			into.add_child(child, true)
+		if part_body != null:
+			if body == null:
+				part.remove_child(part_body)
+				into.add_child(part_body, true)
+				body = part_body
+			else:
+				_move_shapes(part_body, body)
+		part.free()
+	return into
+
+
+static func _collision_body(node: Node3D) -> StaticBody3D:
+	for body_name in ["FaceCollision", "FloorCollision"]:
+		var body := node.get_node_or_null(NodePath(body_name)) as StaticBody3D
+		if body != null:
+			return body
+	return null
+
+
+## Every shape of `from` onto `to`, after the shapes `to` has, and the names of
+## the surfaces they were cut from after its names. A shape that is not a surface,
+## a hull, keeps its place with no name, as `record_surface_identity()` leaves one.
+static func _move_shapes(from: StaticBody3D, to: StaticBody3D) -> void:
+	var named := from.has_meta(SURFACE_NAMES_META) or to.has_meta(SURFACE_NAMES_META)
+	var first := _shape_count(to)
+	var names := PackedStringArray()
+	if to.has_meta(SURFACE_NAMES_META):
+		names = to.get_meta(SURFACE_NAMES_META)
+	names.resize(first)
+	var moved := PackedStringArray()
+	if from.has_meta(SURFACE_NAMES_META):
+		moved = from.get_meta(SURFACE_NAMES_META)
+	moved.resize(_shape_count(from))
+	var index := 0
+	for shape in from.get_children():
+		from.remove_child(shape)
+		var col := shape as CollisionShape3D
+		if col != null and str(col.name).begins_with("SurfaceCollision_"):
+			col.name = "SurfaceCollision_%d" % (first + index)
+		if col != null and col.shape != null:
+			index += 1
+		to.add_child(shape, true)
+	if named:
+		names.append_array(moved)
+		to.set_meta(SURFACE_NAMES_META, names)
+
+
+## Collision for one baked mesh, the same on every bake path (#1462).
+##
+## Collision mode 0 is the mesh's own triangles. Modes 1 and 2 are one convex
+## hull per entry of `hull_verts`, which are already in the body's space; when
+## no entry is solid enough to hull, the triangles stand in. The triangles are
+## always one shape per surface, so a hit can name its material (#707) whichever
+## path baked the level. Only they need `xform`, which places the mesh.
+##
+## True when the collision is hulls, false when it is the triangles.
+static func _add_collision(
+	body: StaticBody3D,
+	mesh: Mesh,
+	xform: Transform3D,
+	hull_verts: Array,
+	collision_mode: int,
+	convex_clean: bool,
+	convex_simplify: float
+) -> bool:
+	if collision_mode >= 1 and not hull_verts.is_empty():
+		var shapes: Array = build_convex_collision_shapes(hull_verts, convex_clean, convex_simplify)
+		for shape in shapes:
+			var col := CollisionShape3D.new()
+			col.shape = shape
+			body.add_child(col)
+		if not shapes.is_empty():
+			return true
+	_add_per_surface_trimesh(body, mesh, xform)
+	return false
 
 
 ## One trimesh collision shape per baked surface, rather than one for the level.
@@ -532,19 +682,26 @@ func build_mesh_from_groups(
 ##
 ## A surface that produces no triangles is still given its shape, empty, so that
 ## a shape index keeps naming the surface with the same number.
-static func _add_per_surface_trimesh(body: StaticBody3D, mesh: ArrayMesh) -> void:
+##
+## `xform` places the mesh in the body, as the CSG path's meshes need.
+static func _add_per_surface_trimesh(
+	body: StaticBody3D, mesh: Mesh, xform: Transform3D = Transform3D.IDENTITY
+) -> void:
+	var first := _shape_count(body)
 	record_surface_identity(body, mesh)
 	if mesh.get_surface_count() <= 1:
 		var single := CollisionShape3D.new()
 		single.shape = mesh.create_trimesh_shape()
+		single.transform = xform
 		body.add_child(single)
 		return
 	for i in mesh.get_surface_count():
 		var surface := ArrayMesh.new()
 		surface.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(i))
 		var col := CollisionShape3D.new()
-		col.name = "SurfaceCollision_%d" % i
+		col.name = "SurfaceCollision_%d" % (first + i)
 		col.shape = surface.create_trimesh_shape()
+		col.transform = xform
 		body.add_child(col)
 
 
@@ -555,13 +712,31 @@ static func _add_per_surface_trimesh(body: StaticBody3D, mesh: ArrayMesh) -> voi
 ## collision modes index shapes by brush, and a brush has six faces. A game that
 ## finds no names knows the body cannot answer, rather than being told the wrong
 ## material.
-static func record_surface_identity(body: StaticBody3D, mesh: ArrayMesh) -> void:
+##
+## The names go on after the shapes the body already has, because a body can
+## take collision from more than one mesh. A shape already there that is not a
+## surface, such as a hull, keeps its place with an empty name, which reads as
+## unknown, rather than every later name sliding onto the wrong shape.
+static func record_surface_identity(body: StaticBody3D, mesh: Mesh) -> void:
 	if body == null or mesh == null:
 		return
 	var names := PackedStringArray()
+	if body.has_meta(SURFACE_NAMES_META):
+		names = body.get_meta(SURFACE_NAMES_META)
+	names.resize(_shape_count(body))
 	for i in mesh.get_surface_count():
 		names.append(surface_label(mesh.surface_get_material(i)))
 	body.set_meta(SURFACE_NAMES_META, names)
+
+
+## How many shapes a hit can report on this body. A CollisionShape3D with no
+## shape takes no index, so it is not counted.
+static func _shape_count(body: StaticBody3D) -> int:
+	var count := 0
+	for child in body.get_children():
+		if child is CollisionShape3D and (child as CollisionShape3D).shape != null:
+			count += 1
+	return count
 
 
 ## What to call a surface, from the material it draws with.
@@ -706,12 +881,17 @@ func _postprocess_mesh(
 func _mesh_with_lods(mesh: ArrayMesh) -> ArrayMesh:
 	if mesh.get_surface_count() == 0:
 		return mesh
+	# Both rebuilds below make a new mesh, and a new mesh has no lightmap size
+	# hint. LightmapGI sizes a lightmap from it, and without it gave every mesh
+	# 64 x 64 whatever the texel size (#1566).
+	var hint := mesh.lightmap_size_hint
 	# `generate_lods()` builds LOD *index* arrays by simplifying an indexed
 	# surface. The CSG merge path hands over a triangle soup - every corner a
 	# loose vertex, no indices - so the simplifier had nothing to collapse and
 	# returned the surface unchanged, with no warning (#611). The face-material
 	# path already indexes in `_add_group_surface()`; this is the other one.
 	mesh = _indexed(mesh)
+	mesh.lightmap_size_hint = hint
 	var importer := ImporterMesh.from_mesh(mesh)
 	if importer == null:
 		HFLog.warn("Bake: could not build an ImporterMesh, skipping LOD generation")
@@ -721,6 +901,7 @@ func _mesh_with_lods(mesh: ArrayMesh) -> ArrayMesh:
 	if out == null:
 		HFLog.warn("Bake: LOD generation produced no mesh, keeping the original")
 		return mesh
+	out.lightmap_size_hint = hint
 	return out
 
 
@@ -802,7 +983,8 @@ static func _append_transformed_face(
 	tri_normals: PackedVector3Array,
 	origin: Vector3,
 	basis: Basis,
-	fallback_normal: Vector3
+	fallback_normal: Vector3,
+	world_normals: PackedVector3Array = PackedVector3Array()
 ) -> void:
 	var count := verts.size()
 	if count <= 0:
@@ -820,7 +1002,10 @@ static func _append_transformed_face(
 	for i in range(count):
 		dest_verts[start + i] = origin + basis * verts[i]
 		dest_uvs[start + i] = uvs[i] if uvs.size() > i else Vector2.ZERO
-		if tri_normals.size() > i:
+		# A smoothed face's normals are worked out in the level already (#1429).
+		if world_normals.size() > i:
+			dest_normals[start + i] = world_normals[i]
+		elif tri_normals.size() > i:
 			dest_normals[start + i] = (to_normal * tri_normals[i]).normalized()
 		else:
 			dest_normals[start + i] = fallback
@@ -850,29 +1035,23 @@ func _merge_entries(entries: Array, use_thread_pool: bool) -> ArrayMesh:
 	return _assemble_merged_mesh(grouped)
 
 
-## Extract world-space vertices from a Mesh, applying the given transform.
-static func _extract_mesh_verts(
-	mesh: Mesh, xform: Transform3D = Transform3D.IDENTITY
-) -> PackedVector3Array:
-	var out := PackedVector3Array()
-	if not mesh:
-		return out
-	for s_idx in range(mesh.get_surface_count()):
-		var arrays = mesh.surface_get_arrays(s_idx)
-		if arrays.is_empty():
-			continue
-		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		for v in verts:
-			out.append(xform * v)
-	return out
-
-
-## Collect per-entry vertex arrays from CSG output entries for convex hull generation.
-func _collect_entry_verts(entries: Array) -> Array:
-	var result: Array = []
-	for pair in _csg_mesh_pairs(entries):
-		result.append(_extract_mesh_verts(pair["mesh"], pair["transform"]))
-	return result
+## The pieces handed to `bake_from_csg()` for hulls, moved to where its mesh goes.
+##
+## They come in the CSG node's own space, which is the space its mesh comes out
+## in, so they take the placement the mesh takes. Godot 4.7 hands back an
+## identity there, and this keeps the hulls on the mesh if that ever changes.
+static func _placed_like_csg_mesh(hull_verts: Array, entries: Array) -> Array:
+	var pairs := _csg_mesh_pairs(entries)
+	if pairs.is_empty():
+		return hull_verts
+	var xform: Transform3D = pairs[0]["transform"]
+	if xform == Transform3D.IDENTITY:
+		return hull_verts
+	var placed: Array = []
+	for verts in hull_verts:
+		if verts is PackedVector3Array:
+			placed.append(xform * (verts as PackedVector3Array))
+	return placed
 
 
 ## What `CSGShape3D.get_meshes()` handed back, as mesh-and-placement pairs.
@@ -890,6 +1069,15 @@ func _collect_entry_verts(entries: Array) -> Array:
 ## this shape; the baker had three copies of the version without it.
 func _collect_mesh_entries(entries: Array) -> Array:
 	return _csg_mesh_pairs(entries)
+
+
+## What the CSG handed back with each mesh shaded as its smoothed faces shade
+## (#1429), as a list of `[Transform3D, Mesh]` pairs, which `_csg_mesh_pairs()` reads.
+static func _reshaded_entries(entries: Array, shading: HFSmoothing) -> Array:
+	var out: Array = []
+	for pair in _csg_mesh_pairs(entries):
+		out.append([pair["transform"], shading.reshade(pair["mesh"])])
+	return out
 
 
 static func _csg_mesh_pairs(entries: Array) -> Array:

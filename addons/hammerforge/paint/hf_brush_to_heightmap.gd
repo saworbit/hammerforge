@@ -87,7 +87,7 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 			aabb = aabb.merge(b_aabb)
 
 	if first:
-		result.error = "No additive brushes to convert"
+		result.error = "No solid brushes to convert"
 		return result
 
 	# --- 2. Determine grid extents ---

@@ -23,6 +23,14 @@ const DOC_PATHS := [
 ]
 const TUTORIAL = preload("res://addons/hammerforge/ui/hf_tutorial_wizard.gd")
 const KEYMAP = preload("res://addons/hammerforge/hf_keymap.gd")
+## The tools `plugin.gd` registers, which take their own keys outside the keymap.
+const TOOLS := [
+	preload("res://addons/hammerforge/hf_measure_tool.gd"),
+	preload("res://addons/hammerforge/hf_decal_tool.gd"),
+	preload("res://addons/hammerforge/hf_polygon_tool.gd"),
+	preload("res://addons/hammerforge/hf_path_tool.gd"),
+	preload("res://addons/hammerforge/hf_clip_tool.gd"),
+]
 
 
 func id() -> String:
@@ -97,10 +105,26 @@ func _shortcuts_the_guide_names() -> void:
 		for m in re.search_all(text):
 			seen["%s%s" % [m.get_string(1), m.get_string(2)]] = path.get_file()
 	note("shortcut-shaped tokens across the docs", seen.size())
+	var tool_keys := _tool_keys()
 	var unbound: Array[String] = []
+	var taken: Array[String] = []
+	var by_tool: Array[String] = []
 	for token in seen.keys():
-		if not chords.has(str(token).to_upper()):
-			unbound.append("%s (%s)" % [token, seen[token]])
+		if chords.has(str(token).to_upper()):
+			continue
+		if tool_keys.has(str(token).to_upper()):
+			by_tool.append("%s (%s)" % [token, tool_keys[str(token).to_upper()]])
+			continue
+		# The palette's chords, Escape and Godot's Undo, Redo, Save and Run are
+		# taken ahead of the keymap on purpose, so naming them is no stale
+		# shortcut (#1621).
+		var press := _press_of(str(token))
+		if press != null and (KEYMAP.fixed_key(press) != "" or KEYMAP.godot_editor_uses(press)):
+			taken.append(str(token))
+			continue
+		unbound.append("%s (%s)" % [token, seen[token]])
+	note("tokens taken ahead of the keymap", taken)
+	note("tokens a tool takes itself", by_tool)
 	note("tokens the docs name and the keymap does not bind", unbound)
 	if not unbound.is_empty():
 		flag(
@@ -113,6 +137,45 @@ func _shortcuts_the_guide_names() -> void:
 				% str(unbound)
 			)
 		)
+
+
+## The keys each tool takes itself, upper case, to the tool's name: the bare key
+## that starts a tool the keymap does not hold (`HFToolRegistry.check_shortcut()`),
+## and each key its HUD lists while it is active, such as the Clip tool's Tab.
+## HammerForge's own tools start on keymap actions since #1820, which the keymap
+## check above already reads.
+func _tool_keys() -> Dictionary:
+	var out := {}
+	for script in TOOLS:
+		var tool = script.new()
+		var start: int = tool.tool_shortcut_key()
+		if start != 0:
+			out[OS.get_keycode_string(start).to_upper()] = tool.tool_name()
+		for line in tool.get_shortcut_hud_lines():
+			for part in str(line).split("|"):
+				if not part.contains(":"):
+					continue
+				for key in part.get_slice(":", 0).split("/"):
+					out[key.strip_edges().to_upper()] = tool.tool_name()
+	return out
+
+
+## The key press a docs token such as `Ctrl+Z` or `Esc` names, or null.
+static func _press_of(token: String) -> InputEventKey:
+	var parts := token.split("+")
+	var key_name := parts[parts.size() - 1]
+	if key_name == "Esc":
+		key_name = "Escape"
+	var keycode := OS.find_keycode_from_string(key_name)
+	if keycode == KEY_NONE:
+		return null
+	var press := InputEventKey.new()
+	press.keycode = keycode
+	press.pressed = true
+	press.ctrl_pressed = parts.has("Ctrl")
+	press.shift_pressed = parts.has("Shift")
+	press.alt_pressed = parts.has("Alt")
+	return press
 
 
 ## Numbers a reader would act on: the default brush size, the grid, the player.

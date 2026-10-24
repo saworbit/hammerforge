@@ -8,9 +8,13 @@ const DockType = preload("dock.gd")
 const HFPluginBakePreview = preload("plugin_bake_preview.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginConsoleType = preload("plugin_console.gd")
+const HFPluginCommandLineType = preload("plugin_command_line.gd")
 const HFPluginMcpType = preload("plugin_mcp.gd")
+const HFPluginCompareType = preload("plugin_compare.gd")
+const HFPluginCrashJournalType = preload("plugin_crash_journal.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
+const HFViewAxes = preload("hf_view_axes.gd")
 const HFPluginInputRouter = preload("plugin_input_router.gd")
 const HFPluginNumericInput = preload("plugin_numeric_input.gd")
 const HFPluginVertexInput = preload("plugin_vertex_input.gd")
@@ -25,14 +29,26 @@ const HFPluginSelectionInput = preload("plugin_selection_input.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginShortcuts = preload("plugin_shortcuts.gd")
+const HFPluginSnapFeedback = preload("plugin_snap_feedback.gd")
 const HFPluginGestureRecovery = preload("plugin_gesture_recovery.gd")
 const HFPluginMaterialCommands = preload("plugin_material_commands.gd")
 const HFPluginToolModes = preload("plugin_tool_modes.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 const HFPluginUndoEvents = preload("plugin_undo_events.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFPathToolType = preload("hf_path_tool.gd")
+const HFAutosaveSchedulerType = preload("systems/hf_autosave_scheduler.gd")
+const HFPluginUpdateCheckType = preload("plugin_update_check.gd")
+const HFClipToolType = preload("hf_clip_tool.gd")
+const HFHullToolType = preload("hf_hull_tool.gd")
+const HFShearToolType = preload("hf_shear_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
+const HFFaceSelectionOverlayType = preload("hf_face_selection_overlay.gd")
+const HFPivotMarkerType = preload("hf_pivot_marker.gd")
+const HFSelectionReadoutType = preload("hf_selection_readout.gd")
+const HFTextureGizmoType = preload("hf_texture_gizmo.gd")
+const HFPluginBrushStampType = preload("plugin_brush_stamp.gd")
 var dock: DockType
 ## The Console main screen and the lamp that opens it from the 3D toolbar.
 ## Optional surface: if the editor refuses either, the rest of the plugin
@@ -43,6 +59,8 @@ var console_strip: Control = null
 ## the Test tab's Agent Bridge box is ticked. See plugin_mcp.gd.
 var mcp_dispatcher: RefCounted = null
 var mcp_listener: Node = null
+## What this session did, on disk until a clean close (#1654).
+var crash_journal: RefCounted = null
 var hud: Control
 var base_control: Control
 var active_root: LevelRoot = null
@@ -54,6 +72,19 @@ var _no_level_hint_scene_id := 0
 var _selection_gesture := HFSelectionGestureType.new()
 var _brush_change_tracker := HFBrushChangeTrackerType.new()
 var _brush_reconcile_queued := false
+## The queued check looks at every brush rather than at those the steps since
+## the last one can have touched (#1619).
+var _brush_reconcile_full := false
+## Marks the faces picked in Face Select on the level the plugin is editing.
+var _face_selection_overlay := HFFaceSelectionOverlayType.new()
+## The cross at that level's picked pivot, while its Pivot is Pick.
+var _pivot_marker := HFPivotMarkerType.new()
+## Measures the selection for its size labels and the dock's Selection Info.
+var _selection_readout := HFSelectionReadoutType.new()
+## Slides, stretches and turns the texture on the faces Face Select picked (#1420).
+var _texture_gizmo := HFTextureGizmoType.new()
+## Repeat's stamp of the brush the last Draw made (#1407).
+var _brush_stamp := HFPluginBrushStampType.new()
 ## The Control Godot draws the 3D viewport overlay through, captured the first
 ## time _forward_3d_force_draw_over_viewport runs. Viewport overlays are
 ## parented here rather than into the toolbar row, which is a layout container
@@ -73,6 +104,9 @@ var _native_selection_toggle := false
 var _focus_recovery_queued := false
 var _applying_hf_selection := false
 var _face_mode_saved_object_selection: Array = []
+## The size last drawn beside the cursor, so the overlay is redrawn once more
+## when it goes.
+var _cursor_size_text := ""
 const SELECT_DRAG_THRESHOLD := 6.0
 ## Two places carry this switch, and the toast names both. The dock is the
 ## shorter trip from the viewport the reader just pressed a key in; the
@@ -90,12 +124,28 @@ var numeric_buffer := ""
 var _tool_registry: HFToolRegistry = null
 var _keymap: HFKeymap = null
 var _user_prefs: HFUserPrefs = null
+## The overlay palette each level was last drawn under, by the level's instance
+## id, so one in another scene tab is redrawn when it comes back to the front.
+var _overlay_colors_drawn: Dictionary = {}
 var _vertex_mode := false
 var _vertex_drag_active := false
 var _vertex_drag_start := Vector2.ZERO
+## A box over the corners in vertex mode, and how it selects: 0 replaces, 1 adds,
+## 2 takes away (#1713). How many brushes the last corner picked is shared by.
+var _vertex_marquee_active := false
+var _vertex_marquee_start := Vector2.ZERO
+var _vertex_marquee_mode := 0
+var _vertex_shared_count := 0
 var _vertex_overlay_mesh: MeshInstance3D = null
 var _vertex_overlay_imesh: ImmediateMesh = null
 var _texture_picker_active := false
+## Wrap mode's face, `{brush_id, face_idx}`, or empty when Wrap is off (#1428).
+var _wrap_source: Dictionary = {}
+## Pick Pivot is waiting for its one click (plugin_transform_tools.gd).
+var _pivot_pick_armed := false
+## What the Offset popup opens with: the last offset and axes Enter applied.
+var _offset_last := Vector3.ZERO
+var _offset_local := false
 var _last_picked_material_index := -1
 var _disp_paint_active := false
 var _disp_paint_brush_id := ""
@@ -111,12 +161,28 @@ var _paint_overlay_imesh: ImmediateMesh = null
 var _paint_connector_overlay_meshes: Array[MeshInstance3D] = []
 var _context_toolbar: Control = null
 var _hotkey_palette: Control = null
+## A compare's outlines in the viewport while one is shown (#1701). See
+## plugin_compare.gd.
+var _compare_overlay = null
+## The command line over the viewport, and the file dialog its scripts come
+## from, built when first asked for (#1696). See plugin_command_line.gd.
+var _command_line_overlay: Control = null
+var _command_script_dialog: FileDialog = null
+## The lines run on either command line this session, oldest first.
+var command_line_history: Array = []
 var _selection_filter: Window = null
 var _coach_marks: Control = null
 var _operation_replay: Control = null
 var _viewport_context_menu: PopupMenu = null
 var _radial_menu: Control = null
 var _quick_property: Control = null
+## Takes drags over the viewport for `_can_drop_data()` and `_drop_data()`, which
+## Godot never calls on a plugin itself (#1417).
+var _viewport_drop_target: Control = null
+## A drop target for each viewport of a split layout, by its host's id, and each
+## viewport's host by its camera's id, so a click can bring the overlays (#1627).
+var _viewport_drop_targets: Dictionary = {}
+var _viewport_hosts_by_camera: Dictionary = {}
 var _dialog_manager  # HFDialogManager — tracks confirmation dialogs for cleanup
 # Double-tap detection for quick property popups
 var _last_tap_keycode := 0
@@ -160,12 +226,17 @@ func _recover_after_application_focus_loss() -> void:
 
 
 func _enter_tree():
+	# First, so a crash while the rest starts up still leaves a journal.
+	HFPluginCrashJournalType.setup(self)
 	# HammerForge raycasts in the 3D viewport regardless of which editor object
 	# is selected. Keep that input forwarding independent from _handles(), which
 	# should describe only the object types this plugin actually edits.
 	set_input_event_forwarding_always_enabled()
 	set_force_draw_over_forwarding_enabled()
 	call_deferred("_prime_managed_brush_tracker")
+	call_deferred("_watch_face_selection_root")
+	if not scene_changed.is_connected(_on_scene_changed):
+		scene_changed.connect(_on_scene_changed)
 	add_custom_type("LevelRoot", "Node3D", LevelRootType, IconRes)
 	add_custom_type("DraftEntity", "Node3D", DraftEntityType, IconRes)
 	_dialog_manager = HFDialogManagerType.new()
@@ -197,6 +268,9 @@ func _enter_tree():
 	_tool_registry.register_tool(HFDecalTool.new())
 	_tool_registry.register_tool(HFPolygonTool.new())
 	_tool_registry.register_tool(HFPathToolType.new())
+	_tool_registry.register_tool(HFClipToolType.new())
+	_tool_registry.register_tool(HFHullToolType.new())
+	_tool_registry.register_tool(HFShearToolType.new())
 	# A project's own tools go outside the addon, the way HFEntityDef already looks
 	# for `res://hammerforge_entities.json`. The in-addon path is the folder the
 	# upgrade instructions tell you to replace, so every custom tool a project
@@ -206,7 +280,12 @@ func _enter_tree():
 	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	_keymap = HFKeymap.load_or_default("user://hammerforge_keymap.json")
 	_user_prefs = HFUserPrefs.load_prefs()
+	# A new note is signed with the last author, across sessions (#1700).
+	DraftEntityType.last_note_author = str(_user_prefs.get_pref("note_author", ""))
+	# Each tool comes back with the settings it was last used with (#1406).
+	_tool_registry.keep_settings_in(_user_prefs)
 	add_control_to_dock(DOCK_SLOT_LEFT_UL, dock)
+	HFPluginCrashJournalType.stage(self, "dock")
 	if dock:
 		dock.set_editor_interface(get_editor_interface())
 		dock.set_undo_redo(undo_redo_manager)
@@ -221,14 +300,22 @@ func _enter_tree():
 			dock.connect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
 		if dock.has_signal("face_select_mode_toggled"):
 			dock.connect("face_select_mode_toggled", Callable(self, "_on_face_select_mode_toggled"))
+		if dock.has_signal("texture_gizmo_toggled"):
+			dock.connect("texture_gizmo_toggled", Callable(self, "_sync_texture_gizmo"))
+		if dock.has_signal("face_xray_toggled"):
+			dock.connect("face_xray_toggled", Callable(self, "_on_face_xray_toggled"))
 		if dock.has_signal("selection_clear_requested"):
 			dock.connect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.has_signal("grid_snap_applied"):
 			dock.connect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
+		if dock.has_signal("command_requested"):
+			dock.connect("command_requested", Callable(self, "_dispatch_viewport_action"))
 		if dock.has_signal("bake_state_changed"):
 			dock.connect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 		if dock.has_signal("command_palette_requested"):
 			dock.connect("command_palette_requested", Callable(self, "_on_toggle_hotkey_palette"))
+		if dock.has_signal("compare_requested"):
+			dock.connect("compare_requested", Callable(self, "_on_compare_requested"))
 		if dock.has_signal("power_user_overlays_changed"):
 			dock.connect(
 				"power_user_overlays_changed",
@@ -245,9 +332,33 @@ func _enter_tree():
 				"paint_connector_confirm_requested",
 				Callable(self, "_on_paint_connector_confirm_requested")
 			)
+		if dock.has_signal("selection_size_toggled"):
+			dock.connect(
+				"selection_size_toggled", Callable(self, "_on_dock_selection_size_toggled")
+			)
+		if dock.has_signal("selection_vertex_typed"):
+			dock.connect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
+		if dock.has_signal("selection_narrow_requested"):
+			dock.connect(
+				"selection_narrow_requested", Callable(self, "_on_selection_narrow_requested")
+			)
+		if dock.has_signal("overlay_colors_changed"):
+			dock.connect("overlay_colors_changed", Callable(self, "_on_overlay_colors_changed"))
+		if not _ensure_selection_readout().refreshed.is_connected(dock.set_selection_info):
+			_selection_readout.refreshed.connect(dock.set_selection_info)
+	_ensure_selection_readout().set_source(_selection_readout_source)
+	_selection_readout.set_show_size(bool(_user_prefs.get_pref("show_selection_size", false)))
+	HFPluginOverlays.apply_overlay_colors(self)
 
+	HFPluginCrashJournalType.stage(self, "console")
 	HFPluginConsoleType.setup(self)
 	HFPluginMcpType.setup(self)
+	HFPluginCommandLineType.setup(self)
+	# Whether a newer HammerForge is out, asked once a day when allowed (#1656).
+	HFPluginUpdateCheckType.setup(self)
+	# The timed autosave waits for a pause in editing, and asks here (#1736).
+	HFAutosaveSchedulerType.editor_state = HFPluginGestureRecovery.editing_state.bind(self)
+	HFPluginCrashJournalType.stage(self, "overlays")
 	# The dock lands in its TabContainer during this frame, so the tab icon is
 	# stamped again once the editor has finished parenting it.
 	call_deferred("_reapply_console_icons")
@@ -277,6 +388,8 @@ func _enter_tree():
 		_hotkey_palette.theme = base_control.theme
 	_hotkey_palette.populate(_keymap)
 	_hotkey_palette.action_invoked.connect(_on_hotkey_palette_action)
+	# A key changed in the shortcut dialog shows on every surface at once (#1733).
+	_keymap.changed.connect(_on_keymap_changed)
 	HFPluginOverlays.attach_viewport_overlay(self, _hotkey_palette)
 	# Selection filter popover (Window-based — not a Control, so managed manually)
 	_selection_filter = HFSelectionFilter.new()
@@ -317,9 +430,16 @@ func _enter_tree():
 				"version_changed", Callable(self, "_on_undo_redo_version_changed")
 			)
 	set_process(false)
+	HFPluginCrashJournalType.started(self)
 
 
 func _exit_tree():
+	HFPluginCrashJournalType.stage(self, "exit_tree")
+	HFAutosaveSchedulerType.editor_state = Callable()
+	if _keymap and _keymap.changed.is_connected(_on_keymap_changed):
+		_keymap.changed.disconnect(_on_keymap_changed)
+	HFPluginCompareType.end(self)
+	HFPluginCommandLineType.teardown(self)
 	HFPluginConsoleType.teardown(self)
 	# Before the dock goes: the panel lives in it, and the listener has a file to
 	# delete and a socket to close.
@@ -327,7 +447,17 @@ func _exit_tree():
 	_clear_paint_overlay()
 	_cancel_selection_gesture()
 	_brush_reconcile_queued = false
+	_brush_reconcile_full = false
 	_ensure_brush_change_tracker().reset()
+	if scene_changed.is_connected(_on_scene_changed):
+		scene_changed.disconnect(_on_scene_changed)
+	_ensure_face_selection_overlay().reset()
+	_ensure_texture_gizmo().reset()
+	_ensure_pivot_marker().reset()
+	_pivot_pick_armed = false
+	if dock and _ensure_selection_readout().refreshed.is_connected(dock.set_selection_info):
+		_selection_readout.refreshed.disconnect(dock.set_selection_info)
+	_ensure_selection_readout().reset()
 	if _tool_registry and _tool_registry.has_active_external_tool():
 		_tool_registry.deactivate_current()
 	_cleanup_pending_dialogs()
@@ -377,12 +507,16 @@ func _exit_tree():
 			dock.disconnect("builtin_tool_changed", Callable(self, "_on_builtin_tool_changed"))
 		if dock.is_connected("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled")):
 			dock.disconnect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
+		if dock.is_connected("face_xray_toggled", Callable(self, "_on_face_xray_toggled")):
+			dock.disconnect("face_xray_toggled", Callable(self, "_on_face_xray_toggled"))
 		if dock.is_connected(
 			"selection_clear_requested", Callable(self, "_on_dock_selection_clear")
 		):
 			dock.disconnect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.is_connected("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied")):
 			dock.disconnect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
+		if dock.is_connected("command_requested", Callable(self, "_dispatch_viewport_action")):
+			dock.disconnect("command_requested", Callable(self, "_dispatch_viewport_action"))
 		if dock.is_connected("bake_state_changed", Callable(self, "_on_dock_bake_state_changed")):
 			dock.disconnect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 		if dock.is_connected(
@@ -391,6 +525,8 @@ func _exit_tree():
 			dock.disconnect(
 				"command_palette_requested", Callable(self, "_on_toggle_hotkey_palette")
 			)
+		if dock.is_connected("compare_requested", Callable(self, "_on_compare_requested")):
+			dock.disconnect("compare_requested", Callable(self, "_on_compare_requested"))
 		if dock.is_connected(
 			"power_user_overlays_changed", Callable(self, "_on_dock_power_user_overlays_changed")
 		):
@@ -412,6 +548,26 @@ func _exit_tree():
 				"paint_connector_confirm_requested",
 				Callable(self, "_on_paint_connector_confirm_requested")
 			)
+		if dock.is_connected(
+			"selection_size_toggled", Callable(self, "_on_dock_selection_size_toggled")
+		):
+			dock.disconnect(
+				"selection_size_toggled", Callable(self, "_on_dock_selection_size_toggled")
+			)
+		if dock.is_connected(
+			"selection_vertex_typed", Callable(self, "_on_selection_vertex_typed")
+		):
+			dock.disconnect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
+		if dock.is_connected(
+			"selection_narrow_requested", Callable(self, "_on_selection_narrow_requested")
+		):
+			dock.disconnect(
+				"selection_narrow_requested", Callable(self, "_on_selection_narrow_requested")
+			)
+		if dock.is_connected(
+			"overlay_colors_changed", Callable(self, "_on_overlay_colors_changed")
+		):
+			dock.disconnect("overlay_colors_changed", Callable(self, "_on_overlay_colors_changed"))
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
 			dock.queue_free()
@@ -480,6 +636,7 @@ func _exit_tree():
 		if is_instance_valid(_quick_property):
 			_quick_property.queue_free()
 		_quick_property = null
+	HFPluginOverlays.free_viewport_drop_target(self)
 	# Dropped last: detach_viewport_overlay reads it to know which of the two
 	# parents each overlay went onto.
 	_viewport_overlay_host = null
@@ -491,8 +648,16 @@ func _exit_tree():
 		)
 	):
 		selection.disconnect("selection_changed", Callable(self, "_on_editor_selection_changed"))
+	if _tool_registry:
+		_tool_registry.keep_settings_in(null)
 	_tool_registry = null
+	if _user_prefs and _user_prefs.get_pref("note_author", "") != DraftEntityType.last_note_author:
+		_user_prefs.set_pref("note_author", DraftEntityType.last_note_author)
+		_user_prefs.save()
+	_ensure_brush_stamp().disarm()
 	set_process(false)
+	# Last: a crash while closing leaves the journal too.
+	HFPluginCrashJournalType.teardown(self)
 
 
 ## The Test tab's Agent Bridge box. HFPluginMcp starts or stops the listener.
@@ -507,7 +672,18 @@ func _on_mcp_state_changed(state: int, detail: String) -> void:
 
 ## What the agent's last command did, shown on the panel.
 func _on_mcp_command_finished(method: String, ok: bool, code: String, ms: int) -> void:
+	HFPluginCrashJournalType.note_bridge(self, method, ok, code)
 	HFPluginMcpType.show_last(self, method, ok, code, ms)
+
+
+## What the agent changed, outlined for a moment, and what the panel's Last line
+## selects (#1653).
+var _agent_highlight = null
+var _mcp_last_changed: Dictionary = {}
+
+
+func _on_mcp_last_pressed() -> void:
+	HFPluginMcpType.select_last_changed(self, _mcp_last_changed)
 
 
 ## Routed from the Console's status rows and header buttons. Every action is
@@ -515,6 +691,11 @@ func _on_mcp_command_finished(method: String, ok: bool, code: String, ms: int) -
 ## HFPluginConsole.handle_action.
 func _on_console_action(action_id: String) -> void:
 	HFPluginConsoleType.handle_action(self, action_id)
+
+
+## The dock's Compare With... picked a file.
+func _on_compare_requested(path: String) -> void:
+	HFPluginCompareType.start(self, path)
 
 
 ## The viewport lamp was clicked.
@@ -650,6 +831,7 @@ func _teardown_power_user_overlays() -> void:
 
 
 func _on_editor_selection_changed() -> void:
+	_ensure_selection_readout().queue_refresh()
 	HFPluginSelectionState.on_editor_selection_changed(self)
 
 
@@ -708,14 +890,17 @@ func sync_active_root_from_selection(nodes: Array) -> void:
 	if root:
 		active_root = root
 		_ensure_brush_change_tracker().ensure_root(root)
+		_watch_face_selection_root()
 		return
 	# Don't null active_root — keep the previous root alive as long as it still
 	# exists in the scene. This prevents losing the dock/3D connection when the
 	# user clicks a Camera, Light, or other non-LevelRoot node.
 	if active_root and is_instance_valid(active_root) and active_root.is_inside_tree():
+		_watch_face_selection_root()
 		return
 	active_root = null
 	_ensure_brush_change_tracker().reset()
+	_watch_face_selection_root()
 
 
 ## The LevelRoot a selection should make active, or null to keep the current
@@ -783,11 +968,14 @@ static func is_lmb_release_recovery_motion(event: InputEvent) -> bool:
 
 
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
-	return HFPluginViewportInput.handle(self, camera, event)
+	HFPluginSnapFeedback.begin(self, event)
+	var answer := HFPluginViewportInput.handle(self, camera, event)
+	HFPluginSnapFeedback.end(self, event)
+	return answer
 
 
-func _should_start_disp_paint(event: InputEvent, root: Node) -> bool:
-	return HFPluginPaintInput.should_start_displacement(self, event, root)
+func _should_start_disp_paint(event: InputEvent, root: Node, cam: Camera3D) -> bool:
+	return HFPluginPaintInput.should_start_displacement(self, event, root, cam)
 
 
 func _handle_disp_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
@@ -850,21 +1038,21 @@ func _handle_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vect
 	return HFPluginPaintInput.handle_paint(self, event, root, cam, pos)
 
 
+## The way an arrow or Page key moves the selection: along the world axis
+## nearest its direction in the view it was pressed in, unless the mapper keeps
+## the fixed mapping (#1716).
 func _get_nudge_direction(keycode: int) -> Vector3:
-	match keycode:
-		KEY_UP:
-			return Vector3(0.0, 0.0, -1.0)
-		KEY_DOWN:
-			return Vector3(0.0, 0.0, 1.0)
-		KEY_LEFT:
-			return Vector3(-1.0, 0.0, 0.0)
-		KEY_RIGHT:
-			return Vector3(1.0, 0.0, 0.0)
-		KEY_PAGEUP:
-			return Vector3(0.0, 1.0, 0.0)
-		KEY_PAGEDOWN:
-			return Vector3(0.0, -1.0, 0.0)
-	return Vector3.ZERO
+	var follow := _user_prefs == null or bool(_user_prefs.get_pref("nudge_follows_view", true))
+	return HFViewAxes.nudge_direction(keycode, last_3d_camera if follow else null)
+
+
+## The last move, as the HUD shows it for a moment: [text, when].
+var _nudge_readout: Array = []
+
+
+## Show a move on the HUD for a moment, as "+Y 0.25 m".
+func read_out_move(text: String) -> void:
+	_nudge_readout = [text, Time.get_ticks_msec()]
 
 
 func _handle_numeric_input(event: InputEventKey, root: Node) -> int:
@@ -908,7 +1096,117 @@ func _prime_managed_brush_tracker(root: Node = null) -> void:
 		_ensure_brush_change_tracker().ensure_root(target)
 
 
-func _queue_managed_brush_reconcile() -> void:
+func _ensure_face_selection_overlay():
+	if _face_selection_overlay == null:
+		_face_selection_overlay = HFFaceSelectionOverlayType.new()
+	return _face_selection_overlay
+
+
+func _ensure_pivot_marker():
+	if _pivot_marker == null:
+		_pivot_marker = HFPivotMarkerType.new()
+	return _pivot_marker
+
+
+## Mark the picked faces, and the picked pivot, of the level the plugin is editing
+## now, and only those, and measure its selection.
+func _watch_face_selection_root() -> void:
+	var root: Node = active_root if active_root else _get_level_root()
+	_ensure_face_selection_overlay().watch(root)
+	_ensure_pivot_marker().watch(root)
+	_ensure_selection_readout().watch(root)
+	_ensure_texture_gizmo().watch(root)
+	HFPluginOverlays.refresh_overlay_colors(self, root)
+
+
+## A tab switch leaves active_root on the level that was in front until something
+## else is selected, so the marks go by the scene now open instead. A pick armed
+## on the scene that went is put away rather than left to catch a click here.
+func _on_scene_changed(_scene_root: Node) -> void:
+	HFPluginTransformTools.cancel_pivot_pick(self)
+	_ensure_face_selection_overlay().watch(_get_level_root())
+	_ensure_pivot_marker().watch(_get_level_root())
+	_ensure_selection_readout().watch(_get_level_root())
+	_ensure_texture_gizmo().watch(_get_level_root())
+	# A stamp belongs to the level it was armed in.
+	_ensure_brush_stamp().disarm()
+	HFPluginOverlays.refresh_overlay_colors(self, _get_level_root())
+
+
+func _ensure_texture_gizmo():
+	if _texture_gizmo == null:
+		_texture_gizmo = HFTextureGizmoType.new()
+	return _texture_gizmo
+
+
+## Show the Texture Gizmo while its toggle is on and Face Select is open (#1420).
+func _sync_texture_gizmo(_enabled := false) -> void:
+	var gizmo = _ensure_texture_gizmo()
+	gizmo.set_camera(last_3d_camera)
+	gizmo.set_shown(
+		dock != null and dock.is_face_select_mode_enabled() and dock.is_texture_gizmo_enabled()
+	)
+
+
+## A colour picked under Test > Settings > Colours, or a preset or Reset there.
+func _on_overlay_colors_changed() -> void:
+	HFPluginOverlays.apply_overlay_colors(self)
+
+
+func _ensure_selection_readout():
+	if _selection_readout == null:
+		_selection_readout = HFSelectionReadoutType.new()
+	return _selection_readout
+
+
+func _ensure_brush_stamp():
+	if _brush_stamp == null:
+		_brush_stamp = HFPluginBrushStampType.new()
+	return _brush_stamp
+
+
+## What the readout measures: the selection, and whether it is vertices of it.
+func _selection_readout_source() -> Dictionary:
+	return {"nodes": hf_selection, "vertex_mode": _vertex_mode}
+
+
+func _on_dock_selection_size_toggled(enabled: bool) -> void:
+	_ensure_selection_readout().set_show_size(enabled)
+
+
+## A place typed for the one selected vertex in the dock's Selection Info.
+func _on_selection_narrow_requested(kind: String) -> void:
+	var root := active_root if active_root else _get_level_root()
+	if root:
+		HFPluginSelectionCommands.narrow_selection(self, root, kind)
+
+
+func _on_selection_vertex_typed(place: Vector3, local: bool) -> void:
+	var root := active_root if active_root else _get_level_root()
+	if root:
+		HFPluginVertexOps.move_selected_vertex_to(self, root, place, local)
+	# Measured now rather than next frame, so a refused place goes back at once.
+	_ensure_selection_readout().refresh()
+
+
+## Check the level's brushes for what Godot changed, once this frame is done.
+## `full` looks at every brush, for a change nothing can narrow, such as one made
+## while the editor was out of focus.
+## Every surface that names a chord reads the keymap again: the dock, the HUD,
+## the context toolbar and the command palette.
+func _on_keymap_changed() -> void:
+	if dock:
+		dock.set_keymap(_keymap)
+	if hud and hud.has_method("set_keymap"):
+		hud.set_keymap(_keymap)
+	if _context_toolbar:
+		_context_toolbar.set_keymap(_keymap)
+	if _hotkey_palette:
+		_hotkey_palette.populate(_keymap)
+
+
+func _queue_managed_brush_reconcile(full := false) -> void:
+	_brush_reconcile_full = _brush_reconcile_full or full
 	if _brush_reconcile_queued:
 		return
 	_brush_reconcile_queued = true
@@ -917,11 +1215,29 @@ func _queue_managed_brush_reconcile() -> void:
 
 func _reconcile_managed_brush_changes() -> void:
 	_brush_reconcile_queued = false
+	var full := _brush_reconcile_full or undo_redo_manager == null
+	_brush_reconcile_full = false
 	var root := active_root if active_root else _get_level_root()
 	if root:
-		_ensure_brush_change_tracker().reconcile(root)
+		var selection = EditorInterface.get_selection()
+		var selected: Array = selection.get_selected_nodes() if selection else []
+		_ensure_brush_change_tracker().reconcile_step(root, selected, full)
 	else:
 		_ensure_brush_change_tracker().reset()
+
+
+## Tell the change check where the level's undo history now stands, so the check
+## after this step looks at the brushes the step can have touched (#1619).
+func _note_history_step(root: Node) -> void:
+	if not undo_redo_manager or not root:
+		return
+	var history_id: int = undo_redo_manager.get_object_history_id(root)
+	var history: UndoRedo = undo_redo_manager.get_history_undo_redo(history_id)
+	if history:
+		_ensure_brush_change_tracker().note_step(
+			history.get_version(), history.has_redo(), history.get_current_action_name()
+		)
+		HFPluginCrashJournalType.note_step(self, root, history)
 
 
 func _begin_native_selection_session(selected_nodes: Array, additive: bool, toggle: bool) -> void:
@@ -987,6 +1303,14 @@ func _on_vertex_mode_toggled(enabled: bool) -> void:
 
 func _on_face_select_mode_toggled(enabled: bool) -> void:
 	HFPluginToolModes.on_face_select_mode_toggled(self, enabled)
+	_sync_texture_gizmo()
+
+
+## The HUD line and the marquee's colour say whether X-ray is on.
+func _on_face_xray_toggled(_enabled: bool) -> void:
+	_update_hud_context()
+	if is_inside_tree():
+		update_overlays()
 
 
 func _close_face_select_mode(message: String = "") -> bool:
@@ -1122,26 +1446,23 @@ func _handle_mouse_motion(
 
 func _toggle_vertex_mode(root: Node) -> void:
 	HFPluginVertexOps.toggle_mode(self, root)
+	_ensure_selection_readout().queue_refresh()
 
 
 func _vertex_merge_selected(root: Node) -> void:
-	HFPluginVertexOps.merge_selected(root)
+	HFPluginVertexOps.merge_selected(self, root)
 
 
 func _vertex_split_selected_edge(root: Node) -> void:
-	HFPluginVertexOps.split_selected_edge(root)
+	HFPluginVertexOps.split_selected_edge(self, root)
 
 
 func _vertex_clip_to_convex(root: Node) -> void:
-	HFPluginVertexOps.clip_to_convex(root)
+	HFPluginVertexOps.clip_to_convex(self, root)
 
 
 func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
 	return HFPluginVertexInput.handle(self, event, root, cam, pos)
-
-
-func _commit_vertex_op(root: Node, pre_op_snapshots: Dictionary, action_name: String) -> void:
-	HFPluginVertexOps.commit_op(self, root, pre_op_snapshots, action_name)
 
 
 func _commit_vertex_move(root: Node, pre_drag_snapshots: Dictionary) -> void:
@@ -1150,6 +1471,9 @@ func _commit_vertex_move(root: Node, pre_drag_snapshots: Dictionary) -> void:
 
 func _update_vertex_overlay(root: Node, _cam: Camera3D) -> void:
 	HFPluginOverlays.update_vertex_overlay(self, root)
+	# Every vertex pick, drag step and edit redraws the overlay, and none of the
+	# drag steps tags the brush.
+	_ensure_selection_readout().queue_refresh()
 
 
 func _clear_vertex_overlay() -> void:
@@ -1264,9 +1588,21 @@ func _paint_brush_with_undo(root: Node, brush: Node, mat: Material) -> void:
 	HFPluginMaterialCommands.paint_brush_with_undo(self, root, brush, mat)
 
 
+func _paint_brushes_with_undo(root: Node, brushes: Array, mat: Material) -> int:
+	return HFPluginMaterialCommands.paint_brushes_with_undo(self, root, brushes, mat)
+
+
 func _commit_brush_placement(root: Node, info: Dictionary) -> void:
 	if info.is_empty():
 		return
+	# New work joins the current visgroup, as part of the step so a redo does too
+	# (#1732).
+	var current: String = (
+		root.visgroup_system.get_current_visgroup() if root.get("visgroup_system") else ""
+	)
+	if current != "" and not info.has("visgroups"):
+		info = info.duplicate()
+		info["visgroups"] = [current]
 	HFUndoHelper.commit(
 		_get_undo_redo(),
 		root,
@@ -1358,8 +1694,13 @@ func _update_marquee_overlay(from: Vector2, to: Vector2, active: bool) -> void:
 ## remain correct under split views, editor scaling, and dock rearrangement.
 func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
 	HFPluginOverlays.adopt_viewport_overlay_host(self, viewport_control)
+	HFPluginOverlays.ensure_viewport_drop_target(self, viewport_control)
 	HFPluginOverlays.refresh_viewport_overlay_placement(self)
 	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
+	HFPluginHud.draw_cursor_size(self, viewport_control)
+	HFPluginSnapFeedback.draw(self, viewport_control)
+	if _agent_highlight:
+		_agent_highlight.draw_edge_arrow(viewport_control, last_3d_camera)
 
 
 func _add_confirmable_dialog(dlg: ConfirmationDialog) -> void:
@@ -1452,12 +1793,35 @@ func _carve_selected(root: Node) -> bool:
 	return HFPluginEditActions.carve_selected(self, root)
 
 
-func _can_drop_data(_position: Vector2, data: Variant) -> bool:
-	return HFPluginDropHandler.can_drop_data(data)
+func _intersect_selected(root: Node) -> bool:
+	return HFPluginEditActions.intersect_selected(self, root)
+
+
+## Called by `_viewport_drop_target` for a drag over the viewport.
+func _can_drop_data(position: Vector2, data: Variant) -> bool:
+	return HFPluginDropHandler.can_drop(self, position, data)
 
 
 func _drop_data(position: Vector2, data: Variant) -> void:
 	HFPluginDropHandler.drop_data(self, position, data)
+
+
+## The same for a drag over the viewport `host` draws over, which is the one whose
+## camera says what is under the cursor (#1627).
+func _can_drop_data_on(position: Vector2, data: Variant, host: Control) -> bool:
+	_look_through(host)
+	return _can_drop_data(position, data)
+
+
+func _drop_data_on(position: Vector2, data: Variant, host: Control) -> void:
+	_look_through(host)
+	_drop_data(position, data)
+
+
+func _look_through(host: Control) -> void:
+	var camera := HFPluginOverlays.camera_for_host(host)
+	if camera:
+		last_3d_camera = camera
 
 
 # ---------------------------------------------------------------------------
@@ -1541,6 +1905,12 @@ static func hotkey_palette_action_requires_existing_root(action: String) -> bool
 	return HFPluginCommands.requires_existing_root(action)
 
 
+## The last command run that changed the level or the selection, which Repeat
+## Last Command runs again, and the commands run lately, newest first (#1694).
+var last_repeatable_command := ""
+var recent_commands: Array = []
+
+
 func _on_hotkey_palette_action(action: String) -> void:
 	var root = active_root if active_root else _get_level_root()
 	if hotkey_palette_action_requires_existing_root(action) and not root:
@@ -1594,6 +1964,13 @@ func _on_coach_mark_dismissed(_tool_key: String, _dont_show: bool) -> void:
 
 func _on_undo_redo_version_changed() -> void:
 	HFPluginUndoEvents.on_version_changed(self)
+	# A Godot undo moves a brush with no signal until the brush tracker tags it,
+	# and the first reconcile of a level the tracker was not watching tags nothing.
+	_ensure_face_selection_overlay().queue_refresh()
+	_ensure_selection_readout().queue_refresh()
+	_ensure_texture_gizmo().queue_refresh()
+	# An undo can end a drag, and the size beside the cursor with it.
+	update_overlays()
 
 
 func _on_replay_requested(entry_index: int) -> void:

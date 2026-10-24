@@ -21,6 +21,9 @@ var _value: Label = null
 var _detail: Label = null
 var _action: Button = null
 var _action_id: String = ""
+## Further buttons, for a row that offers more than one thing to do.
+var _more: HBoxContainer = null
+var _more_actions: Array = []
 ## The board refreshes once a second. Rebuilding the stylebox and re-applying
 ## the colour overrides on every one of those passes allocates for nothing, so
 ## the styling work only runs when what it depends on has actually moved.
@@ -79,6 +82,10 @@ func _build() -> void:
 	_action.pressed.connect(_on_action_pressed)
 	row.add_child(_action)
 
+	_more = HBoxContainer.new()
+	_more.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_more)
+
 
 ## Point the row at a check row from HFStatusBoard.evaluate().
 func apply_check(check: Dictionary, base_control: Control = null) -> void:
@@ -100,6 +107,8 @@ func apply_check(check: Dictionary, base_control: Control = null) -> void:
 	_action.visible = _action_id != "" and action_label != ""
 	if _action.visible:
 		_set_button_text(_action, action_label)
+	var more: Variant = check.get("more_actions", [])
+	_set_more_actions(more if more is Array else [])
 
 	# The reader should be able to hover anywhere on the row and learn what the
 	# check measures, including over the lamp and the value.
@@ -153,6 +162,24 @@ func _apply_background(severity: int, base_control: Control) -> void:
 		style.border_width_left = 3
 		style.border_color = Color(0, 0, 0, 0)
 	add_theme_stylebox_override("panel", style)
+
+
+## Built again only when the list changes, so a button under the cursor keeps
+## its focus through the board's once a second refresh.
+func _set_more_actions(actions: Array) -> void:
+	if actions == _more_actions:
+		return
+	_more_actions = actions.duplicate(true)
+	for child in _more.get_children():
+		_more.remove_child(child)
+		child.queue_free()
+	for action in actions:
+		if not (action is Dictionary):
+			continue
+		var button := Button.new()
+		button.text = str(action.get("label", ""))
+		button.pressed.connect(action_requested.emit.bind(str(action.get("id", ""))))
+		_more.add_child(button)
 
 
 func _on_action_pressed() -> void:

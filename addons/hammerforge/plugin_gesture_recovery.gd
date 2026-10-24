@@ -19,6 +19,29 @@ const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
+## What the timed autosave asks the editor about a level (#1736): whether a
+## gesture only the plugin knows about is open, and how far the level's undo
+## history has moved. `HFAutosaveScheduler.editor_state` is this, bound to the
+## plugin.
+static func editing_state(root: Node, plugin: Object) -> Dictionary:
+	var gesture: bool = (
+		plugin._vertex_drag_active
+		or plugin._brush_gizmo_action_active()
+		or plugin._selection_gesture.is_active()
+	)
+	var registry = plugin._tool_registry
+	if not gesture and registry and registry.has_active_external_tool():
+		var active = registry.get_active_tool()
+		gesture = active != null and active.has_work_in_progress()
+	var version := 0
+	var undo = plugin.undo_redo_manager
+	if undo and root and is_instance_valid(root):
+		var history = undo.get_history_undo_redo(undo.get_object_history_id(root))
+		if history:
+			version = history.get_version()
+	return {"gesture": gesture, "version": version}
+
+
 ## The window went away mid-gesture. Deferred by _notification so the editor has
 ## finished its own focus handling before we touch shared state.
 static func after_application_focus_loss(plugin: Object) -> void:
@@ -30,7 +53,8 @@ static func after_application_focus_loss(plugin: Object) -> void:
 	plugin._cancel_selection_gesture()
 	if plugin._tool_registry:
 		plugin._tool_registry.cancel_active_pointer_capture()
-	plugin._queue_managed_brush_reconcile()
+	# Every brush: whatever changed while the editor was away has no step to say.
+	plugin._queue_managed_brush_reconcile(true)
 	var root: Node = plugin.active_root if plugin.active_root else plugin._get_level_root()
 	if not root:
 		return

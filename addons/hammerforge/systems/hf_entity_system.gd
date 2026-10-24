@@ -8,6 +8,7 @@ class_name HFEntitySystem
 const DraftEntity = preload("../draft_entity.gd")
 const HFEntityDef = preload("../hf_entity_def.gd")
 const HFPrefabSystem = preload("hf_prefab_system.gd")
+const HFGridSystem = preload("hf_grid_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -79,7 +80,15 @@ func add_entity(entity: Node3D) -> void:
 	# not take back, so a restore made it `_Node3D_14` (#1179).
 	root.entities_node.add_child(entity, true)
 	root._assign_owner(entity)
+	_hide_if_filtered(entity)
 	_emit_entity_signal("entity_added", entity)
+
+
+## A kind the view filters hide is hidden as it arrives (#1720).
+func _hide_if_filtered(entity: Node3D) -> void:
+	var visgroups = root.get("visgroup_system")
+	if visgroups != null and visgroups.view_filter_hides(entity):
+		entity.visible = false
 
 
 func place_entity_at_screen(
@@ -98,6 +107,9 @@ func place_entity_at_screen(
 		entity.entity_class = entity_type
 	add_entity(entity)
 	entity.global_position = snapped_pos
+	# New work joins the current visgroup (#1732).
+	if root.visgroup_system:
+		root.visgroup_system.join_current(entity)
 	return entity
 
 
@@ -220,6 +232,7 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	root._assign_owner(entity)
 	if info.has("transform"):
 		entity.global_transform = info["transform"]
+	_hide_if_filtered(entity)
 	_emit_entity_signal("entity_added", entity)
 	return entity
 
@@ -471,6 +484,21 @@ func nudge_entities_by_paths(entity_paths: Array, offset: Vector3) -> void:
 		var entity := _entity_at_path(entity_path)
 		if entity:
 			entity.global_position += offset
+
+
+## Snap to Grid for entities: each origin onto the grid point nearest it. One
+## already there is left alone, so a float that rounds differently on the way
+## back does not count as a move.
+func snap_entities_to_grid(entity_paths: Array, step: float) -> void:
+	if not (step > 0.0):
+		return
+	for entity_path in entity_paths:
+		var entity := _entity_at_path(entity_path)
+		if entity == null:
+			continue
+		var target := HFGridSystem.nearest_grid_point(entity.global_position, step)
+		if not target.is_equal_approx(entity.global_position):
+			entity.global_position = target
 
 
 func _entity_at_path(entity_path: Variant) -> DraftEntity:

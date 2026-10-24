@@ -60,6 +60,7 @@ func _round_trip_every_type() -> void:
 		["Transform2D", Transform2D.IDENTITY],
 		["Transform3D", Transform3D.IDENTITY],
 		["Color", Color(0.25, 0.5, 0.75, 0.5)],
+		["Color above 1", Color(2.0, 1.0, 0.5)],
 		["PackedInt32Array", PackedInt32Array([1, 2, 3])],
 		["PackedFloat32Array", PackedFloat32Array([1.5, 2.5])],
 		["PackedStringArray", PackedStringArray(["a", "b"])],
@@ -97,19 +98,19 @@ func _round_trip_every_type() -> void:
 		if not (same and type_kept):
 			lost.append("%s -> %s" % [label, type_string(typeof(back))])
 	note("types the encoder does not round trip", lost)
-	if not lost.is_empty():
-		known(
-			619,
-			"%d Variant types silently change type through the .hflevel encoder" % lost.size(),
-			(
-				("%s. " % str(lost))
-				+ "encode_variant()'s match has a `_: return value` arm, so anything it "
-				+ "does not name is handed to JSON.stringify and comes back as whatever "
-				+ "JSON made of it -- usually a String of Godot's own notation, which no "
-				+ "later read can turn back into the value. Nothing warns, and the file "
-				+ "still carries the current format version"
-			)
-		)
+	# #619 fixed the types that were turned into strings, and #1787 the Color,
+	# written as its four floats now. A bare int still comes back a float, as JSON
+	# reads every number: a typed field takes its int back, and an entity
+	# property its class declares an int is given its type on load. Anything else
+	# that changes is new.
+	var expected := ["int", "Array", "Dictionary"]
+	var unexpected: Array = []
+	for entry in lost:
+		if not expected.has(str(entry).get_slice(" -> ", 0)):
+			unexpected.append(entry)
+	note("what JSON widens, by design", lost.filter(func(entry): return not unexpected.has(entry)))
+	if not unexpected.is_empty():
+		flag("a Variant type changes through the .hflevel encoder", str(unexpected))
 
 
 ## Dictionary *keys* do not go through the encoder at all.
@@ -124,20 +125,9 @@ func _dictionary_keys() -> void:
 		for k in keys:
 			kinds.append(type_string(typeof(k)))
 		note("  key types after", kinds)
-		if not kinds.has("Vector2i"):
-			known(
-				619,
-				"a Dictionary key is never encoded, so a non-String key comes back a String",
-				(
-					(
-						"encode_variant() encodes the values of a Dictionary and copies the "
-						+ "keys: `dict_out[key] = encode_variant(value[key], _depth + 1)`. A "
-						+ "Vector2i key -- the shape a paint grid cell is -- becomes the String "
-						+ "'%s' and stays one. Key types after the trip: %s"
-					)
-					% [str(keys[0]) if not keys.is_empty() else "?", kinds]
-				)
-			)
+		# #619 encodes a key that is not a String as a list of pairs.
+		if not kinds.has("Vector2i") or not kinds.has("int"):
+			flag("a Dictionary key comes back as another type", str(kinds))
 
 
 ## A ResourcePath that no longer resolves.

@@ -42,6 +42,26 @@ func summary() -> String:
 	return ""
 
 
+## The issues this scenario expects to reproduce through `known()`, by number.
+## One it did not see in a run is named in the summary as no longer reproducing,
+## so the issue can be closed or the scenario corrected (#1659). Without this, a
+## fixed defect only made the known count drop by one, naming nothing.
+func expected_issues() -> Array[int]:
+	return []
+
+
+## The issues `expected_issues()` names that `known()` did not see this run.
+func stale_issues() -> Array[int]:
+	var seen: Dictionary = {}
+	for entry in knowns:
+		seen[int(entry[0])] = true
+	var stale: Array[int] = []
+	for issue in expected_issues():
+		if not seen.has(issue):
+			stale.append(issue)
+	return stale
+
+
 ## Do the work. Override this. `await` freely -- the runner awaits the call.
 func run() -> void:
 	pass
@@ -76,7 +96,9 @@ func known(issue: int, label: String, detail: Variant = null) -> void:
 ##
 ## `context` names the round trip, so a report says which one lost the data.
 ## `known_keys` maps a key to the issue already covering it, so a defect that is
-## reported but unmerged is still exercised without turning the run red.
+## reported but unmerged is still exercised without turning the run red. A key
+## mapped to a sentence instead is a change the format makes on purpose, and is
+## noted with that sentence.
 func diff_levels(
 	before: Dictionary, after: Dictionary, context: String, known_keys: Dictionary = {}
 ) -> void:
@@ -85,6 +107,9 @@ func diff_levels(
 			flag("%s dropped '%s' entirely" % [context, k])
 			continue
 		if HFVibe.canonical(before[k]) != HFVibe.canonical(after[k]):
+			if known_keys.get(k) is String:
+				note("%s changed '%s'" % [context, k], known_keys[k])
+				continue
 			if known_keys.has(k):
 				known(int(known_keys[k]), "%s changed '%s'" % [context, k])
 			else:

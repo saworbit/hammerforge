@@ -1,0 +1,178 @@
+name: Nightly
+
+# The checks worth having that are too slow for every pull request (#1639): every
+# vibe scenario under tools/vibe/scenarios/, which otherwise ran only when
+# someone started the harness by hand, and the GUT tests under tests/nightly/,
+# which the pull request suite does not look in. Those are the save kill loop
+# (#1642) and the chaos scenarios at 300 steps (#1643). Pull request CI keeps the
+# quick forms, so its time does not grow with this.
+#
+# A red night is said on the one open issue labelled `nightly`, with the run
+# linked and the checks that failed named, and a green night after a red one says
+# so there too. Nothing opens an issue a night. When there is no such issue, the
+# first red night opens it.
+#
+# Worth knowing: GitHub disables a scheduled workflow after 60 days with no
+# activity in a public repository. This one would stop running and say nothing.
+# Anything that quiet is only found by looking at the Actions tab.
+
+on:
+  schedule:
+    # 04:17 UTC daily: off the hour, when GitHub delays scheduled runs the most,
+    # and clear of the 03:30 stale run.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  GODOT_VERSION: "4.7-stable"
+
+jobs:
+  vibe:
+    name: Every vibe scenario
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # The same download as ci.yml's shards, retries and all: see the reasons
+      # written beside it there.
+      - name: Download Godot
+        run: |
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          for attempt in 1 2 3; do
+            if wget -nv -S --tries=3 --waitretry=5 --retry-connrefused \
+                --retry-on-http-error=429,500,502,503,504 "$url" -O godot.zip \
+                && unzip -qt godot.zip; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "Godot ${GODOT_VERSION} would not download after 3 attempts"
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
+          unzip -q godot.zip
+          mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          chmod +x /usr/local/bin/godot
+
+      - name: Import project
+        run: godot --headless --import --path . 2>&1
+
+      # Exits 1 when a scenario flags something new, times out or cannot run. A
+      # scenario that only reproduces a defect already filed, with its number,
+      # stays quiet, as it does by hand.
+      - name: Run every vibe scenario
+        env:
+          GODOT: godot
+        run: python3 tools/vibe/run_vibe.py --log-dir vibe-logs
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: vibe-logs
+          path: vibe-logs/
+          retention-days: 7
+
+  slow-tests:
+    name: Slow GUT tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Download Godot
+        run: |
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          for attempt in 1 2 3; do
+            if wget -nv -S --tries=3 --waitretry=5 --retry-connrefused \
+                --retry-on-http-error=429,500,502,503,504 "$url" -O godot.zip \
+                && unzip -qt godot.zip; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "Godot ${GODOT_VERSION} would not download after 3 attempts"
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
+          unzip -q godot.zip
+          mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          chmod +x /usr/local/bin/godot
+
+      - name: Import project
+        run: godot --headless --import --path . 2>&1
+
+      # -gconfig= for the reason ci.yml gives: with .gutconfig.json in play the
+      # whole suite would be collected on top of this folder.
+      - name: Run tests/nightly
+        run: |
+          set -o pipefail
+          godot --headless -s res://addons/gut/gut_cmdln.gd --path . \
+            -gconfig= -gexit -glog=1 -gdir=res://tests/nightly -gprefix=test_ -gsuffix=.gd \
+            -gpre_run_script=res://tests/support/gut_pre_run.gd \
+            -gpost_run_script=res://tests/support/gut_post_run.gd \
+            2>&1 | tee gut-nightly.log
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: gut-nightly
+          path: gut-nightly.log
+          retention-days: 7
+
+  report:
+    name: Say how the night went
+    needs: [vibe, slow-tests]
+    # main only: a run started by hand on a branch is for trying the checks, and
+    # says nothing on the issue.
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Update the nightly issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          VIBE: ${{ needs.vibe.result }}
+          SLOW_TESTS: ${{ needs.slow-tests.result }}
+        run: |
+          failing=""
+          if [ "$VIBE" != success ]; then failing="vibe scenarios ($VIBE)"; fi
+          if [ "$SLOW_TESTS" != success ]; then
+            failing="${failing:+$failing, }slow GUT tests ($SLOW_TESTS)"
+          fi
+          issue=$(gh issue list --label nightly --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -z "$issue" ]; then
+            if [ -z "$failing" ]; then
+              exit 0
+            fi
+            gh label create nightly --color 5319e7 --force \
+              --description "The nightly workflow's own issue"
+            url=$(gh issue create --title "Nightly run" --label nightly \
+              --body "The nightly workflow says here when a night fails, and again when one is green after a red one.")
+            issue="${url##*/}"
+            gh issue pin "$issue" || echo "Opened #$issue, and could not pin it"
+          fi
+          # The first line of the workflow's last word here: Red or Green.
+          last=$(gh api --paginate "repos/$GH_REPO/issues/$issue/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | (.body | split("\n")[0])' | tail -n 1)
+          if [ -n "$failing" ]; then
+            gh issue comment "$issue" --body "Red: $RUN_URL
+          Failing: $failing."
+          elif [ "${last#Red}" != "$last" ]; then
+            gh issue comment "$issue" --body "Green again: $RUN_URL"
+          fi

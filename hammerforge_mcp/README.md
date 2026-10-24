@@ -50,6 +50,31 @@ Logs go to stderr, one line per call. `--log-file` writes them to a file as
 well, and `--log-level DEBUG` adds each call's arguments. The token is never
 logged.
 
+### Record a session and play it back
+
+`--record session.jsonl` writes each call as one JSON line: the tool, its
+arguments, whether it changed the level, ok or the error code, the revision
+before and after, how long it took, and the ids it made, changed and removed.
+Reads are written too, marked as reads. The token is never written.
+
+```bash
+hammerforge-mcp replay session.jsonl --project /path/to/your/godot/project
+```
+
+sends the recorded changes again, in order, to the open editor, starting from a
+new starter level, so open an empty scene first. It stops at the first call
+whose outcome differs from the recording and prints both: ok where it was
+refused, another error code, or other ids made, changed or removed. A brush the
+replay makes gets a new id, and later calls that named the old one are sent the
+new one. `--until N` stops after call N, `--keep-going` reports every
+difference, and `--here` plays onto the level that is open instead.
+
+`replay session.jsonl --to-batch batch.jsonl` sends nothing. It writes the
+changes that built the session's level as `hf_batch` payloads of up to 100 ops,
+one per line, for a test. Refused changes, a change an undo took back and that
+undo, and bakes are left out. Within a payload a brush an earlier op placed is
+named `$N.brush_id`. The file can be replayed the same way.
+
 The server also lists three prompts: `block_out_room`, `review_level` and
 `bake_for_playtest`.
 
@@ -58,7 +83,7 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | Tool | What it does |
 |---|---|
 | `hf_get_status` | Which editor, scene and level the bridge is on, the revision, counts, grid and camera |
-| `hf_place_brush` | Place a brush: shape, size, position, union or subtract, and optionally a material, a rotation, sides and a name, snapped to the grid unless told not to |
+| `hf_place_brush` | Place a brush: shape, size, position, a solid brush (`union`) or a cut brush (`subtract`), and optionally a material, a rotation, sides and a name, snapped to the grid unless told not to |
 | `hf_get_brushes` | List brushes with their faces and the structure each is a piece of, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |
@@ -74,7 +99,7 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | `hf_delete_entity` | Delete an entity and the wires aimed at it |
 | `hf_add_entity_output` | Wire an entity's output to an input on a named target, such as a timer to a light's Toggle, or a trigger to a lamp |
 | `hf_remove_entity_output` | Take a wire back by its place in the source's outputs |
-| `hf_set_brush_entity` | Make brushes one trigger, door, button or wall, with a name to wire to, or untie them |
+| `hf_set_brush_entity` | Make brushes one trigger, door, button, wall, detail or clip brush, with a name to wire to, or untie them |
 | `hf_get_cordons` | List the cordons a partial bake is cut to: each one's index, name, corners and switch, and the level's switch for all of them |
 | `hf_set_cordon` | Add a cordon round brushes or at a box, or move, rename or switch one by index, or switch every cordon on or off |
 | `hf_remove_cordon` | Take a cordon out by index; the level always keeps one |
@@ -82,10 +107,12 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | `hf_undo` | Take back the agent's last step, never anyone else's |
 | `hf_redo` | Put back the step `hf_undo` took |
 | `hf_bake` | Bake the whole level, or with `cordons: true` only what the cordons take, and write `<scene>_mcp.tscn` for a game or gda to load, with the bake id on its root |
+| `hf_measure` | Measure brushes, faces, entities and points: sizes and volume, the gap between two (0 when touching, negative when overlapping), the gap along each axis, and the angle between two faces |
+| `hf_plan` | A top down plan of the level drawn from its brushes, as a PNG or as SVG in metres: solids filled, cuts hatched, entities by kind, wires and cordons, one floor at a time by a height band. Works from a headless editor |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A PNG of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params, the prefab library and the level's paint layers |
-| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, build stairs, arches, spiral stairs or domes, change or detach one, place a prefab from the library, switch or propagate a placed one, move to floor or ceiling, reset rotation; or paint floor by cell: a rectangle painted or erased, its walls raised, a room stamped, a connector between two layers confirmed |
+| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, intersect, snap to grid, build stairs, arches, spiral stairs, domes, rings or door frames, change or detach one, place a prefab from the library, switch or propagate a placed one, move to floor or ceiling, reset rotation; or paint floor by cell: a rectangle painted or erased, its walls raised, a room stamped, a connector between two layers confirmed |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 
 A face is named by its index, by a world side such as `"+y"`, or by
@@ -108,8 +135,8 @@ Paint rectangle replies distinguish `cells_changed` (filled bits flipped)
 from `materials_changed` (material ids changed). `heights_changed` counts new
 or changed wall-height overrides, including a new override at the default.
 A material-only paint can record a step with `cells_changed: 0`. With region
-streaming enabled, `paint_raise` currently needs its painted region loaded;
-unloaded cells can be refused as empty
+streaming enabled, a paint command loads the regions it writes before it
+checks them, so paint streamed out to disk counts and `hf_undo` restores it
 ([#1502](https://github.com/saworbit/hammerforge/issues/1502)).
 
 Every change is one undo step named `MCP: ...` in the editor's history. A call
@@ -122,6 +149,18 @@ pass the id it gave to retry.
 
 If the editor moves to another scene or level, the next change is refused with
 `target_changed`. Call `hf_get_status` to work on the new one.
+
+## The building guide
+
+`skills/hammerforge-building/` is a guide an agent loads before it builds: the
+working loop (plan as numbers, build in a few batches, then measure, validate and
+look), the conventions in one place, what each read costs, the answers that mean
+a plan went wrong, and a worked example with the numbers it should measure. It is
+in the skill format coding agents load. Copy the folder into your agent's skills
+folder; for Claude Code that is `.claude/skills/` in your project or
+`~/.claude/skills/`. A client that does not load skills can read the same pages
+as MCP resources: `hammerforge://guide`, and `hammerforge://guide/<page>` for
+`conventions`, `costs`, `warning-signs` and `worked-example`.
 
 ## Hand a bake to gda
 

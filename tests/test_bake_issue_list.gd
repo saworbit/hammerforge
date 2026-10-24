@@ -98,7 +98,7 @@ func test_the_list_shows_what_bake_check_raises_on_the_object_it_names():
 	_spawn_at(Vector3(2, 1.1, 2))
 	_check()
 	assert_true(dock.bake_issue_list.visible, "there is something to list")
-	var row := _row("doesn't intersect any additive brush")
+	var row := _row("does not overlap any solid brush")
 	assert_not_null(row, "the floating cutter is a row")
 	if row == null:
 		return
@@ -222,10 +222,13 @@ func test_validate_still_logs_its_findings():
 
 
 func test_a_clean_validate_clears_the_list():
+	# A micro-gap is a bake check finding Validate does not make. A floating cut
+	# was the fixture until Validate learned to find one (#1708).
 	_floor()
-	_box(Vector3(1, 1, 1), Vector3(0, 6, 0), true)
-	_spawn_at(Vector3(2, 1.1, 2))
+	_box(Vector3(1, 1, 1), Vector3(2, 0.5, 2))
+	_box(Vector3(1, 1, 1), Vector3(3.0005, 0.5, 2))
+	_spawn_at(Vector3(-2, 1.1, -2))
 	_check()
-	assert_true(dock.bake_issue_list.visible, "fixture: Check Bake Issues listed the cutter")
+	assert_true(dock.bake_issue_list.visible, "fixture: Check Bake Issues listed the gap")
 	HFDockManageHandler.on_validate_level(dock)
 	assert_false(dock.bake_issue_list.visible, "Validate found nothing, so the rows went")

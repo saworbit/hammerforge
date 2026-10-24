@@ -8,14 +8,22 @@ class_name MapIO
 const LevelRoot = preload("level_root.gd")
 const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
+const HFNotes = preload("hf_notes.gd")
 const HFMapAdapterType = preload("map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("map_adapters/hf_map_quake.gd")
 const HFConvexClip = preload("hf_convex_clip.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
 const HFEntitySystem = preload("systems/hf_entity_system.gd")
+const HFVertexWeld = preload("hf_vertex_weld.gd")
+const HFHiddenFaces = preload("hf_hidden_faces.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const DEFAULT_TEXTURE := "__default"
+## The texture names that make a world brush clip collision, as the Quake family,
+## Quake 3 and Source write them, compared in lower case (#1409).
+const CLIP_TEXTURES := ["clip", "common/clip", "tools/toolsclip"]
+## What an export names a clip brush's face that came in under no clip name.
+const CLIP_TEXTURE := "clip"
 const AXIS_THRESHOLD := 0.98
 
 ## How many `.map` units one HammerForge unit is worth, by the convention of the
@@ -291,6 +299,10 @@ static func parse_map_text(
 					extra.erase(carried)
 				if not extra.is_empty():
 					info["brush_entity_data"] = extra
+			elif _is_clip_brush(brush.get("faces", [])):
+				# Hammer and TrenchBroom write clip collision as a world brush with
+				# every face named clip. It came in as a solid wall (#1409).
+				info["brush_entity_class"] = HFBrushEntity.CLIP_CLASS
 			brushes.append(info)
 	if entities.is_empty() and text.strip_edges() != "":
 		errors.append("No map blocks found")
@@ -378,7 +390,12 @@ static func _convert_parsed_alignment(
 				var size: Vector2 = texture_sizes.get(
 					str(face.get("texture", "")), HFMapAdapterType.DEFAULT_TEXTURE_SIZE
 				)
-				face["alignment"] = HFMapAdapterType.alignment_from_map(raw, units_per_metre, size)
+				var alignment := HFMapAdapterType.alignment_from_map(raw, units_per_metre, size)
+				# Valve 220's axes go with the numbers, to wherever the face is matched.
+				var axes: Array = face.get("axes", [])
+				if axes.size() == 2:
+					alignment["uv_axes"] = axes
+				face["alignment"] = alignment
 
 
 ## Put every parsed plane point into this project's units and the right way up,
@@ -396,6 +413,11 @@ static func _convert_parsed_points(entities: Array, factor: float, turn: bool) -
 				for i in points.size():
 					var point: Vector3 = (points[i] as Vector3) * factor
 					points[i] = from_map_axes(point) if turn else point
+				# Texture axes are directions, which a unit change leaves alone.
+				var axes: Array = face.get("axes", [])
+				if turn:
+					for i in axes.size():
+						axes[i] = from_map_axes(axes[i] as Vector3)
 
 
 ## The I/O connections among an entity's key/value lines.
@@ -436,11 +458,16 @@ static func _connections_from_pairs(pairs: Array, dropped: Array) -> Array:
 ## `parse_map_text()` does: the conversion is the level's policy, not the
 ## format's. The figure is put on the adapter, which is where every coordinate
 ## and every texture scale passes through on the way out.
+##
+## `only`, when given, is the brushes and entities to write and nothing else, with
+## the level's own worldspawn keys left out: what Copy puts on the system
+## clipboard (#1722).
 static func export_map_from_level(
 	level_root: Node,
 	adapter: HFMapAdapterType = null,
 	units_per_metre: float = 1.0,
-	convert_axes: bool = false
+	convert_axes: bool = false,
+	only: Array = []
 ) -> String:
 	if not level_root:
 		return ""
@@ -475,10 +502,13 @@ static func export_map_from_level(
 			)
 		)
 	)
-	lines.append_array(_worldspawn_lines(level_root, adapter))
+	if only.is_empty():
+		lines.append_array(_worldspawn_lines(level_root, adapter))
 	var brush_nodes: Array = []
 	if level_root.has_method("_iter_pick_nodes"):
 		brush_nodes.append_array(level_root.call("_iter_pick_nodes"))
+	if not only.is_empty():
+		brush_nodes = brush_nodes.filter(func(node): return only.has(node))
 	# Keyed on `[class, authored name]` rather than on the node, so brushes tied
 	# under one name become one entity. An Array key compares by content in Godot,
 	# which avoids inventing a separator that an authored name could contain.
@@ -491,13 +521,18 @@ static func export_map_from_level(
 			continue
 		if _is_cutter(node):
 			continue
+		if left_out_of_bake(level_root, node):
+			continue
 		if _has_unexportable_uv_scale(node):
 			substituted_scales.append(str(node.name))
-		var brush_lines = _brush_to_map_lines(node, adapter, material_names)
+		var bec := str(node.get_meta("brush_entity_class", ""))
+		var as_clip := bec == HFBrushEntity.CLIP_CLASS
+		var brush_lines = _brush_to_map_lines(node, adapter, material_names, as_clip)
 		if brush_lines.is_empty():
 			continue
-		var bec := str(node.get_meta("brush_entity_class", ""))
-		if bec != "":
+		# A clip goes into worldspawn, its faces named clip, as Hammer and TrenchBroom
+		# write one, unless it holds something a world brush cannot carry.
+		if bec != "" and not (as_clip and _clip_in_worldspawn(node, level_root)):
 			# One entry per node emitted one block per brush, so a two leaf door
 			# exported as two doors that move independently (#668). The brushes
 			# of one entity belong in one block, by `HFBrushEntity.identity()`: the
@@ -542,7 +577,12 @@ static func export_map_from_level(
 		lines.append("}")
 	if level_root.has_method("_iter_pick_nodes"):
 		for node in level_root.call("_iter_pick_nodes"):
-			if not (node is DraftEntity):
+			if not (node is DraftEntity) or left_out_of_bake(level_root, node):
+				continue
+			if not only.is_empty() and not only.has(node):
+				continue
+			# A note is for the people working on the level, not the map (#1700).
+			if HFNotes.is_editor_only(level_root, node):
 				continue
 			var ent_lines = _entity_to_map_lines(node, adapter, targets)
 			if ent_lines.is_empty():
@@ -666,9 +706,23 @@ static func _palette_texture_sizes(level_root: Node) -> Array:
 
 ## The texture name for one face, resolved through the palette names the level
 ## was exported with. An unset or out-of-range index is the default texture.
-static func _texture_for_face(face_data: Variant, material_names: Array) -> String:
+##
+## Every face of a clip brush is named clip whatever it is painted with, so the
+## editor it goes to reads it as clip collision. A face that came in under a clip
+## name keeps that spelling, which is the one its own game reads (#1409).
+static func _texture_for_face(
+	face_data: Variant, material_names: Array, as_clip := false
+) -> String:
+	if as_clip:
+		var named := "" if face_data == null else str(face_data.map_texture).strip_edges()
+		return texture_token(named) if is_clip_texture(named) else CLIP_TEXTURE
 	if face_data == null:
 		return DEFAULT_TEXTURE
+	# A Hidden face goes out under the name the map compilers drop, or the one of
+	# those it came in under, and comes back Hidden (#1719).
+	if face_data.has_method("is_hidden") and face_data.is_hidden():
+		var named := str(face_data.map_texture).strip_edges()
+		return texture_token(named) if HFHiddenFaces.is_map_name(named) else HFHiddenFaces.MAP_NAME
 	var idx: int = int(face_data.material_idx)
 	if idx >= 0 and idx < material_names.size():
 		return texture_token(str(material_names[idx]))
@@ -679,6 +733,58 @@ static func _texture_for_face(face_data: Variant, material_names: Array) -> Stri
 	if imported != "":
 		return texture_token(imported)
 	return DEFAULT_TEXTURE
+
+
+## Whether a face's texture name makes its brush clip collision, in any case.
+static func is_clip_texture(texture: String) -> bool:
+	return texture.strip_edges().to_lower() in CLIP_TEXTURES
+
+
+## Whether every face of a parsed brush is named clip, which is how a world brush
+## says it is clip collision.
+static func _is_clip_brush(faces: Array) -> bool:
+	if faces.is_empty():
+		return false
+	for face in faces:
+		if not is_clip_texture(str((face as Dictionary).get("texture", ""))):
+			return false
+	return true
+
+
+## Whether a func_clip brush can go out as a world brush, which carries no name,
+## no wires and no properties: it holds none of them, or only its class defaults.
+## One that holds more goes out as a func_clip block instead, its faces still named
+## clip, so the import gives back what it held.
+static func _clip_in_worldspawn(node: Node, level_root: Node) -> bool:
+	if str(node.get_meta(HFBrushEntity.NAME_META, "")) != "":
+		return false
+	var outputs: Variant = node.get_meta(HFBrushEntity.OUTPUTS_META, [])
+	if outputs is Array and not (outputs as Array).is_empty():
+		return false
+	var data: Variant = node.get_meta(HFBrushEntity.DATA_META, {})
+	if not (data is Dictionary) or (data as Dictionary).is_empty():
+		return true
+	var definition: Dictionary = {}
+	if level_root.has_method("get_entity_definition"):
+		definition = level_root.call("get_entity_definition", HFBrushEntity.CLIP_CLASS)
+	var defaults: Dictionary = {}
+	for prop in definition.get("properties", []):
+		if prop is Dictionary and (prop as Dictionary).has("default"):
+			defaults[str(prop.get("name", ""))] = prop["default"]
+	for key in data as Dictionary:
+		if not defaults.has(str(key)) or not _same_value(data[key], defaults[str(key)]):
+			return false
+	return true
+
+
+## Whether two property values say the same thing: as numbers when both read as
+## one, since an import holds `0` as text and the Entity panel as a float.
+static func _same_value(a: Variant, b: Variant) -> bool:
+	var left := str(a).strip_edges()
+	var right := str(b).strip_edges()
+	if left.is_valid_float() and right.is_valid_float():
+		return is_equal_approx(float(left), float(right))
+	return left == right
 
 
 ## The face whose outward normal is closest to [param local_normal], a direction
@@ -773,6 +879,12 @@ static func _no_commas(text: String) -> String:
 ## `CommittedCuts` and keeps whatever operation it had when it was stashed, and a
 ## plain subtraction brush is neither. Reading only the operation misses the
 ## frozen one; reading only the container misses the other two.
+## Whether a visgroup leaves `node` out of every bake and export (#1732).
+static func left_out_of_bake(level_root: Node, node: Node) -> bool:
+	var visgroups = level_root.get("visgroup_system")
+	return visgroups != null and visgroups.is_left_out_of_bake(node)
+
+
 static func _is_cutter(node: DraftBrush) -> bool:
 	if node.operation == CSGShape3D.OPERATION_SUBTRACTION:
 		return true
@@ -1003,7 +1115,11 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 	if size.length() <= 0.001:
 		return {}
 	var center = bounds.get_center()
-	if axis_aligned and faces.size() <= 8:
+	# A box no side of which is under a box's minimum. A thinner one, such as trim
+	# two units thick at 32 to the metre, would be widened to that minimum, so it
+	# keeps its faces as a CUSTOM brush, as a cut piece that thin does (#1635).
+	var fits_a_box: bool = size[size.min_axis_index()] >= HFConvexClip.MIN_BOX_SIDE - 0.00001
+	if axis_aligned and faces.size() <= 8 and fits_a_box:
 		# A box builds its own six faces, so there is no face list to line the
 		# textures up against. They travel keyed on the plane normal instead and
 		# the importer matches them to the faces the box makes.
@@ -1355,16 +1471,18 @@ static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:
 		var alignment := _parse_alignment(tail_parts.slice(1))
 		if not alignment.is_empty():
 			out["alignment"] = alignment
+			var axes := _parse_texture_axes(tail_parts.slice(1))
+			if not axes.is_empty():
+				out["axes"] = axes
 	out["texture"] = texture
 	return out
 
 
 ## The five alignment numbers of a face line as the file writes them: u offset,
 ## v offset, rotation in degrees, u scale and v scale. Classic Quake writes just
-## those. Valve 220 puts a texture axis in front of each offset, which is not
-## read: the face keeps its own projection. Quake 2 and 3 add flags after the
-## scale, which are not read either. Empty when any of the five is missing or is
-## not a number.
+## those. Valve 220 puts a texture axis in front of each offset, which
+## `_parse_texture_axes()` reads. Quake 2 and 3 add flags after the scale, which
+## are not read. Empty when any of the five is missing or is not a number.
 static func _parse_alignment(tokens: PackedStringArray) -> Array:
 	var fields: Array = []
 	if tokens.size() > 0 and tokens[0] == "[":
@@ -1383,8 +1501,30 @@ static func _parse_alignment(tokens: PackedStringArray) -> Array:
 	return out
 
 
+## The two texture axes a Valve 220 face line writes in front of its offsets, in
+## the file's own axes, or an empty array for a line with none or with one that is
+## not three numbers. The import reads them to tell a face laid on in its own plane
+## from one laid on along the world (#1419).
+static func _parse_texture_axes(tokens: PackedStringArray) -> Array:
+	if tokens.size() < 15 or tokens[0] != "[" or tokens[6] != "[":
+		return []
+	var out: Array = []
+	for first in [1, 7]:
+		var parts: Array = []
+		for i in 3:
+			var token := str(tokens[first + i])
+			if not token.is_valid_float() or not is_finite(float(token)):
+				return []
+			parts.append(float(token))
+		out.append(Vector3(parts[0], parts[1], parts[2]))
+	return out
+
+
 static func _brush_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
+	brush: DraftBrush,
+	adapter: HFMapAdapterType = null,
+	material_names: Array = [],
+	as_clip := false
 ) -> Array[String]:
 	if not brush:
 		return []
@@ -1394,19 +1534,22 @@ static func _brush_to_map_lines(
 	var shape = brush.shape
 	match shape:
 		LevelRoot.BrushShape.BOX:
-			lines.append_array(_box_to_map_lines(brush, adapter, material_names))
+			lines.append_array(_box_to_map_lines(brush, adapter, material_names, as_clip))
 		LevelRoot.BrushShape.CYLINDER:
-			lines.append_array(_cylinder_to_map_lines(brush, adapter, material_names))
+			lines.append_array(_cylinder_to_map_lines(brush, adapter, material_names, as_clip))
 		_:
 			if not brush.faces.is_empty():
-				lines.append_array(_faces_to_map_lines(brush, adapter, material_names))
+				lines.append_array(_faces_to_map_lines(brush, adapter, material_names, as_clip))
 			else:
-				lines.append_array(_box_to_map_lines(brush, adapter, material_names))
+				lines.append_array(_box_to_map_lines(brush, adapter, material_names, as_clip))
 	return lines
 
 
 static func _faces_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
+	brush: DraftBrush,
+	adapter: HFMapAdapterType = null,
+	material_names: Array = [],
+	as_clip := false
 ) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
@@ -1421,13 +1564,18 @@ static func _faces_to_map_lines(
 		# (b - a) x (c - a), so the points go out in the reverse order or every
 		# hull comes out inside out.
 		lines.append(
-			adapter.format_face_line(a, c, b, _texture_for_face(face, material_names), face)
+			adapter.format_face_line(
+				a, c, b, _texture_for_face(face, material_names, as_clip), face
+			)
 		)
 	return lines
 
 
 static func _box_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
+	brush: DraftBrush,
+	adapter: HFMapAdapterType = null,
+	material_names: Array = [],
+	as_clip := false
 ) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
@@ -1453,7 +1601,9 @@ static func _box_to_map_lines(
 		var b = corners[face[1]]
 		var c = corners[face[2]]
 		var fd: Variant = _box_face_along(brush, BOX_PLANE_DIRECTIONS[fi])
-		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
+		lines.append(
+			adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names, as_clip), fd)
+		)
 	return lines
 
 
@@ -1489,7 +1639,10 @@ static func _box_face_along(brush: DraftBrush, direction: Vector3) -> Variant:
 
 
 static func _cylinder_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
+	brush: DraftBrush,
+	adapter: HFMapAdapterType = null,
+	material_names: Array = [],
+	as_clip := false
 ) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
@@ -1536,7 +1689,9 @@ static func _cylinder_to_map_lines(
 		var c: Vector3 = points_bottom[(i + 1) % sides]
 		var wall_direction: Vector3 = (ring[i] + ring[(i + 1) % sides]).normalized()
 		var fd: Variant = _face_for_normal(brush, wall_direction)
-		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
+		lines.append(
+			adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names, as_clip), fd)
+		)
 	# Three distinct points on each ring name the cap plane. Taking them from the
 	# ring rather than from the centre keeps them non-collinear for any side count
 	# the brush allows.
@@ -1546,7 +1701,7 @@ static func _cylinder_to_map_lines(
 			points_top[2],
 			points_top[1],
 			points_top[0],
-			_texture_for_face(fd_top, material_names),
+			_texture_for_face(fd_top, material_names, as_clip),
 			fd_top
 		)
 	)
@@ -1556,7 +1711,7 @@ static func _cylinder_to_map_lines(
 			points_bottom[0],
 			points_bottom[1],
 			points_bottom[2],
-			_texture_for_face(fd_bottom, material_names),
+			_texture_for_face(fd_bottom, material_names, as_clip),
 			fd_bottom
 		)
 	)
@@ -1578,82 +1733,30 @@ static func _snapped(value: float) -> String:
 
 
 ## Snap near-coincident vertices within a single parsed brush's face list.
-## Uses BFS over a spatial hash with 27-cell neighbor lookup so pairs straddling
-## a bucket boundary are never missed.  Averages each cluster and writes
-## the canonical position back.
+## `HFVertexWeld` decides which points join, the same way Check Issues' weld fix
+## does; each group is averaged and the shared position written back.
 static func _snap_parsed_vertices(faces: Array, tolerance: float) -> void:
 	if tolerance <= 0.0:
 		return
-	# Collect all vertex references into a flat list + spatial hash
-	var entries: Array = []  # Array of {fi: int, pi: int, pos: Vector3}
-	var cells: Dictionary = {}  # cell_key -> Array[int]
+	# Every plane point in one flat list, with the face and slot it came from.
+	var points := PackedVector3Array()
+	var face_of := PackedInt32Array()
+	var slot_of := PackedInt32Array()
 	for fi in range(faces.size()):
-		var points: Array = faces[fi].get("points", [])
-		for pi in range(points.size()):
-			var idx: int = entries.size()
-			var pos: Vector3 = points[pi]
-			entries.append({"fi": fi, "pi": pi, "pos": pos})
-			var key: String = _snap_cell_key(pos, tolerance)
-			if not cells.has(key):
-				cells[key] = []
-			(cells[key] as Array).append(idx)
-	# BFS grouping
-	var group_of: PackedInt32Array = PackedInt32Array()
-	group_of.resize(entries.size())
-	group_of.fill(-1)
-	var groups: Array = []  # Array of Array[int]
-	for seed_idx in range(entries.size()):
-		if group_of[seed_idx] >= 0:
-			continue
-		var gid: int = groups.size()
-		var members: Array = [seed_idx]
-		group_of[seed_idx] = gid
-		var queue: Array = [seed_idx]
-		while not queue.is_empty():
-			var cur: int = queue.pop_front()
-			var cur_pos: Vector3 = entries[cur]["pos"]
-			for cell_key: String in _snap_cell_keys(cur_pos, tolerance):
-				for neighbor_idx: int in cells.get(cell_key, []):
-					if group_of[neighbor_idx] >= 0:
-						continue
-					if cur_pos.distance_to(entries[neighbor_idx]["pos"]) <= tolerance:
-						group_of[neighbor_idx] = gid
-						members.append(neighbor_idx)
-						queue.append(neighbor_idx)
-		groups.append(members)
-	# Average each group and write back
-	for members: Array in groups:
-		if members.size() < 2:
-			continue
-		var avg := Vector3.ZERO
-		for idx: int in members:
-			avg += entries[idx]["pos"]
-		avg /= float(members.size())
+		var face_points: Array = faces[fi].get("points", [])
+		for pi in range(face_points.size()):
+			var pos: Vector3 = face_points[pi]
+			points.append(pos)
+			face_of.append(fi)
+			slot_of.append(pi)
+	for group: PackedInt32Array in HFVertexWeld.cluster(points, tolerance):
+		var avg := HFVertexWeld.average(points, group)
 		var any_moved := false
-		for idx: int in members:
-			if (entries[idx]["pos"] as Vector3).distance_to(avg) > 0.0:
+		for i in group:
+			if points[i].distance_to(avg) > 0.0:
 				any_moved = true
 				break
 		if not any_moved:
 			continue
-		for idx: int in members:
-			var fi: int = entries[idx]["fi"]
-			var pi: int = entries[idx]["pi"]
-			faces[fi]["points"][pi] = avg
-
-
-static func _snap_cell_key(v: Vector3, tol: float) -> String:
-	return "%s,%s,%s" % [snapped(v.x, tol), snapped(v.y, tol), snapped(v.z, tol)]
-
-
-## Return all 27 cell keys (self + 26 neighbors) for spatial hash lookup.
-static func _snap_cell_keys(v: Vector3, cell_size: float) -> Array:
-	var cx: float = snapped(v.x, cell_size)
-	var cy: float = snapped(v.y, cell_size)
-	var cz: float = snapped(v.z, cell_size)
-	var keys: Array = []
-	for dx in [-cell_size, 0.0, cell_size]:
-		for dy in [-cell_size, 0.0, cell_size]:
-			for dz in [-cell_size, 0.0, cell_size]:
-				keys.append("%s,%s,%s" % [cx + dx, cy + dy, cz + dz])
-	return keys
+		for i in group:
+			faces[face_of[i]]["points"][slot_of[i]] = avg

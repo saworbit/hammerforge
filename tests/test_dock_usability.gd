@@ -25,17 +25,35 @@ func test_primary_navigation_uses_plain_workflow_names() -> void:
 	assert_eq(dock._mode_label.text, "Draw - drag in the 3D viewport")
 
 
-func test_solid_and_cutout_live_in_build_context() -> void:
+func test_solid_and_cut_live_in_build_context() -> void:
 	assert_eq(dock.mode_add.get_parent().name, "OperationRow")
 	assert_eq(dock.mode_subtract.get_parent().name, "OperationRow")
 	assert_eq(dock.mode_add.text, "Solid")
-	assert_eq(dock.mode_subtract.text, "Cutout")
+	assert_eq(dock.mode_subtract.text, "Cut")
 	assert_false(dock._advanced_build_section.is_expanded())
 	assert_true(_is_descendant_of(dock._snap_mode_row, dock._advanced_build_section))
 	assert_true(_is_descendant_of(dock._axis_lock_row, dock._advanced_build_section))
-	assert_true(_is_descendant_of(dock._disp_section, dock._advanced_build_section))
 	assert_true(_is_descendant_of(dock._bevel_section, dock._advanced_build_section))
 	assert_true(_is_descendant_of(dock.texture_lock_check, dock._advanced_build_section))
+
+
+## Displacement and Face Inset act on a picked face, and Face Select and its picks
+## close when the mapper leaves the Paint tab, so the tools sit on Paint with it,
+## under Face Tools beside the UV Editor. Bevel Edge needs Vertex Edit, which the
+## Paint tab closes, so it stays on Build (#1527).
+func test_tools_for_a_picked_face_live_beside_face_select() -> void:
+	assert_true(dock.paint_tab.is_ancestor_of(dock.face_select_mode), "Face Select is on Paint")
+	assert_true(dock.paint_tab.is_ancestor_of(dock._face_tools_section), "so is Face Tools")
+	for section_name in ["UV Editor", "Face Inset", "Displacement"]:
+		assert_true(
+			dock._face_tools_section.is_ancestor_of(dock._all_sections[section_name]),
+			"%s is in Face Tools" % section_name
+		)
+	assert_false(dock._face_tools_section.is_expanded(), "which starts closed")
+	assert_true(_is_descendant_of(dock._disp_create_btn, dock._disp_section))
+	assert_true(_is_descendant_of(dock._bevel_inset_btn, dock._inset_section))
+	assert_true(dock.brush_tab.is_ancestor_of(dock._bevel_edge_btn), "Bevel Edge is on Build")
+	assert_false(dock.brush_tab.is_ancestor_of(dock._bevel_inset_btn), "and Inset Face is not")
 
 
 func test_specialist_edit_tools_only_appear_for_brush_selection() -> void:

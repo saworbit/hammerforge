@@ -2,7 +2,8 @@
 class_name HFPluginCommands
 extends RefCounted
 ## Shared command dispatch for the context toolbar, hotkey palette, viewport
-## context menu, and radial menu. Surfaces keep their own root/selection guards.
+## context menu, and radial menu, and the state those surfaces read to decide
+## what they offer. Surfaces keep their own root/selection guards.
 ##
 ## The arms below are what each command does. What it is called, whether it needs
 ## a level and what it needs selected are in `HFCommandRegistry`, and only an id
@@ -10,12 +11,33 @@ extends RefCounted
 
 const LevelRootType = preload("level_root.gd")
 const HFUndoNavType = preload("ui/hf_undo_nav.gd")
+const HFInputStateType = preload("input_state.gd")
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
+const DraftBrush = preload("brush_instance.gd")
+const FaceData = preload("face_data.gd")
+const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
+const HFBrushConversion = preload("hf_brush_conversion.gd")
 const HFCommandRegistry = preload("hf_command_registry.gd")
+const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFLog = preload("hf_log.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
+const HFPluginEditActions = preload("plugin_edit_actions.gd")
+const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
+const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
+const HFViewFiltersType = preload("hf_view_filters.gd")
+const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
+const HFPluginViewCommands = preload("plugin_view_commands.gd")
+const HFPluginSelectionState = preload("plugin_selection_state.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
+const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
+const HFPluginBrushStamp = preload("plugin_brush_stamp.gd")
+const HFPluginSnapFeedbackType = preload("plugin_snap_feedback.gd")
+const HFFgdReader = preload("hf_fgd_reader.gd")
+const HFSettingsFile = preload("hf_settings_file.gd")
+const HFPluginCompare = preload("plugin_compare.gd")
+const HFPluginCommandLine = preload("plugin_command_line.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -27,6 +49,9 @@ static func requires_existing_root(action: String) -> bool:
 	return HFCommandRegistry.needs_level(action)
 
 
+## How many commands run lately the palette lists at its top (#1694).
+const RECENT_MAX := 8
+
 const TOOL_SWITCH_ACTIONS := [
 	"tool_draw",
 	"tool_select",
@@ -37,6 +62,157 @@ const TOOL_SWITCH_ACTIONS := [
 	"tool_extrude",
 	"tool_extrude_down_alt",
 ]
+
+
+## What every command surface reads to decide what it offers: the tool and mode,
+## what is selected and what it belongs to, and what is waiting to be applied.
+## The context toolbar and the palette get it on each HUD update and the viewport
+## menu as it opens. Each adds only its own keys on top, so a key one surface
+## reads is set for all of them (#1450).
+static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dictionary:
+	var state := {}
+	if plugin == null:
+		return state
+	var dock = plugin.get("dock")
+	var registry = plugin.get("_tool_registry")
+	state["has_root"] = root != null
+	state["tool"] = tool_id
+	state["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
+	state["paint_mirror_x"] = dock.get_paint_mirror_x_enabled() if dock else false
+	state["paint_mirror_z"] = dock.get_paint_mirror_z_enabled() if dock else false
+	state["vertex_mode"] = plugin._vertex_mode
+	state["is_subtract"] = dock.get_operation() != 0 if dock else false  # 0 = UNION
+	state["has_active_external_tool"] = (registry.has_active_external_tool() if registry else false)
+	# The toolbar's Repeat button: what it would place, and whether it is armed.
+	var last_drawn: Dictionary = {}
+	if root and root.get("drag_system"):
+		last_drawn = root.drag_system.last_drawn
+		state["repeat_label"] = HFPluginBrushStamp.label(last_drawn, float(root.grid_snap))
+	state["repeat_shape"] = HFPluginBrushStamp.shape_key(last_drawn)
+	var stamp = plugin.get("_brush_stamp")
+	state["repeat_armed"] = stamp != null and stamp.armed
+	# What Repeat Last Command would run, and the commands run lately (#1694).
+	var last := last_command(plugin)
+	state["repeat_command"] = last
+	state["repeat_text"] = repeat_text(plugin, last) if last != "" else ""
+	var recent = plugin.get("recent_commands")
+	state["recent_commands"] = (recent as Array).duplicate() if recent is Array else []
+
+	# Input mode
+	var input_mode := 0
+	if root and root.input_state:
+		input_mode = root.input_state.mode
+		var dims = root.input_state.get_drag_dimensions()
+		state["dimensions"] = HFInputStateType.format_dimensions(dims, root.grid_snap)
+	state["input_mode"] = input_mode
+
+	# Count from the authoritative editor selection. Mixed native/HammerForge
+	# selections must remain visible to every action surface so none of them can
+	# silently mutate only the managed subset.
+	var selection_nodes = plugin._current_selection_nodes()
+	state["mixed_selection"] = (
+		plugin.classify_selection_scope(selection_nodes, root) == HFPluginSelectionState.SCOPE_MIXED
+		if root
+		else false
+	)
+	var brush_count := 0
+	var entity_count := 0
+	for node in selection_nodes:
+		if node is DraftBrush:
+			brush_count += 1
+		elif root and root.has_method("is_entity_node") and root.is_entity_node(node):
+			entity_count += 1
+	state["brush_count"] = brush_count
+	state["entity_count"] = entity_count
+	# Godot nodes Convert to Brushes takes, so the viewport menu can offer it.
+	var convertible_count := 0
+	for node in selection_nodes:
+		if not (node is DraftBrush) and HFBrushConversion.is_convertible_kind(node):
+			convertible_count += 1
+	state["convertible_count"] = convertible_count
+
+	# I/O connection summary for entity context toolbar
+	if entity_count > 0 and root and root.has_method("get_connection_summary"):
+		var first_entity: Node = null
+		for node in selection_nodes:
+			if root.has_method("is_entity_node") and root.is_entity_node(node):
+				first_entity = node
+				break
+		if first_entity:
+			var summary = root.get_connection_summary(first_entity.name)
+			var triggers: int = summary.get("triggers", 0)
+			var triggered_by: int = summary.get("triggered_by", 0)
+			var parts: Array = []
+			if triggers > 0:
+				parts.append("%d out" % triggers)
+			if triggered_by > 0:
+				parts.append("%d in" % triggered_by)
+			if not parts.is_empty():
+				state["io_summary"] = " | ".join(parts)
+
+	# The toolbar's Highlight button and the viewport menu's check item both show
+	# the level's own highlight, and toggle from it.
+	if root and root.get("io_visualizer") and root.io_visualizer:
+		state["highlight_connected"] = root.io_visualizer.highlight_connected
+
+	# The picked faces that are still faces, counted as the dock counts them (#1685).
+	var face_count := 0
+	if root and root.has_method("picked_face_count"):
+		face_count = root.picked_face_count()
+	state["face_count"] = face_count
+	# Whether the Space menu offers Re-pick: faces are picked, and a Trim Run's
+	# piece is selected or was on the way into Face Select (#1414).
+	state["repick_trim_run"] = false
+	if face_count > 0 and root and root.has_method("generator_for_selection"):
+		var target = root.generator_for_selection(
+			HFPluginEditActions.clip_target_brush_ids(plugin, root)
+		)
+		state["repick_trim_run"] = target != null and HFGeneratorSystem.follows_run(target.type)
+	state["texture_gizmo"] = dock.is_texture_gizmo_enabled() if dock else false
+
+	# Pending cut count for "Apply Cuts" button visibility
+	var pending_cut_count := 0
+	if root and root.pending_node:
+		for child in root.pending_node.get_children():
+			if child is DraftBrush:
+				pending_cut_count += 1
+	state["pending_cut_count"] = pending_cut_count
+	state["bake_preview_active"] = plugin._bake_preview_active
+	state["bake_disabled"] = dock._bake_disabled if dock else false
+	if root and root.get("paint_tool"):
+		state["paint_connector_pending"] = root.paint_tool._pending_connector_defs.size()
+
+	# Prefab instance info for context toolbar badge
+	if root and root.prefab_system and not plugin.hf_selection.is_empty():
+		var first_node = plugin.hf_selection[0]
+		var pfb_rec = (
+			root.prefab_system.instance_of(first_node)
+			if is_instance_valid(first_node) and first_node is Node
+			else null
+		)
+		if pfb_rec:
+			state["prefab_source"] = pfb_rec.source_path
+			state["prefab_variant"] = pfb_rec.variant_name
+			state["prefab_linked"] = pfb_rec.linked
+			state["prefab_copies"] = root.prefab_system.copies_like(pfb_rec.instance_id).size()
+			# What a linked copy changed outside what it keeps (#1734).
+			if pfb_rec.linked:
+				state["prefab_changes"] = root.prefab_system.compute_instance_diff(
+					pfb_rec.instance_id
+				)
+
+	# The structure a selected piece belongs to, for the toolbar's Update and
+	# Detach. Read through the record: the tag on the brush only points at it.
+	if root and root.has_method("generator_for_id"):
+		for node in plugin.hf_selection:
+			if not (is_instance_valid(node) and node is DraftBrush):
+				continue
+			var tag := str(node.get_meta(HFGeneratorSystem.GENERATOR_META, ""))
+			var record = root.generator_for_id(tag) if tag != "" else null
+			if record:
+				state["structure_type"] = record.type
+				break
+	return state
 
 
 static func execute(plugin: Object, action: String, args: Array = []) -> void:
@@ -64,6 +240,11 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"validate_level":
 			if dock:
 				dock._on_validate_level()
+		"compare_level":
+			if dock:
+				dock.open_compare_dialog()
+		"end_compare":
+			HFPluginCompare.end(plugin)
 		"tool_draw":
 			plugin._deactivate_external_tool()
 			if dock and dock.tool_draw:
@@ -82,12 +263,26 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			if dock:
 				dock.set_extrude_tool(-1)
 				plugin._update_hud_context()
+		"repeat_brush":
+			plugin._ensure_brush_stamp().arm(plugin, root)
+		"repeat_last_command":
+			repeat_last(plugin, root)
+		"command_line":
+			HFPluginCommandLine.open(plugin)
+		"run_command_script":
+			HFPluginCommandLine.ask_for_script(plugin)
+		"convert_entity_definitions":
+			convert_entity_definitions(plugin, root)
 		"hollow":
 			plugin._hollow_selected(root)
 		"clip":
 			plugin._clip_selected(root)
 		"clip_to_face":
 			plugin._clip_to_face_plane_selected(root)
+		"run_trim_along_faces":
+			HFPluginEditActions.run_trim_along_faces(plugin, root)
+		"repick_trim_run":
+			HFPluginEditActions.repick_trim_run(plugin, root)
 		"create_arch":
 			if dock:
 				dock._on_create_structure()
@@ -101,22 +296,59 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._carve_selected(root)
 		"merge":
 			plugin._merge_selected(root)
+		"intersect":
+			plugin._intersect_selected(root)
+		"hull":
+			HFPluginEditActions.hull_selected(plugin, root)
 		"rotate_ccw":
 			plugin._rotate_selected(root, 1)
 		"rotate_cw":
 			plugin._rotate_selected(root, -1)
 		"flip_selection":
 			plugin._flip_selected(root)
+		"mirror_copy":
+			HFPluginEditActions.mirror_copy_selected(plugin, root)
+		"shear_selection":
+			HFPluginEditActions.open_shear_dialog(plugin, root)
 		"reset_rotation":
 			plugin._reset_rotation_selected(root)
+		"apply_rotation_scale":
+			HFPluginEditActions.apply_rotation_scale_selected(plugin, root)
+		"convert_to_brushes":
+			HFPluginEditActions.convert_selected_to_brushes(plugin, root)
+		"offset_selection":
+			HFPluginTransformTools.open_offset(plugin, root)
+		"pick_pivot":
+			HFPluginTransformTools.arm_pivot_pick(plugin, root)
+		"clear_pivot":
+			HFPluginTransformTools.clear_pivot(plugin, root)
 		"duplicate":
 			plugin._duplicate_selected(root)
 		"copy":
 			plugin._copy_selection(root)
 		"paste":
 			plugin._paste_clipboard(root)
+		"paste_at_cursor":
+			HFPluginEditActions.paste_at_cursor(
+				plugin, root, args[0] if not args.is_empty() else null
+			)
 		"delete":
 			plugin._delete_selected(root)
+		"place_entity_here":
+			if args.size() >= 2:
+				HFPluginEditActions.place_entity_here(plugin, root, str(args[0]), args[1])
+		"make_brush_entity":
+			if not args.is_empty():
+				HFPluginEditActions.make_brush_entity(plugin, root, str(args[0]))
+		"back_to_world":
+			HFPluginEditActions.back_to_world(plugin, root)
+		"add_to_visgroup":
+			if not args.is_empty():
+				HFPluginEditActions.add_to_visgroup(plugin, root, str(args[0]))
+		"new_visgroup":
+			HFPluginEditActions.new_visgroup(plugin, root)
+		"show_material_in_browser":
+			HFPluginEditActions.show_material_in_browser(plugin, root)
 		"group":
 			plugin._group_selected(root)
 		"ungroup":
@@ -125,6 +357,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._move_selected_to_floor(root)
 		"move_to_ceiling":
 			plugin._move_selected_to_ceiling(root)
+		"snap_to_grid":
+			HFPluginEditActions.snap_selected_to_grid(plugin, root)
 		"shape_box":
 			if dock and dock.shape_select:
 				dock.shape_select.select(0)
@@ -159,14 +393,89 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"justify_bottom":
 			if dock:
 				dock._on_justify("bottom")
+		"justify_fit_u":
+			if dock:
+				dock._on_justify("fit_u")
+		"justify_fit_v":
+			if dock:
+				dock._on_justify("fit_v")
+		"uv_flip_u":
+			if dock:
+				dock._on_uv_edit("flip_u")
+		"uv_flip_v":
+			if dock:
+				dock._on_uv_edit("flip_v")
+		"uv_rotate_90":
+			if dock:
+				dock._on_uv_edit("rotate_90")
+		"align_texture_to_edge":
+			if dock:
+				# From the face menu, the edge nearest where it was opened (#1727).
+				var near: Variant = null
+				if not args.is_empty() and str(args[0]) == "cursor" and root:
+					near = root.pick_face(plugin.last_3d_camera, plugin.last_3d_mouse_pos).get(
+						"position"
+					)
+				dock._on_align_to_edge(near)
+		"fit_texture_repeats":
+			if dock:
+				dock._on_fit_repeats()
+		"fit_texture_strip":
+			if dock:
+				dock._on_fit_strip()
+		"uv_align_face":
+			if dock:
+				dock._on_uv_align(FaceData.UVProjection.FACE)
+		"uv_align_world":
+			if dock:
+				dock._on_uv_align(FaceData.UVProjection.BOX_UV)
+		"uv_wrap":
+			HFPluginUVWrap.begin(plugin, root)
+		"uv_link":
+			if dock:
+				dock._on_uv_link()
+		"uv_unlink":
+			if dock:
+				dock._on_uv_unlink()
+		"uv_select_group":
+			if dock:
+				dock._on_uv_select_group()
 		"apply_to_brush":
 			if dock:
 				dock._apply_material_to_whole_brush()
 		"apply_last_texture":
 			plugin._apply_last_texture(root)
+		"apply_picked_look":
+			if dock:
+				dock._on_apply_picked_look()
+		"make_faces_hidden":
+			if dock:
+				dock.make_selected_faces_hidden(true)
+		"make_faces_normal":
+			if dock:
+				dock.make_selected_faces_hidden(false)
+		"hide_faces_against_solids":
+			HFPluginEditActions.hide_faces_against_solids(plugin, root)
+		"replace_material":
+			if dock:
+				dock.open_replace_material()
+		"texture_gizmo":
+			# The toolbar's button says which way; the palette and a key switch it.
+			if dock:
+				dock.set_texture_gizmo_enabled(
+					bool(args[0]) if not args.is_empty() else not dock.is_texture_gizmo_enabled()
+				)
+		# Apply Favorite 1 to 9, Alt+1 to Alt+9.
+		_ when action.begins_with("apply_favorite_"):
+			HFPluginMaterialCommands.apply_favorite(
+				plugin, action.trim_prefix("apply_favorite_").to_int()
+			)
 		"entity_io", "entity_props":
 			if dock:
 				dock.main_tabs.current_tab = 2
+		"cycle_io_wires":
+			if dock:
+				dock.cycle_io_wires()
 		"highlight_connected":
 			if root and root.has_method("set_highlight_connected"):
 				var pressed: bool = args[0] if not args.is_empty() else false
@@ -212,6 +521,12 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"vertex_clip_convex":
 			if root and root.vertex_system:
 				plugin._vertex_clip_to_convex(root)
+		"vertex_snap_to_grid":
+			if root:
+				HFPluginVertexOps.snap_selected_to_grid(plugin, root)
+		"vertex_scale":
+			if root:
+				HFPluginVertexOps.open_scale_dialog(plugin, root)
 		"vertex_exit":
 			plugin._toggle_vertex_mode(root)
 		"select_all":
@@ -220,8 +535,57 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._deselect_all_nodes(root)
 		"select_similar":
 			plugin._select_similar(root)
+		"invert_selection":
+			HFPluginSelectionCommands.invert_selection(plugin, root)
+		"select_inside", "select_partly_inside", "select_touching", "select_column":
+			HFPluginSelectionCommands.select_with_brush(plugin, root, action)
+		"hide_selection":
+			HFPluginViewCommands.hide_selection(plugin, root)
+		"show_hidden":
+			HFPluginViewCommands.show_hidden(plugin, root)
+		"isolate_selection":
+			HFPluginViewCommands.isolate_selection(plugin, root)
+		"isolate_visgroups":
+			HFPluginViewCommands.isolate_visgroups(plugin, root)
+		"end_isolate":
+			HFPluginViewCommands.end_isolate(plugin, root)
+		"previous_visibility":
+			HFPluginViewCommands.previous_visibility(plugin, root)
 		"selection_filter":
 			plugin._show_selection_filter()
+		"view_filter_world", "view_filter_cut", "view_filter_clip", "view_filter_trigger", "view_filter_brush_entity", "view_filter_entity", "view_filter_structure", "view_filter_prefab", "view_filter_decal", "view_filter_wires", "view_filter_cordons", "view_filter_hidden_faces":
+			if root:
+				var kind := action.trim_prefix("view_filter_")
+				var hide: bool = not root.is_view_filtered(kind)
+				root.set_view_filter(kind, hide)
+				if dock:
+					dock.show_toast(
+						(
+							"%s %s"
+							% [HFViewFiltersType.label_for(kind), "hidden" if hide else "shown"]
+						),
+						0
+					)
+		"quick_select":
+			HFPluginSelectionCommands.show_quick_select(plugin)
+		"grow_selection":
+			HFPluginSelectionCommands.grow_selection(plugin, root)
+		"shrink_selection":
+			HFPluginSelectionCommands.shrink_selection(plugin, root)
+		"toggle_face_xray":
+			HFPluginSelectionCommands.toggle_face_xray(plugin)
+		"toggle_selection_size":
+			if dock:
+				dock.toggle_show_selection_size()
+		"toggle_draw_on_face":
+			if dock:
+				dock.toggle_draw_on_face()
+			# The preview under a still cursor changes with it.
+			var hover_camera = plugin.get("last_3d_camera")
+			if is_instance_valid(hover_camera):
+				HFPluginPointerTools.follow_draw_hover(
+					plugin, root, hover_camera, plugin.last_3d_mouse_pos
+				)
 		"quick_save_prefab":
 			plugin._quick_save_prefab(root, false)
 		"quick_save_linked_prefab":
@@ -232,6 +596,12 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._push_prefab_to_source(root)
 		"propagate_prefab":
 			plugin._propagate_prefab(root)
+		"unlink_prefab_copy":
+			HFPluginPrefabCommands.unlink_copy(plugin, root)
+		"select_linked_copies":
+			HFPluginPrefabCommands.select_linked_copies(plugin, root)
+		"discard_prefab_changes":
+			HFPluginPrefabCommands.discard_changes(plugin, root)
 		"place_prefab":
 			HFPluginDropHandler.place_selected_prefab(plugin, root)
 		"texture_picker":
@@ -301,9 +671,13 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"set_grid_snap":
 			if dock and not args.is_empty():
 				dock._apply_grid_snap(float(args[0]))
-		"measure":
+		"measure", "tool_clip", "tool_polygon", "tool_path", "tool_decal", "tool_hull", "tool_shear":
 			if plugin._tool_registry and plugin.active_root:
-				plugin._activate_external_tool(100, plugin.active_root)
+				var tool_id: int = plugin._tool_registry.tool_id_for_action(action)
+				if tool_id >= 0:
+					plugin._activate_external_tool(tool_id, plugin.active_root)
+		"snap_next_vertex", "snap_next_midpoint", "snap_next_centre", "snap_next_perpendicular", "snap_next_grid":
+			HFPluginSnapFeedbackType.limit(plugin, action)
 		"cancel_drag":
 			if root:
 				root.cancel_drag()
@@ -333,10 +707,129 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 					plugin._radial_menu.hide_menu()
 				else:
 					plugin._radial_menu.show_at(plugin._get_current_overlay_mouse_pos())
+		"toggle_operation_replay":
+			if plugin._operation_replay and is_instance_valid(plugin._operation_replay):
+				plugin._operation_replay.toggle_visible()
+			else:
+				plugin._toast_power_user_overlay_hint()
 		_:
 			# The table lists it, so a surface offers it, and nothing here runs it.
 			# The palette sweep fails on this in every state it tries.
 			push_error("HFPluginCommands: '%s' is in HFCommandRegistry but has no arm" % action)
 			return
+	note_command(plugin, action)
 	plugin._show_coach_mark_for_action(action)
 	plugin._update_hud_context()
+
+
+## Note `action` as run, for Repeat Last Command and the palette's recent list
+## (#1694). Repeat itself is never noted, so it never repeats itself.
+static func note_command(plugin: Object, action: String) -> void:
+	if action == "repeat_last_command" or not HFCommandRegistry.dispatches(action):
+		return
+	if not ("recent_commands" in plugin and "last_repeatable_command" in plugin):
+		return
+	var recent: Array = plugin.recent_commands
+	recent.erase(action)
+	recent.push_front(action)
+	if recent.size() > RECENT_MAX:
+		recent.resize(RECENT_MAX)
+	if HFCommandRegistry.repeatable(action):
+		plugin.last_repeatable_command = action
+
+
+## Note the command a key ran. The key router runs most commands itself rather
+## than through `execute()`, so it asks which command the key is, the mode's own
+## keys first as the router asks them.
+static func note_key_command(plugin: Object, event: InputEventKey, mode: String) -> void:
+	var keymap = plugin.get("_keymap")
+	if keymap == null:
+		return
+	var found := ""
+	for action in keymap.get_actions():
+		if not HFCommandRegistry.dispatches(action) or not keymap.matches(action, event):
+			continue
+		var its: String = keymap.action_mode(action)
+		if its == mode:
+			found = action
+			break
+		if its == "general" and found == "":
+			found = action
+	if found != "":
+		note_command(plugin, found)
+
+
+## The command Repeat Last Command would run, or "".
+static func last_command(plugin: Object) -> String:
+	var last = plugin.get("last_repeatable_command") if plugin else null
+	return str(last) if last is String else ""
+
+
+## What Repeat says it runs: the command's name, and the setting it runs with
+## where it has one, as "Hollow (0.25 m)".
+static func repeat_text(plugin: Object, action: String) -> String:
+	var text := HFCommandRegistry.label(action)
+	var dock = plugin.get("dock")
+	if action == "hollow" and dock and dock.has_method("get_hollow_thickness"):
+		text += " (%s m)" % String.num(float(dock.get_hollow_thickness()), 3)
+	return text
+
+
+## Convert Entity Definitions to JSON (#1721): the classes the level reads from an
+## FGD, written as an `entities.json` beside the first FGD it names, for a team
+## that wants to go on in that form. One way: the FGD is left as it is, and the
+## level reads the new file once its definitions path names it. Returns the file
+## written, or "".
+static func convert_entity_definitions(plugin: Object, root: Node) -> String:
+	var dock = plugin.get("dock")
+	var path := str(root.get("entity_definitions_path"))
+	var fgd := ""
+	for part in path.split(HFEntityDef.PATH_SEPARATOR, false):
+		if part.strip_edges().get_extension().to_lower() == "fgd":
+			fgd = part.strip_edges()
+			break
+	if fgd == "":
+		if dock:
+			dock.show_toast("The level's entity definitions name no FGD to convert", 1)
+		return ""
+	var read := HFEntityDef._read_entries(path)
+	if str(read["failure"]) != "" or (read["entries"] as Array).is_empty():
+		if dock:
+			dock.show_toast("%s has no entity classes to convert" % fgd.get_file(), 1)
+		return ""
+	var out := fgd.get_basename() + ".json"
+	var err := HFSettingsFile.write_text(out, HFFgdReader.to_json_text(read["entries"]))
+	if err != OK:
+		if dock:
+			dock.show_toast("Could not write %s: %s" % [out, error_string(err)], 2)
+		return ""
+	(
+		root
+		. emit_signal(
+			"user_message",
+			(
+				"Wrote %d entity classes to %s. Point the level's entity definitions at it to edit them as JSON"
+				% [(read["entries"] as Array).size(), out]
+			),
+			0
+		)
+	)
+	return out
+
+
+## Run the last command that changed the level or the selection again, on the
+## selection there is now (#1694). The command's own selection guard is asked
+## first, so a refusal reads as that command's. The command makes its own undo
+## step, named after it.
+static func repeat_last(plugin: Object, root: Node) -> void:
+	var dock = plugin.get("dock")
+	var last := last_command(plugin)
+	if last == "":
+		if dock:
+			dock.show_toast("Nothing to repeat yet", 0)
+		return
+	if root and not plugin._managed_action_surface_allowed(root, last):
+		return
+	if dock:
+		dock.show_toast("Repeat: %s" % repeat_text(plugin, last), 0)
+	execute(plugin, last)

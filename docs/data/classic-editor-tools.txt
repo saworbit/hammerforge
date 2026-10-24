@@ -1,0 +1,174 @@
+# The tools and menu actions of Hammer and TrenchBroom, by name only, grouped by
+# area, each mapped to what HammerForge has for it (#1707). Names come from their
+# public manuals; nothing past the name is copied. `tools/gen_parity.py` writes
+# docs/parity.md from this file and the command registry, and CI holds the page
+# to it.
+#
+# A line is `Name | mapping`, the mapping one of:
+#   command ids, comma separated   covered by those commands
+#   note: text                     covered some other way, as the text says
+#   none                           not covered yet
+#   not planned: reason            left out on purpose
+# A `## Area` line starts an area.
+
+## Selection
+Selection tool | tool_select
+Select All | select_all
+Select None | deselect_all
+Invert Selection | invert_selection
+Select Touching | select_touching
+Select Inside | select_inside
+Select Partially Inside | select_partly_inside
+Select Tall | select_column
+Select Matching Texture | select_similar
+Select by Line Number | none
+Find Entities | quick_select
+Selection Filter | selection_filter
+Grow Selection | grow_selection
+Quick Hide | hide_selection
+Quick Hide Unselected | isolate_selection
+Quick Unhide | show_hidden
+Group | group
+Ungroup | ungroup
+Ignore Groups | none
+
+## Brush creation
+Block Tool | tool_draw
+Create Brush Tool | tool_draw
+Block Primitive | shape_box
+Cylinder Primitive | shape_cylinder
+Sphere Primitive | shape_sphere
+Spike Primitive | shape_cone
+Wedge Primitive | note: the Build tab's Shape list
+Torus Primitive | note: the Build tab's Shape list
+Arch | create_arch
+Convex Brush from Points | tool_hull
+Polygon Brush | tool_polygon
+Duplicate | duplicate
+Clone by Dragging | note: Shift with an arrow key duplicates and moves the copy
+Copy | copy
+Paste | paste
+Paste Special | note: Duplicate Array repeats a copy in a line, a grid or a ring
+Delete | delete
+Undo | undo
+Redo | redo
+Repeat Last Command | repeat_last_command
+Repeat Last Brush | repeat_brush
+
+## Transform
+Move Objects | note: the arrow keys nudge and Godot's move gizmo drags
+Rotate 90 Degrees Clockwise | rotate_cw
+Rotate 90 Degrees Counter-clockwise | rotate_ccw
+Rotate Tool | note: Godot's own rotate gizmo
+Scale Tool | note: Godot's scale gizmo and the brush resize handles
+Shear Tool | tool_shear, shear_selection
+Flip Objects | flip_selection
+Mirror | mirror_copy
+Transform Dialog | offset_selection
+Snap Selected to Grid | snap_to_grid
+Align Objects | move_to_floor, move_to_ceiling
+Reset Rotation | reset_rotation
+Pick Pivot | pick_pivot
+
+## Boolean and clipping
+Make Hollow | hollow
+Carve | carve
+CSG Subtract | carve
+CSG Convex Merge | merge, hull
+CSG Intersect | intersect
+CSG Hollow | hollow
+Clipping Tool | tool_clip, clip
+Clip to a Face Plane | clip_to_face
+
+## Vertex editing
+Vertex Manipulation | vertex_edit
+Vertex Tool | vertex_submode
+Edge Tool | edge_submode
+Face Tool | tool_extrude_up, tool_extrude_down
+Snap Vertices to Grid | vertex_snap_to_grid
+Merge Vertices | vertex_merge
+Split Edge | vertex_split_edge
+Make Convex | vertex_clip_convex
+Scale Vertices | vertex_scale
+
+## Texturing
+Texture Application Tool | note: the Paint tab's Face Tools and UV Editor
+Face Edit Sheet | note: the Paint tab's Face Tools and UV Editor
+Texture Browser | note: the Material Browser in the Paint tab
+Apply Current Texture | apply_last_texture
+Apply Texture to Whole Brush | apply_to_brush
+Lift Texture | texture_picker
+Apply Texture and Alignment | apply_picked_look
+Texture Lock | note: the Texture Lock box in the Build tab
+UV Lock | note: the Texture Lock box in the Build tab
+Justify Fit | justify_fit
+Justify Left | justify_left
+Justify Right | justify_right
+Justify Top | justify_top
+Justify Bottom | justify_bottom
+Justify Center | justify_center
+Align to World | uv_align_world
+Align to Face | uv_align_face
+Rotate Texture | uv_rotate_90
+Flip Texture | uv_flip_u, uv_flip_v
+Treat as One | uv_link
+Wrap Texture | uv_wrap
+Replace Textures | replace_material
+Decal Tool | tool_decal
+Overlay Tool | none
+Smoothing Groups | note: the UV Editor's Smoothing box
+Nodraw Faces | make_faces_hidden, hide_faces_against_solids
+Create Displacement | note: the Displacement section of Face Tools
+Sculpt Displacement | note: the Displacement section of Face Tools
+Paint Displacement Alpha | none
+Sew Displacements | note: the Displacement section of Face Tools
+
+## Entities
+Entity Tool | place_entity_here
+Entity Browser | note: the Objects tab's entity palette
+Object Properties | entity_props
+Smart Property Editors | note: the Entity panel's typed editors, choices and flags among them
+Tie to Entity | make_brush_entity
+Move to World | back_to_world
+Entity Connections | entity_io, highlight_connected, cycle_io_wires
+Entity Report | note: the Console's Entities list
+Game Data Files | note: entity_definitions_path reads an FGD or several
+Prefab Factory | place_prefab, quick_save_prefab
+Linked Groups | quick_save_linked_prefab, push_to_source, select_linked_copies, propagate_prefab
+
+## Visibility and layers
+Visgroups | add_to_visgroup, new_visgroup
+Layers | add_to_visgroup, new_visgroup
+Auto Visgroups | view_filter_world, view_filter_trigger, view_filter_brush_entity, view_filter_entity
+Isolate Layer | isolate_visgroups
+Lock Layer | note: a visgroup's lock
+Cordon | note: cordons, which bake a part of the level
+Hide Nodraw | view_filter_hidden_faces
+
+## Problems and compiling
+Check for Problems | validate_level
+Issue Browser | validate_level
+Run Map | quick_play
+Compile Map | quick_bake
+Launch Engine | quick_play
+Load Pointfile | not planned: a bake is no BSP compile, so there is no leak to trace
+Load Portal File | not planned: a bake runs no vis compile
+Map Properties | none
+
+## View
+Top, Front and Side Views | note: Godot's own split views, each set to Top, Front or Right
+Camera Tool | note: Godot's own editor camera
+Center View on Selection | note: Godot's own focus key
+Grid Size Up | grid_increase
+Grid Size Down | grid_decrease
+Toggle Grid | toggle_grid
+Measure | measure
+Texture X-ray | toggle_face_xray
+
+## Files
+Open and Save Map | note: the .hflevel and the scene, saved with Godot's own Save
+Export Map | note: the File section's Export .map
+Import Map | note: the File section's Import .map
+Export to OBJ | note: the File section's Export .glb
+Autosave | note: the level's autosave
+Game Configuration | not planned: the Godot project is the game

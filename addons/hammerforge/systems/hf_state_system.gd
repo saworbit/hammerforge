@@ -8,6 +8,8 @@ class_name HFStateSystem
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
+const HFFormatRecord = preload("../hf_format_record.gd")
+const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFHeightmapIO = preload("../paint/hf_heightmap_io.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -43,6 +45,11 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	)
 	if include_transient:
 		state["face_selection"] = root.face_selection.duplicate(true)
+		# Which streamed regions' paint was in a file alone, for an undo to put
+		# the files back in line with these chunks (#1514). It counts this
+		# session's writes, so a saved level leaves it out.
+		if root.paint_system and root.paint_system.region_streaming_enabled:
+			state["paint_region_files"] = root.paint_system.capture_region_files()
 	if root.material_manager:
 		# A copy, not the live array. Without this every later palette edit
 		# writes straight into the snapshot that was taken to protect it.
@@ -122,7 +129,12 @@ func capture_brush_scope(brush_ids: Array, entity_paths: Array = []) -> Dictiona
 		return {}
 	var records: Array = []
 	var order: Dictionary = {}
-	for raw_id in brush_ids:
+	# A texture group is one surface across brushes, and a step that changes one of
+	# its faces can lay the change on the rest (#1437), so the brushes holding the
+	# rest are recorded with the ones named.
+	var scoped: Array = brush_ids.duplicate()
+	scoped.append_array(root.brush_system.texture_group_mate_ids(brush_ids))
+	for raw_id in scoped:
 		var brush_id := str(raw_id)
 		if brush_id == "" or order.has(brush_id):
 			continue
@@ -193,6 +205,7 @@ static func merge_brush_scopes(scopes: Array) -> Dictionary:
 func restore_brush_scope(scope: Dictionary) -> void:
 	if scope.is_empty() or root.brush_system == null:
 		return
+	_restore_added(scope)
 	var records = scope.get("brushes", [])
 	var skipped := 0
 	for info in records if records is Array else []:
@@ -206,8 +219,45 @@ func restore_brush_scope(scope: Dictionary) -> void:
 	var entities = scope.get("entities", {})
 	if entities is Dictionary and not entities.is_empty() and root.entity_system != null:
 		skipped += root.entity_system.restore_entity_scope(entities as Dictionary)
+	# After the rebuilds, as `restore_state()` sets it: a step that added brushes
+	# carries the counter either side (#1646).
+	if scope.has("id_counter"):
+		root._brush_id_counter = int(scope["id_counter"])
 	if skipped > 0:
 		HFLog.warn("HFStateSystem: skipped %d record this undo step could not use" % skipped)
+
+
+## The two halves of a step that only added (#1786): `remove` and
+## `remove_entities` take out the brushes by id and the entities by path that the
+## step made, which is its undo, and `add_entities` makes entities again from
+## their records, which with the brush records is its redo. So placing a brush
+## records that brush, not the whole level.
+func _restore_added(scope: Dictionary) -> void:
+	for brush_id in scope.get("remove", []):
+		var brush = root.brush_system.find_brush_by_id(str(brush_id))
+		if brush is DraftBrush and is_instance_valid(brush):
+			root.brush_system.release_draft_brush(brush)
+	for path in scope.get("remove_entities", []):
+		var entity: Node = root.get_node_or_null(NodePath(str(path)))
+		if entity != null and root.is_entity_node(entity):
+			entity.get_parent().remove_child(entity)
+			entity.queue_free()
+	var made: Variant = scope.get("add_entities", {})
+	if made is Dictionary and root.entity_system != null:
+		for path in made:
+			if root.get_node_or_null(NodePath(str(path))) == null and made[path] is Dictionary:
+				root.entity_system.restore_entity_from_info(made[path])
+
+
+## A switch a file says is on or off. A damaged file can hold anything there, and
+## `bool()` of a dictionary is a script error, so anything not a switch or a
+## number reads as `fallback`.
+static func _flag(value: Variant, fallback: bool) -> bool:
+	if value is bool:
+		return value
+	if value is int or value is float:
+		return value != 0
+	return fallback
 
 
 ## Put the scoped brushes back at the indices they were captured at.
@@ -263,6 +313,8 @@ func capture_registries() -> Dictionary:
 		# order the mapper made on purpose (#706).
 		out["visgroup_order"] = root.visgroup_system.capture_order(captured_visgroups)
 		out["group_order"] = root.visgroup_system.capture_order(captured_groups)
+		# Named visibility states; Hide Selection and an isolate are not kept (#1697).
+		out["visibility_views"] = root.visgroup_system.capture_saved_views()
 	if root.brush_system:
 		var duplicators: Array = []
 		for dup_id in root.brush_system._duplicators:
@@ -272,6 +324,9 @@ func capture_registries() -> Dictionary:
 	out["generators"] = root.generator_system.capture() if root.generator_system else []
 	if root.prefab_system:
 		out["prefab_instances"] = root.prefab_system.capture_state()
+	# Findings accepted for this level (#1731), so they save and undo with it.
+	if root.validation_system:
+		out["accepted_findings"] = root.validation_system.accepted.duplicate(true)
 	return out
 
 
@@ -284,6 +339,7 @@ func restore_registries(state: Dictionary) -> void:
 			state.get("visgroups", {}), state.get("visgroup_order", [])
 		)
 		root.visgroup_system.restore_groups(state.get("groups", {}), state.get("group_order", []))
+		root.visgroup_system.restore_saved_views(state.get("visibility_views", {}))
 	if root.generator_system:
 		root.generator_system.restore(state.get("generators", []))
 	if root.brush_system:
@@ -320,6 +376,47 @@ func restore_registries(state: Dictionary) -> void:
 		root.brush_system.forget_faces_as_loaded()
 	if root.prefab_system and state.has("prefab_instances"):
 		root.prefab_system.restore_state(state["prefab_instances"])
+	if root.validation_system and state.get("accepted_findings") is Dictionary:
+		root.validation_system.accepted = (state["accepted_findings"] as Dictionary).duplicate(true)
+
+
+## The floor paint as the `.hflevel` writes it, for `LevelRoot.live_registries`.
+## A paint layer is a node and the scene writes it, but its cells, heightmap,
+## terrain slots and wall heights are plain vars, so a level reopened from its
+## `.tscn` had every layer and no paint (#1854). A streamed level carries the
+## index of its region files and not the cells in them, as its `.hflevel` does.
+func capture_floor_paint() -> Dictionary:
+	var streamed: bool = root.paint_system != null and root.paint_system.region_streaming_enabled
+	var out := {
+		"paint_layers": capture_paint_layers(not streamed),
+		"paint_active_layer": root.paint_layers.active_layer_index if root.paint_layers else 0,
+		"paint_connectors": root.paint_tool.capture_connector_defs() if root.paint_tool else [],
+	}
+	if streamed:
+		out["terrain_regions"] = root.paint_system.capture_region_index()
+	return out
+
+
+## Put back the floor paint `state` holds: a whole level state, or what
+## `capture_floor_paint()` gave the scene.
+func restore_floor_paint(state: Dictionary) -> void:
+	var region_data = state.get("terrain_regions", {})
+	if region_data is Dictionary and not region_data.is_empty():
+		if root.paint_system:
+			root.paint_system.region_streaming_enabled = true
+			root.paint_system.load_region_index(region_data)
+	root.paint_system.restore_paint_layers(
+		state.get("paint_layers", []), int(state.get("paint_active_layer", 0))
+	)
+	if root.paint_tool:
+		root.paint_tool.restore_connector_defs(state.get("paint_connectors", []))
+	if region_data is Dictionary and not region_data.is_empty():
+		if root.paint_system:
+			root.paint_system.load_initial_regions()
+	else:
+		# Region files written since an undo capture go back in line with it, so
+		# a region does not stream back in with paint the undo took away (#1514).
+		root.paint_system.restore_region_files(state.get("paint_region_files"))
 
 
 ## Put the brushes back in the order the snapshot recorded them in.
@@ -426,7 +523,105 @@ func _restored_brush(info, extra: Dictionary) -> Node:
 	var entry: Dictionary = (info as Dictionary).duplicate()
 	for key in extra:
 		entry[key] = extra[key]
+	var problem := _brush_record_problem(entry)
+	if problem != "":
+		HFLog.warn(
+			"HFStateSystem: brush %s left out: %s" % [str(entry.get("brush_id", "?")), problem]
+		)
+		return null
+	if not _faces_are_whole(entry.get("faces", [])) or not _faces_close(entry.get("faces", [])):
+		var brush_id := str(entry.get("brush_id", "?"))
+		if int(entry.get("shape", 0)) == DraftBrush.BrushShape.CUSTOM:
+			HFLog.warn("HFStateSystem: brush %s left out: its corners are damaged" % brush_id)
+			return null
+		# Its shape builds it again; its faces' looks go with the broken corners.
+		HFLog.warn("HFStateSystem: brush %s had damaged corners; built from its shape" % brush_id)
+		entry.erase("faces")
 	return root.create_brush_from_info(entry)
+
+
+## What in a brush record cannot be read as what it should be, or "" when all of
+## it can (#1641). A level file is JSON on disk, and a hand edit, a merge or a
+## sync that cut it short can leave anything where a value was. One bad record
+## costs that brush, not the load.
+static func _brush_record_problem(entry: Dictionary) -> String:
+	const TYPED := {
+		"size": TYPE_VECTOR3,
+		"center": TYPE_VECTOR3,
+		"draw_origin": TYPE_VECTOR3,
+		"transform": TYPE_TRANSFORM3D,
+		"faces": TYPE_ARRAY,
+		"pending": TYPE_BOOL,
+		"committed": TYPE_BOOL,
+	}
+	for key in TYPED:
+		if entry.has(key) and typeof(entry[key]) != TYPED[key]:
+			return "its %s is a %s" % [key, type_string(typeof(entry[key]))]
+	for key in ["shape", "sides", "operation"]:
+		if entry.has(key):
+			var value: Variant = entry[key]
+			if not (value is int or value is float) or not is_finite(float(value)):
+				return "its %s is not a number" % key
+	if entry.has("transform"):
+		var xform: Transform3D = entry["transform"]
+		if not xform.origin.is_finite() or not _basis_is_finite(xform.basis):
+			return "its transform is not finite"
+	if entry.has("center") and not (entry["center"] as Vector3).is_finite():
+		return "its centre is not finite"
+	if entry.has("size") and not (entry["size"] as Vector3).is_finite():
+		return "its size is not finite"
+	if entry.has("material") and entry["material"] != null and not (entry["material"] is Material):
+		return "its material is a %s" % type_string(typeof(entry["material"]))
+	var visgroups: Variant = entry.get("visgroups", [])
+	if not (visgroups is Array or visgroups is PackedStringArray):
+		return "its visgroups are a %s" % type_string(typeof(visgroups))
+	for face in entry.get("faces", []):
+		if not (face is Dictionary):
+			return "a face is a %s" % type_string(typeof(face))
+	return ""
+
+
+static func _basis_is_finite(basis: Basis) -> bool:
+	return basis.x.is_finite() and basis.y.is_finite() and basis.z.is_finite()
+
+
+## Whether every face a record holds has at least three corners and every corner
+## is three finite numbers. A file can carry an infinite one although JSON cannot
+## write it, since Godot reads 1e999 as one, and a corner that is not three
+## numbers is dropped as the face is read, which leaves the solid open.
+static func _faces_are_whole(faces: Variant) -> bool:
+	if not (faces is Array):
+		return true
+	for face in faces:
+		if not (face is Dictionary):
+			continue
+		var corners: Variant = face.get("local_verts")
+		if not (corners is Array) or (corners as Array).size() < 3:
+			return false
+		for corner in corners:
+			if not (corner is Array) or (corner as Array).size() < 3:
+				return false
+			for i in 3:
+				var value: Variant = corner[i]
+				if not (value is float or value is int) or not is_finite(float(value)):
+					return false
+	return true
+
+
+## Whether a record's faces close into a solid. A corner moved to another number
+## by a hand edit or a merge leaves a seam open (#1769). A record without faces
+## builds from its shape and is closed. Fewer than four faces is no solid at all,
+## such as a lone displaced tile, and loads as it is.
+static func _faces_close(faces: Variant) -> bool:
+	if not (faces is Array) or (faces as Array).size() < 4:
+		return true
+	var rings: Array = []
+	for face in faces:
+		var ring := PackedVector3Array()
+		for corner in (face as Dictionary).get("local_verts", []):
+			ring.append(Vector3(float(corner[0]), float(corner[1]), float(corner[2])))
+		rings.append(ring)
+	return HFSolidMeasure.open_edge_count(rings) == 0
 
 
 ## Note a node restored under another name than its record's. Godot names a node
@@ -457,21 +652,12 @@ func restore_state(state: Dictionary) -> void:
 	# registries rather than rebuilt. At 400 brushes a one-brush edit rebuilds one.
 	var brushes: Array = state.get("brushes", [])
 	var reusable: Dictionary = root.brush_system.reusable_draft_brushes(brushes)
+	# Before the clear below empties it, so the end can tell whether the selection
+	# put back is another one.
+	var selection_before: Dictionary = root.face_selection.duplicate(true)
 	root.clear_brushes(reusable)
 	root.entity_system.clear_entities()
-	var region_data = state.get("terrain_regions", {})
-	if region_data is Dictionary and not region_data.is_empty():
-		if root.paint_system:
-			root.paint_system.region_streaming_enabled = true
-			root.paint_system.load_region_index(region_data)
-	root.paint_system.restore_paint_layers(
-		state.get("paint_layers", []), int(state.get("paint_active_layer", 0))
-	)
-	if root.paint_tool:
-		root.paint_tool.restore_connector_defs(state.get("paint_connectors", []))
-	if region_data is Dictionary and not region_data.is_empty():
-		if root.paint_system:
-			root.paint_system.load_initial_regions()
+	restore_floor_paint(state)
 	# Only when the palette is part of what changed. `set_materials()` ends in a
 	# rebuild of every brush preview in the level, and on a 900-brush map that was
 	# 141 ms of the 188 an undo cost (#705) -- spent re-applying a palette nothing
@@ -546,10 +732,10 @@ func restore_state(state: Dictionary) -> void:
 	restore_floor_info(state.get("floor", {}))
 	restore_sun_info(state.get("sun", {}))
 	if root.draft_brushes_node:
-		root.draft_brushes_node.visible = bool(state.get("csg_visible", true))
+		root.draft_brushes_node.visible = _flag(state.get("csg_visible"), true)
 	if root.pending_node:
-		root.pending_node.visible = bool(state.get("pending_visible", true))
-	if not bool(state.get("baked_present", false)) and root.baked_container:
+		root.pending_node.visible = _flag(state.get("pending_visible"), true)
+	if not _flag(state.get("baked_present"), false) and root.baked_container:
 		root.clear_baked_geometry()
 	# Only restore preview mode when a baked container exists — a stale mode
 	# with no baked mesh would cause the toolbar toggle to show wireframe
@@ -567,6 +753,12 @@ func restore_state(state: Dictionary) -> void:
 		HFLog.warn("HFStateSystem: skipped %d entry this level could not use" % skipped)
 		if root.has_signal("user_message"):
 			root.user_message.emit("Skipped %d unreadable entry in this level" % skipped, 1)
+	# Last, once the brushes it names are back. The dock's Surface Paint panel and
+	# selection count read the selection when told it changed, and an undo that
+	# put back another one said nothing, so they showed the one it replaced
+	# (#1515). Only on a change: most undos put back the selection they found.
+	if root.face_selection != selection_before:
+		root._emit_or_batch("face_selection_changed", [])
 
 
 func capture_full_state() -> Dictionary:
@@ -611,6 +803,9 @@ func capture_hflevel_payload() -> Dictionary:
 		# it came out of, and nothing can tell a level that is behind its own
 		# `.hflevel` from one sitting next to another level's.
 		"scene": root.scene_source_path(),
+		# The waiting format fragments this build has, so two development builds
+		# at one number tell each other apart (#1638).
+		"format_pending": Array(HFFormatRecord.pending_names()),
 		"settings": capture_hflevel_settings(),
 		"state": state
 	}
@@ -620,12 +815,78 @@ func capture_hflevel_payload() -> Dictionary:
 	return data
 
 
+## The settings whose value is the kind of value the level's property of that
+## name holds, a whole number standing in for a decimal one. A hand edit, a merge
+## or a sync that cut the file short can leave a list where a number was, and
+## reading that into the property was a script error mid-load (#1641). One that
+## does not fit is left out and said; a key the level has no property for is
+## kept, for the reads below that know it.
+func _settings_that_fit(settings: Dictionary) -> Dictionary:
+	var kinds: Dictionary = {}
+	for property in root.get_property_list():
+		kinds[str(property.get("name", ""))] = int(property.get("type", TYPE_NIL))
+	var fit: Dictionary = {}
+	for key in settings:
+		var value: Variant = settings[key]
+		var kind: int = kinds.get(str(key), TYPE_NIL)
+		if kind == TYPE_NIL or _fits(value, kind):
+			fit[key] = value
+		else:
+			HFLog.warn(
+				(
+					"HFStateSystem: the level file's %s is not %s; left as it was"
+					% [key, _kind_name(kind)]
+				)
+			)
+	return fit
+
+
+## A property kind as a level file's reader would say it.
+static func _kind_name(kind: int) -> String:
+	match kind:
+		TYPE_FLOAT, TYPE_INT:
+			return "a number"
+		TYPE_BOOL:
+			return "true or false"
+		TYPE_STRING, TYPE_STRING_NAME:
+			return "text"
+		TYPE_DICTIONARY:
+			return "a set of values"
+		TYPE_OBJECT:
+			return "a resource"
+	if kind == TYPE_ARRAY or (kind >= TYPE_PACKED_BYTE_ARRAY and kind <= TYPE_PACKED_VECTOR4_ARRAY):
+		return "a list"
+	return "a " + type_string(kind)
+
+
+static func _fits(value: Variant, kind: int) -> bool:
+	match kind:
+		TYPE_FLOAT, TYPE_INT:
+			return (value is float or value is int) and is_finite(float(value))
+		TYPE_OBJECT:
+			return value == null or value is Object
+		TYPE_STRING, TYPE_STRING_NAME:
+			return value is String or value is StringName
+	# A list in the file reads back as a list, whatever kind of list it was saved
+	# from, and the property's own setter takes it from there.
+	if kind == TYPE_ARRAY or (kind >= TYPE_PACKED_BYTE_ARRAY and kind <= TYPE_PACKED_VECTOR4_ARRAY):
+		return (
+			typeof(value) == TYPE_ARRAY
+			or (
+				typeof(value) >= TYPE_PACKED_BYTE_ARRAY
+				and typeof(value) <= TYPE_PACKED_VECTOR4_ARRAY
+			)
+		)
+	return typeof(value) == kind
+
+
 func capture_hflevel_settings() -> Dictionary:
 	# What the file does not carry, and why, so the next walk of
 	# `get_property_list()` does not have to decide it again (#755):
 	#
 	#   brush_size_default    the size of the next brush you draw, not a property
 	#                         of the level you drew already.
+	#   active_material       the material of the next brush, for the same reason.
 	#   grid_color, grid_plane_size, grid_major_line_frequency
 	#                         how the grid looks. `grid_snap` is here because it
 	#                         decides where geometry lands; these three do not.
@@ -653,6 +914,7 @@ func capture_hflevel_settings() -> Dictionary:
 		"grid_snap": root.grid_snap,
 		"bake_chunk_size": root.bake_chunk_size,
 		"bake_visible_only": root.bake_visible_only,
+		"current_visgroup": root.current_visgroup,
 		"scene_contents": root.scene_contents,
 		"bake_use_atlas": root.bake_use_atlas,
 		"bake_collision_layer_index": root.bake_collision_layer_index,
@@ -662,6 +924,7 @@ func capture_hflevel_settings() -> Dictionary:
 		"grid_visible": root.grid_visible,
 		"grid_follow_brush": root.grid_follow_brush,
 		"debug_logging": root.debug_logging,
+		"validate_warns_open_todos": root.validate_warns_open_todos,
 		"auto_spawn_player": root.auto_spawn_player,
 		"draft_pick_layer_index": root.draft_pick_layer_index,
 		"bake_merge_meshes": root.bake_merge_meshes,
@@ -693,6 +956,7 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_connector_width": root.bake_connector_width,
 		"bake_connector_stair_threshold": root.bake_connector_stair_threshold,
 		"bake_wire_io": root.bake_wire_io,
+		"bake_cast_shadows": root.bake_cast_shadows,
 		"hflevel_autosave_keep": root.hflevel_autosave_keep,
 		"region_streaming_enabled":
 		root.paint_system.region_streaming_enabled if root.paint_system else false,
@@ -715,6 +979,9 @@ func capture_hflevel_settings() -> Dictionary:
 		"export_level_environment": root.export_level_environment,
 		"rotate_snap_degrees": root.rotate_snap_degrees,
 		"transform_pivot_mode": root.transform_pivot_mode,
+		"transform_pivot_point": root.transform_pivot_point,
+		"mirror_copy_axes": root.mirror_copy_axes,
+		"mirror_copy_at_edge": root.mirror_copy_at_edge,
 		"show_subtract_preview": root.show_subtract_preview,
 		"cordon_enabled": root.cordon_enabled,
 		# Flattened to two float arrays because the encoder could not write an AABB
@@ -734,12 +1001,15 @@ func capture_hflevel_settings() -> Dictionary:
 func apply_hflevel_settings(settings: Dictionary) -> void:
 	if settings.is_empty():
 		return
+	settings = _settings_that_fit(settings)
 	if settings.has("grid_snap"):
 		root.grid_snap = float(settings.get("grid_snap", root.grid_snap))
 	if settings.has("bake_chunk_size"):
 		root.bake_chunk_size = float(settings.get("bake_chunk_size", root.bake_chunk_size))
 	if settings.has("bake_visible_only"):
 		root.bake_visible_only = bool(settings.get("bake_visible_only", root.bake_visible_only))
+	if settings.has("current_visgroup"):
+		root.current_visgroup = str(settings.get("current_visgroup", ""))
 	if settings.has("scene_contents"):
 		root.scene_contents = int(settings.get("scene_contents", root.scene_contents))
 	# "bake_use_multimesh" in an older payload is read past: the toggle it belonged
@@ -769,6 +1039,8 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		)
 	if settings.has("bake_wire_io"):
 		root.bake_wire_io = bool(settings.get("bake_wire_io", root.bake_wire_io))
+	if settings.has("bake_cast_shadows"):
+		root.bake_cast_shadows = int(settings.get("bake_cast_shadows", root.bake_cast_shadows))
 	if settings.has("bake_collision_layer_index"):
 		root.bake_collision_layer_index = int(
 			settings.get("bake_collision_layer_index", root.bake_collision_layer_index)
@@ -789,6 +1061,10 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.grid_follow_brush = bool(settings.get("grid_follow_brush", root.grid_follow_brush))
 	if settings.has("debug_logging"):
 		root.debug_logging = bool(settings.get("debug_logging", root.debug_logging))
+	if settings.has("validate_warns_open_todos"):
+		root.validate_warns_open_todos = bool(
+			settings.get("validate_warns_open_todos", root.validate_warns_open_todos)
+		)
 	if settings.has("auto_spawn_player"):
 		root.auto_spawn_player = bool(settings.get("auto_spawn_player", root.auto_spawn_player))
 	if settings.has("draft_pick_layer_index"):
@@ -900,6 +1176,14 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.rotate_snap_degrees = float(settings.get("rotate_snap_degrees", 15.0))
 	if settings.has("transform_pivot_mode"):
 		root.transform_pivot_mode = int(settings.get("transform_pivot_mode", 0))
+	# A file written before Pick Pivot has no point, and the level keeps its own.
+	var pivot_point: Variant = settings.get("transform_pivot_point")
+	if pivot_point is Vector3:
+		root.transform_pivot_point = pivot_point
+	if settings.has("mirror_copy_axes"):
+		root.mirror_copy_axes = int(settings.get("mirror_copy_axes", 1)) & 7
+	if settings.has("mirror_copy_at_edge"):
+		root.mirror_copy_at_edge = bool(settings.get("mirror_copy_at_edge", true))
 	if settings.has("show_subtract_preview"):
 		root.show_subtract_preview = bool(settings.get("show_subtract_preview", false))
 	if settings.has("cordon_enabled"):

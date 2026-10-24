@@ -9,6 +9,12 @@ extends "hf_editor_tool.gd"
 ## reserved for Godot's 3D camera navigation.
 ## Delete/Backspace removes the last ruler. Escape clears all.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFSizeLabels = preload("hf_size_labels.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 const MAX_RULERS := 20
 const RULER_COLORS: Array[Color] = [
 	Color.YELLOW,
@@ -37,8 +43,8 @@ func tool_id() -> int:
 	return 100
 
 
-func tool_shortcut_key() -> int:
-	return KEY_M
+func keymap_action() -> String:
+	return "measure"
 
 
 func can_activate(p_root: Node3D) -> bool:
@@ -62,6 +68,14 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 
 	if event is InputEventKey and event.pressed:
 		return handle_keyboard(event)
+
+	# The snap under the cursor shows before the click, as every snapping tool's
+	# does, and Tab can step it (#1691). Nothing else changes on a hover.
+	if event is InputEventMouseMotion and event.button_mask == 0:
+		var hover = _raycast_world(camera, mouse_pos)
+		if hover != null:
+			snap_point(hover)
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
@@ -99,8 +113,22 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 		var last: Dictionary = _measurements.back()
 		var dist = last["a"].distance_to(last["b"])
 		var delta = last["b"] - last["a"]
-		lines.append("Distance: %.1f" % dist)
-		lines.append("dX: %.1f  dY: %.1f  dZ: %.1f" % [abs(delta.x), abs(delta.y), abs(delta.z)])
+		# At the grid's precision, as every length the editor shows (#1674).
+		var step := grid_step()
+		lines.append("Distance: %s" % length_text(dist, step))
+		(
+			lines
+			. append(
+				(
+					"dX: %s  dY: %s  dZ: %s"
+					% [
+						length_text(abs(delta.x), step),
+						length_text(abs(delta.y), step),
+						length_text(abs(delta.z), step),
+					]
+				)
+			)
+		)
 	lines.append("Rulers: %d / %d" % [_measurements.size(), MAX_RULERS])
 	if _align_active and _snap_ref_index >= 0:
 		lines.append("Align: ON (ruler #%d)" % (_snap_ref_index + 1))
@@ -121,7 +149,7 @@ func _handle_left_click(event: InputEventMouseButton, camera: Camera3D, mouse_po
 	if hit_pos == null:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 
-	hit_pos = _snap_hit(hit_pos)
+	hit_pos = snap_point(hit_pos)
 	var shift_held: bool = event.shift_pressed
 
 	if not _has_pending:
@@ -262,10 +290,8 @@ func _clear_snap_line() -> void:
 
 func _clear_visuals() -> void:
 	if _mesh_instance and is_instance_valid(_mesh_instance):
-		if _mesh_instance.get_parent():
-			_mesh_instance.get_parent().remove_child(_mesh_instance)
-		_mesh_instance.queue_free()
-		_mesh_instance = null
+		free_overlay_mesh(_mesh_instance)
+	_mesh_instance = null
 	for lbl in _labels:
 		if lbl and is_instance_valid(lbl):
 			if lbl.get_parent():
@@ -324,8 +350,15 @@ func _update_visuals() -> void:
 		var midpoint: Vector3 = (m["a"] + m["b"]) * 0.5 + Vector3(0, 0.5, 0)
 		var dist: float = m["a"].distance_to(m["b"])
 		var delta: Vector3 = m["b"] - m["a"]
+		var step := grid_step()
 		var text := (
-			"%.1f\ndX:%.1f dY:%.1f dZ:%.1f" % [dist, abs(delta.x), abs(delta.y), abs(delta.z)]
+			"%s\ndX:%s dY:%s dZ:%s"
+			% [
+				length_text(dist, step),
+				length_text(abs(delta.x), step),
+				length_text(abs(delta.y), step),
+				length_text(abs(delta.z), step),
+			]
 		)
 		if is_snap_ref:
 			text += "\n[SNAP REF]"
@@ -379,17 +412,8 @@ func _ruler_color(index: int) -> Color:
 
 
 func _add_label(pos: Vector3, text: String, color: Color) -> void:
-	var lbl := Label3D.new()
-	lbl.name = "MeasureLabel_%d" % _labels.size()
-	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	lbl.no_depth_test = true
-	lbl.pixel_size = 0.005
-	lbl.font_size = 24
-	lbl.modulate = color
-	lbl.outline_modulate = Color.BLACK
-	lbl.outline_size = 4
+	var lbl := make_overlay_label(root, "MeasureLabel_%d" % _labels.size(), color)
 	lbl.text = text
-	root.add_child(lbl)
 	lbl.global_position = pos
 	_labels.append(lbl)
 
@@ -427,12 +451,6 @@ func _raycast_world(camera: Camera3D, mouse_pos: Vector2) -> Variant:
 	if t < 0.0:
 		return null
 	return ray_origin + ray_dir * t
-
-
-func _snap_hit(hit_pos: Vector3) -> Vector3:
-	if root.has_method("_snap_point"):
-		return root._snap_point(hit_pos)
-	return hit_pos
 
 
 func _point_line_distance(point: Vector3, line_a: Vector3, line_b: Vector3) -> float:

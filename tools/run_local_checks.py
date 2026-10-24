@@ -184,6 +184,20 @@ CHECKS: tuple[Check, ...] = (
         "",
     ),
     Check(
+        "Check the parity guard still detects",
+        _py("tools/gen_parity.py", "--selftest"),
+        "",
+    ),
+    Check(
+        "Check the parity page is current", _py("tools/gen_parity.py", "--check"), ""
+    ),
+    Check(
+        "Check the link guard still detects",
+        _py("tools/check_doc_links.py", "--selftest"),
+        "",
+    ),
+    Check("Check the top-level pages' links", _py("tools/check_doc_links.py"), ""),
+    Check(
         "Check the release tree still ships the right files",
         _py("tools/build_release_tree.py", "--selftest"),
         "",

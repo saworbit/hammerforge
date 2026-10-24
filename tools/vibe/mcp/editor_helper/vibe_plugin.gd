@@ -32,6 +32,11 @@ func _process(_delta: float) -> void:
 			var script: Script = node.get_script()
 			if script and script.resource_path == HAMMERFORGE_PLUGIN:
 				_hf = node
+				# The editor shares user:// with the developer's own, and an agent's
+				# paint goes into the material browser's Recent row, so the run
+				# keeps its preferences to itself.
+				if _hf.get("_user_prefs"):
+					_hf._user_prefs.persistence_enabled = false
 				_write({"id": -1, "ready": true})
 		return
 	if not FileAccess.file_exists(CMD):
@@ -131,10 +136,39 @@ func _run(cmd: Dictionary) -> Variant:
 				func(): EditorInterface.close_scene.call_deferred(), CONNECT_ONE_SHOT
 			)
 			return "armed"
+		"save_level":
+			# Save Level, to the file the level autosaves to.
+			var saving = _hf._get_level_root()
+			if saving == null:
+				return "no level"
+			return saving.save_hflevel(saving.resolved_hflevel_path(), true)
+		"autosave":
+			# What the autosave timer does when it fires.
+			var autosaving = _hf._get_level_root()
+			if autosaving == null:
+				return "no level"
+			return autosaving.save_hflevel(autosaving.resolved_hflevel_path(), true, true)
+		"level_file":
+			return _level_file()
 		"quit":
 			get_tree().quit()
 			return "bye"
 	return "unknown op %s" % op
+
+
+## The level's own `.hflevel`, the scene it records, and whether a write to it
+## is still in flight.
+func _level_file() -> Variant:
+	var level = _hf._get_level_root()
+	if level == null:
+		return "no level"
+	var path := str(level.resolved_hflevel_path())
+	return {
+		"path": path,
+		"recorded": HFFileSystem.read_recorded_scene(path),
+		"scene": level.scene_source_path(),
+		"writing": level.file_system._hflevel_thread != null,
+	}
 
 
 ## The dock's Cordon section as a person sees it.

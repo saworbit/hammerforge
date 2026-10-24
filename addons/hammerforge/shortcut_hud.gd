@@ -205,6 +205,11 @@ func _chords(text: String) -> String:
 	return _keymap.format_chords(text)
 
 
+## The snap line the row shows for a held invert key, or "" (#1431).
+func shown_drag_snap() -> String:
+	return str(_last_context.get("drag_snap", ""))
+
+
 func update_context(ctx: Dictionary) -> void:
 	if ctx == _last_context:
 		return
@@ -325,6 +330,14 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 	var text := ""
 	if numeric.length() > 0:
 		text = "[Size: %s] Type digits, Enter to apply\n" % numeric
+	# What the held invert key does to the drag under way (#1431), on the row.
+	var drag_snap := str(ctx.get("drag_snap", ""))
+	if drag_snap != "":
+		text += drag_snap + "\n"
+	# Where the last arrow press went, "+Y 0.25 m" (#1716).
+	var nudge := str(ctx.get("nudge", ""))
+	if nudge != "":
+		text += nudge + "\n"
 	var external_name := str(ctx.get("external_tool_name", ""))
 	var external_shortcuts: PackedStringArray = ctx.get("external_shortcuts", PackedStringArray())
 	if not external_name.is_empty():
@@ -344,7 +357,12 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 		return text + _vertex_edit_shortcuts()
 
 	if tool_id == 1:
-		return text + _select_mode_shortcuts()
+		return (
+			text
+			+ _select_mode_shortcuts(
+				bool(ctx.get("face_xray", false)), ctx.get("texture_keys", PackedStringArray())
+			)
+		)
 
 	if tool_id == 2 or tool_id == 3:
 		var dir_label := "Up" if tool_id == 2 else "Down"
@@ -354,13 +372,25 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 		return text + _extrude_idle_shortcuts(dir_label)
 
 	# Draw tool
+	var drawing := ""
 	match mode:
 		1:
-			return text + _draw_base_shortcuts(axis_lock)
+			drawing = _draw_base_shortcuts(axis_lock)
 		2:
-			return text + _draw_height_shortcuts()
+			drawing = _draw_height_shortcuts()
 		_:
-			return text + _draw_idle_shortcuts(axis_lock)
+			drawing = _draw_idle_shortcuts(axis_lock)
+	return text + into_visgroup(drawing, str(ctx.get("current_visgroup", "")))
+
+
+## Name the visgroup a new brush joins on the row's first line, so nobody fills
+## the wrong one (#1732).
+static func into_visgroup(text: String, visgroup: String) -> String:
+	if visgroup == "":
+		return text
+	var lines := text.split("\n")
+	lines[0] = "%s  (into %s)" % [lines[0], visgroup]
+	return "\n".join(lines)
 
 
 func _draw_idle_shortcuts(axis_lock: int) -> String:
@@ -369,6 +399,7 @@ func _draw_idle_shortcuts(axis_lock: int) -> String:
 	lines.append("Manage > Create Floor: Stable Surface")
 	lines.append("Shift: Square | Alt+Shift: Cube")
 	lines.append(_chords("{axis_x} / {axis_y} / {axis_z}: Lock Axis%s" % _axis_suffix(axis_lock)))
+	lines.append(_chords("{toggle_draw_on_face}: Draw on Face"))
 	lines.append("Ctrl+Scroll: Brush Size")
 	lines.append("[ / ]: Grid Size Down/Up")
 	lines.append(_chords("{duplicate}: Duplicate | {delete}: Remove"))
@@ -379,6 +410,7 @@ func _draw_base_shortcuts(axis_lock: int) -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Dragging Base%s --" % _axis_suffix(axis_lock))
 	lines.append("Shift: Square | Alt+Shift: Cube")
+	lines.append(_chords("Hold {snap_invert_hold}: Grid Snap Off/On"))
 	lines.append("Type number: Set exact size")
 	lines.append("Click: Set Height Stage")
 	lines.append("Right-click: Cancel")
@@ -389,21 +421,34 @@ func _draw_height_shortcuts() -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Adjusting Height --")
 	lines.append("Move Mouse: Change Height")
+	lines.append(_chords("Hold {snap_invert_hold}: Grid Snap Off/On"))
 	lines.append("Type number + Enter: Exact height")
 	lines.append("Click: Confirm Placement")
 	lines.append("Right-click: Cancel")
 	return "\n".join(lines)
 
 
-func _select_mode_shortcuts() -> String:
+func _select_mode_shortcuts(
+	face_xray := false, texture_keys: PackedStringArray = PackedStringArray()
+) -> String:
 	var lines := PackedStringArray()
+	# First, so the row shows it: a box now takes faces nobody can see.
+	if face_xray:
+		lines.append(_chords("X-ray ({toggle_face_xray}): Box takes covered and back faces"))
+	# The arrows move the picked faces' textures, not objects (#1728).
+	lines.append_array(texture_keys)
 	lines.append("Click: Select | Shift: Add")
 	lines.append("Ctrl+Click: Toggle Selection")
 	lines.append("Drag Empty Space: Box Select")
 	lines.append("Drag Brush Widgets: Resize/Move")
+	lines.append(
+		_chords("Hold {snap_invert_hold}: Grid Snap Off/On | {snap_vertex_hold}: Vertices")
+	)
 	lines.append("Escape: Clear Selection")
 	lines.append(_chords("{delete}: Remove | {duplicate}: Duplicate"))
-	lines.append("Arrows: Nudge | PgUp/Dn: Y-Nudge")
+	if texture_keys.is_empty():
+		lines.append("Arrows: Nudge | PgUp/Dn: Y-Nudge")
+		lines.append("Alt: Tenth-step Nudge (Alt+Shift with PgUp/Dn)")
 	lines.append(_chords("{hollow}: Hollow | {clip}: Clip"))
 	lines.append(_chords("{move_to_floor} / {move_to_ceiling}: Floor / Ceiling"))
 	return "\n".join(lines)
@@ -413,6 +458,7 @@ func _extrude_idle_shortcuts(dir_label: String) -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Extrude %s --" % dir_label)
 	lines.append("Click face + Drag: Extrude %s" % dir_label)
+	lines.append("Shift+Click face + Drag: Move the face")
 	lines.append(_chords("{tool_extrude_up}: Extrude Up | {tool_extrude_down}: Extrude Down"))
 	lines.append("Right-click: Cancel")
 	return "\n".join(lines)
@@ -459,9 +505,14 @@ func _surface_paint_shortcuts() -> String:
 func _vertex_edit_shortcuts() -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Vertex Edit --")
-	lines.append("Click: Select vertex")
-	lines.append("Shift+Click: Multi-select")
-	lines.append("Drag: Move selected")
+	lines.append("Click: Select vertex (every brush's at that spot)")
+	lines.append("Shift+Click: Multi-select | Alt+Click: Just this brush's")
+	lines.append("Drag: Move selected | Drag on empty space: Box select")
+	lines.append(_chords("{delete}: Delete corners | Alt+Click face: Add a corner"))
+	lines.append(_chords("Arrows: Nudge corners | {rotate_ccw}: Turn corners"))
+	lines.append(
+		_chords("Hold {snap_invert_hold}: Grid Snap Off/On | {snap_vertex_hold}: Vertices")
+	)
 	lines.append(_chords("{vertex_edge_mode}: Toggle edge mode"))
 	lines.append(_chords("{vertex_merge}: Merge verts | {vertex_split_edge}: Split edge"))
 	lines.append(_chords("{axis_x} / {axis_y} / {axis_z}: Lock axis"))

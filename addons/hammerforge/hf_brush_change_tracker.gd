@@ -3,8 +3,9 @@ class_name HFBrushChangeTracker
 extends RefCounted
 
 ## Reconciles edits owned by Godot's native Inspector/transform gizmos with
-## HammerForge's incremental bake tags, and turns a door's or a spawn's angle
-## with a turn they make. The cache is deliberately keyed by the stable brush ID so native
+## HammerForge's incremental bake tags, turns a door's or a spawn's angle with a
+## turn they make, and unpicks the faces of a brush Godot's Delete took away.
+## The cache is deliberately keyed by the stable brush ID so native
 ## undo/redo and node recreation cannot confuse it.
 
 # Preloaded under its global name so the script parses before Godot has
@@ -13,6 +14,7 @@ extends RefCounted
 const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
 const HFPrefabSystem = preload("systems/hf_prefab_system.gd")
+const HFBakeSplit = preload("hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFBakeSystemType = preload("systems/hf_bake_system.gd")
 
@@ -31,6 +33,37 @@ var _watched_root: WeakRef = null
 ## Where each point entity stood and the `angle` it held at the last reconcile,
 ## by instance.
 var _entity_turns_by_instance: Dictionary = {}
+## How many nodes each of the level's folders held at the last reconcile.
+var _folder_counts: Array = []
+
+# The check after a step looks at the brushes the step can have touched rather
+# than at every brush, which grew with the level: 296 ms at 3,000 brushes
+# (#1619). These say which brushes those are, and owe a full walk when they
+# cannot.
+
+## Records kept of what steps changed, oldest dropped first.
+const MAX_STEP_RECORDS := 512
+## Brush ids each step of the scene's undo history changed, by the version the
+## step led to, so its undo or redo checks those brushes.
+var _step_brushes: Dictionary = {}
+## The name of the step each version led to, when it was last seen, so a new step
+## taken where a redo was waiting is told from that redo.
+var _step_names: Dictionary = {}
+## The scene history's version, and whether it held a redo, as last noted. -1
+## before the first note.
+var _noted_version := -1
+var _noted_redo := false
+## Versions noted since the last reconcile, whose record that reconcile writes.
+var _unrecorded_versions: Array[int] = []
+## Brush ids the undo or redo of a recorded step puts back, by id.
+var _owed_ids: Dictionary = {}
+## A step noted since the last reconcile that nothing narrows to some brushes.
+var _owed_full := false
+## Every brush HammerForge's own commands tagged since the last reconcile.
+var _tagged_ids: Dictionary = {}
+## A reconcile looked at only some brushes since the last full walk, so a change
+## made outside them waits for the full walk a bake asks for.
+var _full_walk_owed := false
 
 
 func reset() -> void:
@@ -43,7 +76,17 @@ func reset() -> void:
 	_entity_names_by_instance.clear()
 	_entity_prefab_links_by_instance.clear()
 	_entity_turns_by_instance.clear()
+	_folder_counts.clear()
 	_bake_configuration.clear()
+	_step_brushes.clear()
+	_step_names.clear()
+	_noted_version = -1
+	_noted_redo = false
+	_unrecorded_versions.clear()
+	_owed_ids.clear()
+	_owed_full = false
+	_tagged_ids.clear()
+	_full_walk_owed = false
 
 
 func is_tracking_root(root: Node) -> bool:
@@ -77,7 +120,84 @@ func prime(root: Node) -> void:
 	_entity_names_by_instance = _entity_names(entities)
 	_entity_prefab_links_by_instance = _entity_prefab_links(entities)
 	_entity_turns_by_instance = _entity_turns(entities)
+	_folder_counts = _folder_counts_of(root)
 	_bake_configuration = _bake_configuration_signature(root)
+
+
+## Note that the scene's undo history moved to `version`, holding a redo or not,
+## and that `action_name` is the step it now stands on. The plugin calls this on
+## every version change, so the next `reconcile_step()` knows which brushes the
+## steps since can have touched.
+##
+## A step taken from the newest version is an edit of the selection, by Godot's
+## gizmo or Inspector, or a command of HammerForge's that tags what it changes.
+## An undo puts back what the step it undoes changed, and a redo what the step it
+## redoes changed, which the record of that step says. A step with no record, or
+## a jump of more than one, owes a full walk.
+func note_step(version: int, has_redo: bool, action_name := "") -> void:
+	if _noted_version < 0:
+		_owed_full = true
+	elif version == _noted_version:
+		# A step merged into the newest one, as a dragged Inspector slider is, or a
+		# step in another history. What it changed joins the newest step's record.
+		_unrecorded_versions.append(version)
+	elif version == _noted_version + 1:
+		# With a redo waiting this may be that redo, or a new step in its place;
+		# the record covers the one and the selection and tags the other. A name
+		# other than the redo's is a new step, which a redo cannot be.
+		var redo_name := str(_step_names.get(version, ""))
+		var new_step := action_name != "" and redo_name != "" and redo_name != action_name
+		if _noted_redo and not new_step:
+			if _step_brushes.has(version):
+				_owe(_step_brushes[version])
+			else:
+				_owed_full = true
+		_unrecorded_versions.append(version)
+		_step_names[version] = action_name
+		if not has_redo:
+			# The redos are gone, and with them the steps those records were of.
+			for later in _step_brushes.keys():
+				if int(later) > version:
+					_step_brushes.erase(later)
+			for later in _step_names.keys():
+				if int(later) > version:
+					_step_names.erase(later)
+	elif version == _noted_version - 1:
+		if _step_brushes.has(_noted_version):
+			_owe(_step_brushes[_noted_version])
+		else:
+			_owed_full = true
+	else:
+		_owed_full = true
+	_noted_version = version
+	_noted_redo = has_redo
+
+
+func _owe(brush_ids: PackedStringArray) -> void:
+	for brush_id in brush_ids:
+		_owed_ids[brush_id] = true
+
+
+## The check the plugin runs after a step: the brushes the step can have touched
+## when the notes say which, and every brush when `full` asks for it, when a
+## noted step cannot be narrowed, or when the level's brushes or entities came or
+## went. `selected` is the editor's selection, the nodes Godot's gizmo and
+## Inspector edit.
+func reconcile_step(root: Node, selected: Array, full := false) -> PackedStringArray:
+	if full or _owed_full or not is_tracking_root(root):
+		return reconcile(root)
+	var scope: Variant = _step_scope(root, selected)
+	if scope == null:
+		return reconcile(root)
+	var changed: Variant = _reconcile_scope(root, scope)
+	if changed == null:
+		return reconcile(root)
+	return changed
+
+
+## Whether a reconcile since the last full walk looked at only some brushes.
+func owes_full_walk() -> bool:
+	return _full_walk_owed
 
 
 ## Tag changed existing brushes, update the baseline, add new IDs without a
@@ -89,6 +209,7 @@ func reconcile(root: Node) -> PackedStringArray:
 		return changed
 	if not is_tracking_root(root):
 		prime(root)
+		root.call("drop_faces_of_departed_brushes")
 		return changed
 
 	# Taken before anything below tags a brush itself.
@@ -181,9 +302,233 @@ func reconcile(root: Node) -> PackedStringArray:
 	_entity_names_by_instance = current_entity_names
 	_entity_prefab_links_by_instance = _entity_prefab_links(entities)
 	_entity_turns_by_instance = _entity_turns(entities)
+	_folder_counts = _folder_counts_of(root)
 	_bake_configuration = current_bake_configuration
 	_placed_by_commands.clear()
+	_full_walk_owed = false
+	_finish_check(changed, structure_changed)
+	# Not only on a structure change seen above: that is measured against what
+	# this tracker last saw, and a brush made since without a step of its own is
+	# not in it. A face picked on a brush Godot then deleted stayed picked (#1515).
+	root.call("drop_faces_of_departed_brushes")
 	return changed
+
+
+## The brush ids, by id, and the entity nodes a step can have touched: what the
+## notes owe, what commands tagged and the selection. Null when that is every
+## brush, as when the selection holds the level or one of its folders, which
+## moves every brush in it.
+func _step_scope(root: Node, selected: Array) -> Variant:
+	var brush_ids := _owed_ids.duplicate()
+	brush_ids.merge(_tagged_ids)
+	var entities: Array[Node] = []
+	var folders: Array = []
+	for folder_name in ["draft_brushes_node", "pending_node", "committed_node", "entities_node"]:
+		var folder: Variant = root.get(folder_name)
+		if folder is Node:
+			folders.append(folder)
+	for node in selected:
+		if not (node is Node) or not is_instance_valid(node):
+			continue
+		if node == root or node.is_ancestor_of(root) or folders.has(node):
+			return null
+		if not root.is_ancestor_of(node):
+			continue
+		if node is DraftBrush:
+			var brush_id := _brush_id(node)
+			if brush_id.is_empty():
+				return null
+			brush_ids[brush_id] = true
+		elif bool(root.call("is_entity_node", node)):
+			entities.append(node)
+	return {"brush_ids": brush_ids, "entities": entities}
+
+
+## Reconcile only the brushes and entities `scope` names, as `reconcile()` does
+## each brush, and leave the rest as they were last seen. A brush a command made
+## and tagged is taken in as the full walk takes in a new one. Null, having
+## changed nothing, when the level's structure moved any other way since: a brush
+## or entity came, went or changed folder or id, or a node became an entity or
+## stopped being one. Each of those is the full walk's to repair.
+func _reconcile_scope(root: Node, scope: Dictionary) -> Variant:
+	var arrived: Variant = _arrived_brushes(root, scope["brush_ids"])
+	if arrived == null:
+		return null
+	var nodes: Dictionary = {}
+	for brush_id in scope["brush_ids"]:
+		# Taken in below, or gone and never tracked since.
+		if arrived.has(brush_id) or not _instances_by_id.has(brush_id):
+			continue
+		var brush := _tracked_brush(root, str(brush_id))
+		if brush == null or not _entity_name_is_known(root, brush):
+			return null
+		nodes[brush_id] = brush
+	for entity in scope["entities"]:
+		if not _entity_name_is_known(root, entity):
+			return null
+
+	var placed := _placed_by_commands.duplicate()
+	var current_bake_configuration := _bake_configuration_signature(root)
+	if current_bake_configuration != _bake_configuration:
+		root.call("tag_full_reconcile")
+	var changed := PackedStringArray()
+	for brush_id in nodes:
+		var brush: DraftBrush = nodes[brush_id]
+		if brush.global_transform.basis.determinant() < 0.0:
+			root.get("transform_system").normalize_handedness(brush)
+		var role := _container_role(brush)
+		# Apply, Commit and Restore move a brush between folders and own its bake
+		# boundary, so a managed move only re-seeds, as in `reconcile()`.
+		var managed_move := role != str(_containers_by_id.get(brush_id, ""))
+		if not managed_move:
+			_follow_native_turn(root, brush, brush_id, placed)
+		var signature := _signature(brush)
+		if not managed_move and _signature_changed(_signatures[brush_id], signature):
+			var previous_signature: Dictionary = _signatures[brush_id]
+			if previous_signature.get("faces") != signature.get("faces"):
+				_refresh_face_preview(brush)
+				signature = _signature(brush)
+			root.call("tag_brush_dirty", brush_id)
+			changed.append(brush_id)
+		_signatures[brush_id] = signature
+		_containers_by_id[brush_id] = role
+		_parents_by_id[brush_id] = weakref(brush.get_parent())
+		if _entity_names_by_instance.has(brush.get_instance_id()):
+			_entity_prefab_links_by_instance[brush.get_instance_id()] = _prefab_link(brush)
+	for entity in scope["entities"]:
+		_follow_native_entity_turn(root, entity)
+		var instance_id: int = entity.get_instance_id()
+		_entity_prefab_links_by_instance[instance_id] = _prefab_link(entity)
+		var turns := _entity_turns([entity])
+		if turns.has(instance_id):
+			_entity_turns_by_instance[instance_id] = turns[instance_id]
+	for brush_id in arrived:
+		var brush: DraftBrush = arrived[brush_id]
+		_signatures[brush_id] = _signature(brush)
+		_instances_by_id[brush_id] = brush.get_instance_id()
+		_containers_by_id[brush_id] = _container_role(brush)
+		_parents_by_id[brush_id] = weakref(brush.get_parent())
+	if not arrived.is_empty():
+		# What the full walk does on a new brush, so the level's records agree.
+		_tag_structural_change(root)
+		_folder_counts = _folder_counts_of(root)
+	_bake_configuration = current_bake_configuration
+	_placed_by_commands.clear()
+	_full_walk_owed = true
+	_finish_check(changed, false)
+	root.call("drop_faces_of_departed_brushes")
+	return changed
+
+
+## The brushes made since the last reconcile, by id, when every one of them is a
+## plain brush a command tagged in `brush_ids` and nothing else changed how many
+## brushes or entities each folder holds. Empty when none were made. Null when
+## the level's brushes changed any other way, such as a copy Godot made, which
+## carries its original's id and no tag. An id in `brush_ids` that no brush has
+## any more is passed over.
+func _arrived_brushes(root: Node, brush_ids: Dictionary) -> Variant:
+	var grown := _brushes(root).size() - _instances_by_id.size()
+	if grown < 0:
+		return null
+	var arrived: Dictionary = {}
+	var expected: Array = _folder_counts.duplicate()
+	if grown > 0:
+		for brush_id in brush_ids:
+			if _instances_by_id.has(brush_id):
+				continue
+			var brush := root.call("find_brush_by_id", str(brush_id)) as DraftBrush
+			# Gone: a record of an undone step names a brush its undo took away.
+			if brush == null:
+				continue
+			if (
+				not root.is_ancestor_of(brush)
+				or _brush_id(brush) != str(brush_id)
+				or not str(brush.get_meta("brush_entity_class", "")).is_empty()
+			):
+				return null
+			var folder := ["draft", "pending", "committed"].find(_container_role(brush))
+			if folder < 0 or expected.size() <= folder:
+				return null
+			expected[folder] = int(expected[folder]) + 1
+			arrived[brush_id] = brush
+	if arrived.size() != grown or _folder_counts_of(root) != expected:
+		return null
+	return arrived
+
+
+## The brush tracked as `brush_id`, when it is still that brush where it was last
+## seen or in the folder a managed move put it in. Null otherwise.
+func _tracked_brush(root: Node, brush_id: String) -> DraftBrush:
+	if not _instances_by_id.has(brush_id):
+		return null
+	var found := instance_from_id(int(_instances_by_id[brush_id]))
+	if not (found is DraftBrush) or not is_instance_valid(found):
+		return null
+	var brush := found as DraftBrush
+	if brush.is_queued_for_deletion() or not root.is_ancestor_of(brush):
+		return null
+	if _brush_id(brush) != brush_id:
+		return null
+	var previous_ref := _parents_by_id.get(brush_id, null) as WeakRef
+	var previous_parent: Node = previous_ref.get_ref() if previous_ref != null else null
+	if brush.get_parent() != previous_parent:
+		var role := _managed_container_role(root, brush.get_parent())
+		if role.is_empty() or str(brush.get_meta("hf_container_role", "")) != role:
+			return null
+	return brush
+
+
+## Whether `node` is an entity exactly when it was one at the last reconcile, and
+## under the name it had. A rename or a new entity class is the full walk's.
+func _entity_name_is_known(root: Node, node: Node) -> bool:
+	var is_entity := (
+		bool(root.call("is_entity_node", node))
+		or (
+			bool(root.call("is_brush_node", node))
+			and not str(node.get_meta("brush_entity_class", "")).is_empty()
+		)
+	)
+	var instance_id := node.get_instance_id()
+	if is_entity != _entity_names_by_instance.has(instance_id):
+		return false
+	return not is_entity or str(_entity_names_by_instance[instance_id]) == str(node.name)
+
+
+## How many nodes the brush folders and the Entities folder hold. A brush Godot
+## moved from one folder to another, or an entity made or deleted, changes these
+## when the number of brushes stays the same.
+static func _folder_counts_of(root: Node) -> Array:
+	var counts: Array = []
+	for folder_name in ["draft_brushes_node", "pending_node", "committed_node", "entities_node"]:
+		var folder: Variant = root.get(folder_name)
+		counts.append((folder as Node).get_child_count() if folder is Node else 0)
+	return counts
+
+
+## Write what this reconcile found as the record of each step noted since the
+## last one, joining what the record already held, or drop those records when
+## the level's structure moved. Then owe nothing.
+func _finish_check(changed: PackedStringArray, structural: bool) -> void:
+	var found := _tagged_ids.duplicate()
+	for brush_id in changed:
+		found[brush_id] = true
+	for version in _unrecorded_versions:
+		if structural:
+			_step_brushes.erase(version)
+			continue
+		var record: Dictionary = {}
+		for brush_id in _step_brushes.get(version, PackedStringArray()):
+			record[brush_id] = true
+		record.merge(found)
+		_step_brushes[version] = PackedStringArray(record.keys())
+	while _step_brushes.size() > MAX_STEP_RECORDS:
+		_step_brushes.erase(_step_brushes.keys().min())
+	while _step_names.size() > MAX_STEP_RECORDS:
+		_step_names.erase(_step_names.keys().min())
+	_unrecorded_versions.clear()
+	_owed_ids.clear()
+	_owed_full = false
+	_tagged_ids.clear()
 
 
 func _brushes(root: Node) -> Array:
@@ -197,6 +542,8 @@ func _watch(root: Node) -> void:
 	if not root.has_signal("brush_changed"):
 		return
 	root.connect("brush_changed", _on_brush_changed)
+	if root.has_signal("brush_changes_wanted"):
+		root.connect("brush_changes_wanted", _on_brush_changes_wanted)
 	_watched_root = weakref(root)
 
 
@@ -204,6 +551,8 @@ func _stop_watching() -> void:
 	var watched: Node = _watched_root.get_ref() if _watched_root != null else null
 	if watched != null and watched.is_connected("brush_changed", _on_brush_changed):
 		watched.disconnect("brush_changed", _on_brush_changed)
+	if watched != null and watched.is_connected("brush_changes_wanted", _on_brush_changes_wanted):
+		watched.disconnect("brush_changes_wanted", _on_brush_changes_wanted)
 	_watched_root = null
 	_placed_by_commands.clear()
 
@@ -212,9 +561,19 @@ func _on_brush_changed(brush_id: String) -> void:
 	var watched: Node = _watched_root.get_ref() if _watched_root != null else null
 	if watched == null:
 		return
+	_tagged_ids[brush_id] = true
 	var brush := watched.call("find_brush_by_id", brush_id) as Node3D
 	if brush != null and brush.is_inside_tree():
 		_placed_by_commands[brush_id] = brush.global_transform
+
+
+## A bake is about to read which brushes changed. When a check since the last
+## full walk looked at only some brushes, look at every one now, so a change made
+## outside them reaches the bake (#1619).
+func _on_brush_changes_wanted() -> void:
+	var watched: Node = _watched_root.get_ref() if _watched_root != null else null
+	if watched != null and _full_walk_owed and is_tracking_root(watched):
+		reconcile(watched)
 
 
 ## Turn a brush entity's `angle` with a turn Godot made, so a door turned with
@@ -466,6 +825,8 @@ static func _signature(brush: Node3D) -> Dictionary:
 		"material": _object_identity(brush.get("material_override")),
 		"faces": _faces_signature(brush.get("faces")),
 		"entity_meta": _entity_meta_signature(brush),
+		# Cast Shadows and Lightmap Scale are metadata the Inspector edits (#1661).
+		"bake_split": HFBakeSplit.fields(brush),
 	}
 
 
@@ -522,6 +883,8 @@ static func _faces_signature(value: Variant) -> Array:
 					"uv_scale": face.get("uv_scale"),
 					"uv_offset": face.get("uv_offset"),
 					"uv_rotation": face.get("uv_rotation"),
+					"legacy_wall_axes": face.get("legacy_wall_axes"),
+					"smoothing_group": face.get("smoothing_group"),
 					"custom_uvs": _snapshot_packed_array(face.get("custom_uvs")),
 					"local_verts": _snapshot_packed_array(face.get("local_verts")),
 					"paint_layers": _paint_layers_signature(face.get("paint_layers")),
@@ -710,7 +1073,9 @@ static func _signature_changed(before: Dictionary, after: Dictionary) -> bool:
 			return true
 	elif old_size != new_size:
 		return true
-	for field in ["visible", "shape", "operation", "sides", "material", "faces", "entity_meta"]:
+	for field in [
+		"visible", "shape", "operation", "sides", "material", "faces", "entity_meta", "bake_split"
+	]:
 		if before.get(field) != after.get(field):
 			return true
 	return false

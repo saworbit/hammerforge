@@ -6,18 +6,37 @@ signal hud_visibility_changed(visible: bool)
 signal builtin_tool_changed
 signal vertex_mode_toggled(enabled: bool)
 signal face_select_mode_toggled(enabled: bool)
+## The Texture Gizmo was switched on or off in the UV Editor (#1420).
+signal texture_gizmo_toggled(enabled: bool)
+## Face Select's X-ray switch, from its checkbox or Alt+X: the HUD line and the
+## marquee colour follow it.
+signal face_xray_toggled(enabled: bool)
 signal selection_clear_requested
 signal grid_snap_applied(value: float)
+## A button asking the plugin to run one of its commands, by the id the palette
+## and the keys use, through the same guard. For a command whose result is the
+## plugin's to keep, such as the selection Mirror Copy leaves.
+signal command_requested(action: String)
 # The tab builders and handlers emit some of these, which the unused warning
 # cannot see.
 @warning_ignore_start("unused_signal")
 signal bake_state_changed(baking: bool, success: bool)
 signal command_palette_requested
+## Compare With... picked a file: compare the open level with it (#1701).
+signal compare_requested(path: String)
 signal power_user_overlays_changed(enabled: bool)
 signal paint_options_changed
 signal paint_raise_requested
 signal paint_room_requested
 signal paint_connector_confirm_requested
+## Show selection size was switched (#1403).
+signal selection_size_toggled(enabled: bool)
+## A place was typed for the one selected vertex in Selection Info (#1404).
+signal selection_vertex_typed(place: Vector3, local: bool)
+## Keep only one kind of the selection, from Selection Info's kinds (#1698).
+signal selection_narrow_requested(kind: String)
+## An overlay colour, or all of them, changed under Settings > Colours (#1446).
+signal overlay_colors_changed
 @warning_ignore_restore("unused_signal")
 
 const LevelRootType = preload("level_root.gd")
@@ -36,12 +55,23 @@ const HFShapeIcons = preload("ui/hf_shape_icons.gd")
 const HFUndoNav = preload("ui/hf_undo_nav.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const HFTooltipText = preload("ui/hf_tooltip_text.gd")
+const HFSelectionInfo = preload("ui/hf_selection_info.gd")
 const HFToast = preload("ui/hf_toast.gd")
 const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
+const HFMaterialUse = preload("hf_material_use.gd")
+const HFValidationChecks = preload("hf_validation_checks.gd")
+const HFFileNames = preload("hf_file_names.gd")
 const HFPrefabType = preload("hf_prefab.gd")
+const HFEntityCensus = preload("hf_entity_census.gd")
+const HFLevelPlan = preload("hf_level_plan.gd")
+const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
+const HFReplaceMaterialDialog = preload("ui/hf_replace_material_dialog.gd")
 ## Where brush presets were saved before #930.
 const LEGACY_PRESETS_DIR := "res://addons/hammerforge/presets"
+## The Pivot option's Pick: `HFTransformSystem.PivotMode.CUSTOM`, the index the
+## option writes straight into `transform_pivot_mode`.
+const PIVOT_PICK := 3
 const UVEditorScene = preload("uv_editor.tscn")
 const PaintTabBuilder = preload("ui/paint_tab_builder.gd")
 const EntityTabBuilder = preload("ui/entity_tab_builder.gd")
@@ -50,10 +80,15 @@ const SelectionToolsBuilder = preload("ui/selection_tools_builder.gd")
 const HFDockPaintHandler = preload("dock_paint_handler.gd")
 const HFDockBrushHandler = preload("dock_brush_handler.gd")
 const HFDockEntityHandler = preload("dock_entity_handler.gd")
+const HFEntityMultiEdit = preload("ui/hf_entity_multi_edit.gd")
 const HFDockManageHandler = preload("dock_manage_handler.gd")
 const HFDockConnections = preload("dock_connections.gd")
 const HFDockVisgroupHandler = preload("dock_visgroup_handler.gd")
 const HFDockFileHandler = preload("dock_file_handler.gd")
+const HFDockToolMemory = preload("dock_tool_memory.gd")
+const HFViewFiltersType = preload("hf_view_filters.gd")
+const HFUVMulti = preload("hf_uv_multi.gd")
+const HFQuickSelectType = preload("hf_quick_select.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const PRESET_MENU_RENAME := 0
@@ -120,6 +155,8 @@ var shape_select: OptionButton = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVB
 var sides_spin: SpinBox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SidesRow/SidesSpin
 @onready
 var active_material_button: Button = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow/ActiveMaterial
+@onready
+var clear_active_material_button: Button = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow/ClearActiveMaterial
 @onready var material_dialog: FileDialog = $MaterialDialog
 @onready var material_palette_dialog: FileDialog = $MaterialPaletteDialog
 @onready var surface_paint_texture_dialog: FileDialog = $SurfacePaintTextureDialog
@@ -211,6 +248,9 @@ var bake_unwrap_uv0: CheckBox = null
 var bake_lightmap_uv2: CheckBox = null
 var bake_use_face_materials: CheckBox = null
 var bake_lightmap_texel_row: HBoxContainer = null
+## The level's Cast Shadows, which every baked mesh takes unless a brush or a
+## visgroup says otherwise (#1444).
+var bake_cast_shadows_opt: OptionButton = null
 var bake_lightmap_texel: SpinBox = null
 var bake_navmesh: CheckBox = null
 var bake_navmesh_cell_row: HBoxContainer = null
@@ -248,11 +288,31 @@ var export_game_scene_btn: Button = null
 var export_profile_opt: OptionButton = null
 ## The rows Check Bake Issues fills, with Select and Fix buttons (#992).
 var bake_issue_list: VBoxContainer = null
+## Said while the level's scene was saved by a newer HammerForge, which this
+## build would write the level without (#1638). The levels warned about already.
+var format_banner: Label = null
+var _format_warned: Dictionary = {}
+## Below the rows: Show accepted, and the Checks menu of which kinds of check
+## Validate runs for the project (#1731).
+var findings_tools_row: HBoxContainer = null
+var show_accepted_findings: CheckBox = null
+var validate_checks_btn: MenuButton = null
+## What the rows show, `{open, accepted, source}`, and what changed in the level
+## since, waiting for a second without edits to be checked again (#1731).
+var _shown_findings: Dictionary = {}
+var _findings_changed_ids: Dictionary = {}
+var _findings_entities_changed := false
+var _findings_settle: Timer = null
 var export_level_environment_check: CheckBox = null
 # -- Editor toggles (built programmatically in _build_manage_tab) --
 var commit_freeze: CheckBox = null
 var show_hud: CheckBox = null
 var power_user_overlays: CheckBox = null
+var size_at_cursor: CheckBox = null
+var show_selection_size: CheckBox = null
+var draw_hover_preview: CheckBox = null
+## The Colours block of Settings (`ui/hf_overlay_colors_panel.gd`).
+var overlay_colors_panel: VBoxContainer = null
 var show_grid: CheckBox = null
 var follow_grid: CheckBox = null
 var debug_logs: CheckBox = null
@@ -275,8 +335,12 @@ var clear_btn: Button = null
 # -- File buttons (built programmatically) --
 var save_hflevel_btn: Button = null
 var load_hflevel_btn: Button = null
+var compare_hflevel_btn: Button = null
+var _compare_dialog: FileDialog = null
 var import_map_btn: Button = null
 var export_map_btn: Button = null
+var export_plan_btn: Button = null
+var _plan_export_dialog: FileDialog = null  # Export Plan, made on first use (#1705)
 var map_format_select: OptionButton = null
 var map_scale_spin: SpinBox = null
 var export_glb_btn: Button = null
@@ -301,6 +365,7 @@ var history_browser: HFHistoryBrowser = null
 # -- Settings (built programmatically) --
 var export_settings_btn: Button = null
 var import_settings_btn: Button = null
+var reset_tool_settings_btn: Button = null
 ## The Test tab's Agent Bridge panel. HFPluginMcp connects it.
 var mcp_panel: Control = null
 @onready var settings_export_dialog: FileDialog = $SettingsExportDialog
@@ -324,16 +389,20 @@ var material_add: Button = null
 var material_remove: Button = null
 var material_load_prototypes: Button = null
 var material_remove_unused: Button = null
+var material_replace: Button = null
 var material_clear: Button = null
 var material_save_library: Button = null
 var material_load_library: Button = null
 var material_assign: Button = null
 var face_select_mode: CheckBox = null
+var face_select_xray: CheckBox = null
 var face_clear: Button = null
 var _material_context_popup: PopupMenu = null
 var _material_context_index: int = -1
 var _hover_preview_faces: Array = []
 # -- UV (built programmatically in _build_paint_tab) --
+## Holds the UV Editor, Displacement and Face Inset: the tools for a picked face.
+var _face_tools_section: HFCollapsibleSection = null
 var uv_editor: UVEditor = null
 var uv_reset: Button = null
 var uv_projection_opt: OptionButton = null
@@ -343,6 +412,19 @@ var uv_scale_y: SpinBox = null
 var uv_offset_x: SpinBox = null
 var uv_offset_y: SpinBox = null
 var uv_rotation_spin: SpinBox = null
+var uv_scale_link: Button = null
+var uv_scale_up_btn: Button = null
+var uv_scale_down_btn: Button = null
+var uv_flip_u_btn: Button = null
+var uv_flip_v_btn: Button = null
+var uv_rotate_90_btn: Button = null
+## The selected faces' smoothing group (#1429).
+var uv_smoothing_spin: SpinBox = null
+var uv_snap_check: CheckBox = null
+## Shows the Texture Gizmo on the faces Face Select picked (#1420).
+var uv_texture_gizmo_check: CheckBox = null
+var uv_snap_preset_opt: OptionButton = null
+var uv_snap_step_spin: SpinBox = null
 # -- Surface paint (built programmatically in _build_paint_tab) --
 var paint_target_select: OptionButton = null
 var surface_paint_radius: SpinBox = null
@@ -382,10 +464,13 @@ var snap_vertex_btn: Button = null
 var snap_center_btn: Button = null
 var snap_edge_btn: Button = null
 var snap_perp_btn: Button = null
+## Draw on Face (#1401): a draw that starts on a brush face builds on its plane.
+var draw_on_face_btn: Button = null
 var _axis_lock_x: Button = null
 var _axis_lock_y: Button = null
 var _axis_lock_z: Button = null
 var _show_io_lines: CheckBox = null
+var io_wire_mode_opt: OptionButton = null  # All, Chain from selection, Selection only (#1730)
 var _show_subtract_preview: CheckBox = null
 var _show_spawn_debug: CheckBox = null
 var _spawn_validate_btn: Button = null
@@ -413,12 +498,20 @@ var _loaded_entity_defs_path := ""
 var preset_buttons: Array[Button] = []
 var entity_palette_buttons: Array[Button] = []
 var preset_context_button: Button = null
-var active_material: Material = null
 var active_shape: int = LevelRootType.BrushShape.BOX
 ## The Sides a pyramid and a round shape each last had, since one spin box serves
 ## both: a pyramid's 4 is not a count a round shape is built from, and a sphere's
 ## 32 is not the pyramid anybody draws next (#1085).
 var _kept_sides := {"pyramid": 4, "round": DraftBrush.DEFAULT_ROUND_SIDES}
+## What each Build tab setting kept between sessions starts at, for Reset Tool
+## Settings (#1406). Noted by `HFDockToolMemory.watch()` once the controls exist.
+var _build_defaults: Dictionary = {}
+## True while kept settings are put back or reset, so the controls they land in
+## are not heard as the mapper changing them.
+var _restoring_tool_memory := false
+## Structure type -> the fields last set for it this session, so switching type
+## and back finds them (#1406).
+var _structure_kept: Dictionary = {}
 var shape_id_to_key: Dictionary = {}
 var paint_layers_signature: String = ""
 var materials_signature: String = ""
@@ -435,6 +528,13 @@ var shape_icon_candidates := {
 	"ELLIPSOID": ["SphereShape3D"]
 }
 var _selected_material_index := -1
+## The look the Texture Picker (T) last read off a face, for Apply Picked Look.
+## A copy, so the face can be edited or freed and this is still what was picked.
+var _picked_look: FaceData = null
+## Replace Material's dialog, made the first time it opens (#1726).
+var _replace_material_dialog: ConfirmationDialog = null
+## Whether that face drew a layout of its own, which the look does not carry.
+var _picked_look_had_hand_layout := false
 var _uv_active_brush: DraftBrush = null
 var _uv_active_face: FaceData = null
 var _surface_active_brush: DraftBrush = null
@@ -462,6 +562,7 @@ var tool_vertex: Button = null
 var _edit_tools_separator: VSeparator = null
 var _vertex_tool_separator: VSeparator = null
 var _snap_mode_row: Container = null
+var _draw_on_face_row: HBoxContainer = null
 var _axis_lock_row: HBoxContainer = null
 var _advanced_build_section: HFCollapsibleSection = null
 var _tool_settings_section: HFCollapsibleSection = null
@@ -470,6 +571,9 @@ var _tool_settings_section: HFCollapsibleSection = null
 var _selection_nodes: Array = []
 var _all_sections: Dictionary = {}
 var _selection_tools_section: HFCollapsibleSection = null
+## Where the selection is and how big, above Selection Tools (#1404).
+var _selection_info_section: HFCollapsibleSection = null
+var selection_info: HFSelectionInfo = null
 var _sel_tools_hint_label: Label = null
 var _uv_hint_label: Label = null
 var _toast_container: VBoxContainer = null
@@ -481,15 +585,34 @@ var _tutorial_wizard = null
 var _brush_hint: Label = null
 var _paint_hint: Label = null
 var _entity_hint: Label = null
+var _entity_export_dialog: FileDialog = null  # Export Entities, made on first use (#1709)
 var _manage_hint: Label = null
 var texture_lock_check: CheckBox = null
 var visgroup_list: ItemList = null
+## The View Filters rows, and the footer chip that says how many kinds are hidden
+## (#1720).
+var view_filters_box: VBoxContainer = null
+var _view_filter_chip: Button = null
+## The classes the rows were last built for, to rebuild when the level's change.
+var _view_filter_classes: Dictionary = {}
 var visgroup_name_input: LineEdit = null
 var visgroup_add_btn: Button = null
 var visgroup_add_sel_btn: Button = null
 var visgroup_rem_sel_btn: Button = null
 var visgroup_rename_btn: Button = null
 var visgroup_delete_btn: Button = null
+## The highlighted visgroup's Cast Shadows (#1444).
+var visgroup_cast_shadow_opt: OptionButton = null
+## The highlighted visgroup as the one new work joins, and as left out of the
+## bake (#1732).
+var visgroup_current_check: CheckBox = null
+var visgroup_bake_check: CheckBox = null
+var visgroup_lock_check: CheckBox = null
+## What is shown apart from the visgroups (#1697): the Hidden chip, the saved views
+## and the name a view is saved under.
+var view_hidden_label: Label = null
+var view_saved_opt: OptionButton = null
+var view_name_input: LineEdit = null
 var group_sel_btn: Button = null
 var ungroup_btn: Button = null
 var cordon_enabled_check: CheckBox = null
@@ -516,17 +639,36 @@ var _active_hollow_id: String = ""
 var _hollow_overwrite_ack: String = ""
 var move_floor_btn: Button = null
 var move_ceiling_btn: Button = null
+var snap_to_grid_btn: Button = null
 var tie_entity_btn: Button = null
 var untie_entity_btn: Button = null
 var brush_entity_class_opt: OptionButton = null
 var brush_entity_name_edit: LineEdit = null
+## The selected brushes' Cast Shadows and Lightmap Scale (#1444, #1438).
+var brush_cast_shadow_opt: OptionButton = null
+var brush_lightmap_scale_spin: SpinBox = null
 var justify_fit_btn: Button = null
+var justify_fit_u_btn: Button = null
+var justify_fit_v_btn: Button = null
 var justify_center_btn: Button = null
 var justify_left_btn: Button = null
 var justify_right_btn: Button = null
 var justify_top_btn: Button = null
 var justify_bottom_btn: Button = null
 var justify_treat_as_one: CheckBox = null
+var uv_align_face_btn: Button = null
+var uv_align_world_btn: Button = null
+## Align to Edge, and the counts Fit Repeats and Fit Strip use (#1727).
+var uv_align_edge_btn: Button = null
+var fit_repeats_u: SpinBox = null
+var fit_repeats_v: SpinBox = null
+var fit_strip_index: SpinBox = null
+var fit_strip_count: SpinBox = null
+var uv_wrap_btn: Button = null
+var uv_link_btn: Button = null
+var uv_unlink_btn: Button = null
+var uv_select_group_btn: Button = null
+var uv_apply_look_btn: Button = null
 var clip_btn: Button = null
 # Duplicator controls
 var dup_count_spin: SpinBox = null
@@ -572,7 +714,23 @@ var structure_fields_box: VBoxContainer = null
 var structure_fields: Dictionary = {}
 var structure_create_btn: Button = null
 var structure_detach_btn: Button = null
+## Re-pick, shown while the section is on a type built along faces (#1414).
+var structure_repick_btn: Button = null
 var structure_warning: Label = null
+## What the settings come to where the builder works something out, such as the
+## rise a stair's total height gives each step (#1410). Hidden when it says nothing.
+var structure_summary: Label = null
+## The Preset row: the presets saved for the chosen type, and Save and Delete.
+var structure_preset_option: OptionButton = null
+var structure_preset_save_btn: Button = null
+var structure_preset_delete_btn: Button = null
+## The preset last picked or saved, which the row keeps showing while the fields
+## still hold it, even where another preset holds the same.
+var _structure_preset_picked: String = ""
+## The preset Delete has asked about, so a second press deletes it.
+var _structure_preset_delete_ack: String = ""
+## The name prompt Save opens, kept so it is not opened twice.
+var _structure_preset_dialog: AcceptDialog = null
 ## The generator the selection belongs to, if any. Empty means the Arch
 ## section is creating rather than editing.
 var _active_generator_id: String = ""
@@ -585,7 +743,13 @@ var rotate_ccw_btn: Button = null
 var rotate_cw_btn: Button = null
 var flip_btn: Button = null
 var reset_rotation_btn: Button = null
+var apply_rotation_scale_btn: Button = null
 var transform_pivot_opt: OptionButton = null
+var mirror_copy_x_check: CheckBox = null
+var mirror_copy_y_check: CheckBox = null
+var mirror_copy_z_check: CheckBox = null
+var mirror_copy_edge_check: CheckBox = null
+var mirror_copy_btn: Button = null
 # Entity I/O controls
 var io_output_name: LineEdit = null
 var io_target_name: LineEdit = null
@@ -626,6 +790,7 @@ var _disp_paint_mode_opt: OptionButton = null
 var _disp_radius_spin: SpinBox = null
 var _disp_strength_spin: SpinBox = null
 var _bevel_section: HFCollapsibleSection = null
+var _inset_section: HFCollapsibleSection = null
 var _bevel_edge_btn: Button = null
 var _bevel_inset_btn: Button = null
 var _bevel_segments_spin: SpinBox = null
@@ -772,8 +937,31 @@ func _apply_user_prefs() -> void:
 		power_user_overlays.set_pressed_no_signal(
 			bool(_user_prefs.get_pref("power_user_overlays", false))
 		)
+	if size_at_cursor:
+		size_at_cursor.set_pressed_no_signal(bool(_user_prefs.get_pref("size_at_cursor", true)))
+	if draw_hover_preview:
+		draw_hover_preview.set_pressed_no_signal(
+			bool(_user_prefs.get_pref("draw_hover_preview", true))
+		)
+	if show_selection_size:
+		show_selection_size.set_pressed_no_signal(
+			bool(_user_prefs.get_pref("show_selection_size", false))
+		)
+	if io_wire_mode_opt:
+		io_wire_mode_opt.select(clampi(int(_user_prefs.get_pref("io_wire_mode", 0)), 0, 2))
+		_sync_io_wires()
 	if material_browser:
 		material_browser.set_user_prefs(_user_prefs)
+	if overlay_colors_panel:
+		overlay_colors_panel.set_user_prefs(_user_prefs)
+	if uv_scale_link:
+		uv_scale_link.set_pressed_no_signal(bool(_user_prefs.get_pref("uv_scale_linked", false)))
+	_apply_uv_snap(
+		bool(_user_prefs.get_pref("uv_snap_enabled", true)),
+		float(_user_prefs.get_pref("uv_snap_step", UVEditor.DEFAULT_SNAP_STEP))
+	)
+	# Each tool setting the mapper last used (#1406).
+	HFDockToolMemory.apply(self)
 	# Restore collapsed section state
 	for sec_name in _all_sections:
 		var collapsed = _user_prefs.get_section_collapsed(sec_name)
@@ -884,13 +1072,13 @@ func _setup_simplified_workflow() -> void:
 		quick_snaps.reparent(advanced_content)
 	if _snap_mode_row:
 		_snap_mode_row.reparent(advanced_content)
+	if _draw_on_face_row:
+		_draw_on_face_row.reparent(advanced_content)
 	if _axis_lock_row:
 		_axis_lock_row.reparent(advanced_content)
 	var physics_row := brush_vbox.get_node_or_null("PhysicsLayerRow")
 	if physics_row:
 		physics_row.reparent(advanced_content)
-	if _disp_section:
-		_disp_section.reparent(advanced_content)
 	if _bevel_section:
 		_bevel_section.reparent(advanced_content)
 
@@ -1086,7 +1274,8 @@ func _on_main_tab_changed(tab_index: int) -> void:
 		return
 	var paint_tab_active := main_tabs.get_tab_title(tab_index) == "Paint"
 	# Face Select's controls live on Paint, but its modal state must never remain
-	# hidden after the user moves to another workflow tab.
+	# hidden after the user moves to another workflow tab. Its picks go with it,
+	# so a tool that acts on a picked face belongs on Paint too (#1527).
 	if not paint_tab_active and face_select_mode and face_select_mode.button_pressed:
 		face_select_mode.button_pressed = false
 	if paint_mode.button_pressed == paint_tab_active:
@@ -1107,6 +1296,20 @@ func _on_paint_mode_toggled(enabled: bool) -> void:
 	builtin_tool_changed.emit()
 
 
+## A Build tab setting the mapper changed, kept for the next session (#1406).
+func _on_build_setting_changed(_value: Variant, key: String) -> void:
+	HFDockToolMemory.remember(self, key)
+
+
+## Test > Settings > Reset Tool Settings: every tool setting kept between
+## sessions back to its default, the tools' own included (#1406).
+func _on_reset_tool_settings() -> void:
+	HFDockToolMemory.reset(self)
+	if _tool_settings_section and _tool_settings_section.visible and _tool_settings_tool:
+		show_tool_settings(_tool_settings_tool)
+	show_toast("Tool settings are back to their defaults", 0)
+
+
 ## Persist a pref change to disk.
 func _save_user_pref(key: String, value: Variant) -> void:
 	if not _user_prefs:
@@ -1125,6 +1328,8 @@ func _on_section_toggled(expanded: bool, section_name: String) -> void:
 		_user_prefs.set_section_collapsed(section_name, not expanded)
 		_user_prefs.save()
 	if section_name == "Structure":
+		# A pull may have changed the project's presets while it was shut.
+		HFDockBrushHandler.sync_structure_presets(self)
 		HFDockBrushHandler.refresh_structure_preview(self)
 	if section_name == "Performance" and expanded:
 		# Opened, so the numbers in it are however old the last look left them.
@@ -1186,8 +1391,8 @@ func _update_toolbar_shortcut_labels() -> void:
 		tool_vertex.tooltip_text = "Vertex Edit (%s)\nSelect and drag brush vertices" % key
 	if mode_add and mode_subtract:
 		var key = _keymap.get_display_string("toggle_operation")
-		mode_add.tooltip_text = "Solid brush | Toggle Solid/Cutout: %s" % key
-		mode_subtract.tooltip_text = "Cutout brush | Toggle Solid/Cutout: %s" % key
+		mode_add.tooltip_text = "Solid brush | Toggle Solid/Cut: %s" % key
+		mode_subtract.tooltip_text = "Cut brush | Toggle Solid/Cut: %s" % key
 	if paint_mode:
 		var key = _keymap.get_display_string("toggle_paint_mode")
 		paint_mode.tooltip_text = "Toggle Paint Mode (%s)" % key
@@ -1302,7 +1507,7 @@ func _apply_toolbar_tooltips() -> void:
 	_set_tooltip(tool_select, "Select (%s)\nClick: select | Shift: add | Ctrl: toggle" % select_key)
 	_set_tooltip(mode_add, "Solid brush\nDrag to add geometry | Toggle: %s" % operation_key)
 	_set_tooltip(
-		mode_subtract, "Cutout brush\nDrag through solids to carve | Toggle: %s" % operation_key
+		mode_subtract, "Cut brush\nDrag through solids to carve | Toggle: %s" % operation_key
 	)
 	if paint_mode:
 		_set_tooltip(
@@ -1396,6 +1601,11 @@ func _update_history_buttons() -> void:
 
 func _on_undo_redo_version_changed() -> void:
 	_refresh_history_list()
+	# A step taken or undone during a UV corner drag leaves what its press
+	# recorded out of date, so the drag is called off rather than recorded.
+	if uv_editor:
+		uv_editor.cancel_drag()
+	_refind_uv_face()
 
 
 func _on_history_undo() -> void:
@@ -1447,6 +1657,46 @@ func _rebuild_entity_props(entity: Node3D) -> void:
 	HFDockEntityHandler.rebuild_entity_props(self, entity)
 
 
+func _on_entities_prop_changed(value: Variant, entities: Array, prop_name: String) -> void:
+	HFDockEntityHandler.on_entities_prop_changed(self, value, entities, prop_name)
+
+
+func _on_entities_prop_enum_changed(
+	index: int, entities: Array, prop_name: String, enum_vals: Array
+) -> void:
+	HFDockEntityHandler.on_entities_prop_enum_changed(self, index, entities, prop_name, enum_vals)
+
+
+func _on_entities_prop_vec3_changed(
+	value: float, entities: Array, prop_name: String, axis_index: int
+) -> void:
+	HFDockEntityHandler.on_entities_prop_vec3_changed(self, value, entities, prop_name, axis_index)
+
+
+func _on_entity_prop_reset(entities: Array, prop_name: String) -> void:
+	HFDockEntityHandler.reset_to_default(self, entities, [prop_name])
+
+
+func _on_entity_reset_all(entities: Array) -> void:
+	HFDockEntityHandler.reset_to_default(self, entities, [])
+
+
+func _on_entity_write_defaults(entities: Array) -> void:
+	HFDockEntityHandler.write_defaults(self, entities)
+
+
+func _on_entity_keep_toggled(keep: bool, entity: Node3D, prop_name: String) -> void:
+	HFDockEntityHandler.on_entity_keep_toggled(self, keep, entity, prop_name)
+
+
+func _on_entity_keep_wiring_toggled(keep: bool, entity: Node3D) -> void:
+	HFDockEntityHandler.on_entity_keep_wiring_toggled(self, keep, entity)
+
+
+func _on_entity_clear_kept(entity: Node3D) -> void:
+	HFDockEntityHandler.on_entity_clear_kept(self, entity)
+
+
 func _clear_entity_props() -> void:
 	HFDockEntityHandler.clear_entity_props(self)
 
@@ -1476,8 +1726,128 @@ func _on_bake_issue_select(node: Node, other: Node = null) -> void:
 			selection.add_node(other)
 
 
+## Select every brush of one kind of finding (#1708).
+func _on_bake_issue_select_all(nodes: Array) -> void:
+	if not editor_interface:
+		return
+	var selection = EditorInterface.get_selection()
+	if selection:
+		selection.clear()
+		for node in nodes:
+			if node is Node and is_instance_valid(node):
+				selection.add_node(node)
+
+
+func _on_keep_first(later: Array) -> void:
+	HFDockManageHandler.keep_first(self, later)
+
+
 func _on_bake_issue_fix(fix: String, node: Variant) -> void:
 	HFDockManageHandler.on_bake_issue_fix(self, fix, node)
+
+
+## The read-only banner, under the one that says there is no level.
+func _build_format_banner() -> void:
+	if format_banner != null or no_root_banner == null:
+		return
+	format_banner = Label.new()
+	format_banner.name = "FormatBanner"
+	format_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	format_banner.add_theme_color_override("font_color", Color(1.0, 0.6, 0.35))
+	format_banner.visible = false
+	var holder := no_root_banner.get_parent()
+	holder.add_child(format_banner)
+	holder.move_child(format_banner, no_root_banner.get_index() + 1)
+
+
+## What the banner says for the open level, or "" when it can be written.
+func format_banner_text() -> String:
+	if level_root == null or not is_instance_valid(level_root):
+		return ""
+	if not level_root.has_method("format_refusal"):
+		return ""
+	var reason: String = level_root.format_refusal()
+	if reason == "":
+		return ""
+	return (
+		(
+			"Read only: this level %s. Save Level and autosave are off. Saving the scene with "
+			+ "Ctrl+S will drop what that build added; open it there instead."
+		)
+		% reason
+	)
+
+
+func _refresh_format_banner() -> void:
+	if format_banner == null:
+		return
+	var text := format_banner_text()
+	format_banner.visible = text != ""
+	if format_banner.text != text:
+		format_banner.text = text
+
+
+## Say so once, in a dialog, when a level a newer build saved is opened here.
+func _warn_about_a_newer_level() -> void:
+	var text := format_banner_text()
+	if text == "" or _format_warned.has(level_root.get_instance_id()):
+		return
+	_format_warned[level_root.get_instance_id()] = true
+	var dialog := AcceptDialog.new()
+	dialog.title = "Level saved by a newer HammerForge"
+	dialog.dialog_text = text
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	if is_inside_tree():
+		dialog.popup_centered()
+
+
+func _on_finding_accept(finding: Dictionary) -> void:
+	HFDockManageHandler.open_accept_dialog(self, finding)
+
+
+func _on_finding_unaccept(key: String) -> void:
+	HFDockManageHandler.unaccept_finding(self, key)
+
+
+func _on_show_accepted_toggled(_pressed: bool) -> void:
+	HFDockManageHandler.render_findings(self)
+
+
+func _on_validate_check_toggled(index: int) -> void:
+	if validate_checks_btn == null:
+		return
+	var popup := validate_checks_btn.get_popup()
+	var on := not popup.is_item_checked(index)
+	popup.set_item_checked(index, on)
+	HFDockManageHandler.set_check_runs(self, str(popup.get_item_metadata(index)), on)
+
+
+## Fill the Checks menu with each kind of check, ticked when the project runs it.
+func _on_validate_checks_about_to_popup() -> void:
+	if validate_checks_btn == null:
+		return
+	var popup := validate_checks_btn.get_popup()
+	popup.clear()
+	for kind in HFValidationChecks.KINDS:
+		popup.add_check_item(str(HFValidationChecks.KINDS[kind]))
+		var index := popup.item_count - 1
+		popup.set_item_metadata(index, kind)
+		popup.set_item_checked(index, HFValidationChecks.runs(kind))
+
+
+## An edit to the level, for the findings list to check again once it settles.
+func _on_root_brush_findings_changed(brush_id: String) -> void:
+	HFDockManageHandler.note_findings_change(self, brush_id, false)
+
+
+func _on_root_entity_findings_changed(_node: Node) -> void:
+	HFDockManageHandler.note_findings_change(self, "", true)
+
+
+func _on_findings_settled() -> void:
+	HFDockManageHandler.settle_findings(self)
 
 
 ## Record a spawn the dock created or moved, as one undo step each.
@@ -1521,6 +1891,9 @@ func _can_edit_selected_entity(entity: Node3D) -> bool:
 
 var _tool_settings_controls: Array = []
 const HFEditorToolType = preload("hf_editor_tool.gd")
+## The tool whose settings the section shows, so Reset Tool Settings can show
+## them again at their defaults.
+var _tool_settings_tool = null
 
 
 ## Show the active tool's declared settings, or nothing when it has none.
@@ -1530,6 +1903,7 @@ const HFEditorToolType = preload("hf_editor_tool.gd")
 ## exposes anything adjustable - reaches the mapper. `set_setting()` has no other
 ## route from the UI, so before this the whole declaration produced no controls.
 func show_tool_settings(tool) -> void:
+	_tool_settings_tool = tool
 	if not _tool_settings_section:
 		return
 	var content := _tool_settings_section.get_content()
@@ -1551,7 +1925,7 @@ func rebuild_tool_settings(tool: HFEditorToolType, parent: Control) -> void:
 		if not (prop is Dictionary):
 			continue
 		var prop_name: String = str(prop.get("name", ""))
-		if prop_name == "":
+		if prop_name == "" or bool(prop.get("hidden", false)):
 			continue
 		var prop_type: String = str(prop.get("type", "string"))
 		var prop_label: String = str(prop.get("label", prop_name))
@@ -1595,16 +1969,15 @@ func rebuild_tool_settings(tool: HFEditorToolType, parent: Control) -> void:
 				row.add_child(le)
 			"enum":
 				var ob = OptionButton.new()
-				var options: Array = prop.get("options", [])
+				var options: Array = Array(prop.get("options", []))
 				for opt in options:
 					ob.add_item(str(opt))
-				var idx = options.find(current_val) if current_val != null else 0
-				if idx >= 0:
+				# The value is the option's index, as the tools read it.
+				var idx: int = int(current_val) if current_val is int or current_val is float else 0
+				if idx >= 0 and idx < options.size():
 					ob.select(idx)
 				ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				ob.item_selected.connect(
-					_on_tool_setting_enum_changed.bind(tool, prop_name, options)
-				)
+				ob.item_selected.connect(_on_tool_setting_enum_changed.bind(tool, prop_name))
 				row.add_child(ob)
 			"color":
 				var cp = ColorPickerButton.new()
@@ -1626,11 +1999,11 @@ func _on_tool_setting_changed(value: Variant, tool: HFEditorToolType, prop_name:
 		tool.set_setting(prop_name, value)
 
 
-func _on_tool_setting_enum_changed(
-	index: int, tool: HFEditorToolType, prop_name: String, options: Array
-) -> void:
-	if tool and index < options.size():
-		tool.set_setting(prop_name, options[index])
+## The index, not the option's label: the tools read an enum into an int, so a
+## label handed over here was an error on the next build that read it.
+func _on_tool_setting_enum_changed(index: int, tool: HFEditorToolType, prop_name: String) -> void:
+	if tool:
+		tool.set_setting(prop_name, index)
 
 
 func _build_entity_io_section() -> void:
@@ -1661,9 +2034,16 @@ func _build_displacement_bevel_section() -> void:
 	var brush_vbox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox
 	if not brush_vbox:
 		return
+	# Displacement and Face Inset act on the face Face Select picked, so they sit
+	# on the Paint tab beside it, under Face Tools. Face Select closes when the
+	# mapper leaves that tab and drops its picks, so on the Build tab neither had
+	# a face (#1527).
+	var face_tools: VBoxContainer = (
+		_face_tools_section.get_content() if _face_tools_section else brush_vbox
+	)
 	# --- Displacement Section ---
 	_disp_section = HFCollapsibleSection.create("Displacement", false)
-	brush_vbox.add_child(_disp_section)
+	face_tools.add_child(_disp_section)
 	var dbox: VBoxContainer = _disp_section.get_content()
 	# Create / Destroy row
 	var cd_row = HBoxContainer.new()
@@ -1812,10 +2192,13 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_radius_spin.tooltip_text = "Bevel radius (how far the bevel extends)"
 	radius_row.add_child(_bevel_radius_spin)
 	bbox.add_child(radius_row)
-	# Face Inset
-	var fi_lbl = Label.new()
-	fi_lbl.text = "Face Inset"
-	bbox.add_child(fi_lbl)
+	_register_section(_bevel_section, "Bevel")
+	# --- Face Inset Section ---
+	# Bevel Edge stays on the Build tab: it needs Vertex Edit, which the Paint tab
+	# closes. Inset Face needs a picked face, which only the Paint tab keeps.
+	_inset_section = HFCollapsibleSection.create("Face Inset", false)
+	face_tools.add_child(_inset_section)
+	var ibox: VBoxContainer = _inset_section.get_content()
 	var fi_row = HBoxContainer.new()
 	fi_row.add_child(_make_label("Inset:"))
 	_bevel_inset_dist_spin = SpinBox.new()
@@ -1825,7 +2208,7 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_inset_dist_spin.value = 0.25
 	_bevel_inset_dist_spin.tooltip_text = "Distance to inset the face boundary"
 	fi_row.add_child(_bevel_inset_dist_spin)
-	bbox.add_child(fi_row)
+	ibox.add_child(fi_row)
 	var height_row = HBoxContainer.new()
 	height_row.add_child(_make_label("Height:"))
 	_bevel_inset_height_spin = SpinBox.new()
@@ -1835,13 +2218,13 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_inset_height_spin.value = 0.0
 	_bevel_inset_height_spin.tooltip_text = "Extrude the inset face along its normal (0 = flat inset)"
 	height_row.add_child(_bevel_inset_height_spin)
-	bbox.add_child(height_row)
+	ibox.add_child(height_row)
 	_bevel_inset_btn = Button.new()
 	_bevel_inset_btn.text = "Inset Face"
 	_bevel_inset_btn.tooltip_text = "Inset the selected face and create connecting side faces"
 	_bevel_inset_btn.pressed.connect(_on_bevel_inset)
-	bbox.add_child(_bevel_inset_btn)
-	_register_section(_bevel_section, "Bevel")
+	ibox.add_child(_bevel_inset_btn)
+	_register_section(_inset_section, "Face Inset")
 	_build_structure_section(brush_vbox)
 
 
@@ -1857,7 +2240,7 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 	var box: VBoxContainer = _structure_section.get_content()
 
 	structure_type_option = HFUIFactory.make_option()
-	for type in HFGeneratorSystem.known_types():
+	for type in HFGeneratorSystem.structure_types():
 		structure_type_option.add_item(HFGeneratorSystem.display_name(str(type)))
 		structure_type_option.set_item_metadata(structure_type_option.item_count - 1, str(type))
 	structure_type_option.selected = 0
@@ -1865,8 +2248,30 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 	structure_type_option.item_selected.connect(_on_structure_type_changed)
 	box.add_child(HFUIFactory.make_label_row("Type:", structure_type_option))
 
+	# Presets read the schema as the fields do, so this row has no type of its own.
+	structure_preset_option = HFUIFactory.fit_option(HFUIFactory.make_option())
+	structure_preset_option.tooltip_text = "Fill the settings from a preset saved for this type"
+	structure_preset_option.item_selected.connect(_on_structure_preset_selected)
+	var preset_row := HFUIFactory.make_label_row("Preset:", structure_preset_option)
+	structure_preset_save_btn = HFUIFactory.make_button(
+		"Save", "Keep these settings as a preset for this type, in the project"
+	)
+	structure_preset_save_btn.pressed.connect(_on_structure_preset_save)
+	preset_row.add_child(structure_preset_save_btn)
+	structure_preset_delete_btn = HFUIFactory.make_button(
+		"Delete", "Delete the chosen preset from the project"
+	)
+	structure_preset_delete_btn.pressed.connect(_on_structure_preset_delete)
+	preset_row.add_child(structure_preset_delete_btn)
+	box.add_child(preset_row)
+
 	structure_fields_box = VBoxContainer.new()
 	box.add_child(structure_fields_box)
+
+	structure_summary = Label.new()
+	structure_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	structure_summary.visible = false
+	box.add_child(structure_summary)
 
 	structure_warning = Label.new()
 	structure_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1891,18 +2296,40 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 	structure_detach_btn.visible = false
 	structure_detach_btn.pressed.connect(_on_detach_structure)
 	buttons.add_child(structure_detach_btn)
+	structure_repick_btn = HFUIFactory.make_button(
+		"Re-pick",
+		"Lay the selected trim run along the faces picked now in Face Select, keeping its settings"
+	)
+	structure_repick_btn.visible = false
+	structure_repick_btn.pressed.connect(_on_repick_structure)
+	buttons.add_child(structure_repick_btn)
 	_register_section(_structure_section, "Structure")
 	HFDockBrushHandler.rebuild_structure_fields(self)
 
 
 func _on_structure_type_changed(_index: int) -> void:
 	HFDockBrushHandler.on_structure_type_changed(self)
+	HFDockToolMemory.remember_structure_type(self)
 
 
 ## Any control in the Structure section, whatever its type. The ghost redraws
 ## from the whole section rather than from the one field that moved.
 func _on_structure_setting_changed(_value: Variant = null) -> void:
+	HFDockToolMemory.remember_structure_fields(self)
+	HFDockBrushHandler.sync_structure_presets(self)
 	HFDockBrushHandler.refresh_structure_preview(self)
+
+
+func _on_structure_preset_selected(index: int) -> void:
+	HFDockBrushHandler.on_structure_preset_selected(self, index)
+
+
+func _on_structure_preset_save() -> void:
+	HFDockBrushHandler.on_structure_preset_save(self)
+
+
+func _on_structure_preset_delete() -> void:
+	HFDockBrushHandler.on_structure_preset_delete(self)
 
 
 ## Point the Structure section at whatever is selected.
@@ -2193,6 +2620,8 @@ func _ready():
 		preset_rename_dialog.confirmed.connect(_on_preset_rename_confirmed)
 	if active_material_button:
 		active_material_button.pressed.connect(_on_active_material_pressed)
+	if clear_active_material_button:
+		clear_active_material_button.pressed.connect(_on_clear_active_material_pressed)
 	_setup_storage_dialogs()
 	if collision_layer_opt:
 		collision_layer_opt.clear()
@@ -2217,6 +2646,7 @@ func _ready():
 		progress_bar.hide()
 	if no_root_banner:
 		no_root_banner.visible = true
+		_build_format_banner()
 	_sync_snap_buttons(grid_snap.value)
 	var moved_presets := migrate_legacy_presets(LEGACY_PRESETS_DIR, presets_dir)
 	if moved_presets > 0:
@@ -2230,8 +2660,10 @@ func _ready():
 	_setup_visgroup_ui()
 	_setup_cordon_ui()
 	_connect_setting_signals()
+	HFDockToolMemory.watch(self)
 	_setup_toast_container()
 	_setup_clear_selection_button()
+	_setup_view_filter_chip()
 	_setup_context_hints()
 	set_process(true)
 
@@ -2252,6 +2684,9 @@ func _process(_delta):
 		_disconnect_root_signals()
 		connected_root = level_root
 		_connect_root_signals()
+		_warn_about_a_newer_level()
+		# A level snaps to the grid alone until it is told otherwise.
+		HFDockToolMemory.push_snap_modes(self)
 		HFDockManageHandler.sync_bake_state_to_root(self)
 		# A root can point at its own definitions file, so rebuild both entity
 		# pickers when the one we loaded from is no longer the active one.
@@ -2263,6 +2698,7 @@ func _process(_delta):
 	# Show/hide the "no root" banner
 	if no_root_banner:
 		no_root_banner.visible = level_root == null
+	_refresh_format_banner()
 	# Paint layers, materials, and surface paint sync are now signal-driven
 	# (see _connect_root_signals for paint_layer_changed, material_list_changed,
 	# selection_changed connections).
@@ -2275,6 +2711,13 @@ func _process(_delta):
 	if _perf_frame_counter >= 30:
 		_perf_frame_counter = 0
 		_update_perf_label()
+		# The browser's in-use marks follow the level's faces (#1725).
+		if material_browser and material_browser.is_visible_in_tree():
+			material_browser.refresh_use()
+		# A class row for each class the level holds now (#1720).
+		if level_root and view_filters_box and view_filters_box.is_visible_in_tree():
+			if HFViewFiltersType.classes_in(level_root) != _view_filter_classes:
+				HFDockVisgroupHandler.refresh_view_filters(self)
 		if _is_perf_panel_visible():
 			_update_perf_panel()
 
@@ -2345,29 +2788,23 @@ func _refresh_material_browser() -> void:
 
 
 func _sync_surface_paint_from_root() -> void:
+	var picked := _primary_face()
+	_set_uv_face(picked["brush"], picked["face"])
+	_set_surface_face(picked["brush"], picked["face"])
+
+
+## The face Face Select picked first and the brush holding it, as `{"brush",
+## "face"}`, both null when there is none.
+func _primary_face() -> Dictionary:
+	var none := {"brush": null, "face": null}
 	if not level_root:
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
+		return none
 	var info: Dictionary = level_root.get_primary_selected_face()
-	if info.is_empty():
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
 	var brush = info.get("brush", null)
-	var face_idx = int(info.get("face_idx", -1))
-	if brush == null or face_idx < 0 or not (brush is DraftBrush):
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
-	var draft := brush as DraftBrush
-	if face_idx >= draft.faces.size():
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
-	var face: FaceData = draft.faces[face_idx]
-	_set_uv_face(draft, face)
-	_set_surface_face(draft, face)
+	var face_idx := int(info.get("face_idx", -1))
+	if not (brush is DraftBrush) or face_idx < 0 or face_idx >= (brush as DraftBrush).faces.size():
+		return none
+	return {"brush": brush, "face": (brush as DraftBrush).faces[face_idx]}
 
 
 func get_operation() -> int:
@@ -2390,7 +2827,7 @@ func _on_shortcuts_help() -> void:
 	var dialog = HFShortcutDialog.new()
 	add_child(dialog)
 	dialog.populate(_keymap)
-	dialog.popup_centered(Vector2i(380, 460))
+	dialog.popup_centered(Vector2i(460, 540))
 	dialog.confirmed.connect(func(): dialog.queue_free())
 	dialog.canceled.connect(func(): dialog.queue_free())
 
@@ -2405,8 +2842,9 @@ func get_tool() -> int:
 	return 1
 
 
+## The level's Active Material, which every new brush is made with (#1405).
 func get_active_material() -> Material:
-	return active_material
+	return level_root.active_material if level_root else null
 
 
 func is_paint_mode_enabled() -> bool:
@@ -2417,8 +2855,49 @@ func is_face_select_mode_enabled() -> bool:
 	return face_select_mode and face_select_mode.button_pressed
 
 
+## Whether the face marquee takes every face inside the box, covered or facing
+## away, rather than only the ones a pick at their centre would hit (#1432).
+func is_face_xray_enabled() -> bool:
+	return face_select_xray != null and face_select_xray.button_pressed
+
+
+## Whether the Displacement section is open, and Face Tools around it, so its
+## brush settings are in view. Paint mode sculpts a displaced face only then: a
+## section folded away inside a closed one must not leave sculpting armed.
+func is_displacement_section_open() -> bool:
+	if not _disp_section:
+		return false
+	var node: Node = _disp_section
+	while node:
+		if node is HFCollapsibleSection and not (node as HFCollapsibleSection).is_expanded():
+			return false
+		node = node.get_parent()
+	return true
+
+
 func _on_face_select_mode_toggled(enabled: bool) -> void:
 	face_select_mode_toggled.emit(enabled)
+
+
+func is_texture_gizmo_enabled() -> bool:
+	return uv_texture_gizmo_check != null and uv_texture_gizmo_check.button_pressed
+
+
+## Switch the Texture Gizmo, as its box in the UV Editor and its button on the
+## context toolbar do.
+func set_texture_gizmo_enabled(enabled: bool) -> void:
+	if uv_texture_gizmo_check:
+		uv_texture_gizmo_check.button_pressed = enabled
+
+
+func _on_texture_gizmo_toggled(enabled: bool) -> void:
+	if enabled and not is_face_select_mode_enabled():
+		show_toast("Texture Gizmo: pick faces in Face Select Mode to see it", 0)
+	texture_gizmo_toggled.emit(enabled)
+
+
+func _on_face_xray_toggled(enabled: bool) -> void:
+	face_xray_toggled.emit(enabled)
 
 
 func get_paint_target() -> int:
@@ -2608,6 +3087,44 @@ func _setup_clear_selection_button() -> void:
 		footer.add_child(_clear_sel_btn)
 
 
+## "Filtered: 3 kinds" in the footer while any view filter is on, so a level
+## that looks half empty says why. A click shows everything again (#1720).
+func _setup_view_filter_chip() -> void:
+	var footer = get_node_or_null("Margin/VBox/Footer/StatusFooter")
+	if not footer:
+		return
+	_view_filter_chip = Button.new()
+	_view_filter_chip.name = "ViewFilterChip"
+	_view_filter_chip.flat = true
+	_view_filter_chip.focus_mode = Control.FOCUS_NONE
+	_view_filter_chip.tooltip_text = "Some kinds are hidden by View Filters. Click to show them all"
+	_view_filter_chip.visible = false
+	_view_filter_chip.add_theme_font_size_override("font_size", 11)
+	_view_filter_chip.pressed.connect(_on_view_filters_show_all)
+	footer.add_child(_view_filter_chip)
+
+
+func _on_view_filter_toggled(shown: bool, key: String) -> void:
+	if level_root:
+		level_root.set_view_filter(key, not shown)
+
+
+func _on_view_filters_show_all() -> void:
+	if level_root:
+		level_root.clear_view_filters()
+
+
+func _on_root_view_filters_changed() -> void:
+	HFDockVisgroupHandler.refresh_view_filters(self)
+
+
+## Whether the footer chip is up, and what it says.
+func view_filter_chip_text() -> String:
+	if _view_filter_chip == null or not _view_filter_chip.visible:
+		return ""
+	return _view_filter_chip.text
+
+
 func _on_clear_selection_pressed() -> void:
 	_selection_nodes = []
 	set_selection_count(0)
@@ -2722,15 +3239,6 @@ func _first_selected_brush() -> Node:
 	return null
 
 
-func _first_selected_entity() -> Node:
-	if not level_root:
-		return null
-	for node in _selection_nodes:
-		if is_instance_valid(node) and level_root.is_entity_node(node):
-			return node
-	return null
-
-
 ## Fail closed before a dock action can silently filter the selection. Most
 ## actions accept any all-HammerForge selection, while brush/entity-specific
 ## handlers opt into a stricter all-members requirement. Scatter is the one
@@ -2772,6 +3280,8 @@ func _guard_selection_action(
 
 func set_selection_nodes(nodes: Array) -> void:
 	_selection_nodes = nodes
+	if selection_info and level_root:
+		selection_info.set_kinds(HFQuickSelectType.kind_counts(level_root, nodes))
 	var selection_scope := _current_selection_scope()
 	var managed_counts := _get_managed_selection_counts(_selection_nodes)
 	var has_brush_selection := (
@@ -2794,6 +3304,7 @@ func set_selection_nodes(nodes: Array) -> void:
 	if tool_vertex:
 		tool_vertex.visible = has_brush_selection
 	refresh_structure_section()
+	HFDockBrushHandler.refresh_bake_settings(self)
 	# Selecting part of an existing array turns the section into an editor for it;
 	# this also redraws the ghost, which follows the selection.
 	refresh_array_section()
@@ -2824,8 +3335,23 @@ func set_selection_nodes(nodes: Array) -> void:
 			if node is Node3D and HFEntityPropUtils.is_brush_entity(node):
 				selected_entity = node
 				break
-	if selected_entity:
+	# Several entities, or doors and lights together, are edited as one (#1729).
+	# A plain brush beside them still leaves one subject, whose edit it refuses.
+	var subjects: Array = []
+	if selected_entity and level_root:
+		var plain_brush := false
+		for node in nodes:
+			if level_root.is_brush_node(node) and not HFEntityPropUtils.is_brush_entity(node):
+				plain_brush = true
+				break
+		if not plain_brush:
+			subjects = HFEntityMultiEdit.subjects(level_root, nodes)
+	if subjects.size() > 1:
+		selected_entity = subjects[0]
+		HFDockEntityHandler.rebuild_multi_entity_props(self, subjects)
+	elif selected_entity:
 		_rebuild_entity_props(selected_entity)
+	if selected_entity:
 		if _entity_io_section:
 			_entity_io_section.visible = true
 		if _io_wiring_section:
@@ -2926,6 +3452,7 @@ func _build_snap_mode_buttons() -> void:
 	row.add_child(snap_perp_btn)
 	parent.add_child(row)
 	parent.move_child(row, idx)
+	_build_draw_on_face_row(parent, idx + 1)
 	# Axis Lock row
 	var axis_row = HBoxContainer.new()
 	axis_row.name = "AxisLocks"
@@ -2959,7 +3486,28 @@ func _build_snap_mode_buttons() -> void:
 	_axis_lock_z.toggled.connect(_on_axis_lock_toggled.bind(3))
 	axis_row.add_child(_axis_lock_z)
 	parent.add_child(axis_row)
-	parent.move_child(axis_row, idx + 1)
+	parent.move_child(axis_row, idx + 2)
+
+
+## Beside the Snap row, as it decides where a draw's points go too (#1401).
+func _build_draw_on_face_row(parent: Node, index: int) -> void:
+	var face_row := HBoxContainer.new()
+	face_row.name = "DrawOnFace"
+	_draw_on_face_row = face_row
+	var face_lbl := Label.new()
+	face_lbl.text = "Draw:"
+	face_lbl.custom_minimum_size.x = 70
+	face_row.add_child(face_lbl)
+	draw_on_face_btn = Button.new()
+	draw_on_face_btn.text = "On Face"
+	draw_on_face_btn.tooltip_text = (
+		"Draw on Face: a draw that starts on a brush face builds on that face's plane."
+		+ "\nA Solid grows out of the face and a Cut into it."
+	)
+	draw_on_face_btn.toggle_mode = true
+	face_row.add_child(draw_on_face_btn)
+	parent.add_child(face_row)
+	parent.move_child(face_row, index)
 
 
 func _on_axis_lock_toggled(pressed: bool, axis: int) -> void:
@@ -3053,6 +3601,63 @@ func _on_power_user_overlays_toggled(pressed: bool) -> void:
 	_log("Power-user overlays: %s" % ("on" if pressed else "off"))
 
 
+## The plugin reads the preference as it draws, so saving it is the whole switch.
+func _on_size_at_cursor_toggled(pressed: bool) -> void:
+	_save_user_pref("size_at_cursor", pressed)
+	_log("Size at cursor: %s" % ("on" if pressed else "off"))
+
+
+## Show selection size from its key and the command palette, through the switch
+## so the switch, the Console and the preference all agree.
+func toggle_show_selection_size() -> void:
+	if show_selection_size:
+		show_selection_size.button_pressed = not show_selection_size.button_pressed
+		show_toast(
+			"Selection size %s" % ("shown" if show_selection_size.button_pressed else "hidden"), 0
+		)
+
+
+## Draw on Face from its key and the command palette, through the button so the
+## button, the key and the palette all agree (#1401).
+func toggle_draw_on_face() -> void:
+	if draw_on_face_btn:
+		draw_on_face_btn.button_pressed = not draw_on_face_btn.button_pressed
+		show_toast("Draw on Face %s" % ("on" if draw_on_face_btn.button_pressed else "off"), 0)
+
+
+func is_draw_on_face_enabled() -> bool:
+	return draw_on_face_btn != null and draw_on_face_btn.button_pressed
+
+
+## The plugin reads the preference on every move, so saving it is the switch.
+## Turned off, the preview on screen goes now rather than at the next move.
+func _on_draw_hover_preview_toggled(pressed: bool) -> void:
+	_save_user_pref("draw_hover_preview", pressed)
+	if not pressed and level_root and level_root.get("draw_hover"):
+		level_root.draw_hover.clear()
+	_log("Draw hover preview: %s" % ("on" if pressed else "off"))
+
+
+func _on_show_selection_size_toggled(pressed: bool) -> void:
+	_save_user_pref("show_selection_size", pressed)
+	selection_size_toggled.emit(pressed)
+	_log("Show selection size: %s" % ("on" if pressed else "off"))
+
+
+## The panel has written the preferences; the plugin draws from them.
+func _on_overlay_colors_changed() -> void:
+	overlay_colors_changed.emit()
+
+
+## What the plugin's selection readout measured, for the Selection Info section,
+## which shows only while there is something to describe.
+func set_selection_info(summary: Dictionary) -> void:
+	if selection_info:
+		selection_info.set_summary(summary)
+	if _selection_info_section:
+		_selection_info_section.visible = str(summary.get("kind", "")) != ""
+
+
 func _on_follow_grid_toggled(pressed: bool) -> void:
 	if syncing_grid:
 		return
@@ -3069,9 +3674,45 @@ func _on_show_grid_toggled(pressed: bool) -> void:
 	_log("Grid visible: %s" % ("on" if pressed else "off"))
 
 
-func _on_show_io_lines_toggled(pressed: bool) -> void:
-	if level_root and level_root.io_visualizer:
-		level_root.io_visualizer.set_enabled(pressed)
+func _on_show_io_lines_toggled(_pressed: bool) -> void:
+	_sync_io_wires()
+
+
+func _on_io_wire_mode_selected(index: int) -> void:
+	_save_user_pref("io_wire_mode", index)
+	_sync_io_wires()
+
+
+## Hand the level whether wires are drawn and which (#1730). A level bound later
+## gets them too, rather than starting with its lines off under a ticked box.
+func _sync_io_wires() -> void:
+	if not level_root or not level_root.get("io_visualizer"):
+		return
+	level_root.io_visualizer.set_wire_mode(io_wire_mode_opt.selected if io_wire_mode_opt else 0)
+	level_root.io_visualizer.set_enabled(_show_io_lines.button_pressed if _show_io_lines else false)
+
+
+const IO_WIRE_NAMES := ["All wires", "Chain from selection", "Selection only"]
+
+
+## Step the wires through none, all, the selection's chain and its own (#1730).
+func cycle_io_wires() -> void:
+	if not _show_io_lines or not io_wire_mode_opt:
+		return
+	var showing := _show_io_lines.button_pressed
+	var mode := io_wire_mode_opt.selected
+	if not showing:
+		showing = true
+		mode = 0
+	elif mode < 2:
+		mode += 1
+	else:
+		showing = false
+	io_wire_mode_opt.select(mode)
+	_save_user_pref("io_wire_mode", mode)
+	_show_io_lines.set_pressed_no_signal(showing)
+	_sync_io_wires()
+	show_toast("I/O wires: %s" % (IO_WIRE_NAMES[mode] if showing else "none"), 0)
 
 
 func _on_show_subtract_preview_toggled(pressed: bool) -> void:
@@ -3084,18 +3725,7 @@ func _on_prefab_save_requested(prefab_name: String) -> void:
 		return
 	if not _guard_selection_action("Save Prefab"):
 		return
-	var brush_nodes: Array = []
-	var entity_nodes: Array = []
-	for node in _selection_nodes:
-		if not is_instance_valid(node):
-			continue
-		if level_root.is_brush_node(node):
-			brush_nodes.append(node)
-		elif level_root.is_entity_node(node):
-			entity_nodes.append(node)
-	if brush_nodes.is_empty() and entity_nodes.is_empty():
-		return
-	_save_prefab_from_panel(prefab_name, brush_nodes, entity_nodes, false)
+	_save_prefab_from_panel(prefab_name, _selection_nodes.duplicate(), false)
 
 
 func _on_prefab_save_linked_requested(prefab_name: String) -> void:
@@ -3103,18 +3733,7 @@ func _on_prefab_save_linked_requested(prefab_name: String) -> void:
 		return
 	if not _guard_selection_action("Save Linked Prefab"):
 		return
-	var brush_nodes: Array = []
-	var entity_nodes: Array = []
-	for node in _selection_nodes:
-		if not is_instance_valid(node):
-			continue
-		if level_root.is_brush_node(node):
-			brush_nodes.append(node)
-		elif level_root.is_entity_node(node):
-			entity_nodes.append(node)
-	if brush_nodes.is_empty() and entity_nodes.is_empty():
-		return
-	_save_prefab_from_panel(prefab_name, brush_nodes, entity_nodes, true)
+	_save_prefab_from_panel(prefab_name, _selection_nodes.duplicate(), true)
 
 
 ## The panel's Save and Save Linked. Both go through the prefab system, so the
@@ -3122,12 +3741,13 @@ func _on_prefab_save_linked_requested(prefab_name: String) -> void:
 ## used to keep its own copy that skipped both. A name that is already a file
 ## asks before replacing it, because the instances linked to that file follow
 ## whatever is saved there (#929).
-func _save_prefab_from_panel(
-	prefab_name: String, brush_nodes: Array, entity_nodes: Array, linked: bool
-) -> void:
+func _save_prefab_from_panel(prefab_name: String, nodes: Array, linked: bool) -> void:
+	var split: Dictionary = HFPrefabSystem.split_selection(level_root, nodes)
+	if split["brushes"].is_empty() and split["entities"].is_empty():
+		return
 	var path := HFPrefabSystem.prefab_path(prefab_name)
 	if not FileAccess.file_exists(path):
-		_write_panel_prefab(prefab_name, brush_nodes, entity_nodes, linked)
+		_write_panel_prefab(prefab_name, nodes, linked)
 		return
 	var dlg := ConfirmationDialog.new()
 	dlg.name = "PrefabReplaceConfirm"
@@ -3138,7 +3758,7 @@ func _save_prefab_from_panel(
 	dlg.confirmed.connect(
 		func():
 			if is_instance_valid(self) and is_instance_valid(level_root):
-				_write_panel_prefab(prefab_name, brush_nodes, entity_nodes, linked)
+				_write_panel_prefab(prefab_name, nodes, linked)
 	)
 	if _plugin and _plugin.has_method("_add_confirmable_dialog"):
 		_plugin.call("_add_confirmable_dialog", dlg)
@@ -3149,16 +3769,12 @@ func _save_prefab_from_panel(
 		dlg.popup_centered()
 
 
-func _write_panel_prefab(
-	prefab_name: String, brush_nodes: Array, entity_nodes: Array, linked: bool
-) -> void:
-	# The selection was taken before the question, so drop anything deleted since.
-	brush_nodes = brush_nodes.filter(func(node): return is_instance_valid(node))
-	entity_nodes = entity_nodes.filter(func(node): return is_instance_valid(node))
-	if brush_nodes.is_empty() and entity_nodes.is_empty():
-		return
-	var path: String = level_root.prefab_system.quick_save_prefab(
-		brush_nodes, entity_nodes, prefab_name, linked
+## The same save as Quick Save's, so Save Linked here is an undo step too (#1451).
+## The selection was taken before the question, and the save drops anything
+## deleted since.
+func _write_panel_prefab(prefab_name: String, nodes: Array, linked: bool) -> void:
+	var path := HFPluginPrefabCommands.save_selection(
+		undo_redo, level_root, nodes, prefab_name, linked, Callable(self, "record_history")
 	)
 	if path != "" and _prefab_library:
 		_prefab_library.on_prefab_saved()
@@ -3201,19 +3817,15 @@ func _on_prefab_variant_add_requested(prefab_path: String, variant_name: String)
 	var prefab = HFPrefabType.load_from_file(prefab_path)
 	if not prefab:
 		return
-	var brush_nodes: Array = []
-	var entity_nodes: Array = []
-	for node in _selection_nodes:
-		if not is_instance_valid(node):
-			continue
-		if level_root.is_brush_node(node):
-			brush_nodes.append(node)
-		elif level_root.is_entity_node(node):
-			entity_nodes.append(node)
-	if brush_nodes.is_empty() and entity_nodes.is_empty():
+	var split: Dictionary = HFPrefabSystem.split_selection(level_root, _selection_nodes)
+	if split["brushes"].is_empty() and split["entities"].is_empty():
 		return
 	prefab.add_variant_from_selection(
-		variant_name, level_root.brush_system, level_root.entity_system, brush_nodes, entity_nodes
+		variant_name,
+		level_root.brush_system,
+		level_root.entity_system,
+		split["brushes"],
+		split["entities"]
 	)
 	prefab.save_to_file(prefab_path)
 	if _prefab_library:
@@ -3537,6 +4149,10 @@ func _on_move_to_ceiling() -> void:
 	HFDockBrushHandler.on_move_to_ceiling(self)
 
 
+func _on_snap_to_grid() -> void:
+	HFDockBrushHandler.on_snap_to_grid(self)
+
+
 func _on_create_duplicate_array() -> void:
 	HFDockBrushHandler.on_create_duplicate_array(self)
 
@@ -3575,6 +4191,20 @@ func _on_detach_structure() -> void:
 	HFDockBrushHandler.on_detach_generator(self)
 
 
+## Re-pick reads the faces picked in Face Select and the piece selected on the
+## way in, which the plugin holds, so the button runs its command (#1414).
+func _on_repick_structure() -> void:
+	if command_requested.get_connections().is_empty():
+		_set_status("Re-pick needs the HammerForge plugin running", true)
+		return
+	command_requested.emit("repick_trim_run")
+
+
+## The settings Run Trim Along Faces builds with (#1414).
+func trim_run_settings() -> Dictionary:
+	return HFDockBrushHandler.trim_run_settings(self)
+
+
 func _on_rotate_selection(direction: int) -> void:
 	HFDockBrushHandler.on_rotate_selection(self, direction)
 
@@ -3587,6 +4217,10 @@ func _on_reset_rotation() -> void:
 	HFDockBrushHandler.on_reset_rotation(self)
 
 
+func _on_apply_rotation_scale() -> void:
+	HFDockBrushHandler.on_apply_rotation_scale(self)
+
+
 func _on_rotate_snap_changed(value: float) -> void:
 	if level_root:
 		level_root.rotate_snap_degrees = value
@@ -3595,6 +4229,46 @@ func _on_rotate_snap_changed(value: float) -> void:
 func _on_transform_pivot_changed(index: int) -> void:
 	if level_root:
 		level_root.transform_pivot_mode = index
+	# Pick wants a point, so choosing it arms the click that takes one. The pick
+	# is the plugin's, as the viewport input is.
+	if index == PIVOT_PICK and not command_requested.get_connections().is_empty():
+		command_requested.emit("pick_pivot")
+
+
+## A pick, Clear Pivot or a load changed the level's Pivot, so the option shows
+## it. Without the signal: the level has it already, and choosing Pick here arms a
+## pick that nobody asked for.
+func _on_root_transform_pivot_changed() -> void:
+	if transform_pivot_opt and _root_has_property("transform_pivot_mode"):
+		transform_pivot_opt.select(int(connected_root.get("transform_pivot_mode")))
+
+
+## Any of the Mirror Copy boxes. The level keeps the three as one set of bits,
+## which is what Alt+M reads.
+func _on_mirror_copy_axes_changed(_pressed: bool = false) -> void:
+	if not level_root:
+		return
+	var checks := [mirror_copy_x_check, mirror_copy_y_check, mirror_copy_z_check]
+	var axes := 0
+	for i in checks.size():
+		var check := checks[i] as CheckBox
+		if check and check.button_pressed:
+			axes |= 1 << i
+	level_root.mirror_copy_axes = axes
+
+
+func _on_mirror_copy_edge_toggled(pressed: bool) -> void:
+	if level_root:
+		level_root.mirror_copy_at_edge = pressed
+
+
+## The button runs the command Alt+M and the palette run rather than a copy of
+## it: the copies join the plugin's selection, which the dock cannot set.
+func _on_mirror_copy() -> void:
+	if command_requested.get_connections().is_empty():
+		_set_status("Mirror Copy needs the HammerForge plugin running", true)
+		return
+	command_requested.emit("mirror_copy")
 
 
 func _on_remove_duplicate_array() -> void:
@@ -3609,13 +4283,236 @@ func _on_untie_entity() -> void:
 	HFDockBrushHandler.on_untie_entity(self)
 
 
+func _on_brush_cast_shadow_selected(index: int) -> void:
+	HFDockBrushHandler.on_brush_cast_shadow_selected(self, index)
+
+
+func _on_brush_lightmap_scale_changed(value: float) -> void:
+	HFDockBrushHandler.on_brush_lightmap_scale_changed(self, value)
+
+
+func _on_visgroup_current_toggled(pressed: bool) -> void:
+	HFDockVisgroupHandler.on_visgroup_current_toggled(self, pressed)
+
+
+func _on_visgroup_bake_toggled(left_out: bool) -> void:
+	HFDockVisgroupHandler.on_visgroup_bake_toggled(self, left_out)
+
+
+func _on_visgroup_lock_toggled(locked: bool) -> void:
+	HFDockVisgroupHandler.on_visgroup_lock_toggled(self, locked)
+
+
+func _on_view_isolate() -> void:
+	HFDockVisgroupHandler.on_view_isolate(self)
+
+
+func _on_view_isolate_selection() -> void:
+	HFDockVisgroupHandler.on_view_isolate_selection(self)
+
+
+func _on_view_end_isolate() -> void:
+	HFDockVisgroupHandler.on_view_end_isolate(self)
+
+
+func _on_view_hide_selection() -> void:
+	HFDockVisgroupHandler.on_view_hide_selection(self)
+
+
+func _on_view_show_hidden() -> void:
+	HFDockVisgroupHandler.on_view_show_hidden(self)
+
+
+func _on_view_previous() -> void:
+	HFDockVisgroupHandler.on_view_previous(self)
+
+
+func _on_view_save() -> void:
+	HFDockVisgroupHandler.on_view_save(self)
+
+
+func _on_view_restore() -> void:
+	HFDockVisgroupHandler.on_view_restore(self)
+
+
+func _on_view_delete() -> void:
+	HFDockVisgroupHandler.on_view_delete(self)
+
+
+func _on_visgroup_cast_shadow_selected(index: int) -> void:
+	HFDockVisgroupHandler.on_visgroup_cast_shadow_selected(self, index)
+
+
 func _on_justify(mode: String) -> void:
 	if not level_root:
 		return
 	if not _guard_selection_action("Justify UV", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var treat_as_one = justify_treat_as_one.button_pressed if justify_treat_as_one else false
-	_commit_state_action("Justify UV (%s)" % mode, "justify_selected_faces", [mode, treat_as_one])
+	_commit_state_action_if_changed(
+		"Justify UV (%s)" % mode, "justify_selected_faces", [mode, treat_as_one]
+	)
+	_resync_uv_face()
+
+
+## Turn each selected face's texture to run along one of its edges, the next
+## edge round the face each press, or the edge nearest `near` (#1727).
+func _on_align_to_edge(near: Variant = null) -> void:
+	if not _uv_faces_ready("Align to Edge"):
+		return
+	_commit_state_action_if_changed("Align to Edge", "align_selected_faces_to_edge", [near])
+	_resync_uv_face()
+
+
+## Fit the counts in Repeats: whole repeats across and down, 0 to keep the aspect.
+func _on_fit_repeats() -> void:
+	if not _uv_faces_ready("Fit Repeats"):
+		return
+	var u := int(fit_repeats_u.value) if fit_repeats_u else 1
+	var v := int(fit_repeats_v.value) if fit_repeats_v else 0
+	if u <= 0 and v <= 0:
+		show_toast("Give Repeats a count across or down", 1)
+		return
+	_commit_state_action_if_changed("Fit Repeats", "fit_selected_faces_repeats", [u, v])
+	_resync_uv_face()
+
+
+## Fit the strip in Strip: strip k of N across V, stretched along U.
+func _on_fit_strip() -> void:
+	if not _uv_faces_ready("Fit Strip"):
+		return
+	var count := int(fit_strip_count.value) if fit_strip_count else 4
+	var index := mini(int(fit_strip_index.value) if fit_strip_index else 1, count)
+	_commit_state_action_if_changed("Fit Strip", "fit_selected_faces_strip", [index, count])
+	_resync_uv_face()
+
+
+## The strip number can go no higher than the strips there are.
+func _on_fit_strip_count_changed(value: float) -> void:
+	if fit_strip_index:
+		fit_strip_index.max_value = value
+
+
+func _uv_faces_ready(label: String) -> bool:
+	if not level_root:
+		return false
+	if not _guard_selection_action(label, DockSelectionRequirement.BRUSHES_ONLY):
+		return false
+	if _count_selected_faces() == 0:
+		show_toast("Select the faces for %s" % label, 1)
+		return false
+	return true
+
+
+## Align to Face and Align to World, beside the Justify buttons (#1419): every
+## face in the face selection laid on the Face projection or on Box UV, keeping
+## its scale, offset and rotation, as one undo step.
+func _on_uv_align(projection: int) -> void:
+	if not level_root:
+		return
+	var action := "Align to Face" if projection == FaceData.UVProjection.FACE else "Align to World"
+	if not _guard_selection_action(action, DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	if _count_selected_faces() == 0:
+		show_toast("%s: select the faces to align first" % action, 1)
+		return
+	if not _commit_state_action_if_changed(
+		action, "align_selected_faces", [projection], _face_selection_brush_ids()
+	):
+		show_toast("%s: the selected faces are aligned that way already" % action, 0)
+		return
+	_resync_uv_face()
+
+
+## Wrap (#1428): the button runs the command the palette runs, since Wrap's clicks
+## land in the viewport, which the plugin owns.
+func _on_uv_wrap() -> void:
+	if command_requested.get_connections().is_empty():
+		show_toast("Wrap needs the HammerForge plugin running", 1)
+		return
+	command_requested.emit("uv_wrap")
+
+
+## Link (#1437), beside Treat as One: the selected faces become one surface, one
+## texture group sharing one mapping, which an edit to one of them keeps, as one
+## undo step.
+func _on_uv_link() -> void:
+	if not level_root:
+		return
+	if not _guard_selection_action("Link Faces", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	var face_count := _count_selected_faces()
+	if face_count < 2:
+		show_toast("Link: select two or more faces to make one surface of", 1)
+		return
+	if not _commit_state_action_if_changed(
+		"Link Faces", "link_selected_faces", [], _face_selection_brush_ids()
+	):
+		show_toast("Link: the selected faces are one surface already", 0)
+		return
+	show_toast("Linked %d faces into one surface" % face_count, 0)
+	_resync_uv_face()
+
+
+## Unlink: the selected faces leave their surfaces, each showing what it showed.
+func _on_uv_unlink() -> void:
+	if not level_root:
+		return
+	if not _guard_selection_action("Unlink Faces", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	if _count_selected_faces() == 0:
+		show_toast("Unlink: select the faces to unlink first", 1)
+		return
+	if not _commit_state_action_if_changed(
+		"Unlink Faces", "unlink_selected_faces", [], _face_selection_brush_ids()
+	):
+		show_toast("Unlink: none of the selected faces is linked", 0)
+		return
+	show_toast("Unlinked the selected faces", 0)
+
+
+## Select Group: every face linked with the selected face.
+func _on_uv_select_group() -> void:
+	if not level_root:
+		return
+	if _count_selected_faces() == 0:
+		show_toast("Select Group: select a linked face first", 1)
+		return
+	var count: int = level_root.select_texture_group()
+	if count == 0:
+		show_toast("Select Group: the selected face is not linked to any other", 1)
+		return
+	show_toast("Selected the %d faces linked with it" % count, 0)
+
+
+## The brushes the face selection is on, as an undo step's scope.
+func _face_selection_brush_ids() -> Array:
+	var brush_ids: Array = []
+	for key in level_root.face_selection.keys():
+		brush_ids.append(str(key))
+	return brush_ids
+
+
+## The name each UV edit's undo step goes by.
+const UV_EDIT_ACTIONS := {
+	"scale_up": "UV Scale x2",
+	"scale_down": "UV Scale /2",
+	"flip_u": "UV Flip U",
+	"flip_v": "UV Flip V",
+	"rotate_90": "UV Rotate 90",
+}
+
+
+## x2, /2, Flip U, Flip V and Rotate 90 in Paint > UV Editor. Each changes every
+## face in the face selection as one step, and a press that changes nothing, such
+## as /2 on a scale already at the smallest step, leaves none.
+func _on_uv_edit(edit: String) -> void:
+	if not level_root or not UV_EDIT_ACTIONS.has(edit):
+		return
+	if not _guard_selection_action(UV_EDIT_ACTIONS[edit], DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	_commit_state_action_if_changed(UV_EDIT_ACTIONS[edit], "edit_selected_face_uvs", [edit])
+	_resync_uv_face()
 
 
 func get_hollow_thickness() -> float:
@@ -3628,6 +4525,7 @@ func _on_create_entity() -> void:
 
 func _connect_root_signals() -> void:
 	HFDockConnections.connect_root(self)
+	_sync_io_wires()
 
 
 func _disconnect_root_signals() -> void:
@@ -3666,6 +4564,7 @@ func _on_root_material_list_changed() -> void:
 
 func _on_root_face_selection_changed() -> void:
 	_sync_surface_paint_from_root()
+	_show_mixed_uv_fields()
 	set_selection_count(_selection_nodes.size())
 	_hints_dirty = true
 
@@ -3713,6 +4612,10 @@ func _sync_grid_settings_from_root() -> void:
 		bake_occluder_min_area_spin.value = float(connected_root.get("bake_occluder_min_area"))
 	if bake_connector_mode_opt and _root_has_property("bake_connector_mode"):
 		bake_connector_mode_opt.select(int(connected_root.get("bake_connector_mode")))
+	if bake_cast_shadows_opt and _root_has_property("bake_cast_shadows"):
+		HFUIFactory.select_cast_shadow(
+			bake_cast_shadows_opt, int(connected_root.get("bake_cast_shadows"))
+		)
 	if bake_connector_stair_height_spin and _root_has_property("bake_connector_stair_height"):
 		bake_connector_stair_height_spin.value = float(
 			connected_root.get("bake_connector_stair_height")
@@ -3755,6 +4658,17 @@ func _sync_grid_settings_from_root() -> void:
 		rotate_snap_spin.value = float(connected_root.get("rotate_snap_degrees"))
 	if transform_pivot_opt and _root_has_property("transform_pivot_mode"):
 		transform_pivot_opt.select(int(connected_root.get("transform_pivot_mode")))
+	# Without the signal: each box's handler reads all three, and the level's set
+	# would pass through a mix of old and new on the way.
+	if mirror_copy_x_check and _root_has_property("mirror_copy_axes"):
+		var axes := int(connected_root.get("mirror_copy_axes"))
+		mirror_copy_x_check.set_pressed_no_signal((axes & 1) != 0)
+		mirror_copy_y_check.set_pressed_no_signal((axes & 2) != 0)
+		mirror_copy_z_check.set_pressed_no_signal((axes & 4) != 0)
+	if mirror_copy_edge_check and _root_has_property("mirror_copy_at_edge"):
+		mirror_copy_edge_check.set_pressed_no_signal(
+			bool(connected_root.get("mirror_copy_at_edge"))
+		)
 	if cordon_enabled_check and _root_has_property("cordon_enabled"):
 		cordon_enabled_check.button_pressed = bool(connected_root.get("cordon_enabled"))
 	HFDockVisgroupHandler.sync_cordon_ui(self)
@@ -3786,6 +4700,18 @@ func _on_autosave_failed(error_message: String) -> void:
 					if is_instance_valid(_autosave_warning):
 						_autosave_warning.visible = false
 			)
+
+
+const AUTOSAVE_WAITING_TEXT := "Autosave waiting for a pause"
+
+
+## The status line says when a timed autosave is put off until editing pauses,
+## and lets go of the line when it runs (#1736).
+func _on_autosave_waiting(waiting: bool) -> void:
+	if waiting:
+		_set_status(AUTOSAVE_WAITING_TEXT)
+	elif status_label and status_label.text == AUTOSAVE_WAITING_TEXT:
+		_set_status("Ready")
 
 
 func _on_hflevel_save_completed(path: String) -> void:
@@ -3908,12 +4834,13 @@ func _update_perf_panel() -> void:
 
 	# Brush count progress bar
 	if perf_brush_bar:
-		perf_brush_bar.value = mini(brush_count, 200)
+		perf_brush_bar.value = mini(brush_count, int(perf_brush_bar.max_value))
 
 	# Health summary with color coding
 	if perf_health_label:
 		var health: Dictionary = level_root.get_level_health()
 		perf_health_label.text = health.get("label", "-")
+		perf_health_label.tooltip_text = str(health.get("detail", ""))
 		var severity: int = health.get("severity", 0)
 		var ok_color = _get_editor_color("success_color", Color(0.2, 0.85, 0.35))
 		var warn_color = _get_editor_color("warning_color", Color(0.95, 0.8, 0.2))
@@ -3926,13 +4853,15 @@ func _update_perf_panel() -> void:
 			_:
 				perf_health_label.add_theme_color_override("font_color", danger_color)
 
-	# Color-code brush count value
+	# Coloured by the level's health rather than thresholds of its own, which
+	# turned the count red at a size the health label still called fine.
 	var ok_c = _get_editor_color("success_color", Color(0.2, 0.85, 0.35))
 	var warn_c = _get_editor_color("warning_color", Color(0.95, 0.8, 0.2))
 	var danger_c = _get_editor_color("error_color", Color(0.95, 0.3, 0.3))
-	if brush_count <= 50:
+	var count_severity := int(level_root.get_level_health().get("severity", 0))
+	if count_severity == 0:
 		perf_brushes_value.add_theme_color_override("font_color", ok_c)
-	elif brush_count <= 100:
+	elif count_severity == 1:
 		perf_brushes_value.add_theme_color_override("font_color", warn_c)
 	else:
 		perf_brushes_value.add_theme_color_override("font_color", danger_c)
@@ -3966,6 +4895,8 @@ func _update_disabled_hints() -> void:
 	_set_control_disabled_hint(load_hflevel_btn, not has_root, need_root_hint)
 	_set_control_disabled_hint(import_map_btn, not has_root, need_root_hint)
 	_set_control_disabled_hint(export_map_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(compare_hflevel_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(export_plan_btn, not has_root, need_root_hint)
 	_set_control_disabled_hint(autosave_enabled, not has_root, need_root_hint)
 	_set_control_disabled_hint(autosave_minutes, not has_root, need_root_hint)
 	_set_control_disabled_hint(autosave_keep, not has_root, need_root_hint)
@@ -4009,15 +4940,24 @@ func _update_disabled_hints() -> void:
 		uv_offset_x,
 		uv_offset_y,
 		uv_rotation_spin,
+		uv_scale_up_btn,
+		uv_scale_down_btn,
+		uv_flip_u_btn,
+		uv_flip_v_btn,
+		uv_rotate_90_btn,
+		uv_smoothing_spin,
 		surface_paint_layer_add,
 		surface_paint_layer_remove,
 		surface_paint_texture,
 		justify_fit_btn,
+		justify_fit_u_btn,
+		justify_fit_v_btn,
 		justify_center_btn,
 		justify_left_btn,
 		justify_right_btn,
 		justify_top_btn,
 		justify_bottom_btn,
+		uv_apply_look_btn,
 		_disp_create_btn,
 		_disp_destroy_btn,
 		_disp_smooth_btn,
@@ -4054,6 +4994,7 @@ func _update_disabled_hints() -> void:
 		clip_btn,
 		move_floor_btn,
 		move_ceiling_btn,
+		snap_to_grid_btn,
 		tie_entity_btn,
 		untie_entity_btn,
 		heightmap_convert_btn,
@@ -4273,10 +5214,60 @@ func _set_uv_face(brush: DraftBrush, face: FaceData) -> void:
 		return
 	_uv_active_brush = brush
 	_uv_active_face = face
-	if uv_editor:
-		uv_editor.set_face(face)
-	if face:
-		_sync_uv_params_to_face(face)
+	_refresh_uv_face()
+
+
+## After a command on the face selection: the face on show is looked up again,
+## because an undo since it was picked may have rebuilt its brush, and is then
+## shown as the command left it.
+func _resync_uv_face() -> void:
+	_sync_surface_paint_from_root()
+	_refresh_uv_face()
+
+
+## An undo or redo that puts a brush back from its record gives it new faces, so
+## a face on show that its brush no longer holds is looked up again. The canvas
+## went on drawing it, and a corner drag went on moving it, while the level had
+## gone back (#1544).
+func _refind_uv_face() -> void:
+	if _uv_active_face == null:
+		return
+	if is_instance_valid(_uv_active_brush) and _uv_active_brush.faces.has(_uv_active_face):
+		return
+	var picked := _primary_face()
+	_set_uv_face(picked["brush"], picked["face"])
+
+
+## Show the face on show again, after a command changed it rather than its own
+## boxes: the canvas refitted to it, its texture under it, and its boxes.
+func _refresh_uv_face() -> void:
+	_refresh_uv_canvas()
+	if _uv_active_face:
+		_sync_uv_params_to_face(_uv_active_face)
+
+
+## The canvas holds the face's UV bounds from when it was handed the face, so
+## after a change it is handed the face again.
+func _refresh_uv_canvas() -> void:
+	if not uv_editor:
+		return
+	uv_editor.set_texture(_uv_face_texture(_uv_active_brush, _uv_active_face))
+	uv_editor.set_face(_uv_active_face)
+
+
+## The albedo texture `face` draws with, as the brush preview resolves its
+## material, without the surface paint laid over it. Null when there is none, or
+## when the material is a shader, which keeps the canvas blank.
+func _uv_face_texture(brush: DraftBrush, face: FaceData) -> Texture2D:
+	if not is_instance_valid(brush) or face == null:
+		return null
+	var manager: MaterialManager = level_root.material_manager if level_root else null
+	var mat := face.resolved_material(
+		manager, brush.material_override, brush.editor_material, false
+	)
+	if mat is BaseMaterial3D:
+		return (mat as BaseMaterial3D).albedo_texture
+	return null
 
 
 func _set_surface_face(brush: DraftBrush, face: FaceData) -> void:
@@ -4548,7 +5539,10 @@ func _on_material_assign() -> void:
 		show_toast(decision.toast, 1)
 		return
 	_commit_state_action(decision.action, decision.method, decision.args)
+	_note_material_used(_selected_material_index)
 	show_toast(decision.toast, 0)
+	# The face on show may have a new texture to lay under its outline.
+	_refresh_uv_canvas()
 
 
 ## Pure decision helper for material assignment.  Returns a Dictionary with
@@ -4607,30 +5601,33 @@ func resolve_material_assign_action(mat_index: int) -> Dictionary:
 
 
 func _count_selected_faces() -> int:
-	if not level_root:
-		return 0
-	var total := 0
-	for key in level_root.face_selection.keys():
-		var brush = level_root._find_brush_by_key(str(key))
-		if not brush:
-			continue
-		var indices: Array = level_root.face_selection.get(key, [])
-		for idx in indices:
-			if int(idx) >= 0 and int(idx) < brush.faces.size():
-				total += 1
-	return total
+	return level_root.picked_face_count() if level_root else 0
 
 
 func _material_display_name(index: int) -> String:
 	if not level_root or not level_root.material_manager:
-		return "material"
-	var mat = level_root.material_manager.get_material(index)
-	if mat == null:
-		return "material"
-	var display_name: String = (
-		mat.resource_name if mat.resource_name != "" else mat.resource_path.get_file()
-	)
-	return display_name if display_name != "" else "material"
+		return MaterialManager.material_label(null)
+	return MaterialManager.material_label(level_root.material_manager.get_material(index))
+
+
+## Say the material in palette slot `index` was just applied. Through the level's
+## `material_used`, which the agent bridge and the viewport's own routes emit as
+## well, so the Recent row is filled in one place (#1422).
+func _note_material_used(index: int) -> void:
+	if not level_root or not level_root.material_manager:
+		return
+	var mat: Material = level_root.material_manager.get_material(index)
+	if mat:
+		level_root.material_used.emit(mat)
+
+
+## A material was applied by any route: first in the browser's Recent row, which
+## is kept with the favourites. One that is first already writes nothing.
+func _on_root_material_used(mat: Material) -> void:
+	if mat == null or not _user_prefs:
+		return
+	if _user_prefs.add_recent_material(mat.resource_path) and material_browser:
+		material_browser.refresh_recent()
 
 
 func _on_face_clear() -> void:
@@ -4641,6 +5638,15 @@ func _on_face_clear() -> void:
 # ---------------------------------------------------------------------------
 # Material Browser handlers
 # ---------------------------------------------------------------------------
+
+
+## Bring the Paint tab forward with `index` selected in the browser's palette,
+## from the viewport menu's Show Material in Browser (#1724).
+func show_material_in_browser(index: int) -> void:
+	highlight_tab("Paint")
+	if material_browser:
+		material_browser.show_palette()
+	_on_browser_material_selected(index)
 
 
 func _on_browser_material_selected(index: int) -> void:
@@ -4660,7 +5666,22 @@ func _on_browser_material_double_clicked(index: int) -> void:
 			show_toast(decision.toast, 1)
 			return
 		_commit_state_action(decision.action, decision.method, decision.args)
+		_note_material_used(index)
 		show_toast(decision.toast, 0)
+
+
+## A Recent material this level's palette does not hold: added as the Add button
+## adds one, as one undo step, then selected.
+func _on_browser_material_add_requested(path: String) -> void:
+	if not level_root or not material_browser:
+		return
+	_on_material_palette_selected(path)
+	var slot: int = material_browser.palette_slot_of(path)
+	if slot < 0:
+		show_toast("%s could not be added to the palette" % path.get_file(), 1)
+		return
+	_on_browser_material_selected(slot)
+	show_toast("Added %s to the palette" % _material_display_name(slot), 0)
 
 
 func _on_browser_context_menu(index: int, global_pos: Vector2) -> void:
@@ -4673,6 +5694,65 @@ func _on_browser_context_menu(index: int, global_pos: Vector2) -> void:
 		_material_context_popup.id_pressed.connect(_on_material_context_action)
 	_material_context_popup.position = Vector2i(int(global_pos.x), int(global_pos.y))
 	_material_context_popup.popup()
+
+
+## How many faces of the open level use each palette slot (#1725).
+func material_use_counts() -> Dictionary:
+	if not level_root or not is_instance_valid(level_root):
+		return {}
+	return HFMaterialUse.counts(level_root)
+
+
+## Face Select on, with the visible, unlocked faces using `slot` picked. Returns
+## how many.
+func select_faces_using(slot: int) -> int:
+	if not level_root:
+		return 0
+	var picked := HFMaterialUse.faces_using(level_root, slot)
+	var total := 0
+	for key in picked:
+		total += (picked[key] as Array).size()
+	if total == 0:
+		show_toast("No visible face uses %s" % _material_display_name(slot), 1)
+		return 0
+	if face_select_mode and not face_select_mode.button_pressed:
+		face_select_mode.button_pressed = true
+	level_root.face_selection = picked
+	level_root.face_selection_changed.emit()
+	show_toast(
+		(
+			"Selected %d face%s using %s"
+			% [total, "" if total == 1 else "s", _material_display_name(slot)]
+		),
+		0
+	)
+	return total
+
+
+## The visible, unlocked brushes with a face using `slot`, selected. Returns them.
+func select_brushes_using(slot: int) -> Array:
+	if not level_root:
+		return []
+	var picked := HFMaterialUse.brushes_using(level_root, slot)
+	if picked.is_empty():
+		show_toast("No visible brush uses %s" % _material_display_name(slot), 1)
+		return picked
+	if face_select_mode and face_select_mode.button_pressed:
+		face_select_mode.button_pressed = false
+	if editor_interface:
+		var selection = EditorInterface.get_selection()
+		if selection:
+			selection.clear()
+			for brush in picked:
+				selection.add_node(brush)
+	show_toast(
+		(
+			"Selected %d brush%s using %s"
+			% [picked.size(), "" if picked.size() == 1 else "es", _material_display_name(slot)]
+		),
+		0
+	)
+	return picked
 
 
 func _on_material_context_action(id: int) -> void:
@@ -4694,6 +5774,7 @@ func _on_material_context_action(id: int) -> void:
 				show_toast("No faces selected — select faces first", 1)
 				return
 			_commit_state_action("Assign Face Material", "assign_material_to_selected_faces", [idx])
+			_note_material_used(idx)
 			show_toast(
 				"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"],
 				0
@@ -4711,6 +5792,7 @@ func _on_material_context_action(id: int) -> void:
 			_commit_state_action(
 				"Assign Brush Material", "assign_material_to_whole_brushes", [idx, brush_ids]
 			)
+			_note_material_used(idx)
 			show_toast(
 				(
 					"Applied %s to %d brush%s"
@@ -4718,6 +5800,10 @@ func _on_material_context_action(id: int) -> void:
 				),
 				0
 			)
+		7:  # Select Faces Using This
+			select_faces_using(idx)
+		8:  # Select Brushes Using This
+			select_brushes_using(idx)
 		2:  # Toggle Favorite
 			if material_browser:
 				var mat = level_root.material_manager.get_material(idx)
@@ -4734,9 +5820,7 @@ func _on_material_context_action(id: int) -> void:
 		3:  # Copy Name
 			var mat = level_root.material_manager.get_material(idx)
 			if mat:
-				var label = mat.resource_name
-				if label == "":
-					label = mat.resource_path.get_file().get_basename()
+				var label := MaterialManager.material_label(mat)
 				DisplayServer.clipboard_set(label)
 				show_toast("Copied: " + label, 0)
 		4:  # Apply + Re-project (Box UV)
@@ -4754,6 +5838,7 @@ func _on_material_context_action(id: int) -> void:
 				"assign_material_and_reproject",
 				[idx, FaceData.UVProjection.BOX_UV]
 			)
+			_note_material_used(idx)
 			show_toast(
 				(
 					"Applied %s + Box UV to %d face%s"
@@ -4761,22 +5846,98 @@ func _on_material_context_action(id: int) -> void:
 				),
 				0
 			)
+		5:  # Set as Active Material, what Paint Mode puts on a clicked brush
+			var active = level_root.material_manager.get_material(idx)
+			if active:
+				level_root.active_material = active
+				_sync_active_material_from_root()
+				show_toast("Active Material: %s" % mat_name, 0)
+		6:  # Replace Material, finding this one
+			open_replace_material(idx)
+
+
+## Replace Material (#1726), from the palette, the Material Library and the
+## browser's right-click menu: Find starts on slot `find_index`, or on the first
+## material in use for -1.
+func open_replace_material(find_index := -1) -> void:
+	if not level_root:
+		show_toast("Replace Material needs a level", 1)
+		return
+	if _replace_material_dialog == null:
+		_replace_material_dialog = HFReplaceMaterialDialog.new()
+		add_child(_replace_material_dialog)
+		_replace_material_dialog.replace_requested.connect(_on_replace_material_requested)
+	var picked := _picked_look.material_idx if _picked_look else -1
+	_replace_material_dialog.open_for(
+		level_root,
+		_replace_material_scope(),
+		find_index,
+		picked,
+		_material_display_name,
+		_material_thumbnail
+	)
+
+
+## The selection as Replace Material's Selected scope takes it: the picked faces,
+## and every face of the selected brushes.
+func _replace_material_scope() -> Dictionary:
+	var scope := {}
+	var faces: Dictionary = (level_root.face_selection as Dictionary).duplicate(true)
+	if not faces.is_empty():
+		scope["faces"] = faces
+	var brush_ids := _get_selected_brush_ids()
+	if not brush_ids.is_empty():
+		scope["brush_ids"] = brush_ids
+	return scope
+
+
+func _material_thumbnail(slot: int) -> Texture2D:
+	if not level_root or not level_root.material_manager or not material_browser:
+		return null
+	var mat = level_root.material_manager.get_material(slot)
+	return material_browser.thumbnail_of(mat) if mat else null
+
+
+func _on_replace_material_requested(
+	from_index: int, to_index: int, scope: Dictionary, reset_uv: bool
+) -> void:
+	if not level_root:
+		return
+	var found: Dictionary = level_root.faces_wearing_material(from_index, scope)
+	var faces := 0
+	for key in found:
+		faces += (found[key] as Array).size()
+	var changed := _commit_state_action_if_changed(
+		"Replace Material",
+		"replace_material",
+		[from_index, to_index, scope, reset_uv],
+		found.keys()
+	)
+	if not changed:
+		show_toast("Nothing to replace", 1)
+		return
+	_note_material_used(to_index)
+	show_toast(
+		(
+			"Replaced %s with %s on %d face%s"
+			% [
+				_material_display_name(from_index),
+				_material_display_name(to_index),
+				faces,
+				"" if faces == 1 else "s"
+			]
+		),
+		0
+	)
+	_refresh_uv_canvas()
 
 
 func _get_selected_brush_ids() -> Array:
-	var ids: Array = []
 	if not level_root or _current_selection_scope() != DockSelectionScope.MANAGED:
-		return ids
+		return []
 	if int(_get_managed_selection_counts(_selection_nodes)["entities"]) > 0:
-		return ids
-	for node in _selection_nodes:
-		if node is DraftBrush and is_instance_valid(node) and level_root.is_brush_node(node):
-			var bid: String = (node as DraftBrush).brush_id
-			if bid != "":
-				ids.append(bid)
-			else:
-				ids.append(str(node.get_instance_id()))
-	return ids
+		return []
+	return Array(HFDockBrushHandler.selection_brush_ids(self))
 
 
 func _on_browser_material_hovered(index: int) -> void:
@@ -4903,44 +6064,164 @@ func _on_uv_reproject() -> void:
 var _uv_param_updating := false
 
 
-func _on_uv_param_changed(_value: float, _param: String) -> void:
+func _on_uv_param_changed(value: float, param: String) -> void:
 	if _uv_param_updating:
 		return
-	if _uv_active_face == null or _uv_active_brush == null:
-		return
-	if not level_root:
+	if not level_root or not HFUVMulti.FIELDS.has(param):
 		return
 	if not _guard_selection_action("Edit UV", DockSelectionRequirement.BRUSHES_ONLY):
 		return
-	if _uv_active_brush.brush_id == "":
-		level_root.get_brush_info_from_node(_uv_active_brush)
-	var brush_id: String = _uv_active_brush.brush_id
-	var face_idx: int = _uv_active_brush.faces.find(_uv_active_face)
-	if brush_id == "" or face_idx < 0:
-		return
-	var uv_scale := Vector2(
-		uv_scale_x.value if uv_scale_x else 1.0, uv_scale_y.value if uv_scale_y else 1.0
-	)
-	var offset := Vector2(
-		uv_offset_x.value if uv_offset_x else 0.0, uv_offset_y.value if uv_offset_y else 0.0
-	)
-	var uv_rotation: float = deg_to_rad(uv_rotation_spin.value) if uv_rotation_spin else 0.0
-	# Route through undo system with collation so rapid spinbox changes merge.
-	# The scope is the one brush the spinbox is editing: set_face_uv_params()
-	# writes one face's UV fields and rebuilds that brush's preview, and the
-	# collation tag already names the brush and the face (#761).
+	# The box typed goes to every selected face, and only that box: each face
+	# keeps its own values for the rest (#1728). It used to reach the face on
+	# show alone, which still takes it with no face selected. Reading every box
+	# rounded the others to their steps: a scale of 0.125 that /2 made went back
+	# as 0.13 the moment the offset was touched.
+	var records := HFUVMulti.picked(level_root)
+	if records.is_empty():
+		if _uv_active_face == null or _uv_active_brush == null:
+			return
+		if _uv_active_brush.brush_id == "":
+			level_root.get_brush_info_from_node(_uv_active_brush)
+		var face_idx: int = _uv_active_brush.faces.find(_uv_active_face)
+		if _uv_active_brush.brush_id == "" or face_idx < 0:
+			return
+		records = [
+			{
+				"brush_id": str(_uv_active_brush.brush_id),
+				"index": face_idx,
+				"face": _uv_active_face,
+			}
+		]
+	var changes := HFUVMulti.field_changes(records, param, value, _uv_scale_linked())
+	var keys := PackedStringArray()
+	for change in changes:
+		keys.append("%s:%d" % [change[0], change[1]])
+	# Through the undo system with collation, so a run of spinbox changes to the
+	# same faces merges. The scope is the brushes the faces are on (#761).
 	HFUndoHelper.commit(
 		undo_redo,
 		level_root,
 		"Set UV Params",
-		"set_face_uv_params",
-		[brush_id, face_idx, uv_scale, offset, uv_rotation],
+		"set_uv_params_on_faces",
+		[changes],
 		false,
 		Callable(self, "record_history"),
-		"uv_param_%s_%d" % [brush_id, face_idx],
-		false,
-		[brush_id]
+		"uv_param_%s_%s" % [param, ",".join(keys)],
+		true,
+		HFUVMulti.brush_ids_of(changes)
 	)
+	# A linked scale set the other box too, and the faces agree on the box now.
+	if _uv_active_face:
+		_sync_uv_params_to_face(_uv_active_face)
+	_refresh_uv_canvas()
+
+
+## The Smoothing box (#1429): every selected face into the group typed, as one
+## undo step. 0 shades them flat; faces in one group above 0 shade round where
+## they meet, in the bake and in a textured brush's preview.
+func _on_uv_smoothing_changed(value: float) -> void:
+	if _uv_param_updating or not level_root:
+		return
+	if not _guard_selection_action("Set Smoothing Group", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	if _count_selected_faces() == 0:
+		show_toast("Select the faces to put in a smoothing group", 1)
+		return
+	var brush_ids: Array = []
+	for key in level_root.face_selection.keys():
+		brush_ids.append(str(key))
+	_commit_state_action_if_changed(
+		"Set Smoothing Group", "set_smoothing_group_on_selected_faces", [int(value)], brush_ids
+	)
+
+
+## The Hidden swatch (#1719): the selected faces made Hidden, as one undo step.
+func _on_hidden_swatch_applied() -> void:
+	make_selected_faces_hidden(true)
+
+
+## Make the selected faces Hidden, or Normal again, as one undo step (#1719). A
+## Hidden face wears stripes in the editor, and the bake leaves it out of the mesh
+## and the lightmap while it still holds the brush.
+func make_selected_faces_hidden(make_hidden: bool) -> bool:
+	var action := "Make Faces Hidden" if make_hidden else "Make Faces Normal"
+	if not level_root:
+		return false
+	if not _guard_selection_action(action, DockSelectionRequirement.BRUSHES_ONLY):
+		return false
+	var count := _count_selected_faces()
+	if count == 0:
+		show_toast("Select the faces to make %s" % ("Hidden" if make_hidden else "Normal"), 1)
+		return false
+	var brush_ids: Array = []
+	for key in level_root.face_selection.keys():
+		brush_ids.append(str(key))
+	if not _commit_state_action_if_changed(
+		action, "set_selected_faces_hidden", [make_hidden], brush_ids
+	):
+		show_toast("Those faces are %s already" % ("Hidden" if make_hidden else "Normal"), 0)
+		return false
+	show_toast(
+		(
+			"%d face%s made %s"
+			% [count, "" if count == 1 else "s", "Hidden" if make_hidden else "Normal"]
+		),
+		0
+	)
+	return true
+
+
+## Whether U and V are linked in the Scale row (#1418).
+func _uv_scale_linked() -> bool:
+	return uv_scale_link != null and uv_scale_link.button_pressed
+
+
+func _on_uv_scale_link_toggled(pressed: bool) -> void:
+	_save_user_pref("uv_scale_linked", pressed)
+
+
+## UV Snap (#1445): the checkbox, the step presets and the typed step all land in
+## the canvas and in the user prefs.
+func _on_uv_snap_toggled(pressed: bool) -> void:
+	if uv_editor:
+		uv_editor.set_snap(pressed, uv_editor.snap_step)
+	_save_user_pref("uv_snap_enabled", pressed)
+
+
+func _on_uv_snap_preset_selected(index: int) -> void:
+	if index < 0 or index >= UVEditor.SNAP_PRESETS.size() or not uv_snap_step_spin:
+		return
+	# The typed box carries it on, so the canvas and the prefs hear it once.
+	uv_snap_step_spin.value = UVEditor.SNAP_PRESETS[index]
+
+
+func _on_uv_snap_step_changed(value: float) -> void:
+	if uv_editor:
+		uv_editor.set_snap(uv_editor.snap_enabled, value)
+	_show_uv_snap_preset(value)
+	_save_user_pref("uv_snap_step", value)
+
+
+## Show the snap settings without writing them back.
+func _apply_uv_snap(enabled: bool, step: float) -> void:
+	if uv_editor:
+		uv_editor.set_snap(enabled, step)
+	if uv_snap_check:
+		uv_snap_check.set_pressed_no_signal(enabled)
+	if uv_snap_step_spin:
+		uv_snap_step_spin.set_value_no_signal(step)
+	_show_uv_snap_preset(step)
+
+
+## The preset a typed step matches, or none.
+func _show_uv_snap_preset(step: float) -> void:
+	if not uv_snap_preset_opt:
+		return
+	var index := -1
+	for i in UVEditor.SNAP_PRESETS.size():
+		if is_equal_approx(float(UVEditor.SNAP_PRESETS[i]), step):
+			index = i
+	uv_snap_preset_opt.select(index)
 
 
 func _sync_uv_params_to_face(face: FaceData) -> void:
@@ -4957,12 +6238,108 @@ func _sync_uv_params_to_face(face: FaceData) -> void:
 		uv_offset_y.value = face.uv_offset.y
 	if uv_rotation_spin:
 		uv_rotation_spin.value = rad_to_deg(face.uv_rotation)
+	if uv_smoothing_spin:
+		uv_smoothing_spin.value = face.smoothing_group
 	_uv_param_updating = false
+	_show_mixed_uv_fields()
+
+
+## A box the selected faces disagree on shows "mixed" rather than the face on
+## show's number, which read as if they all matched (#1728). Typing in it sets
+## all of them.
+func _show_mixed_uv_fields() -> void:
+	var records := HFUVMulti.picked(level_root) if level_root else []
+	var boxes := [uv_scale_x, uv_scale_y, uv_offset_x, uv_offset_y, uv_rotation_spin]
+	for i in boxes.size():
+		var spin: SpinBox = boxes[i]
+		if spin == null:
+			continue
+		var line := spin.get_line_edit()
+		if HFUVMulti.mixed(records, HFUVMulti.FIELDS[i]):
+			line.text = ""
+			line.placeholder_text = "mixed"
+		elif line.placeholder_text != "":
+			line.placeholder_text = ""
+			_refresh_spin_text(spin)
+
+
+## Write a box's number back into its text, after "mixed" cleared it. Setting the
+## value it already has writes nothing, so it goes a step away and back.
+static func _refresh_spin_text(spin: SpinBox) -> void:
+	var held := spin.value
+	var away := held - spin.step if held + spin.step > spin.max_value else held + spin.step
+	spin.set_value_no_signal(away)
+	spin.set_value_no_signal(held)
+
+
+## Which UV boxes show "mixed" now, by field.
+func mixed_uv_fields() -> Array:
+	var out: Array = []
+	var boxes := [uv_scale_x, uv_scale_y, uv_offset_x, uv_offset_y, uv_rotation_spin]
+	for i in boxes.size():
+		if boxes[i] != null and (boxes[i] as SpinBox).get_line_edit().placeholder_text == "mixed":
+			out.append(HFUVMulti.FIELDS[i])
+	return out
 
 
 func _on_uv_changed(_face: FaceData) -> void:
 	if level_root and _uv_active_brush:
 		level_root.rebuild_brush_preview(_uv_active_brush)
+
+
+## The level as a corner drag on the UV canvas found it at the press, from
+## `HFUndoHelper.capture_scope_or_state()`. Empty while no drag is under way.
+var _uv_drag_before: Dictionary = {}
+
+
+## A corner drag, press to release, is one undo step (#1544). The canvas moves the
+## corner as the cursor goes, so the brush is recorded here at the press and the
+## step is committed at the release, as work already done.
+func _on_uv_drag_started(face: FaceData) -> void:
+	_uv_drag_before = {}
+	var brush_id := _uv_face_brush_id(face)
+	if brush_id == "":
+		# No brush of this level holds the face, so no step could take the drag
+		# back. It is called off and the face on show looked up again.
+		uv_editor.cancel_drag()
+		_refind_uv_face()
+		show_toast("The face on show had changed; drag the corner again", 1)
+		return
+	_uv_drag_before = HFUndoHelper.capture_scope_or_state(level_root, [brush_id])
+
+
+## Let go: one step when the corner moved, none when it did not.
+func _on_uv_drag_finished(_face: FaceData) -> void:
+	var before := _uv_drag_before
+	_uv_drag_before = {}
+	if before.is_empty() or not level_root:
+		return
+	HFUndoHelper.commit_completed_if_changed(
+		undo_redo,
+		level_root,
+		"Move UV Corner",
+		before["state"],
+		Callable(self, "record_history"),
+		before["scope_ids"]
+	)
+
+
+## The canvas put the face back as the press found it, so there is nothing to
+## record.
+func _on_uv_drag_canceled(_face: FaceData) -> void:
+	_uv_drag_before = {}
+
+
+## The id of the brush holding `face`, the face on show, or "" when it is not on
+## show or no brush of this level holds it.
+func _uv_face_brush_id(face: FaceData) -> String:
+	if not level_root or face == null or face != _uv_active_face:
+		return ""
+	if not is_instance_valid(_uv_active_brush) or not _uv_active_brush.faces.has(face):
+		return ""
+	if _uv_active_brush.brush_id == "":
+		level_root.get_brush_info_from_node(_uv_active_brush)
+	return str(_uv_active_brush.brush_id)
 
 
 func _on_surface_paint_layer_selected(_index: int) -> void:
@@ -5097,6 +6474,7 @@ func _set_active_shape(shape_value: int) -> void:
 		if target_index >= 0 and shape_select.selected != target_index:
 			shape_select.select(target_index)
 	_update_sides_visibility()
+	HFDockToolMemory.remember(self, HFDockToolMemory.SHAPE)
 
 
 func _shape_requires_sides(shape_value: int) -> bool:
@@ -5150,22 +6528,49 @@ func _update_perf_label() -> void:
 func _on_active_material_pressed() -> void:
 	if not material_dialog:
 		return
+	# The level keeps the pick, so with no level there is nowhere to keep it.
+	if not level_root:
+		_set_status("No LevelRoot to keep an Active Material", true)
+		return
 	material_dialog.popup_centered_ratio(0.6)
 
 
 func _on_material_file_selected(path: String) -> void:
 	if path == "":
 		return
+	# The scene can change while the file dialog is open.
+	if not level_root:
+		_set_status("No LevelRoot to keep an Active Material", true)
+		return
 	var resource = ResourceLoader.load(path)
 	if resource and resource is Material:
-		active_material = resource
-		var display_name = resource.resource_name
-		if display_name == "":
-			display_name = path.get_file()
-		if active_material_button:
-			active_material_button.text = "Active Material: %s" % display_name
+		level_root.active_material = resource
+		_sync_active_material_from_root()
 	else:
 		_log("Selected resource is not a material: %s" % path, true)
+
+
+## New brushes go back to the translucent default. Brushes already made keep
+## the material they were made with.
+func _on_clear_active_material_pressed() -> void:
+	if level_root:
+		level_root.active_material = null
+	_sync_active_material_from_root()
+
+
+## Show the level's Active Material on its button, and offer Clear only while
+## there is one. Run when the dock takes up a level, so a scene switch shows
+## that level's, and whenever the level says it changed.
+func _sync_active_material_from_root() -> void:
+	var mat := get_active_material()
+	if active_material_button:
+		if mat:
+			var display_name := MaterialManager.material_label(mat)
+			active_material_button.text = "Active Material: %s" % display_name
+		else:
+			active_material_button.text = "Active Material"
+	if clear_active_material_button:
+		clear_active_material_button.disabled = mat == null
 
 
 func _setup_storage_dialogs() -> void:
@@ -5180,12 +6585,80 @@ func _on_load_hflevel() -> void:
 	HFDockFileHandler.show_dialog(hflevel_load_dialog)
 
 
+## Ask for a `.hflevel` to compare the open level with (#1701). Only looks: the
+## plugin draws and lists what changed and the open level stays as it is.
+func open_compare_dialog() -> void:
+	if _compare_dialog == null:
+		_compare_dialog = FileDialog.new()
+		_compare_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_compare_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+		_compare_dialog.filters = PackedStringArray(["*.hflevel ; HammerForge level"])
+		_compare_dialog.title = "Compare With"
+		_compare_dialog.file_selected.connect(func(path: String): compare_requested.emit(path))
+		add_child(_compare_dialog)
+	_compare_dialog.popup_centered_ratio(0.6)
+
+
 func _on_import_map() -> void:
 	HFDockFileHandler.show_dialog(map_import_dialog)
 
 
+## Ask where to write the entity table, then write it (#1709).
+func open_entity_export(scope: String = "") -> void:
+	if _entity_export_dialog == null:
+		_entity_export_dialog = FileDialog.new()
+		_entity_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_entity_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+		_entity_export_dialog.filters = PackedStringArray(["*.csv ; Comma separated values"])
+		_entity_export_dialog.title = "Export Entities"
+		add_child(_entity_export_dialog)
+	for connection in _entity_export_dialog.file_selected.get_connections():
+		_entity_export_dialog.file_selected.disconnect(connection["callable"])
+	_entity_export_dialog.file_selected.connect(export_entities_to.bind(scope))
+	_entity_export_dialog.popup_centered_ratio(0.6)
+
+
+## Write every entity in `scope` to `path` as a CSV, and say how it went.
+func export_entities_to(path: String, scope: String = "") -> int:
+	if not level_root:
+		return ERR_UNCONFIGURED
+	var count := HFEntityCensus.entities(level_root, scope).size()
+	var err := HFEntityCensus.write_csv(level_root, path, scope)
+	if err == OK:
+		show_toast("Exported %d entities to %s" % [count, path.get_file()], 0)
+	else:
+		show_toast("Could not write %s: %s" % [path.get_file(), error_string(err)], 2)
+	return err
+
+
 func _on_export_map() -> void:
 	HFDockFileHandler.show_dialog(map_export_dialog)
+
+
+## Ask where to write the plan, then write it as an .svg and a .png (#1705).
+func _on_export_plan() -> void:
+	if _plan_export_dialog == null:
+		_plan_export_dialog = FileDialog.new()
+		_plan_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_plan_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+		_plan_export_dialog.filters = PackedStringArray(["*.svg ; Plan, with a .png beside it"])
+		_plan_export_dialog.title = "Export Plan"
+		_plan_export_dialog.file_selected.connect(export_plan_to)
+		add_child(_plan_export_dialog)
+	_plan_export_dialog.popup_centered_ratio(0.6)
+
+
+## Write the level's plan to `path` as SVG and beside it as PNG, and say so.
+func export_plan_to(path: String) -> int:
+	if not level_root:
+		return ERR_UNCONFIGURED
+	var err := HFLevelPlan.write_files(level_root, path.get_basename())
+	if err == OK:
+		var base := path.get_basename().get_file()
+		show_toast("Plan written: %s.svg and %s.png" % [base, base], 0)
+	else:
+		show_toast("Could not write the plan: %s" % error_string(err), 2)
+	return err
 
 
 func _on_export_glb() -> void:
@@ -5878,31 +7351,25 @@ func _suggest_preset_name() -> String:
 	return "%s %s" % [base, index]
 
 
-func _sanitize_preset_name(preset_name: String) -> String:
-	var safe = preset_name.strip_edges()
-	safe = safe.replace("/", "_")
-	safe = safe.replace("\\", "_")
-	safe = safe.replace(":", "_")
-	safe = safe.replace("*", "_")
-	safe = safe.replace("?", "_")
-	safe = safe.replace('"', "_")
-	safe = safe.replace("<", "_")
-	safe = safe.replace(">", "_")
-	safe = safe.replace("|", "_")
-	if safe == "":
-		safe = "Preset"
-	return safe
+## The label a preset shows: the name as typed, or "Preset" when that is blank.
+func _preset_label(preset_name: String) -> String:
+	var label := preset_name.strip_edges()
+	return label if label != "" else "Preset"
 
 
-func _unique_preset_path(display_name: String) -> String:
-	var safe = _sanitize_preset_name(display_name)
-	var base = safe.replace(" ", "_")
-	var path = "%s/%s.tres" % [presets_dir, base]
-	var index = 1
-	while ResourceLoader.exists(path):
-		path = "%s/%s_%s.tres" % [presets_dir, base, index]
-		index += 1
-	return path
+## The file stem for a preset of this name. Spaces become underscores and the
+## case is kept, as preset files always have; the rest are the rules every file
+## a mapper names keeps. A copy of its own here let `CON` through to a file
+## Godot will not open, and `..x` to a hidden one (#1464).
+func _preset_file_stem(preset_name: String) -> String:
+	var spaced := preset_name.strip_edges().replace(" ", "_")
+	return HFFileNames.safe_file_stem(spaced, "Preset", "preset")
+
+
+## Where a new preset of this name goes: its own file, or the first of name_2,
+## name_3 and so on that is free, as a prefab's (#1464).
+func _unique_preset_path(preset_name: String) -> String:
+	return HFFileNames.unused_path(presets_dir, _preset_file_stem(preset_name), "tres")
 
 
 func _on_preset_button_pressed(button: Button) -> void:
@@ -5977,10 +7444,9 @@ func _rename_preset(button: Button, new_name: String) -> void:
 	var current_path = button.get_meta("preset_path", "")
 	if current_path == "":
 		return
-	var display_name = _sanitize_preset_name(new_name)
-	var base = display_name.replace(" ", "_")
-	var candidate_path = "%s/%s.tres" % [presets_dir, base]
-	var target_path = (
+	var display_name := _preset_label(new_name)
+	var candidate_path := presets_dir.path_join(_preset_file_stem(display_name) + ".tres")
+	var target_path := (
 		candidate_path if candidate_path == current_path else _unique_preset_path(display_name)
 	)
 	var abs_current = ProjectSettings.globalize_path(current_path)
@@ -6045,6 +7511,7 @@ func _on_texture_lock_toggled(pressed: bool) -> void:
 
 func _setup_visgroup_ui() -> void:
 	HFDockVisgroupHandler.setup_visgroup_ui(self)
+	HFDockVisgroupHandler.setup_view_filters_ui(self)
 
 
 func refresh_visgroup_ui() -> void:
@@ -6195,6 +7662,7 @@ func _apply_material_to_whole_brush() -> void:
 		"assign_material_to_whole_brushes",
 		[_selected_material_index, brush_ids]
 	)
+	_note_material_used(_selected_material_index)
 	var mat_name := _material_display_name(_selected_material_index)
 	show_toast(
 		(
@@ -6208,6 +7676,79 @@ func _apply_material_to_whole_brush() -> void:
 ## Assign face material — called by context toolbar for quick material apply.
 func _on_face_assign_material() -> void:
 	_on_material_assign()
+
+
+## Keep the look of `face` for Apply Picked Look: the Texture Picker calls this.
+func remember_picked_look(face: FaceData) -> void:
+	if face == null:
+		return
+	_picked_look = FaceData.new()
+	_picked_look.copy_appearance_from(face)
+	_picked_look_had_hand_layout = face.has_hand_layout()
+
+
+## Apply Picked Look (Alt+T, the hotkey palette, Paint > UV Editor): give every
+## selected face the material and the projection, scale, offset and rotation the
+## Texture Picker last read, as one undo step. Apply Last Texture is the material
+## alone. The selection is judged here rather than by the shared guard, whose
+## counts are of brushes and could not say that this one wants faces.
+func _on_apply_picked_look() -> void:
+	if not level_root:
+		return
+	if _picked_look == null:
+		show_toast("No look picked yet — use T to pick a face first", 1)
+		return
+	if not _guard_selection_action("Apply Picked Look", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	var face_count := _count_selected_faces()
+	if face_count == 0:
+		show_toast("Select the faces to give the picked look to", 1)
+		return
+	# A picked Hidden face's look is Hidden, and each face keeps its own slot under
+	# it for when it is shown again (#1719).
+	if _picked_look.is_hidden():
+		make_selected_faces_hidden(true)
+		return
+	if not level_root.is_usable_material_slot(_picked_look.material_idx):
+		show_toast("The picked material is no longer in the palette — pick it again with T", 1)
+		return
+	if (
+		not FaceData.is_valid_projection(_picked_look.uv_projection)
+		or not level_root.is_usable_uv_transform(
+			_picked_look.uv_scale, _picked_look.uv_offset, _picked_look.uv_rotation
+		)
+	):
+		show_toast("The picked face's texture alignment cannot be laid on another face", 1)
+		return
+	var brush_ids: Array = []
+	for key in level_root.face_selection.keys():
+		brush_ids.append(str(key))
+	var changed := _commit_state_action_if_changed(
+		"Apply Picked Look", "apply_look_to_selected_faces", [_picked_look], brush_ids
+	)
+	# Used either way: the faces carry the material now.
+	_note_material_used(_picked_look.material_idx)
+	if not changed:
+		show_toast("The selected faces already have the picked look", 0)
+		return
+	# The face on show may be one of them, changed where it stands, so its boxes
+	# and canvas are told rather than waiting for a new pick.
+	_sync_surface_paint_from_root()
+	if _uv_active_face:
+		_sync_uv_params_to_face(_uv_active_face)
+		if uv_editor:
+			uv_editor.set_face(_uv_active_face)
+	var faces_text := "%d face%s" % [face_count, "" if face_count == 1 else "s"]
+	if _picked_look_had_hand_layout:
+		show_toast(
+			(
+				"Copied only the picked face's settings to %s: its hand-made UV layout does not travel"
+				% faces_text
+			),
+			0
+		)
+	else:
+		show_toast("Applied the picked look to %s" % faces_text, 0)
 
 
 ## Set the operation replay control (passed from plugin.gd).

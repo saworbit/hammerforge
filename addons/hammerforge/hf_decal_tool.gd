@@ -7,6 +7,12 @@ extends "hf_editor_tool.gd"
 ## Click a surface to spawn a Godot Decal node oriented to the hit normal.
 ## Configure texture, size, and fade distance through the tool settings panel.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 var _preview_decal: Decal = null
 
 
@@ -18,8 +24,8 @@ func tool_id() -> int:
 	return 101
 
 
-func tool_shortcut_key() -> int:
-	return KEY_N
+func keymap_action() -> String:
+	return "tool_decal"
 
 
 func can_activate(p_root: Node3D) -> bool:
@@ -175,13 +181,10 @@ func _place_decal(position: Vector3, normal: Vector3) -> void:
 	decal.global_position = position + normal * 0.01  # slight offset to avoid z-fight
 	_orient_decal(decal, normal)
 
-	if undo_redo and not pre_state.is_empty():
-		var post_state: Dictionary = root.state_system.capture_state(true)
-		undo_redo.create_action("Place Decal", UndoRedo.MERGE_DISABLE, null, false)
-		undo_redo.add_do_method(root.state_system, "restore_state", post_state)
-		undo_redo.add_undo_method(root.state_system, "restore_state", pre_state)
-		undo_redo.commit_action(false)
-	if history_callback.is_valid():
+	# Through the helper, which records History and ends a run of nudges (#1677).
+	if not pre_state.is_empty():
+		HFUndoHelper.commit_completed(undo_redo, root, "Place Decal", pre_state, history_callback)
+	elif history_callback.is_valid():
 		history_callback.call("Place Decal")
 
 

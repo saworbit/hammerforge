@@ -61,6 +61,8 @@ const E_SCREENSHOT_UNAVAILABLE := "screenshot_unavailable"
 const E_NO_BAKE := "no_bake"
 const E_BUSY := "busy"
 const E_UNKNOWN_COMMAND := "unknown_command"
+## A brush or entity in a locked visgroup, or under Godot's own lock (#1697).
+const E_LOCKED := "locked"
 
 const _OPERATION_ID_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-"
 
@@ -283,7 +285,7 @@ static func read_string(
 ## A vector as JSON, with float noise from a transform round trip taken off so
 ## a brush placed at 1.5 reads back as 1.5.
 static func vec3_to_array(v: Vector3) -> Array:
-	return [_clean(v.x), _clean(v.y), _clean(v.z)]
+	return [clean_number(v.x), clean_number(v.y), clean_number(v.z)]
 
 
 ## A vector as JSON when it is one, and null otherwise: for engine calls that
@@ -294,7 +296,8 @@ static func vec3_or_null(value: Variant) -> Variant:
 	return null
 
 
-static func _clean(value: float) -> float:
+## A number as the wire gives it: to a millionth, and never minus zero.
+static func clean_number(value: float) -> float:
 	var rounded := snappedf(value, 0.000001)
 	# Negative zero prints as -0.0 in JSON. It is the same number.
 	return 0.0 if is_zero_approx(rounded) else rounded

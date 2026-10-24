@@ -27,7 +27,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.x"
           cache: pip
@@ -151,6 +151,23 @@ jobs:
       - name: Check the changelog fragments
         run: python3 tools/changelog_fragments.py --check
 
+      # docs/parity.md is written from docs/data/classic-editor-tools.txt and the
+      # command registry, so a command id the catalog maps cannot go without the
+      # page saying so, and the page cannot drift from the catalog (#1707).
+      - name: Check the parity guard still detects
+        run: python3 tools/gen_parity.py --selftest
+
+      - name: Check the parity page is current
+        run: python3 tools/gen_parity.py --check
+
+      # mkdocs checks the links under docs/. The pages at the root are read on
+      # GitHub, and ROADMAP.md pointed at a file the repository never had (#1707).
+      - name: Check the link guard still detects
+        run: python3 tools/check_doc_links.py --selftest
+
+      - name: Check the top-level pages' links
+        run: python3 tools/check_doc_links.py
+
       # The script that decides what reaches the Asset Library ran in exactly
       # one place, release.yml, on the tag. Nothing on a pull request ran it, so
       # a change that broke what ships was found at the release or not at all.
@@ -200,7 +217,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -368,7 +385,7 @@ jobs:
       # stdio, and it talks to the listener in a headless Godot. Like the
       # warnings check, it needs Godot and an imported project, so it runs on
       # the one shard that has them, after the suite.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         if: matrix.shard == 1
         with:
           python-version: "3.12"
@@ -391,6 +408,22 @@ jobs:
       - name: Run the MCP vibe sweep
         if: matrix.shard == 1
         run: python3 tools/vibe/mcp/run_mcp_vibe.py --godot godot
+
+      # The five vibe scenarios that cover what a pull request most often
+      # changes: a Validate check, a Controls switch kept in the preferences, a
+      # shipped example or the reference map, and a key named in the docs. Four
+      # pull requests in one week each turned one of these red and nobody saw it
+      # until the nightly ran (#1819). About 25 seconds. A new finding fails; one
+      # already filed, with its number, passes. The nightly still runs them all.
+      # Shard 2, because shard 1 already carries the warning check and both MCP
+      # runs.
+      - name: Run the quick vibe scenarios
+        if: matrix.shard == 2
+        env:
+          GODOT: godot
+        run: >-
+          python3 tools/vibe/run_vibe.py --log-dir vibe-logs
+          validate-own-output examples-integrity reference-map console-controls docs-truth
 
   # Named exactly "GUT Unit Tests" because that is what the main ruleset requires.
   # The shard legs above report under their own names and are not required

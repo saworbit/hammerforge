@@ -133,6 +133,19 @@ func test_carve_draws_on_the_target_under_a_displaced_root():
 		)
 
 
+func test_intersect_draws_what_it_keeps_under_a_displaced_root():
+	_displace_root()
+	var target := _a_brush(OFFSET, Vector3(128, 128, 128))
+	var other := _a_brush(OFFSET + Vector3(64, 64, 64), Vector3(128, 128, 128))
+
+	root.carve_preview.show_intersect_preview([_id(target), _id(other)])
+
+	assert_eq(root.carve_preview._active_count, 1, "the intersect keeps one brush")
+	_assert_drawn_at(
+		root.carve_preview._mesh_pool[0], OFFSET + Vector3(32, 32, 32), "the brush kept"
+	)
+
+
 func test_clip_draws_its_halves_and_its_plane_under_a_displaced_root():
 	_displace_root()
 	var brush := _a_brush(OFFSET, Vector3(128, 128, 128))

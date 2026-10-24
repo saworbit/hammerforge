@@ -28,6 +28,7 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFLog = preload("hf_log.gd")
+const HFSettingsFile = preload("hf_settings_file.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFBakeSystemType = preload("systems/hf_bake_system.gd")
 
@@ -109,13 +110,7 @@ static func read_saved(root: Object, prefs) -> Dictionary:
 ## The project's profiles in the file at `path`, as it holds them, unchecked. A
 ## missing file is none. One that is not a profiles file is said and is none.
 static func read_project_raw(path: String) -> Dictionary:
-	if not FileAccess.file_exists(path):
-		return {}
-	var profiles: Variant = _profiles_in(path)
-	if profiles == null:
-		HFLog.warn("Bake profiles: %s is not a profiles file. Left out." % path)
-		return {}
-	return profiles
+	return HFSettingsFile.read(path, "profiles", "Bake profiles")
 
 
 ## True when there is a file at `path` that is not a profiles file: a merge left
@@ -123,20 +118,7 @@ static func read_project_raw(path: String) -> Dictionary:
 ## whole file from what they read, and what they read of this one is nothing, so
 ## they wrote one profile over every shared one (#1006). They ask this first.
 static func project_file_unreadable(path: String) -> bool:
-	return FileAccess.file_exists(path) and _profiles_in(path) == null
-
-
-## The profiles in the file at `path`, or null when it is not a profiles file.
-## A JSON object rather than `parse_string()`, which prints an engine error for
-## a file that does not parse, on every read of a conflicted file.
-static func _profiles_in(path: String) -> Variant:
-	var json := JSON.new()
-	if json.parse(FileAccess.get_file_as_string(path)) != OK:
-		return null
-	var parsed = json.data
-	if not (parsed is Dictionary) or not (parsed.get("profiles") is Dictionary):
-		return null
-	return parsed["profiles"]
+	return HFSettingsFile.unreadable(path, "profiles")
 
 
 ## The project's profiles, each held to what `root` can take, as the
@@ -153,19 +135,7 @@ static func read_project(root: Object, path: String) -> Dictionary:
 ## from a newer HammerForge, is kept for the people who can. False when the file
 ## cannot be written, which is said.
 static func write_project(profiles: Dictionary, path: String) -> bool:
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
-		var reason := error_string(FileAccess.get_open_error())
-		HFLog.warn("Bake profiles: cannot write %s (%s)" % [path, reason])
-		return false
-	var written := file.store_string(
-		JSON.stringify({"version": 1, "profiles": profiles}, "\t", true) + "\n"
-	)
-	file.close()
-	if not written:
-		HFLog.warn("Bake profiles: could not finish writing %s" % path)
-	return written
+	return HFSettingsFile.write(path, "profiles", profiles, "Bake profiles")
 
 
 ## The project's profiles and this machine's in one set. A name both keep is the

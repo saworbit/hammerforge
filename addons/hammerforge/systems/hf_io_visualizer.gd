@@ -12,6 +12,10 @@ var _immediate_mesh: ImmediateMesh = null
 var _material: StandardMaterial3D = null
 var enabled: bool = false
 var highlight_connected: bool = false
+## Which wires to draw while drawing is on (#1730): every wire, the chain the
+## selection is in, or the selection's own. None is `enabled` off.
+enum WireMode { ALL, CHAIN, SELECTION }
+var wire_mode: int = WireMode.ALL
 var _frame_counter: int = 0
 var _pulse_phase: float = 0.0
 var _highlight_overlays: Array = []  # MeshInstance3D nodes for pulse effect
@@ -45,10 +49,31 @@ const DANGLING_STUB_HEIGHT := 1.2
 const DANGLING_STUB_ARM := 0.22
 const DELAY_DIM_FACTOR := 0.6  # Dim connections with high delay
 const PULSE_COLOR := Color(1.0, 1.0, 0.4, 0.6)  # Glow for highlight pulse
+## A chain's wires fade from the first hop to the far end, so the order of a
+## sequence reads: the selection's own wires bright, each hop after dimmer.
+const CHAIN_NEAR_COLOR := Color(1.0, 1.0, 0.2, 0.95)
+const CHAIN_FAR_COLOR := Color(0.2, 0.6, 1.0, 0.55)
+const CHAIN_FADE_HOPS := 5.0
 
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
+
+
+## A view filter hides the wires without turning Show I/O off (#1720).
+var filtered := false
+
+
+func set_filtered(value: bool) -> void:
+	if filtered == value:
+		return
+	filtered = value
+	if filtered:
+		if _mesh_instance:
+			_mesh_instance.visible = false
+		_clear_highlight_overlays()
+	elif enabled:
+		refresh()
 
 
 func set_enabled(value: bool) -> void:
@@ -57,6 +82,16 @@ func set_enabled(value: bool) -> void:
 		_mesh_instance.visible = false
 	if not enabled:
 		_clear_highlight_overlays()
+	if enabled:
+		refresh()
+
+
+func set_wire_mode(mode: int) -> void:
+	mode = clampi(mode, WireMode.ALL, WireMode.SELECTION)
+	if mode == wire_mode:
+		return
+	wire_mode = mode
+	_dirty = true
 	if enabled:
 		refresh()
 
@@ -152,7 +187,7 @@ func _io_nodes() -> Array:
 
 
 func refresh() -> void:
-	if not root or not enabled:
+	if not root or not enabled or filtered:
 		return
 	refresh_count += 1
 	_dirty = false
@@ -178,6 +213,9 @@ func refresh() -> void:
 	# Resolve weak references on every refresh so native rename, alias edits, and
 	# deletion are reflected without depending on a nonexistent root getter.
 	var selected_names := _get_selected_names()
+	# The hop of each wire the mode draws, by its index: every wire at hop 0 for
+	# All, only the selection's own for Selection, the chain for Chain (#1730).
+	var hops := wire_hops(connections, name_index, selected_names, wire_mode)
 
 	# Group connections by source→target pair to offset overlapping routes
 	var route_counts: Dictionary = {}  # "src→tgt" -> count
@@ -194,8 +232,9 @@ func refresh() -> void:
 	# Resolve first, draw second. A level whose connections all dangle has nothing
 	# to put in the surface, and closing an empty one is an engine error.
 	var routes: Array = []
-	for conn in connections:
-		if not (conn is Dictionary):
+	for index in connections.size():
+		var conn: Variant = connections[index]
+		if not (conn is Dictionary) or not hops.has(index):
 			continue
 		var source: Node3D = conn.get("source", null)
 		if not source or not is_instance_valid(source):
@@ -212,6 +251,8 @@ func refresh() -> void:
 
 		# Pick color
 		var color: Color = _get_connection_color(output_name, fire_once, delay, is_selected)
+		if wire_mode == WireMode.CHAIN:
+			color = chain_color(int(hops[index]))
 
 		# Route key for offset calculation
 		var route_key = "%s→%s" % [source_name, target_name]
@@ -278,6 +319,62 @@ func refresh() -> void:
 		_update_highlight_overlays(connected_names, selected_names)
 	else:
 		_clear_highlight_overlays()
+
+
+## The wires `mode` draws, as `{index into connections: hop}`. All gives every
+## wire hop 0. Selection gives the wires that start or end at a selected entity.
+## Chain walks out from the selection, following outputs to their targets and
+## inputs back to their sources, as far as they go: the selection's own wires are
+## hop 0, the wires of what they reach hop 1, and on. A wire is taken once, so a
+## cycle is walked once.
+static func wire_hops(
+	connections: Array, name_index: Dictionary, selected_names: Dictionary, mode: int
+) -> Dictionary:
+	var hops: Dictionary = {}
+	if mode == WireMode.ALL:
+		for index in connections.size():
+			hops[index] = 0
+		return hops
+	var reached := selected_names.duplicate()
+	var frontier := selected_names.duplicate()
+	var hop := 0
+	while not frontier.is_empty():
+		var next: Dictionary = {}
+		for index in connections.size():
+			var conn: Variant = connections[index]
+			if hops.has(index) or not (conn is Dictionary):
+				continue
+			var source_name := str(conn.get("source_name", ""))
+			var target_name := str(conn.get("target_name", ""))
+			var from_here := frontier.has(source_name)
+			var to_here := frontier.has(target_name)
+			if not from_here and not to_here:
+				continue
+			hops[index] = hop
+			if mode == WireMode.SELECTION:
+				continue
+			if from_here:
+				next[target_name] = true
+				for target in name_index.get(target_name, []):
+					if target is Node and is_instance_valid(target):
+						_add_node_names(next, target)
+			if to_here:
+				next[source_name] = true
+				var source: Variant = conn.get("source", null)
+				if source is Node and is_instance_valid(source):
+					_add_node_names(next, source)
+		if mode == WireMode.SELECTION:
+			break
+		for name in reached:
+			next.erase(name)
+		reached.merge(next)
+		frontier = next
+		hop += 1
+	return hops
+
+
+static func chain_color(hop: int) -> Color:
+	return CHAIN_NEAR_COLOR.lerp(CHAIN_FAR_COLOR, minf(1.0, float(hop) / CHAIN_FADE_HOPS))
 
 
 func _get_connection_color(

@@ -34,10 +34,14 @@ const HFOpResult = preload("../hf_op_result.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFNameMatchType = preload("../hf_name_match.gd")
 
 ## What `hf_run_command` takes besides `operation_id`, which the dispatcher reads.
 const ARGUMENTS := ["command", "brush_ids", "entities", "params"]
 const AXES := ["x", "y", "z"]
+## The paint forms that write cells, whose streamed regions are loaded before a
+## capture.
+const CELL_FORMS := ["paint_rect", "raise_rect", "stamp_room"]
 ## What an Update says when the pieces had moved apart, as the dock says before it.
 const LOST_PLACE := "The pieces no longer agreed where the structure was, so it was rebuilt where it was made."
 
@@ -94,22 +98,56 @@ func check(root: Node, params: Dictionary) -> Dictionary:
 	}
 
 
+## A refusal for an id the bridge does not run, naming up to three it does that
+## are near it, in the message and in `details.suggestions` (#1651).
 func _unknown_command(command: String) -> Dictionary:
-	var message := "There is no command '%s'. hf_list_commands lists them." % command
+	var near := nearest_commands(command)
+	var message := (
+		"There is no command '%s'.%s hf_list_commands lists them all."
+		% [command, did_you_mean(near)]
+	)
 	if HFCommandRegistry.dispatches(command):
 		message = (
-			"'%s' is a palette command the bridge does not run. hf_list_commands lists the ones it does."
-			% command
+			"'%s' is a palette command the bridge does not run.%s hf_list_commands lists the ones it does."
+			% [command, did_you_mean(near)]
 		)
 	return {
 		"ok": false,
 		"error":
-		HFMcpProtocol.error_body(
-			HFMcpProtocol.E_UNKNOWN_COMMAND,
-			message,
-			{"command": command, "commands": Array(HFCommandRegistry.bridge_ids())}
+		(
+			HFMcpProtocol
+			. error_body(
+				HFMcpProtocol.E_UNKNOWN_COMMAND,
+				message,
+				{
+					"command": command,
+					"commands": Array(HFCommandRegistry.bridge_ids()),
+					"suggestions": Array(near),
+				}
+			)
 		),
 	}
+
+
+## The bridge's ids nearest `command`, by id, label and alias.
+static func nearest_commands(command: String) -> PackedStringArray:
+	var names: Dictionary = {}
+	for id in HFCommandRegistry.bridge_ids():
+		names[id] = [id, HFCommandRegistry.label(id)] + Array(HFCommandRegistry.aliases(id))
+	return HFNameMatchType.nearest(command, names)
+
+
+## " Did you mean 'a'?", " Did you mean 'a' or 'b'?", or "" for none.
+static func did_you_mean(near: PackedStringArray) -> String:
+	if near.is_empty():
+		return ""
+	var quoted := PackedStringArray()
+	for name in near:
+		quoted.append("'%s'" % name)
+	var last := quoted[quoted.size() - 1]
+	quoted.remove_at(quoted.size() - 1)
+	var listed := last if quoted.is_empty() else "%s or %s" % [", ".join(quoted), last]
+	return " Did you mean %s?" % listed
 
 
 ## The brushes and entities a command names, each resolved the way every brush
@@ -141,7 +179,8 @@ func read_targets(root: Node, command: String, spec: Dictionary, params: Diction
 		if seen.has(brush_id):
 			return HFMcpProtocol.invalid("brush_ids", "Brush '%s' is listed twice" % brush_id)
 		seen[brush_id] = true
-		var found := tools._read_brush(root, {"brush_id": brush_id})
+		# hf_run_command changes what it names, so a locked one is refused (#1697).
+		var found := tools._read_brush_to_change(root, {"brush_id": brush_id})
 		if not found["ok"]:
 			return found
 		brushes.append(found["brush"])
@@ -150,7 +189,7 @@ func read_targets(root: Node, command: String, spec: Dictionary, params: Diction
 		if seen.has(path):
 			return HFMcpProtocol.invalid("entities", "Entity '%s' is listed twice" % path)
 		seen[path] = true
-		var found := tools._read_entity(root, {"entity": path})
+		var found := tools._read_entity_to_change(root, {"entity": path})
 		if not found["ok"]:
 			return found
 		entities.append(found["entity"])
@@ -422,6 +461,19 @@ func _apply_vertical(root: Node, ids: Array, down: bool) -> Dictionary:
 	return {"ok": true, "result": {}}
 
 
+func check_snap_to_grid(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
+	var verdict: HFOpResult = root.can_snap_to_grid()
+	if not verdict.ok:
+		return _failed(verdict.user_text())
+	var ids: Array = targets["brush_ids"]
+	return {"ok": true, "scope_ids": ids, "apply": _apply_snap_to_grid.bind(root, ids)}
+
+
+func _apply_snap_to_grid(root: Node, ids: Array) -> Dictionary:
+	root.snap_managed_nodes_to_grid(ids, [])
+	return {"ok": true, "result": {}}
+
+
 func check_reset_rotation(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
 	var ids: Array = targets["brush_ids"]
 	return {"ok": true, "scope_ids": ids, "apply": _apply_reset_rotation.bind(root, ids)}
@@ -430,6 +482,46 @@ func check_reset_rotation(root: Node, targets: Dictionary, _args: Dictionary) ->
 func _apply_reset_rotation(root: Node, ids: Array) -> Dictionary:
 	root.reset_managed_rotation(ids)
 	return {"ok": true, "result": {}}
+
+
+func check_replace_material(root: Node, targets: Dictionary, args: Dictionary) -> Dictionary:
+	var from := tools._resolve_material(root, args["from"])
+	if not from["ok"]:
+		return _under(from, "params.from")
+	var to := tools._resolve_material(root, args["to"])
+	if not to["ok"]:
+		return _under(to, "params.to")
+	var scope := {}
+	var ids: Array = targets["brush_ids"]
+	if not ids.is_empty():
+		scope["brush_ids"] = ids
+	if str(args["scope"]) == "shown":
+		scope["visible_only"] = true
+	var reset_uv := bool(args["reset_uv"])
+	if from["slot"] == to["slot"] and not reset_uv:
+		return _failed("Replace Material: from and to are the same material")
+	var found: Dictionary = root.faces_wearing_material(from["slot"], scope)
+	if found.is_empty():
+		return _failed("Replace Material: no face there wears '%s'" % args["from"])
+	return {
+		"ok": true,
+		"scope_ids": found.keys(),
+		"apply": _apply_replace_material.bind(root, from["slot"], to["slot"], scope, reset_uv),
+	}
+
+
+func _apply_replace_material(
+	root: Node, from_slot: int, to_slot: int, scope: Dictionary, reset_uv: bool
+) -> Dictionary:
+	var changed: Dictionary = root.replace_material(from_slot, to_slot, scope, reset_uv)
+	var keys: Array = changed.keys()
+	keys.sort()
+	var brushes: Array = []
+	var faces := 0
+	for key in keys:
+		brushes.append({"brush_id": str(key), "faces": changed[key]})
+		faces += (changed[key] as Array).size()
+	return {"ok": true, "result": {"faces": faces, "brushes": brushes}}
 
 
 func check_hollow(root: Node, targets: Dictionary, args: Dictionary) -> Dictionary:
@@ -457,7 +549,13 @@ func check_clip(root: Node, targets: Dictionary, args: Dictionary) -> Dictionary
 	)
 	var verdict: HFOpResult = root.can_clip_brush(brush_id, axis, split)
 	if not verdict.ok:
-		return _failed(verdict.user_text())
+		# A brush Clip splits at its middle, refused where it was told: the
+		# position is what the agent has to change, so the refusal names it.
+		var details := {}
+		var middle: float = root.default_clip_position(brush_id, axis)
+		if position != null and root.can_clip_brush(brush_id, axis, middle).ok:
+			details["param"] = "params.position"
+		return _failed(verdict.user_text(), details)
 	return {"ok": true, "scope_ids": [], "apply": _apply_clip.bind(root, brush_id, axis, split)}
 
 
@@ -554,6 +652,36 @@ func _apply_merge(root: Node, ids: Array) -> Dictionary:
 	return {"ok": true, "result": {}}
 
 
+func check_intersect(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
+	var ids: Array = targets["brush_ids"]
+	var verdict: HFOpResult = root.can_intersect_brushes(ids)
+	if not verdict.ok:
+		return _failed(verdict.user_text())
+	return {"ok": true, "scope_ids": [], "apply": _apply_intersect.bind(root, ids)}
+
+
+func _apply_intersect(root: Node, ids: Array) -> Dictionary:
+	var done: HFOpResult = root.intersect_brushes_by_ids(ids)
+	if not done.ok:
+		return _failed(done.user_text())
+	return {"ok": true, "result": {}}
+
+
+func check_hull(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
+	var ids: Array = targets["brush_ids"]
+	var verdict: HFOpResult = root.can_hull_brushes(ids)
+	if not verdict.ok:
+		return _failed(verdict.user_text())
+	return {"ok": true, "scope_ids": [], "apply": _apply_hull.bind(root, ids)}
+
+
+func _apply_hull(root: Node, ids: Array) -> Dictionary:
+	var done: HFOpResult = root.hull_brushes_by_ids(ids)
+	if not done.ok:
+		return _failed(done.user_text())
+	return {"ok": true, "result": {}}
+
+
 func check_create_structure(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
 	var type_name := str(args["type"])
 	var read := read_settings(type_name, args.get("settings", {}))
@@ -589,9 +717,19 @@ func read_settings(type_name: String, given, base := {}) -> Dictionary:
 	for key in given:
 		var param := "params.settings.%s" % key
 		if not keys.has(str(key)):
-			return HFMcpProtocol.invalid(
-				param, "A %s has no setting %s; it has %s" % [type_name, key, ", ".join(keys)]
+			var names: Dictionary = {}
+			for name in keys:
+				names[name] = [name]
+			var near := HFNameMatchType.nearest(str(key), names, 1)
+			var refused := HFMcpProtocol.invalid(
+				param,
+				(
+					"A %s has no setting %s.%s It has %s"
+					% [type_name, key, did_you_mean(near), ", ".join(keys)]
+				)
 			)
+			refused["error"]["details"]["suggestions"] = Array(near)
+			return refused
 		var field_def := HFGeneratorSchema.field(schema, str(key))
 		var read := HFGeneratorSchema.read_field(field_def, given[key], str(key))
 		if not read["ok"]:
@@ -633,7 +771,10 @@ func check_update_structure(root: Node, _targets: Dictionary, args: Dictionary) 
 	if not read["ok"]:
 		return read
 	var settings: Dictionary = read["value"]
-	var verdict: HFOpResult = root.can_build_generator(record.type, settings)
+	# Asked of this structure, so a Trim Run is asked along the run it keeps.
+	var verdict: HFOpResult = root.can_build_generator(
+		record.type, settings, str(record.generator_id)
+	)
 	if not verdict.ok:
 		return _failed(HFGeneratorSystem.not_changed_text(record.type, verdict))
 	return {
@@ -938,13 +1079,14 @@ func _prefab_piece(targets: Dictionary, key: String) -> Dictionary:
 # The paint forms call the paint system's cell-space calls (#1299). Each check
 # resolves the layer, reads the rectangle and asks what the call would refuse,
 # so a refusal comes before the capture; the apply makes the one call, which
-# writes the cells and rebuilds their chunks.
+# writes the cells and rebuilds their chunks. A check that writes cells loads
+# and pins the rectangle's streamed regions as it passes, so the capture holds
+# the paint they had on disk (#1502); the call lets the pins go.
 
 
 func check_paint_rect(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
-	var from: Vector2i = args["from"]
-	var to: Vector2i = args["to"] if args.get("to") != null else from
-	var target := _paint_target(root, args, from, to, "params.to")
+	var rect := _written_rect("paint_rect", args)
+	var target := _paint_target(root, args, rect["from"], rect["to"], "params.to")
 	if not target["ok"]:
 		return target
 	var filled := bool(args["filled"])
@@ -954,6 +1096,7 @@ func check_paint_rect(root: Node, _targets: Dictionary, args: Dictionary) -> Dic
 			"params.material", "material goes on the cells painted; an erase takes none"
 		)
 	var material_id := -1 if material == null else int(material)
+	root.paint_system.load_rect_regions(target["from"], target["to"])
 	return {
 		"ok": true,
 		"scope_ids": [],
@@ -968,7 +1111,7 @@ func _apply_paint_rect(
 		target["index"], target["from"], target["to"], filled, material_id
 	)
 	if not done["ok"]:
-		return _failed(done["error"])
+		return _paint_refused(root, done)
 	var result := _paint_answer(root, target)
 	result["filled"] = filled
 	result["cells"] = done["cells"]
@@ -983,13 +1126,14 @@ func _apply_paint_rect(
 
 
 func check_raise_rect(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
-	var from: Vector2i = args["from"]
-	var to: Vector2i = args["to"] if args.get("to") != null else from
-	var target := _paint_target(root, args, from, to, "params.to")
+	var rect := _written_rect("raise_rect", args)
+	var target := _paint_target(root, args, rect["from"], rect["to"], "params.to")
 	if not target["ok"]:
 		return target
 	var height := float(args["height"])
-	var ready: Dictionary = root.paint_system.check_raise_cells(target["index"], from, to, height)
+	var ready: Dictionary = root.paint_system.check_raise_cells(
+		target["index"], target["from"], target["to"], height
+	)
 	if not ready["ok"]:
 		return _failed(ready["error"])
 	return {"ok": true, "scope_ids": [], "apply": _apply_raise_rect.bind(root, target, height)}
@@ -1000,7 +1144,7 @@ func _apply_raise_rect(root: Node, target: Dictionary, height: float) -> Diction
 		target["index"], target["from"], target["to"], height
 	)
 	if not done["ok"]:
-		return _failed(done["error"])
+		return _paint_refused(root, done)
 	var result := _paint_answer(root, target)
 	result["height"] = height
 	result["raised"] = done["raised"]
@@ -1009,14 +1153,14 @@ func _apply_raise_rect(root: Node, target: Dictionary, height: float) -> Diction
 
 
 func check_stamp_room(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
-	var at: Vector2i = args["at"]
-	var width := int(args["width"])
-	var depth := int(args["depth"])
-	var to := at + Vector2i(width - 1, depth - 1)
-	var target := _paint_target(root, args, at, to, "params.at")
+	var rect := _written_rect("stamp_room", args)
+	var target := _paint_target(root, args, rect["from"], rect["to"], "params.at")
 	if not target["ok"]:
 		return target
 	var height: float = -1.0 if args.get("height") == null else float(args["height"])
+	root.paint_system.load_rect_regions(target["from"], target["to"])
+	var width := int(args["width"])
+	var depth := int(args["depth"])
 	return {
 		"ok": true,
 		"scope_ids": [],
@@ -1031,7 +1175,7 @@ func _apply_stamp_room(
 		target["index"], target["from"], width, depth, height
 	)
 	if not done["ok"]:
-		return _failed(done["error"])
+		return _paint_refused(root, done)
 	var result := _paint_answer(root, target)
 	result["at"] = result["from"]
 	result["width"] = width
@@ -1088,6 +1232,55 @@ func _apply_confirm_connector(root: Node, target: Dictionary, other: int) -> Dic
 	result["added"] = done["added"]
 	result["already"] = done["already"]
 	return {"ok": true, "result": result}
+
+
+## The corners a cell-writing paint form writes, both included: `from` and
+## `to`, `to` alone being `from`, or a room's `at`, `width` and `depth`. Each
+## form's check reads them here, and so does hf_batch's region load ahead of its
+## capture, so both load the same regions.
+static func _written_rect(form: String, args: Dictionary) -> Dictionary:
+	if form == "stamp_room":
+		var at: Vector2i = args["at"]
+		return {"from": at, "to": at + Vector2i(int(args["width"]) - 1, int(args["depth"]) - 1)}
+	var from: Vector2i = args["from"]
+	return {"from": from, "to": args["to"] if args.get("to") != null else from}
+
+
+## Load and pin the streamed regions the paint ops among an hf_batch's `ops`
+## write, before the batch takes its one capture (#1502). Each op's own check
+## loads them only after that capture, which would then miss the paint they had
+## on disk, and an undo of the batch would drop it. An op that does not read,
+## or whose rectangle the paint system would refuse, is left to its check. True
+## when anything was pinned; the batch lets the pins go once it has captured.
+func load_batch_paint_regions(root: Node, ops: Array) -> bool:
+	if root.paint_system == null or not root.paint_system.region_streaming_enabled:
+		return false
+	var pinned := false
+	for op in ops:
+		var params = op.get("params")
+		if op.get("tool") != "hf_run_command" or not (params is Dictionary):
+			continue
+		var spec := HFCommandRegistry.bridge(str(params.get("command", "")))
+		var form := str(spec.get("form", ""))
+		if not (form in CELL_FORMS):
+			continue
+		var args := read_params(spec, params.get("params"))
+		if not args["ok"]:
+			continue
+		var rect := _written_rect(form, args["value"])
+		var target := _paint_target(root, args["value"], rect["from"], rect["to"], "params.to")
+		if not target["ok"]:
+			continue
+		root.paint_system.load_rect_regions(target["from"], target["to"])
+		pinned = true
+	return pinned
+
+
+## A cell-space call's refusal as an answer. The call lets region pins go only
+## once it has taken its own, so the ones its check took are let go here.
+func _paint_refused(root: Node, done: Dictionary) -> Dictionary:
+	root.paint_system.release_paint_region_pins()
+	return _failed(done["error"])
 
 
 ## What every paint form reads first: the layer `args.layer` names, the
@@ -1203,13 +1396,20 @@ func listing(root: Node = null) -> Array:
 		}
 		# Each structure type's settings, for every command that takes them: the
 		# type enum of create_arch, and the settings object of create_arch and
-		# update_structure.
+		# update_structure. Create builds the types made from settings alone; an
+		# update reaches any structure, a Trim Run made in the dock too (#1636).
+		var takes_settings := false
+		var takes_type := false
 		for field_def in spec.get("params", []):
-			if (
-				str(field_def.get("options_from", "")) == "generator_types"
-				or str(field_def.get("key", "")) == "settings"
-			):
-				entry["settings_by_type"] = settings_by_type()
+			if str(field_def.get("options_from", "")) == "generator_types":
+				takes_type = true
+			if str(field_def.get("key", "")) == "settings":
+				takes_settings = true
+		if takes_type:
+			entry["settings_by_type"] = settings_by_type(HFGeneratorSystem.known_types())
+		elif takes_settings:
+			entry["settings_by_type"] = settings_by_type(HFGeneratorSystem.structure_types())
+		for field_def in spec.get("params", []):
 			if str(field_def.get("key", "")) == "prefab":
 				entry["prefabs"] = library_listing()
 			# The layers an agent can name, read off the level; none with no level.
@@ -1295,11 +1495,11 @@ static func _vec3_schema() -> Dictionary:
 	return {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}
 
 
-## Each structure type's settings as JSON Schema, from the schema the dock builds
-## its fields from, so a new generator is described without an edit here.
-static func settings_by_type() -> Dictionary:
+## The settings of each of `types` as JSON Schema, from the schema the dock
+## builds its fields from, so a new generator is described without an edit here.
+static func settings_by_type(types: PackedStringArray) -> Dictionary:
 	var out := {}
-	for type_name in HFGeneratorSystem.known_types():
+	for type_name in types:
 		var properties := {}
 		for field_def in HFGeneratorSystem.settings_schema(type_name):
 			var key := str(field_def["key"])

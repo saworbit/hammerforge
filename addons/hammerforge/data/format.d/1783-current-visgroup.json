@@ -1,0 +1,7 @@
+{
+	"what": "The visgroup new work goes into.",
+	"older_builds": "New work goes into no visgroup.",
+	"keys": [
+		"settings.current_visgroup"
+	]
+}

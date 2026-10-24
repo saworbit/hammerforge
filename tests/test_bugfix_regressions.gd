@@ -147,7 +147,7 @@ func test_end_drag_returns_pre_drag_face_data():
 	var snapshots = vs.end_drag()
 
 	assert_true(snapshots.has("undo1"), "Snapshots should contain the dragged brush")
-	var snap_faces: Array = snapshots["undo1"]
+	var snap_faces: Array = snapshots["undo1"]["faces"]
 	assert_eq(snap_faces.size(), pre_drag_expected.size(), "Should have same face count")
 
 	# Compare actual vertex coordinate values, not just counts.
@@ -181,7 +181,7 @@ func test_pre_drag_snapshots_differ_from_post_move_faces():
 			post_state.append(face.to_dict())
 
 	# The snapshots should NOT equal post-move state (that was the bug)
-	var snap_faces: Array = snapshots["undo2"]
+	var snap_faces: Array = snapshots["undo2"]["faces"]
 	var any_different := false
 	for i in range(snap_faces.size()):
 		var snap_verts = snap_faces[i].get("local_verts", PackedVector3Array())
@@ -1301,6 +1301,10 @@ class FakeAnchorVertexSystem:
 	func select_vertex(_brush_id, _index, _additive) -> void:
 		pass
 
+	## A press on a corner selects every selected brush's corner there (#1713).
+	func select_shared_corner(_brush_id, _index, _additive) -> int:
+		return 1
+
 	func select_edge(_brush_id, _edge, _additive) -> void:
 		pass
 
@@ -1313,6 +1317,7 @@ class FakeAnchorPlugin:
 	var _keymap = null
 	var _vertex_drag_active := false
 	var _vertex_drag_start := Vector2.ZERO
+	var _vertex_shared_count := 0
 
 	func _update_vertex_overlay(_root, _camera) -> void:
 		pass

@@ -36,6 +36,23 @@ const DEFAULT_EPSILON := 0.001
 ## sliver, not a brush.
 const MIN_SOLID_FACES := 4
 
+## The thinnest side a piece described as a box may have: the floor the brush
+## system holds a size to (`HFBrushSystem.MIN_BRUSH_EXTENT`). A box brush is built
+## from its size, so a box piece cut thinner was widened to this and grew whenever
+## its scene opened (#1598). A thinner piece is CUSTOM, built from its faces at any
+## size (#1603).
+const MIN_BOX_SIDE := 0.1
+## How far a corner of a piece described as a box may sit from its box's, as a
+## fraction of the box along each axis: `DraftBrush.CORNER_MATCH_EPSILON`, the most
+## `DraftBrush.faces_in_box_order()` lays a face onto the builder's corners across.
+## Further out, a box piece was stored as it was cut and squared when its scene
+## opened again, and read as edited (#1598).
+const BOX_CORNER_FRACTION := 0.001
+## A solid thinner than this every way across is a sliver rather than a brush.
+## Validate reports a brush this thin as near-zero thickness, and a structure
+## refuses to build a piece this thin (#1605).
+const NEAR_ZERO_THICKNESS := 0.01
+
 ## The most bounding planes a boolean operation will work through.
 ##
 ## Every plane is a split of an ever-growing face set, so the cost climbs steeply
@@ -79,14 +96,21 @@ static func face_plane(face: FaceData) -> Plane:
 ## once and get a wedge where the shape pinches, rather than carrying a special
 ## case through its own arithmetic. Winding is settled afterwards by measurement
 ## against the interior point, as everywhere else.
-static func solid_from_rings(rings: Array, epsilon := DEFAULT_EPSILON) -> Array:
+##
+## `smoothing`, when given, is each ring's smoothing group, in the rings' order:
+## a generator knows which of its faces lie on a curve (#1429).
+static func solid_from_rings(
+	rings: Array, epsilon := DEFAULT_EPSILON, smoothing := PackedInt32Array()
+) -> Array:
 	var faces: Array = []
-	for ring in rings:
-		var corners: PackedVector3Array = _collapse_ring(ring, epsilon)
+	for i in rings.size():
+		var corners: PackedVector3Array = _collapse_ring(rings[i], epsilon)
 		if corners.size() < 3:
 			continue
 		var face := FaceData.new()
 		face.local_verts = corners
+		if i < smoothing.size():
+			face.smoothing_group = smoothing[i]
 		face.ensure_geometry()
 		faces.append(face)
 	if faces.size() < MIN_SOLID_FACES:
@@ -120,6 +144,91 @@ static func interior_point(faces: Array) -> Vector3:
 			total += vertex
 			count += 1
 	return total / float(count) if count > 0 else Vector3.ZERO
+
+
+## How thin the solid that `rings` bound is, read off the corner rings
+## `solid_from_rings()` would build it from: `{across, face}`, the least depth it
+## has behind any of its faces, and that face's `normal`, the way it is thin. That
+## is its narrowest way across whichever way it is turned, as `_thickness()`
+## measures built faces. `corners` is every corner the rings use. `across` is INF
+## when no ring is a face.
+static func thickness_of(
+	corners: PackedVector3Array, rings: Array, epsilon := DEFAULT_EPSILON
+) -> Dictionary:
+	var out := {"across": INF, "normal": Vector3.ZERO}
+	for ring_corners in rings:
+		var ring := _collapse_ring(ring_corners, epsilon)
+		if ring.size() < 3:
+			continue
+		# Newell's sum, so a ring whose first corners nearly line up still has a
+		# normal to measure along.
+		var normal := Vector3.ZERO
+		for k in ring.size():
+			var a := ring[k]
+			var b := ring[(k + 1) % ring.size()]
+			normal += Vector3(
+				(a.y - b.y) * (a.z + b.z), (a.z - b.z) * (a.x + b.x), (a.x - b.x) * (a.y + b.y)
+			)
+		if normal.length_squared() == 0.0:
+			continue
+		normal = normal.normalized()
+		# The whole spread along the normal, not the distance from the face, so a
+		# ring that is not quite a face of the solid can only read thicker.
+		var low := INF
+		var high := -INF
+		for corner: Vector3 in corners:
+			var along := normal.dot(corner)
+			low = minf(low, along)
+			high = maxf(high, along)
+		if high - low < float(out["across"]):
+			out = {"across": high - low, "normal": normal}
+	return out
+
+
+## Whether the solid `rings` bound comes out as a box when it is built: what
+## `is_axis_aligned_box()` says of `solid_from_rings(rings)`, which is how the brush
+## system decides a generated piece is a box brush. That takes six four-cornered
+## faces each square to an axis, so most pieces are told apart by their rings
+## before any face is made.
+static func rings_build_a_box(rings: Array, epsilon := DEFAULT_EPSILON) -> Dictionary:
+	var faces := 0
+	for ring in rings:
+		var corners := _collapse_ring(ring, epsilon)
+		if corners.size() < 3:
+			continue
+		faces += 1
+		if corners.size() != 4:
+			return {}
+		var normal := (corners[2] - corners[0]).cross(corners[1] - corners[0])
+		# A cheap first look at the normal; `is_axis_aligned_box()` decides.
+		var squarest := maxf(absf(normal.x), maxf(absf(normal.y), absf(normal.z)))
+		if normal.length_squared() > 0.000001 and squarest < normal.length() * 0.998:
+			return {}
+	if faces != 6:
+		return {}
+	return is_axis_aligned_box(solid_from_rings(rings, epsilon), epsilon)
+
+
+## The thinnest piece too thin to build, or an empty dictionary when none is:
+## `{piece, across, direction}`, `direction` being the way it is thin.
+##
+## A piece `rings_build_a_box()` says is a box becomes a box brush, and the box
+## test takes no box under `MIN_BOX_SIDE` (#1598), so a box always builds and a
+## thinner box-shaped piece is CUSTOM (#1630). Any other piece keeps the faces it
+## was built with at any size (#1603), so it is held only above
+## `NEAR_ZERO_THICKNESS`, measured the narrowest way across. `corner_sets[i]` and
+## `ring_sets[i]` are one piece, as `thickness_of()` takes it.
+static func too_thin(corner_sets: Array, ring_sets: Array) -> Dictionary:
+	var worst := {}
+	for i in mini(corner_sets.size(), ring_sets.size()):
+		if not rings_build_a_box(ring_sets[i]).is_empty():
+			continue
+		var measured := thickness_of(corner_sets[i], ring_sets[i])
+		if float(measured["across"]) >= NEAR_ZERO_THICKNESS:
+			continue
+		if worst.is_empty() or float(measured["across"]) < float(worst["across"]):
+			worst = {"piece": i, "across": measured["across"], "direction": measured["normal"]}
+	return worst
 
 
 ## Every distinct bounding plane of a convex solid, each facing away from inside.
@@ -204,12 +313,18 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 			saw_back = true
 
 		var whole_uvs := uvs if has_uvs else PackedVector2Array()
-		if below == 0:
-			# Entirely in front, or lying on the plane.
-			front.append(_piece_of(source, verts, whole_uvs, origins))
-			continue
-		if above == 0:
-			back.append(_piece_of(source, verts, whole_uvs, origins))
+		if below == 0 or above == 0:
+			# Entirely on one side, or lying on the plane. Its corners on the plane
+			# are still corners of the cut: where a cutter face lines up with a ring
+			# of the brush's edges, the faces on one side end there and the ones on
+			# the other begin, so no face around such a corner crosses the plane,
+			# and the cap left it out and was missing a corner (#1843).
+			var whole := _piece_of(source, verts, whole_uvs, origins)
+			if below == 0:
+				front.append(whole)
+			else:
+				back.append(whole)
+			cut_points.append_array(_on_plane(verts, plane, epsilon))
 			continue
 
 		var front_part := clip_polygon(verts, uvs, plane, true, epsilon)
@@ -259,7 +374,8 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 ##
 ## Carve passes the planes of the carving brush, and the intersection is the volume
 ## it removes. Hollow passes the brush's own planes pushed inward, and the
-## intersection is the void. Same loop, different planes.
+## intersection is the void. Intersect passes the planes of another brush, and
+## keeps the intersection. Same loop, different planes.
 ##
 ## Returns `{"pieces": Array, "remainder": Array, "separated": bool, "origins":
 ## Dictionary}`. `separated` is false when the solid never straddled one of the
@@ -426,6 +542,8 @@ static func carry_onto_union(faces: Array, origins: Dictionary) -> int:
 		if built == null or not origins.has(built):
 			continue
 		var source: FaceData = origins[built]
+		# Still the surface its face was part of (#1437).
+		built.copy_texture_group_from(source)
 		if not source.paint_layers.is_empty():
 			built.copy_paint_from(source)
 		if built.local_verts == source.local_verts:
@@ -472,6 +590,8 @@ static func carry_surface_detail(face_sets: Array, origins: Dictionary) -> int:
 			if piece == null or not origins.has(piece):
 				continue
 			var source: FaceData = origins[piece]
+			# A piece of a face in a texture group is still that surface (#1437).
+			piece.copy_texture_group_from(source)
 			if (
 				source.uv_projection == FaceData.UVProjection.CYLINDRICAL
 				and piece.custom_uvs.is_empty()
@@ -751,8 +871,18 @@ static func _drop_collinear(ring: PackedVector3Array, threshold: float) -> Packe
 ## a CUSTOM brush loses its resize handles, and the commonest cut of all — a box
 ## split down one of its own axes — produces two boxes.
 ##
-## Returns `{"size": Vector3, "center": Vector3}` when the faces form a six-sided
-## box aligned to the frame they are expressed in.
+## A box brush is rebuilt from its size alone, so a box here is the box its size
+## builds: one face on each side of the bounds, each with that side's four
+## corners within `epsilon` and `BOX_CORNER_FRACTION`, and facing out of it. Six
+## four-sided faces near an axis with every corner somewhere on the bounds was not
+## enough: a one-segment arch of 179 degrees has four faces facing up or down and
+## none facing X, a face leaning up to 2.5 degrees passed the normal test, and
+## each was built as a box of its bounds (#1607).
+##
+## No side may be under `MIN_BOX_SIDE`, which a box brush is widened to.
+##
+## Returns `{"size": Vector3, "center": Vector3}` when the faces form such a box
+## in the frame they are expressed in.
 static func is_axis_aligned_box(faces: Array, epsilon: float = DEFAULT_EPSILON) -> Dictionary:
 	if faces.size() != 6:
 		return {}
@@ -762,9 +892,6 @@ static func is_axis_aligned_box(faces: Array, epsilon: float = DEFAULT_EPSILON) 
 		var data: FaceData = face as FaceData
 		if data == null or data.local_verts.size() != 4:
 			return {}
-		var normal := _face_normal(data)
-		if not _is_axis_direction(normal, epsilon):
-			return {}
 		for vertex in data.local_verts:
 			if seeded:
 				bounds = bounds.expand(vertex)
@@ -773,15 +900,18 @@ static func is_axis_aligned_box(faces: Array, epsilon: float = DEFAULT_EPSILON) 
 				seeded = true
 	if not seeded:
 		return {}
-	if bounds.size.x <= epsilon or bounds.size.y <= epsilon or bounds.size.z <= epsilon:
-		return {}
-	# Every vertex has to sit on the shell of those bounds, or the faces describe
-	# something box-shaped only in outline.
+	for axis in 3:
+		# A side this near the floor is the floor read off float corners, and the
+		# brush system builds it as it is.
+		var extent: float = bounds.size[axis]
+		if extent < MIN_BOX_SIDE and not is_equal_approx(extent, MIN_BOX_SIDE):
+			return {}
+	var sides_taken := {}
 	for face in faces:
-		var data: FaceData = face as FaceData
-		for vertex in data.local_verts:
-			if not _on_box_shell(vertex, bounds, epsilon):
-				return {}
+		var side := _box_side_of(face as FaceData, bounds, epsilon)
+		if side < 0 or sides_taken.has(side):
+			return {}
+		sides_taken[side] = true
 	return {"size": bounds.size, "center": bounds.get_center()}
 
 
@@ -821,6 +951,12 @@ static func _cap_face(
 	var face := FaceData.new()
 	if template != null:
 		face.copy_appearance_from(template)
+	# A cut is flat. Taken from a round brush's side, the group smoothed the
+	# brush's curve into the cut across its edge (#1429).
+	face.smoothing_group = 0
+	# And it is new surface the cut opened, there to be seen, whatever face of the
+	# brush lent it its look (#1719).
+	face.face_type = FaceData.FaceType.NORMAL
 	face.local_verts = ring
 	face.normal = outward_normal.normalized()
 	face.ensure_geometry()
@@ -992,6 +1128,17 @@ static func _same_corners(a: PackedVector3Array, b: PackedVector3Array, epsilon:
 	return true
 
 
+## The corners of `verts` lying on `plane`.
+static func _on_plane(
+	verts: PackedVector3Array, plane: Plane, epsilon: float
+) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for vertex in verts:
+		if absf(plane.distance_to(vertex)) <= epsilon:
+			out.append(vertex)
+	return out
+
+
 static func _crossing_points(
 	verts: PackedVector3Array, plane: Plane, epsilon: float
 ) -> PackedVector3Array:
@@ -1033,32 +1180,59 @@ static func _face_normal(face: FaceData) -> Vector3:
 	return face.normal
 
 
-static func _is_axis_direction(direction: Vector3, epsilon: float) -> bool:
-	var tolerance := maxf(0.999, 1.0 - epsilon)
-	return (
-		absf(direction.dot(Vector3.RIGHT)) >= tolerance
-		or absf(direction.dot(Vector3.UP)) >= tolerance
-		or absf(direction.dot(Vector3.BACK)) >= tolerance
-	)
+## The side of `bounds` a face is, numbered as the box builder lists its faces
+## (+X, -X, +Y, -Y, +Z, -Z), or -1 when it is none: it has to face out of that
+## side and have that side's four corners, as `_same_box_corners()` measures them.
+## Its normal only says which side to measure it against.
+static func _box_side_of(face: FaceData, bounds: AABB, epsilon: float) -> int:
+	var normal := _face_normal(face)
+	var axis := normal.abs().max_axis_index()
+	var high := normal[axis] > 0.0
+	var side := _box_side_corners(bounds, axis, high)
+	var corners := face.local_verts
+	if not _same_box_corners(corners, side, bounds.size, epsilon):
+		return -1
+	return axis * 2 + (0 if high else 1)
 
 
-static func _on_box_shell(point: Vector3, bounds: AABB, epsilon: float) -> bool:
+## Whether `a` and `b` have the same corners in whatever order, each pair within
+## `epsilon` and within half of `BOX_CORNER_FRACTION` of `extent` along each axis.
+## Half, because the brush system centres a piece before the layout measures it,
+## and far from its origin that rounds a corner by a part of a small box.
+static func _same_box_corners(
+	a: PackedVector3Array, b: PackedVector3Array, extent: Vector3, epsilon: float
+) -> bool:
+	if a.size() != b.size():
+		return false
+	for pair in [[a, b], [b, a]]:
+		for point: Vector3 in pair[0]:
+			var found := false
+			for other: Vector3 in pair[1]:
+				var gap: Vector3 = other - point
+				var fraction := (gap / extent).length()
+				if gap.length() <= epsilon and fraction <= BOX_CORNER_FRACTION * 0.5:
+					found = true
+					break
+			if not found:
+				return false
+	return true
+
+
+## The four corners of the side of `bounds` across `axis`, at its high end when
+## `high` and its low end otherwise.
+static func _box_side_corners(bounds: AABB, axis: int, high: bool) -> PackedVector3Array:
 	var low := bounds.position
-	var high := bounds.position + bounds.size
-	if point.x < low.x - epsilon or point.x > high.x + epsilon:
-		return false
-	if point.y < low.y - epsilon or point.y > high.y + epsilon:
-		return false
-	if point.z < low.z - epsilon or point.z > high.z + epsilon:
-		return false
-	return (
-		absf(point.x - low.x) <= epsilon
-		or absf(point.x - high.x) <= epsilon
-		or absf(point.y - low.y) <= epsilon
-		or absf(point.y - high.y) <= epsilon
-		or absf(point.z - low.z) <= epsilon
-		or absf(point.z - high.z) <= epsilon
-	)
+	var top := bounds.end
+	var u := (axis + 1) % 3
+	var v := (axis + 2) % 3
+	var out := PackedVector3Array()
+	for i in 4:
+		var corner := Vector3.ZERO
+		corner[axis] = top[axis] if high else low[axis]
+		corner[u] = top[u] if (i & 1) != 0 else low[u]
+		corner[v] = top[v] if (i & 2) != 0 else low[v]
+		out.append(corner)
+	return out
 
 
 static func _quantize(point: Vector3, epsilon: float) -> String:

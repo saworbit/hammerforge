@@ -12,8 +12,12 @@ const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
+const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
+const HFFileNames = preload("res://addons/hammerforge/hf_file_names.gd")
 const HFRebuildCarry = preload("res://addons/hammerforge/hf_rebuild_carry.gd")
+const HFFormatCensus = preload("res://addons/hammerforge/hf_format_census.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D  # LevelRoot — untyped to avoid circular preload
@@ -56,6 +60,9 @@ const CLIPBOARD_PATH := "user://hammerforge_clipboard.hfprefab"
 ## `prefab_dir` when they are built, so a change after that moves only a save.
 static var prefab_dir: String = PREFAB_DIR
 static var clipboard_path: String = CLIPBOARD_PATH
+## The system clipboard as a test sees it: null for the real one, or text that
+## stands in for it, so a run never touches the clipboard a person is using.
+static var system_clipboard_stand_in: Variant = null
 
 ## The meta a node carries as a piece of a placed copy: the copy's id, the prefab
 ## file, the variant it shows, and on an entity the stable id the copy finds it
@@ -76,6 +83,10 @@ class PrefabInstanceRecord:
 	var brush_ids: Array = []  # String brush IDs belonging to this instance
 	var entity_uids: Array = []  # stable IDs ("pent_N") belonging to this instance
 	var linked: bool = false  # if true, propagation applies
+	## What this copy keeps of its own through a Pull and a variant switch, and
+	## Push leaves out of the prefab (#1734): a piece's key, "b" or "e" and its
+	## index (`piece_key()`), to `{"properties": [names], "wiring": bool}`.
+	var kept: Dictionary = {}
 
 
 func _init(level_root: Node3D) -> void:
@@ -167,6 +178,9 @@ func place(
 	):
 		return {}
 	_turn_angles(result["brush_ids"], result["entity_nodes"], frame.basis)
+	# New work joins the current visgroup (#1732).
+	if root.visgroup_system:
+		root.visgroup_system.join_current_all(result["brush_ids"], result["entity_nodes"])
 	result["instance_id"] = register_instance(
 		source_path, result["brush_ids"], result["entity_nodes"], linked, variant
 	)
@@ -200,6 +214,36 @@ func unregister_instance(instance_id: String) -> void:
 		var rec: PrefabInstanceRecord = _instances[instance_id]
 		_untag_nodes(rec)
 		_instances.erase(instance_id)
+
+
+## Make a placed copy ordinary brushes and entities (#1734): its pieces lose
+## their link and the level forgets the copy, so no later Pull, Push or variant
+## switch reaches them. False for an id the level does not hold.
+func unlink_instance(instance_id: String) -> bool:
+	if not _instances.has(instance_id):
+		return false
+	unregister_instance(instance_id)
+	return true
+
+
+## Every placed copy of the prefab `instance_id` is a copy of, itself included.
+func copies_like(instance_id: String) -> Array:
+	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
+	return get_instances_for_source(rec.source_path) if rec else []
+
+
+## The live brushes and entities of a placed copy.
+func pieces_of(rec: PrefabInstanceRecord) -> Array:
+	var out: Array = []
+	for bid in rec.brush_ids:
+		var brush = _find_brush_by_id(bid)
+		if brush:
+			out.append(brush)
+	for uid in rec.entity_uids:
+		var ent = _find_entity_by_uid(uid)
+		if ent:
+			out.append(ent)
+	return out
 
 
 ## Get instance record by id.
@@ -369,6 +413,8 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 		[HFRebuildCarry.ENTITY_NAME]
 	)
 	var own_names := unnamed.kept(HFRebuildCarry.ENTITY_NAME)
+	# And what the copy keeps of its own (#1734), by piece.
+	var kept_values := _read_kept(rec)
 
 	# Remove existing brushes/entities for this instance
 	_remove_instance_nodes(rec)
@@ -457,6 +503,182 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	rec.entity_uids = new_entity_uids
 	rec.variant_name = variant_name
 	_tag_nodes(rec)
+	_give_kept(rec, kept_values)
+
+
+## A piece's key in its copy: "b" and its brush's index, or "e" and its entity's.
+## The index pairs the piece with its record in the prefab, through a Pull and a
+## Push alike. "" for a node that is no piece of `rec`.
+func piece_key(rec: PrefabInstanceRecord, node: Node) -> String:
+	if rec == null or node == null:
+		return ""
+	if node is DraftBrush:
+		var at := rec.brush_ids.find(str(node.get("brush_id")))
+		return "b%d" % at if at >= 0 else ""
+	var uid_at := rec.entity_uids.find(str(node.get_meta(ENTITY_ID_META, "")))
+	return "e%d" % uid_at if uid_at >= 0 else ""
+
+
+## The piece of `rec` a key names, or null.
+func node_of_piece(rec: PrefabInstanceRecord, key: String) -> Node:
+	if key.length() < 2 or not key.substr(1).is_valid_int():
+		return null
+	var at := key.substr(1).to_int()
+	if key.begins_with("b") and at < rec.brush_ids.size():
+		return _find_brush_by_id(str(rec.brush_ids[at]))
+	if key.begins_with("e") and at < rec.entity_uids.size():
+		return _find_entity_by_uid(str(rec.entity_uids[at]))
+	return null
+
+
+## Keep `prop_name` of `node`'s value on its copy, or stop. False when `node` is
+## no piece of a copy, or nothing changed.
+func set_kept(node: Node, prop_name: String, keep: bool) -> bool:
+	var rec := instance_of(node)
+	var key := piece_key(rec, node)
+	if key == "" or prop_name == "":
+		return false
+	var entry: Dictionary = rec.kept.get(key, {"properties": [], "wiring": false})
+	var props: Array = entry["properties"]
+	if props.has(prop_name) == keep:
+		return false
+	if keep:
+		props.append(prop_name)
+	else:
+		props.erase(prop_name)
+	_store_kept(rec, key, entry)
+	return true
+
+
+## Keep every wire out of `node` on its copy, or stop.
+func set_wiring_kept(node: Node, keep: bool) -> bool:
+	var rec := instance_of(node)
+	var key := piece_key(rec, node)
+	if key == "":
+		return false
+	var entry: Dictionary = rec.kept.get(key, {"properties": [], "wiring": false})
+	if bool(entry["wiring"]) == keep:
+		return false
+	entry["wiring"] = keep
+	_store_kept(rec, key, entry)
+	return true
+
+
+func _store_kept(rec: PrefabInstanceRecord, key: String, entry: Dictionary) -> void:
+	if (entry["properties"] as Array).is_empty() and not bool(entry["wiring"]):
+		rec.kept.erase(key)
+	else:
+		rec.kept[key] = entry
+
+
+## What `node`'s copy keeps of it: `{"properties": [names], "wiring": bool}`.
+func kept_of(node: Node) -> Dictionary:
+	var rec := instance_of(node)
+	var key := piece_key(rec, node)
+	return (rec.kept.get(key, {"properties": [], "wiring": false}) as Dictionary).duplicate(true)
+
+
+## Forget everything the copy keeps, and give it the prefab's values again by
+## rebuilding it from its file. False when there was nothing kept.
+func clear_kept(node: Node) -> bool:
+	var rec := instance_of(node)
+	if rec == null or rec.kept.is_empty():
+		return false
+	rec.kept.clear()
+	return set_variant(rec.instance_id, rec.variant_name)
+
+
+## The linked copy `nodes` are all of, every piece of it and nothing else, or "".
+## What Ctrl+D duplicates as another linked copy when asked to (#1734).
+func whole_linked_copy(nodes: Array) -> String:
+	if nodes.is_empty():
+		return ""
+	var rec := instance_of(nodes[0])
+	if rec == null or not rec.linked:
+		return ""
+	var pieces := pieces_of(rec)
+	if pieces.size() != nodes.size():
+		return ""
+	for node in nodes:
+		if not pieces.has(node):
+			return ""
+	return rec.instance_id
+
+
+## Place another linked copy of the prefab `instance_id` is a copy of, moved by
+## `offset`, keeping what that copy keeps. It is made from the prefab, as a Pull
+## would make it. The new copy's id, or "".
+func duplicate_linked(instance_id: String, offset: Vector3) -> String:
+	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
+	if rec == null or not rec.linked or _instance_is_gone(rec):
+		return ""
+	var prefab = HFPrefabType.load_from_file(rec.source_path)
+	if not prefab:
+		return ""
+	var frame := _instance_frame(
+		rec, _instance_pieces(rec, prefab.get_variant_data(rec.variant_name))
+	)
+	frame.origin += offset
+	var placed := place(prefab, rec.source_path, frame, rec.variant_name, true)
+	var iid := str(placed.get("instance_id", ""))
+	if iid == "":
+		return ""
+	var copy: PrefabInstanceRecord = _instances[iid]
+	copy.kept = rec.kept.duplicate(true)
+	_give_kept(copy, _read_kept(rec))
+	return iid
+
+
+## Rebuild a copy from its prefab, throwing away what it changed outside what it
+## keeps. False when the prefab cannot be read.
+func discard_changes(instance_id: String) -> bool:
+	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
+	return rec != null and set_variant(instance_id, rec.variant_name)
+
+
+## Each kept piece's values as they are now, by key: its kept properties, and
+## with its wiring kept, its wires.
+func _read_kept(rec: PrefabInstanceRecord) -> Dictionary:
+	var out: Dictionary = {}
+	for key in rec.kept:
+		var node := node_of_piece(rec, key)
+		if node == null:
+			continue
+		var entry: Dictionary = rec.kept[key]
+		var data := _entity_data_of(node)
+		var values: Dictionary = {}
+		for prop_name in entry.get("properties", []):
+			if data.has(prop_name):
+				values[prop_name] = data[prop_name]
+		var wires: Variant = null
+		if bool(entry.get("wiring", false)):
+			wires = (node.get_meta(HFBrushEntity.OUTPUTS_META, []) as Array).duplicate(true)
+		out[key] = {"properties": values, "wiring": wires}
+	return out
+
+
+## Put kept values back on the pieces a rebuild made, by key.
+func _give_kept(rec: PrefabInstanceRecord, values: Dictionary) -> void:
+	for key in values:
+		var node := node_of_piece(rec, key)
+		if node == null:
+			continue
+		var entry: Dictionary = values[key]
+		for prop_name in entry["properties"]:
+			root.set_entity_property(node, prop_name, entry["properties"][prop_name])
+		if entry["wiring"] is Array:
+			for holder in root.entity_property_nodes(node):
+				holder.set_meta(
+					HFBrushEntity.OUTPUTS_META, (entry["wiring"] as Array).duplicate(true)
+				)
+
+
+## A point entity's properties, or a brush entity's.
+static func _entity_data_of(node: Node) -> Dictionary:
+	if node is DraftEntity:
+		return (node as DraftEntity).entity_data
+	var data: Variant = node.get_meta(HFBrushEntity.DATA_META, {})
+	return data if data is Dictionary else {}
 
 
 ## Each node of the instance still there, with the record it was placed from, as
@@ -671,11 +893,27 @@ func propagate_from_source(source_path: String) -> int:
 	var instances = get_instances_for_source(source_path)
 	var count := 0
 	for rec in instances:
-		if not rec.linked or _instance_is_gone(rec):
+		if not rec.linked or _instance_is_gone(rec) or _instance_is_locked(rec):
 			continue
 		_apply_variant(rec, prefab, rec.variant_name)
 		count += 1
 	return count
+
+
+## Whether a piece of the copy is locked, so a Pull leaves the copy as it is
+## rather than rebuild what nothing may change (#1697).
+func _instance_is_locked(rec: PrefabInstanceRecord) -> bool:
+	if root.visgroup_system == null:
+		return false
+	for bid in rec.brush_ids:
+		var brush = _find_brush_by_id(bid)
+		if brush and root.visgroup_system.is_locked(brush):
+			return true
+	for uid in rec.entity_uids:
+		var ent = _find_entity_by_uid(uid)
+		if ent and root.visgroup_system.is_locked(ent):
+			return true
+	return false
 
 
 ## Re-capture the current state of an instance back to the source prefab.
@@ -720,14 +958,49 @@ func push_instance_to_source(instance_id: String) -> bool:
 	var captured = HFPrefabType.capture_from_selection(
 		root.brush_system, root.entity_system, brush_nodes, entity_nodes
 	)
+	_leave_kept_out(rec, captured, prefab.get_variant_data(rec.variant_name))
 	prefab.set_variant_data(rec.variant_name, captured.brush_infos, captured.entity_infos)
 
 	var err := prefab.save_to_file(rec.source_path)
 	return err == OK
 
 
+## What a copy keeps is its own, so Push writes the prefab's value back in its
+## place, and drops it where the prefab has none (#1734).
+func _leave_kept_out(rec: PrefabInstanceRecord, captured, before: Dictionary) -> void:
+	for key in rec.kept:
+		var at := str(key).substr(1).to_int()
+		var brush := str(key).begins_with("b")
+		var infos: Array = captured.brush_infos if brush else captured.entity_infos
+		var old_infos: Array = before.get("brush_infos" if brush else "entity_infos", [])
+		if at >= infos.size():
+			continue
+		var info: Dictionary = infos[at]
+		var old: Dictionary = old_infos[at] if at < old_infos.size() else {}
+		var data_key := HFBrushEntity.DATA_META if brush else "properties"
+		var wires_key := HFBrushEntity.OUTPUTS_META if brush else "io_outputs"
+		var entry: Dictionary = rec.kept[key]
+		var data: Dictionary = info.get(data_key, {})
+		var old_data: Dictionary = old.get(data_key, {})
+		for prop_name in entry.get("properties", []):
+			if old_data.has(prop_name):
+				data[prop_name] = old_data[prop_name]
+			else:
+				data.erase(prop_name)
+		info[data_key] = data
+		if bool(entry.get("wiring", false)):
+			if old.has(wires_key):
+				info[wires_key] = (old[wires_key] as Array).duplicate(true)
+			else:
+				info.erase(wires_key)
+
+
 ## Compute a diff between a prefab instance and its source.
 ## Returns an Array of {field, source_value, instance_value} dictionaries.
+##
+## Beside the counts, each piece's properties and wires against its record, with
+## the names a copy's own entities answer to read as the prefab's, and what the
+## copy keeps left out (#1734).
 func compute_instance_diff(instance_id: String) -> Array:
 	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
 	if not rec:
@@ -766,7 +1039,78 @@ func compute_instance_diff(instance_id: String) -> Array:
 			)
 		)
 
+	var pieces := _instance_pieces(rec, data)
+	var names: Dictionary = {}
+	for piece in pieces:
+		var theirs := str((piece[0] as Dictionary).get(HFBrushEntity.NAME_META, ""))
+		var ours := str((piece[1] as Node).get_meta(HFBrushEntity.NAME_META, ""))
+		if theirs != "" and ours != "":
+			names[ours] = theirs
+	for piece in pieces:
+		var info: Dictionary = piece[0]
+		var node: Node = piece[1]
+		if info.is_empty():
+			continue
+		var entry: Dictionary = rec.kept.get(piece_key(rec, node), {})
+		var brush := node is DraftBrush
+		var source_data: Dictionary = info.get(
+			HFBrushEntity.DATA_META if brush else "properties", {}
+		)
+		var own_data := _entity_data_of(node)
+		var props: Array = source_data.keys()
+		for prop_name in own_data:
+			if not props.has(prop_name):
+				props.append(prop_name)
+		for prop_name in props:
+			if (entry.get("properties", []) as Array).has(prop_name):
+				continue
+			var own: Variant = _as_prefab_names(own_data.get(prop_name), names)
+			if var_to_str(own) != var_to_str(source_data.get(prop_name)):
+				(
+					diff
+					. append(
+						{
+							"field": "%s %s" % [node.name, prop_name],
+							"source_value": source_data.get(prop_name),
+							"instance_value": own_data.get(prop_name),
+						}
+					)
+				)
+		if bool(entry.get("wiring", false)):
+			continue
+		var source_wires: Variant = info.get(
+			HFBrushEntity.OUTPUTS_META if brush else "io_outputs", []
+		)
+		var own_wires: Variant = _as_prefab_names(
+			node.get_meta(HFBrushEntity.OUTPUTS_META, []), names
+		)
+		if var_to_str(own_wires) != var_to_str(source_wires if source_wires is Array else []):
+			(
+				diff
+				. append(
+					{
+						"field": "%s wiring" % node.name,
+						"source_value": source_wires,
+						"instance_value": node.get_meta(HFBrushEntity.OUTPUTS_META, []),
+					}
+				)
+			)
 	return diff
+
+
+## `value` with the names a copy gave its own entities read as the prefab's, so a
+## wire or a target to a piece of the copy is not a change.
+static func _as_prefab_names(value: Variant, names: Dictionary) -> Variant:
+	if value is String and names.has(value):
+		return names[value]
+	if value is Array:
+		return (value as Array).map(func(item): return _as_prefab_names(item, names))
+	if value is Dictionary:
+		var out: Dictionary = {}
+		for key in value:
+			out[key] = _as_prefab_names(value[key], names)
+		return out
+	return value
 
 
 # ---------------------------------------------------------------------------
@@ -811,66 +1155,18 @@ func _shape_name(shape: int) -> String:
 			return "brush"
 
 
-## Quick-save selection as prefab. Returns the saved path or "".
-## Names Windows treats as devices whatever extension follows them.
-const _RESERVED_FILE_NAMES := [
-	"CON",
-	"PRN",
-	"AUX",
-	"NUL",
-	"COM1",
-	"COM2",
-	"COM3",
-	"COM4",
-	"COM5",
-	"COM6",
-	"COM7",
-	"COM8",
-	"COM9",
-	"LPT1",
-	"LPT2",
-	"LPT3",
-	"LPT4",
-	"LPT5",
-	"LPT6",
-	"LPT7",
-	"LPT8",
-	"LPT9",
-]
-
-
 ## A prefab name as a file name that stays inside the prefab directory.
 ##
 ## `to_snake_case()` normalises case and word breaks and does not touch a slash,
 ## a dot or a leading `..`, so the Save box was free text going straight into a
 ## path: "../escape" resolved to `res://escape.hfprefab`, beside `project.godot`
 ## and invisible to the panel that made it, and "level 2/pillar" failed silently
-## (#667). `validate_filename()` is the engine's own rule for what a filesystem
-## accepts and replaces every separator, so a name can no longer point anywhere
-## but here.
-##
-## Capped at 200 characters before the extension. The usual filesystem limit is
-## 255 bytes for the whole name, and a name the panel's list cannot show is not a
-## name anybody wanted.
+## (#667). The rest of the rules are every library file's, in `HFFileNames`.
 static func prefab_file_name(prefab_name: String) -> String:
 	# Trimmed before `to_snake_case()`, which turns a run of spaces into a run of
 	# underscores: "   " came out as "___" rather than as no name at all.
-	var cleaned := prefab_name.strip_edges().to_snake_case().validate_filename().strip_edges()
-	# Leading dots are what a traversal is made of, and a file starting with one
-	# is hidden on every platform that matters.
-	while cleaned.begins_with("."):
-		cleaned = cleaned.substr(1)
-	if cleaned.length() > 200:
-		cleaned = cleaned.substr(0, 200)
-	if cleaned == "":
-		cleaned = "untitled"
-	# `validate_filename()` replaces characters a filesystem refuses; it does not
-	# know about names it refuses. On Windows `CON`, `NUL`, `PRN`, `AUX` and the
-	# COM/LPT series are devices, with or without an extension, so `CON.hfprefab`
-	# cannot be opened and the save failed with nothing on screen (#667).
-	if _RESERVED_FILE_NAMES.has(cleaned.to_upper()):
-		cleaned = "%s_prefab" % cleaned
-	return cleaned + ".hfprefab"
+	var snake := prefab_name.strip_edges().to_snake_case()
+	return HFFileNames.safe_file_stem(snake, "untitled", "prefab") + ".hfprefab"
 
 
 ## Where a prefab of this name is saved.
@@ -883,13 +1179,32 @@ static func prefab_path(prefab_name: String, dir_path: String = prefab_dir) -> S
 ## Quick Save has no dialog to ask in, and the name it suggests depends only on
 ## what is selected, so a second box saved over the first one's file and every
 ## instance linked to it followed (#929). It takes the next free name instead.
+## A numbered name is the free file's own stem, which `prefab_file_name()` gives
+## back unchanged, so the file it is saved to is the one found free.
 static func unused_prefab_name(prefab_name: String, dir_path: String = prefab_dir) -> String:
-	if not FileAccess.file_exists(prefab_path(prefab_name, dir_path)):
-		return prefab_name
-	var n := 2
-	while FileAccess.file_exists(prefab_path("%s_%d" % [prefab_name, n], dir_path)):
-		n += 1
-	return "%s_%d" % [prefab_name, n]
+	var stem := prefab_file_name(prefab_name).get_basename()
+	var free_stem := HFFileNames.unused_path(dir_path, stem, "hfprefab").get_file().get_basename()
+	return prefab_name if free_stem == stem else free_stem
+
+
+## The brushes and the entities among `nodes`, in selection order, as
+## `{"brushes": [...], "entities": [...]}`. A node freed since it was selected,
+## or one that is neither, is left out.
+##
+## Quick Save, the library panel's Save and Save Linked, and Add Variant each
+## split the selection with a loop of their own, and only the panel's skipped a
+## freed node (#1451).
+static func split_selection(level_root: Node, nodes: Array) -> Dictionary:
+	var brushes: Array = []
+	var entities: Array = []
+	for node in nodes:
+		if not is_instance_valid(node) or not (node is Node):
+			continue
+		if level_root.is_brush_node(node):
+			brushes.append(node)
+		elif level_root.is_entity_node(node):
+			entities.append(node)
+	return {"brushes": brushes, "entities": entities}
 
 
 ## Say something to the mapper, the way the other subsystems do.
@@ -899,6 +1214,7 @@ func _report(message: String, severity: int) -> void:
 		root.user_message.emit(message, severity)
 
 
+## Quick-save selection as prefab. Returns the saved path or "".
 func quick_save_prefab(
 	brush_nodes: Array, entity_nodes: Array, prefab_name: String = "", linked: bool = false
 ) -> String:
@@ -926,6 +1242,10 @@ func quick_save_prefab(
 		# feedback as one who typed a name with a slash in it (#667).
 		_report("Prefab '%s' could not be written to %s (error %d)" % [prefab_name, path, err], 2)
 		return ""
+	# Before the pieces are tagged as a copy of this one.
+	var dropped := HFFormatCensus.left_out(root, ".hfprefab", brush_nodes + entity_nodes)
+	if dropped != "" and root.has_signal("user_message"):
+		root.user_message.emit("Prefab '%s' %s" % [prefab_name, dropped], 0)
 
 	# Register as a linked instance if requested
 	if linked:
@@ -965,7 +1285,58 @@ func copy_to_clipboard(brush_nodes: Array, entity_nodes: Array) -> bool:
 		# before and the mapper is looking at the wrong geometry.
 		_report("Copy failed: the clipboard buffer could not be written (error %d)" % err, 2)
 		return false
+	# And as `.map` text on the system clipboard, to paste into a message, another
+	# editor or a file of pieces (#1722). Kept beside the buffer as well, so a paste
+	# can tell whether the system clipboard still holds this copy or something
+	# newer.
+	var text: String = root.file_system.map_text_of(brush_nodes + entity_nodes)
+	set_system_clipboard(text)
+	_write_text(map_text_path(), text)
 	return true
+
+
+## What Copy put on the system clipboard, kept beside the buffer.
+static func map_text_path() -> String:
+	return clipboard_path.get_basename() + ".map"
+
+
+## The system clipboard's text. A display server with no clipboard, a headless
+## run's, has none to read and errors when asked, so it is not asked.
+static func system_clipboard() -> String:
+	if system_clipboard_stand_in != null:
+		return str(system_clipboard_stand_in)
+	if not DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		return ""
+	return DisplayServer.clipboard_get()
+
+
+static func set_system_clipboard(text: String) -> void:
+	if system_clipboard_stand_in != null:
+		system_clipboard_stand_in = text
+		return
+	if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		DisplayServer.clipboard_set(text)
+
+
+## `.map` text on the system clipboard that is newer than the buffer, or "": text
+## that reads as `.map` and is not what the last Copy put there (#1722).
+func newer_map_text() -> String:
+	var text := system_clipboard()
+	if text.strip_edges() == "":
+		return ""
+	if (
+		FileAccess.file_exists(map_text_path())
+		and FileAccess.get_file_as_string(map_text_path()) == text
+	):
+		return ""
+	return text if root.file_system.is_map_text(text) else ""
+
+
+static func _write_text(path: String, text: String) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file:
+		file.store_string(text)
+		file.close()
 
 
 ## What is on the clipboard, or null when it is empty or unreadable.
@@ -1032,6 +1403,7 @@ func capture_state() -> Dictionary:
 					"brush_ids": rec.brush_ids.duplicate(),
 					"entity_uids": rec.entity_uids.duplicate(),
 					"linked": rec.linked,
+					"kept": rec.kept.duplicate(true),
 				}
 			)
 		)
@@ -1059,6 +1431,8 @@ func restore_state(data: Dictionary) -> void:
 		# "overrides" in an older payload is read past: the mechanism it belonged
 		# to had no way in from the editor and wrote a meta nothing read.
 		rec.linked = bool(entry.get("linked", false))
+		var kept: Variant = entry.get("kept", {})
+		rec.kept = (kept as Dictionary).duplicate(true) if kept is Dictionary else {}
 		if rec.instance_id != "":
 			_instances[rec.instance_id] = rec
 			written.merge(_tag_nodes(rec), true)

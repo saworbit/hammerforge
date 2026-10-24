@@ -15,6 +15,8 @@ const _ID_CLIP := 103
 const _ID_CLIP_TO_FACE := 112
 const _ID_CARVE := 104
 const _ID_MERGE := 105
+const _ID_INTERSECT := 117
+const _ID_OFFSET := 118
 const _ID_ROTATE_CCW := 106
 const _ID_ROTATE_CW := 107
 const _ID_FLIP := 108
@@ -25,13 +27,19 @@ const _ID_SELECT_SIMILAR := 113
 const _ID_APPLY_LAST_TEX := 114
 const _ID_SELECTION_FILTER := 115
 const _ID_PLACE_PREFAB := 116
+const _ID_CONVERT_TO_BRUSHES := 119
 const _ID_APPLY_TO_BRUSH := 121
+const _ID_RUN_TRIM := 122
+const _ID_REPICK_TRIM := 123
 const _ID_JUSTIFY_FIT := 130
 const _ID_JUSTIFY_CENTER := 131
 const _ID_JUSTIFY_LEFT := 132
 const _ID_JUSTIFY_RIGHT := 133
 const _ID_JUSTIFY_TOP := 134
 const _ID_JUSTIFY_BOTTOM := 135
+const _ID_ALIGN_EDGE := 136
+const _ID_FIT_REPEATS := 137
+const _ID_FIT_STRIP := 138
 const _ID_ENTITY_IO := 140
 const _ID_ENTITY_PROPS := 141
 const _ID_HIGHLIGHT_CONN := 142
@@ -48,16 +56,42 @@ const _ID_VERTEX_SUBMODE := 164
 const _ID_EDGE_SUBMODE := 165
 const _ID_SELECT_ALL := 170
 const _ID_DESELECT_ALL := 171
+const _ID_INVERT_SELECTION := 172
+const _ID_SELECT_INSIDE := 173
+const _ID_SELECT_PARTLY_INSIDE := 174
+const _ID_SELECT_TOUCHING := 175
+const _ID_SELECT_COLUMN := 176
+const _ID_GROUP := 180
+const _ID_UNGROUP := 181
+const _ID_BACK_TO_WORLD := 182
+const _ID_NEW_VISGROUP := 183
+const _ID_SHOW_MATERIAL := 184
+const _ID_DRAW_ADD := 185
+const _ID_DRAW_CUT := 186
+const _ID_PASTE_HERE := 187
 const _ID_QUICK_BAKE := 200
 const _ID_UNDO := 201
 const _ID_REDO := 202
 # Grid snap IDs: 300 + value
 const _ID_GRID_BASE := 300
+## The entity, brush entity and visgroup submenus are filled as the menu opens;
+## an item's id is its place in the list kept beside it, plus one of these.
+const _ID_PLACE_BASE := 1000
+const _ID_BRUSH_ENTITY_BASE := 2000
+const _ID_VISGROUP_BASE := 3000
 
 var _grid_submenu: PopupMenu
 var _uv_submenu: PopupMenu
 var _shape_submenu: PopupMenu
+var _select_with_submenu: PopupMenu
 var _state: Dictionary = {}
+
+var _place_submenu: PopupMenu
+var _brush_entity_submenu: PopupMenu
+var _visgroup_submenu: PopupMenu
+var _place_classes: Array[String] = []
+var _brush_entity_classes: Array[String] = []
+var _visgroup_names: Array[String] = []
 
 
 func _init() -> void:
@@ -81,6 +115,10 @@ func _init() -> void:
 	_uv_submenu.add_item("Right", _ID_JUSTIFY_RIGHT)
 	_uv_submenu.add_item("Top", _ID_JUSTIFY_TOP)
 	_uv_submenu.add_item("Bottom", _ID_JUSTIFY_BOTTOM)
+	_uv_submenu.add_separator()
+	_uv_submenu.add_item("Align to Edge", _ID_ALIGN_EDGE)
+	_uv_submenu.add_item("Fit Repeats", _ID_FIT_REPEATS)
+	_uv_submenu.add_item("Fit Strip", _ID_FIT_STRIP)
 	_uv_submenu.id_pressed.connect(_on_id_pressed)
 	add_child(_uv_submenu)
 	# Shape submenu
@@ -92,6 +130,28 @@ func _init() -> void:
 	_shape_submenu.add_item("Cone", _ID_SHAPE_CONE)
 	_shape_submenu.id_pressed.connect(_on_id_pressed)
 	add_child(_shape_submenu)
+	# Select with the selected brush, then delete it (#1717)
+	_select_with_submenu = PopupMenu.new()
+	_select_with_submenu.name = "SelectWithBrush"
+	_select_with_submenu.add_item("Select Inside", _ID_SELECT_INSIDE)
+	_select_with_submenu.add_item("Select Partly Inside", _ID_SELECT_PARTLY_INSIDE)
+	_select_with_submenu.add_item("Select Touching", _ID_SELECT_TOUCHING)
+	_select_with_submenu.add_item("Select Column", _ID_SELECT_COLUMN)
+	_select_with_submenu.id_pressed.connect(_on_id_pressed)
+	add_child(_select_with_submenu)
+	# Filled as the menu opens, from the level (#1724).
+	_place_submenu = PopupMenu.new()
+	_place_submenu.name = "PlaceEntity"
+	_place_submenu.id_pressed.connect(_on_place_pressed)
+	add_child(_place_submenu)
+	_brush_entity_submenu = PopupMenu.new()
+	_brush_entity_submenu.name = "BrushEntity"
+	_brush_entity_submenu.id_pressed.connect(_on_brush_entity_pressed)
+	add_child(_brush_entity_submenu)
+	_visgroup_submenu = PopupMenu.new()
+	_visgroup_submenu.name = "Visgroup"
+	_visgroup_submenu.id_pressed.connect(_on_visgroup_pressed)
+	add_child(_visgroup_submenu)
 	# Own signal
 	id_pressed.connect(_on_id_pressed)
 
@@ -104,6 +164,10 @@ func show_at(pos: Vector2, state: Dictionary) -> void:
 		add_item("Edit HammerForge and Godot nodes separately")
 		set_item_disabled(0, true)
 	else:
+		# Godot meshes and CSG shapes selected, which can join the level as brushes.
+		if int(state.get("convertible_count", 0)) > 0 and state.get("has_root", false):
+			add_item("Convert to Brushes", _ID_CONVERT_TO_BRUSHES)
+			add_separator()
 		_build_context_items(ctx)
 		# The prefab selected in the library, put where the cursor is, as a drop
 		# would put it (#1301).
@@ -115,6 +179,7 @@ func show_at(pos: Vector2, state: Dictionary) -> void:
 	add_separator()
 	add_item("Select All", _ID_SELECT_ALL)
 	add_item("Deselect All", _ID_DESELECT_ALL)
+	add_item("Invert Selection", _ID_INVERT_SELECTION)
 	add_separator()
 	add_submenu_node_item("Grid Snap", _grid_submenu)
 	add_item("Quick Bake", _ID_QUICK_BAKE)
@@ -133,17 +198,27 @@ func _build_context_items(ctx: Context) -> void:
 			add_item("Merge Vertices", _ID_VERTEX_MERGE)
 			add_item("Split Edge", _ID_VERTEX_SPLIT)
 			add_item("Clip to Convex", _ID_VERTEX_CONVEX)
+			add_item("Offset...", _ID_OFFSET)
 			add_separator()
 			add_item("Exit Vertex Mode", _ID_VERTEX_EXIT)
 		Context.FACE_SELECTED:
 			add_item("Apply Last Texture", _ID_APPLY_LAST_TEX)
 			add_item("Apply to Whole Brush", _ID_APPLY_TO_BRUSH)
+			if int(_state.get("face_material", -1)) >= 0:
+				add_item("Show Material in Browser", _ID_SHOW_MATERIAL)
 			add_separator()
 			add_submenu_node_item("UV Operations", _uv_submenu)
+			add_item("Offset...", _ID_OFFSET)
+			add_separator()
+			# A skirting or cornice along the picked wall faces (#1414).
+			add_item("Run Trim Along Faces", _ID_RUN_TRIM)
+			if _state.get("repick_trim_run", false):
+				add_item("Re-pick Trim Run", _ID_REPICK_TRIM)
 			add_separator()
 			add_item("Select Similar", _ID_SELECT_SIMILAR)
 			add_item("Selection Filters...", _ID_SELECTION_FILTER)
 		Context.ENTITY_SELECTED:
+			_add_place_entity()
 			add_item("I/O Connections", _ID_ENTITY_IO)
 			add_item("Edit Properties", _ID_ENTITY_PROPS)
 			add_check_item("Highlight Connected", _ID_HIGHLIGHT_CONN)
@@ -151,9 +226,12 @@ func _build_context_items(ctx: Context) -> void:
 				get_item_index(_ID_HIGHLIGHT_CONN), _state.get("highlight_connected", false)
 			)
 			add_separator()
+			_add_visgroup_submenu()
+			add_item("Offset...", _ID_OFFSET)
 			add_item("Duplicate", _ID_DUPLICATE)
 			add_item("Delete", _ID_DELETE)
 		Context.BRUSH_SELECTED:
+			_add_place_entity()
 			add_item("Extrude Up", _ID_EXTRUDE_UP)
 			add_item("Extrude Down", _ID_EXTRUDE_DOWN)
 			add_separator()
@@ -162,20 +240,114 @@ func _build_context_items(ctx: Context) -> void:
 			add_item("Clip to Face Plane", _ID_CLIP_TO_FACE)
 			add_item("Carve", _ID_CARVE)
 			add_item("Merge", _ID_MERGE)
+			add_item("Intersect", _ID_INTERSECT)
 			add_separator()
 			add_item("Rotate CCW", _ID_ROTATE_CCW)
 			add_item("Rotate CW", _ID_ROTATE_CW)
 			add_item("Flip", _ID_FLIP)
 			add_item("Reset Rotation", _ID_RESET_ROTATION)
+			add_item("Offset...", _ID_OFFSET)
+			add_separator()
+			_add_brush_entity_submenu()
+			if _state.get("tied", false):
+				add_item("Back to World", _ID_BACK_TO_WORLD)
+			add_item("Group", _ID_GROUP)
+			if _state.get("grouped", false):
+				add_item("Ungroup", _ID_UNGROUP)
+			_add_visgroup_submenu()
 			add_separator()
 			add_item("Select Similar", _ID_SELECT_SIMILAR)
 			add_item("Selection Filters...", _ID_SELECTION_FILTER)
+			add_submenu_node_item("Select With This Brush", _select_with_submenu)
 			add_separator()
 			add_item("Duplicate", _ID_DUPLICATE)
 			add_item("Delete", _ID_DELETE)
 		Context.DRAW_IDLE, Context.NONE:
+			_add_place_entity()
 			add_submenu_node_item("Draw Shape", _shape_submenu)
+			var cutting: bool = _state.get("is_subtract", false)
+			add_radio_check_item("Draw as Add", _ID_DRAW_ADD)
+			set_item_checked(get_item_index(_ID_DRAW_ADD), not cutting)
+			add_radio_check_item("Draw as Cut", _ID_DRAW_CUT)
+			set_item_checked(get_item_index(_ID_DRAW_CUT), cutting)
 			add_item("Toggle Grid", _ID_TOGGLE_GRID)
+
+
+## Place Entity Here, by category, when there is a level and a point under the
+## cursor to put it on, and Paste Here when the clipboard holds something
+## (#1722).
+func _add_place_entity() -> void:
+	if (
+		_state.get("has_root", false)
+		and _state.get("can_paste", false)
+		and _state.get("cursor_screen") is Vector2
+	):
+		add_item("Paste Here", _ID_PASTE_HERE)
+	var classes: Dictionary = _state.get("entity_classes", {})
+	if not _state.get("has_root", false) or classes.is_empty():
+		return
+	if not (_state.get("cursor_screen") is Vector2):
+		return
+	_place_submenu.clear()
+	_place_classes.clear()
+	var categories: Array = classes.keys()
+	categories.sort()
+	for category in categories:
+		_place_submenu.add_separator(str(category))
+		for entity_class in classes[category]:
+			_place_submenu.add_item(str(entity_class), _ID_PLACE_BASE + _place_classes.size())
+			_place_classes.append(str(entity_class))
+	add_submenu_node_item("Place Entity Here", _place_submenu)
+	add_separator()
+
+
+func _add_brush_entity_submenu() -> void:
+	var classes: Array = _state.get("brush_entity_classes", [])
+	if classes.is_empty():
+		return
+	_brush_entity_submenu.clear()
+	_brush_entity_classes.clear()
+	for entity_class in classes:
+		_brush_entity_submenu.add_item(
+			str(entity_class), _ID_BRUSH_ENTITY_BASE + _brush_entity_classes.size()
+		)
+		_brush_entity_classes.append(str(entity_class))
+	add_submenu_node_item("Make Brush Entity", _brush_entity_submenu)
+
+
+func _add_visgroup_submenu() -> void:
+	_visgroup_submenu.clear()
+	_visgroup_names.clear()
+	for visgroup in _state.get("visgroups", []):
+		_visgroup_submenu.add_item(str(visgroup), _ID_VISGROUP_BASE + _visgroup_names.size())
+		_visgroup_names.append(str(visgroup))
+	if not _visgroup_names.is_empty():
+		_visgroup_submenu.add_separator()
+	_visgroup_submenu.add_item("New Visgroup", _ID_NEW_VISGROUP)
+	add_submenu_node_item("Add to Visgroup", _visgroup_submenu)
+
+
+func _on_place_pressed(id: int) -> void:
+	var index := id - _ID_PLACE_BASE
+	if index >= 0 and index < _place_classes.size():
+		action_requested.emit(
+			"place_entity_here", [_place_classes[index], _state.get("cursor_screen")]
+		)
+
+
+func _on_brush_entity_pressed(id: int) -> void:
+	var index := id - _ID_BRUSH_ENTITY_BASE
+	if index >= 0 and index < _brush_entity_classes.size():
+		action_requested.emit("make_brush_entity", [_brush_entity_classes[index]])
+
+
+func _on_visgroup_pressed(id: int) -> void:
+	if id == _ID_NEW_VISGROUP:
+		action_requested.emit("new_visgroup", [])
+		return
+	var index := id - _ID_VISGROUP_BASE
+	if index >= 0 and index < _visgroup_names.size():
+		action_requested.emit("add_to_visgroup", [_visgroup_names[index]])
 
 
 func _determine_context(state: Dictionary) -> Context:
@@ -217,6 +389,8 @@ func _on_id_pressed(id: int) -> void:
 			action = "carve"
 		_ID_MERGE:
 			action = "merge"
+		_ID_INTERSECT:
+			action = "intersect"
 		_ID_ROTATE_CCW:
 			action = "rotate_ccw"
 		_ID_ROTATE_CW:
@@ -225,6 +399,8 @@ func _on_id_pressed(id: int) -> void:
 			action = "flip_selection"
 		_ID_RESET_ROTATION:
 			action = "reset_rotation"
+		_ID_OFFSET:
+			action = "offset_selection"
 		_ID_DUPLICATE:
 			action = "duplicate"
 		_ID_DELETE:
@@ -237,10 +413,26 @@ func _on_id_pressed(id: int) -> void:
 			action = "selection_filter"
 		_ID_PLACE_PREFAB:
 			action = "place_prefab"
+		_ID_PASTE_HERE:
+			action = "paste_at_cursor"
+			args = [_state.get("cursor_screen")]
+		_ID_CONVERT_TO_BRUSHES:
+			action = "convert_to_brushes"
 		_ID_APPLY_TO_BRUSH:
 			action = "apply_to_brush"
+		_ID_RUN_TRIM:
+			action = "run_trim_along_faces"
+		_ID_REPICK_TRIM:
+			action = "repick_trim_run"
 		_ID_JUSTIFY_FIT:
 			action = "justify_fit"
+		_ID_ALIGN_EDGE:
+			action = "align_texture_to_edge"
+			args = ["cursor"]
+		_ID_FIT_REPEATS:
+			action = "fit_texture_repeats"
+		_ID_FIT_STRIP:
+			action = "fit_texture_strip"
 		_ID_JUSTIFY_CENTER:
 			action = "justify_center"
 		_ID_JUSTIFY_LEFT:
@@ -285,12 +477,36 @@ func _on_id_pressed(id: int) -> void:
 			action = "select_all"
 		_ID_DESELECT_ALL:
 			action = "deselect_all"
+		_ID_INVERT_SELECTION:
+			action = "invert_selection"
+		_ID_SELECT_INSIDE:
+			action = "select_inside"
+		_ID_SELECT_PARTLY_INSIDE:
+			action = "select_partly_inside"
+		_ID_SELECT_TOUCHING:
+			action = "select_touching"
+		_ID_SELECT_COLUMN:
+			action = "select_column"
 		_ID_QUICK_BAKE:
 			action = "quick_bake"
 		_ID_UNDO:
 			action = "undo"
 		_ID_REDO:
 			action = "redo"
+		_ID_GROUP:
+			action = "group"
+		_ID_UNGROUP:
+			action = "ungroup"
+		_ID_BACK_TO_WORLD:
+			action = "back_to_world"
+		_ID_SHOW_MATERIAL:
+			action = "show_material_in_browser"
+		_ID_DRAW_ADD:
+			if _state.get("is_subtract", false):
+				action = "toggle_operation"
+		_ID_DRAW_CUT:
+			if not _state.get("is_subtract", false):
+				action = "toggle_operation"
 	if action != "":
 		action_requested.emit(action, args)
 

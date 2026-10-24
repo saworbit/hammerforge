@@ -21,6 +21,7 @@ class_name HFSpiralStairsBuilder
 @warning_ignore_start("shadowed_global_identifier")
 const HFConvexClip = preload("hf_convex_clip.gd")
 const HFGeneratorSchema = preload("hf_generator_schema.gd")
+const HFNumberFormat = preload("hf_number_format.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -33,6 +34,17 @@ const MAX_STEP_DEGREES := 179.0
 ## and costs one brush; more sides would cost the same brush and buy nothing.
 const POST_SIDES := 8
 
+## The thinnest a piece can be, as on the Stairs (`HFBrushSystem.MIN_BRUSH_EXTENT`).
+## Outer R and Slab start here (#1582). `validate()` holds what the fields only
+## feed: how far across a tread and the post come out.
+const MIN_PIECE := 0.1
+
+## The treads collide as they look.
+const COLLISION_STEPS := 0
+## The bake lays a smooth slope over the treads instead, for a player body that
+## cannot step up (#1416). `ramp_collision()` is what it lays.
+const COLLISION_RAMP := 1
+
 
 static func settings_schema() -> Array:
 	return [
@@ -40,7 +52,7 @@ static func settings_schema() -> Array:
 			"key": "outer_radius",
 			"label": "Outer R",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.05,
+			"min": MIN_PIECE,
 			"max": 4096.0,
 			"step": 0.05,
 			"default": 2.0,
@@ -90,7 +102,7 @@ static func settings_schema() -> Array:
 			"key": "tread_thickness",
 			"label": "Slab",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.05,
+			"min": MIN_PIECE,
 			"max": 1024.0,
 			"step": 0.05,
 			"default": 0.1,
@@ -112,6 +124,18 @@ static func settings_schema() -> Array:
 			"type": HFGeneratorSchema.TYPE_BOOL,
 			"default": true,
 			"tooltip": "Fill the middle with a post the full height of the flight",
+		},
+		{
+			"key": "collision",
+			"label": "Collision",
+			"type": HFGeneratorSchema.TYPE_ENUM,
+			"options": ["Steps", "Ramp"],
+			"default": COLLISION_STEPS,
+			"tooltip":
+			(
+				"Steps collide as they look. Ramp bakes a smooth slope up the treads, for a "
+				+ "player that cannot step up"
+			),
 		},
 	]
 
@@ -170,7 +194,56 @@ static func validate(settings: Dictionary) -> HFOpResult:
 			"Spiral stairs: a newel post needs an inner radius to occupy",
 			"Set an inner radius, or turn the post off"
 		)
+	var thin_refusal := _thin_refusal(merged)
+	if thin_refusal != null:
+		return thin_refusal
 	return HFOpResult.success()
+
+
+## Why a tread or the post would be thinner than a brush can be, or null.
+##
+## A brush is measured along the structure's axes, and which way a tread lies
+## along them depends on where it is in the turn, so a tread is held to its
+## narrowest way across seen from above. Its corners are all there is to it: the
+## depth from its inner edge to its outer, and the width from one end to the far
+## corner of the other. Near half a turn both ends lie almost along one line.
+static func _thin_refusal(merged: Dictionary) -> HFOpResult:
+	var outer: float = merged["outer_radius"]
+	var inner: float = merged["inner_radius"]
+	var turn := deg_to_rad(absf(float(merged["degrees_per_step"])))
+	var deep := (outer - inner) * cos(turn * 0.5)
+	var wide := outer * sin(turn)
+	if minf(deep, wide) < MIN_PIECE:
+		return HFOpResult.fail(
+			(
+				"Spiral stairs: a tread %s across at its narrowest is thinner than a brush can be"
+				% _number(minf(deep, wide))
+			),
+			(
+				"Leave more between Inner R and Outer R, or turn each tread less"
+				if deep < wide
+				else "Use a larger Outer R, or a Turn nearer 90 degrees"
+			)
+		)
+	if bool(merged["center_post"]):
+		# Across the flats of its sides, the narrowest way across it.
+		var flats := cos(PI / float(POST_SIDES)) * 2.0
+		if inner * flats < MIN_PIECE:
+			return HFOpResult.fail(
+				(
+					"Spiral stairs: a newel post %s across is thinner than a brush can be"
+					% _number(inner * flats)
+				),
+				(
+					"Use an Inner R of %s or more, or turn the post off"
+					% _number(ceilf(MIN_PIECE / flats * 100.0) / 100.0)
+				)
+			)
+	return null
+
+
+static func _number(value: float) -> String:
+	return HFNumberFormat.number(value, 0.0001)
 
 
 ## Build the flight. One `Array[FaceData]` per tread, and the post last if asked.
@@ -189,16 +262,7 @@ static func build(settings: Dictionary) -> Array:
 	var climb := float(steps) * rise
 	var has_post := bool(merged["center_post"])
 	var post_height := maxf(climb, thickness)
-	# Centred on the geometry actually emitted. The treads start at the underside
-	# of the first one rather than at the foot of the climb, so a flight without a
-	# post to fill that gap would otherwise sit half a tread high. With a post this
-	# comes out at the same place it always did.
-	var lowest := rise - thickness
-	var highest := climb
-	if has_post:
-		lowest = minf(lowest, 0.0)
-		highest = maxf(highest, post_height)
-	var y_shift := -(lowest + highest) * 0.5
+	var y_shift := _y_shift(merged)
 
 	var out: Array = []
 	for i in steps:
@@ -208,6 +272,91 @@ static func build(settings: Dictionary) -> Array:
 		out.append(_tread_faces(outer, inner, a0, a1, top - thickness, top))
 	if has_post:
 		out.append(_post_faces(inner, y_shift, y_shift + post_height))
+	return out
+
+
+## How far the flight is lowered to stand on its own middle.
+##
+## Centred on the geometry actually emitted. The treads start at the underside of
+## the first one rather than at the foot of the climb, so a flight without a post
+## to fill that gap would otherwise sit half a tread high. With a post this comes
+## out at the same place it always did.
+static func _y_shift(merged: Dictionary) -> float:
+	var steps: int = merged["steps"]
+	var rise: float = merged["rise"]
+	var thickness: float = merged["tread_thickness"]
+	var climb := float(steps) * rise
+	var lowest := rise - thickness
+	var highest := climb
+	if bool(merged["center_post"]):
+		lowest = minf(lowest, 0.0)
+		highest = maxf(highest, maxf(climb, thickness))
+	return -(lowest + highest) * 0.5
+
+
+## The collision the bake lays in place of the treads when Collision is Ramp
+## (#1416), in the flight's own space, or `{}` when it is Steps or the settings
+## cannot build.
+##
+## A helix is not one convex solid, so `pieces` is a convex point cloud for each
+## tread, which the bake hulls: a slope over the span before the tread, from the
+## front edge of the tread below (the floor, for the first) up to this one's, each
+## starting where the last one ends. The top tread gets a flat piece, so the slope
+## meets the floor above level. `over` is the tread each stands over, `covers` the
+## treads whose own collision they replace (the newel post keeps its own), and
+## `slope_degrees` how steep the slope is along the walking line, half way across
+## the treads.
+static func ramp_collision(settings: Dictionary) -> Dictionary:
+	var merged := HFGeneratorSchema.merge(settings_schema(), settings)
+	if int(merged["collision"]) != COLLISION_RAMP or not validate(settings).ok:
+		return {}
+	var outer: float = merged["outer_radius"]
+	var inner: float = merged["inner_radius"]
+	var steps: int = merged["steps"]
+	var turn := deg_to_rad(float(merged["degrees_per_step"]))
+	var rise: float = merged["rise"]
+	var thickness: float = merged["tread_thickness"]
+	var start := deg_to_rad(float(merged["start_degrees"]))
+	var y_shift := _y_shift(merged)
+
+	var pieces: Array = []
+	var over := PackedInt32Array()
+	var covers := PackedInt32Array()
+	for i in steps:
+		var a1 := start + turn * float(i)
+		var a0 := a1 - turn
+		# The same arithmetic `build()` puts each tread's top at, so a slope ends
+		# exactly where the tread it leads to begins.
+		var low := float(i) * rise + y_shift
+		var high := float(i + 1) * rise + y_shift
+		var bottom := (low - thickness) if i > 0 else y_shift
+		pieces.append(_span_points(outer, inner, a0, a1, low, high, bottom))
+		over.append(i)
+		covers.append(i)
+	var last := start + turn * float(steps - 1)
+	var top := float(steps) * rise + y_shift
+	pieces.append(_span_points(outer, inner, last, last + turn, top, top, top - thickness))
+	over.append(steps - 1)
+	var walking := (outer + inner) * 0.5
+	return {
+		"pieces": pieces,
+		"over": over,
+		"covers": covers,
+		"slope_degrees": rad_to_deg(atan2(rise, walking * absf(turn))),
+	}
+
+
+## The corners over the span from `a0` to `a1` at both radii: the top rising from
+## `low` to `high`, the bottom at `bottom`.
+static func _span_points(
+	outer: float, inner: float, a0: float, a1: float, low: float, high: float, bottom: float
+) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for radius in [inner, outer]:
+		out.append(_at(radius, a0, low))
+		out.append(_at(radius, a1, high))
+		out.append(_at(radius, a0, bottom))
+		out.append(_at(radius, a1, bottom))
 	return out
 
 

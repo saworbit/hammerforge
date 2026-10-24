@@ -7,6 +7,7 @@ extends GutTest
 const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 const HFShortcutDialogType = preload("res://addons/hammerforge/ui/hf_shortcut_dialog.gd")
 const HFHotkeyPaletteType = preload("res://addons/hammerforge/ui/hf_hotkey_palette.gd")
+const HFCommandRegistryType = preload("res://addons/hammerforge/hf_command_registry.gd")
 const HFEditorToolType = preload("res://addons/hammerforge/hf_editor_tool.gd")
 const HFPathToolType = preload("res://addons/hammerforge/hf_path_tool.gd")
 const HFPolygonToolType = preload("res://addons/hammerforge/hf_polygon_tool.gd")
@@ -48,7 +49,7 @@ func test_the_shortcut_dialog_lists_the_transform_shortcuts():
 		assert_has(listed, action, "the dialog lists %s" % action)
 
 
-func test_the_palette_and_the_dialog_list_the_same_shortcuts():
+func test_the_dialog_lists_every_shortcut_in_the_palette_and_every_command():
 	var keymap = HFKeymapType.load_or_default()
 	var palette = HFHotkeyPaletteType.new()
 	add_child_autofree(palette)
@@ -67,9 +68,18 @@ func test_the_palette_and_the_dialog_list_the_same_shortcuts():
 			in_dialog.append(str(item.get_meta("action", "")))
 			item = item.get_next()
 		category = category.get_next()
-	in_palette.sort()
-	in_dialog.sort()
-	assert_eq(in_dialog, in_palette)
+	# The palette also lists the commands with no key (#1428). The dialog lists
+	# every command the palette runs, since any of them can be given a key there
+	# now (#1733), and every action the keymap holds.
+	var keyless := Array(HFCommandRegistryType.palette_ids())
+	for action in in_palette:
+		assert_has(in_dialog, action, "the dialog lists %s" % action)
+	for action in HFCommandRegistryType.dispatched_ids():
+		assert_has(in_dialog, action, "the dialog lists %s, keyed or not" % action)
+	for action in keymap.get_actions():
+		assert_has(in_dialog, action, "and the keymap's %s" % action)
+	for action in keyless:
+		assert_has(in_palette, action, "the palette lists %s with no key" % action)
 
 
 # -- The tools' overlay (#904) ---------------------------------------------------
@@ -101,6 +111,93 @@ func test_every_drawing_tool_gets_the_same_overlay():
 		assert_eq(material.transparency, BaseMaterial3D.TRANSPARENCY_ALPHA)
 		tool._ensure_mesh()
 		assert_eq(tool._mesh_instance, overlay, "and asking again keeps the one it has")
+
+
+func test_every_drawing_tool_lets_its_overlay_go_the_same_way():
+	var holder := Node3D.new()
+	add_child_autofree(holder)
+	for tool in [HFPathToolType.new(), HFPolygonToolType.new(), HFMeasureToolType.new()]:
+		tool.root = holder
+		tool._ensure_mesh()
+		var overlay: MeshInstance3D = tool._mesh_instance
+		tool._clear_visuals()
+		assert_null(overlay.get_parent(), "out of the level at once, not a frame later")
+		assert_true(overlay.is_queued_for_deletion(), "and freed")
+		assert_null(tool._mesh_instance, "the tool lets go of it")
+		assert_null(tool._immediate_mesh)
+	await get_tree().process_frame
+
+
+func test_every_drawing_tool_writes_lengths_in_the_measure_label_style():
+	# The Polygon and Path tools' segment lengths are meant to read as a Measure
+	# ruler's do (#1408), so all three are made by the one helper.
+	var holder := Node3D.new()
+	add_child_autofree(holder)
+	var measure = HFMeasureToolType.new()
+	measure.root = holder
+	measure._add_label(Vector3.ZERO, "4.0", Color.YELLOW)
+	var ruler: Label3D = measure._labels[0]
+	var labels: Array = []
+	HFEditorToolType.show_segment_lengths(
+		holder, labels, [[Vector3.ZERO, Vector3(4, 0, 0), Color.YELLOW]], 0.5
+	)
+	var length: Label3D = labels[0]
+	assert_eq(length.text, "4", "printed as every length in the editor is")
+	for property in [
+		"billboard",
+		"no_depth_test",
+		"pixel_size",
+		"font_size",
+		"modulate",
+		"outline_modulate",
+		"outline_size"
+	]:
+		assert_eq(length.get(property), ruler.get(property), "the same %s" % property)
+	assert_null(length.owner, "and no owner, so it is never saved")
+	HFEditorToolType.free_overlay_labels(labels)
+	assert_true(labels.is_empty(), "letting them go empties the list")
+	assert_null(length.get_parent(), "and takes each out of the level at once")
+	measure._clear_visuals()
+	await get_tree().process_frame
+
+
+# -- One snap for the tools (#1468) ----------------------------------------------
+
+
+class SnapRoot:
+	extends Node3D
+
+	var snap_calls := 0
+
+	func _snap_point(point: Vector3, _exclude_ids: Array = []) -> Vector3:
+		snap_calls += 1
+		return point.snapped(Vector3(4, 4, 4))
+
+
+func test_every_drawing_tool_snaps_through_the_level():
+	var tools := [HFPathToolType.new(), HFPolygonToolType.new(), HFMeasureToolType.new()]
+	for tool in tools:
+		var root := SnapRoot.new()
+		tool.root = root
+		assert_eq(tool.snap_point(Vector3(3, 7, 9)), Vector3(4, 8, 8), "LevelRoot snaps")
+		assert_eq(root.snap_calls, 1, "once, through the one helper")
+		root.free()
+
+
+func test_every_drawing_tool_lands_on_the_real_level_grid():
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	root.grid_snap = 0.5
+	for tool in [HFPathToolType.new(), HFPolygonToolType.new(), HFMeasureToolType.new()]:
+		tool.root = root
+		assert_eq(tool.snap_point(Vector3(0.3, 0.9, -0.2)), Vector3(0.5, 1.0, 0.0))
+
+
+func test_a_tool_with_no_level_leaves_the_point_alone():
+	var tool := HFEditorToolType.new()
+	assert_eq(tool.snap_point(Vector3(0.3, 0.9, -0.2)), Vector3(0.3, 0.9, -0.2))
 
 
 # -- A packed paint chunk (#900) -------------------------------------------------

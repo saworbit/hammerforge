@@ -73,11 +73,15 @@ static func set_entity_property(entity: Node3D, prop_name: String, value: Varian
 	if entity is DraftEntity:
 		entity.entity_data[prop_name] = value
 		entity.notify_property_list_changed()
-		# A class whose instances name their own model draws that model, so the
-		# viewport has to follow the field. Only that one property, because
-		# rebuilding the preview on every edit would do it per keystroke.
-		if prop_name == entity.authored_scene_property():
+		# A class whose instances name their own model draws that model, and a
+		# note draws its title, body, kind and whether it is done, so the viewport
+		# has to follow those fields. Only those, because rebuilding the preview
+		# on every edit would do it per keystroke.
+		if entity.refreshes_preview_on(prop_name):
 			entity.refresh_preview()
+		if entity.entity_type == DraftEntity.NOTE_CLASS and prop_name == "author":
+			if str(value) != "":
+				DraftEntity.last_note_author = str(value)
 	elif is_brush_entity(entity):
 		var brush_data: Dictionary = entity.get_meta(BRUSH_ENTITY_DATA, {}).duplicate()
 		brush_data[prop_name] = value
@@ -103,14 +107,24 @@ static func vec3_with_axis(
 
 
 ## Coerce a raw default from an entity definition into a typed value matching
-## the property's declared type. Mirrors the legacy dock helper.
+## the property's declared type. The only copy: a placed entity, the Entity
+## panel, an export and the MCP bridge all fill a default in here, so a property
+## starts at the same value on every path (#1453). A missing default is the
+## type's zero, because `float(null)`, `int(null)` and `bool(null)` are script
+## errors and `str(null)` is the text "<null>".
 static func coerce_default(type_name: String, value: Variant) -> Variant:
 	match type_name:
 		"float":
 			return float(value) if value != null else 0.0
 		"int":
 			return int(value) if value != null else 0
+		# A bit mask, such as an FGD's spawnflags (#1721).
+		"flags":
+			return int(value) if value != null and str(value).is_valid_int() else 0
 		"bool":
+			# bool() has no String form; a definition can still write "false".
+			if value is String:
+				return value.strip_edges().to_lower() in ["true", "1", "yes"]
 			return bool(value) if value != null else false
 		"color":
 			if value is Color:

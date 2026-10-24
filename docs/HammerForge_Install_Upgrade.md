@@ -4,7 +4,7 @@ description: "Install HammerForge into a Godot 4.7+ project, enable the plugin, 
 
 # HammerForge Install + Upgrade
 
-Last updated: October 18, 2026
+Last updated: October 22, 2026
 
 This guide covers installing, upgrading, and recovering HammerForge for Godot 4.7+.
 
@@ -39,9 +39,11 @@ In a new 3D scene with nothing in it yet, a left-click with Draw active also cre
 
 1. Close Godot.
 2. Back up your project, including `.hflevel` and `.hfprefab` files.
-3. Replace the existing `addons/hammerforge` folder with the new version. Your own data lives outside it and is kept: brush presets in `res://hammerforge_presets/`, prefabs in `res://prefabs/`, custom tools in `res://hammerforge_tools/` and entity definitions in `res://hammerforge_entities.json`. Upgrading from 0.3.2 or earlier, brush presets are still inside the addon folder: move `addons/hammerforge/presets/` to `res://hammerforge_presets/` before you replace it. An install that copies over the top, as the Asset Library does, leaves that folder in place, and the new version moves the presets across on first load.
+3. Replace the existing `addons/hammerforge` folder with the new version. Your own data lives outside it and is kept: brush presets, structure presets and the project's bake profiles in `res://hammerforge_presets/`, prefabs in `res://prefabs/`, custom tools in `res://hammerforge_tools/` and entity definitions in `res://hammerforge_entities.json`. Upgrading from 0.3.2 or earlier, brush presets are still inside the addon folder: move `addons/hammerforge/presets/` to `res://hammerforge_presets/` before you replace it. An install that copies over the top, as the Asset Library does, leaves that folder in place, and the new version moves the presets across on first load.
 4. Reopen the project and re-enable the plugin if prompted.
 5. Open a level and run **Test → Check Only**, followed by **Test Level**, to verify validation, bake, and play.
+
+HammerForge says when a newer version is out: a grey **HammerForge 0.x.y is out** line on the Console's Status board, with **What's New** (the release notes), **Skip This Version** and **Later** (three days). Once a day it asks the Asset Library which version is current, so it never points at a version the Asset Library does not offer yet. It asks only when the editor's network mode is Online and its own update check is on, never from a development build, and it sends nothing about you or your levels. Untick **Check for a newer HammerForge** under Safety net in the Console's Controls to stop it ([#1656](https://github.com/saworbit/hammerforge/issues/1656)).
 
 ## Cache Reset (Recovery)
 
@@ -55,7 +57,9 @@ If the plugin fails to load, the dock is missing, or tools behave incorrectly:
 ## Compatibility Notes
 
 - HammerForge targets Godot 4.7+.
-- New `.hflevel` fields are backward compatible; missing keys fall back to defaults.
+- New `.hflevel` fields are backward compatible; missing keys fall back to defaults. The other way is refused rather than lost: every release that saves something new writes a higher format number, and a build older than a file's number will not open it, because it would drop what it does not know on its next save (#1638). A scene the newer build saved opens read only in an older build from 0.4.1 on: the dock says so, Save Level and autosave refuse, and Ctrl+S, which a plugin cannot stop, would save the scene without the newer build's additions. Open the level in the newer build instead. 0.4.0 and older check only the `.hflevel`. A brush saved before smoothing groups bakes flat, as it did; set a Smoothing group on its faces to shade it round.
+- Since October 2026 a round brush cut on the CSG path bakes with its own faces, the segments it shows, where it used to bake as Godot's primitive at Godot's counts. A level with a cut through a sphere or a cylinder bakes a little differently after an upgrade.
+- A custom keymap that binds a key HammerForge takes ahead of the keymap (the command palette's F1, Shift+? and Ctrl+K, Escape, or a nudge key) is warned about when it loads, naming the key, because that binding never ran.
 - `.glb` export requires a successful bake first.
 - The agent bridge (MCP) is optional and off until you turn it on in the Test tab; see [hammerforge_mcp](https://github.com/saworbit/hammerforge/tree/main/hammerforge_mcp). No third-party editor bridge is vendored, and none is required to use HammerForge.
 

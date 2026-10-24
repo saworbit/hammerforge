@@ -81,12 +81,12 @@ Level editors like Hammer and TrenchBroom proved that **brush-based workflows** 
 
 - **No full-scene live CSG** -- brushes are lightweight preview nodes; full CSG runs only at bake time. An optional, capped subtract overlay computes only nearby cut previews.
 - **Two-click geometry** -- drag a base rectangle, click to set height. Extrude faces to extend rooms. Type exact numbers any time.
-- **Free transform** -- rotate and mirror anything you have drawn, in snapped steps about the axis you choose, then array it in a line, a ring, or a lattice.
-- **Cut along any plane** -- clip and carve split the real geometry, so a diagonal cut, a rotated brush or a cylinder are all fair game. Clip along a selected face's plane to chamfer a corner in one action.
-- **Generate structures** -- hollow any brush into walls (a cylinder becomes a tube), and build an arch, a straight flight of stairs, a spiral staircase or a faceted dome from a handful of numbers, one brush per piece.
+- **Free transform** -- rotate and mirror anything you have drawn, in snapped steps about the axis you choose or a point you pick, mirror a copy of one half onto the other, move by a typed offset, then array it in a line, a ring, or a lattice.
+- **Cut along any plane** -- clip, carve and intersect work on the real geometry, so a diagonal cut, a rotated brush or a cylinder are all fair game. Clip along a selected face's plane to chamfer a corner in one action.
+- **Generate structures** -- hollow any brush into walls (a cylinder becomes a tube), and build an arch, a flight of stairs straight or turning at a landing, a spiral staircase, a faceted dome, a ring or a door frame from a handful of numbers, one brush per piece. Run a skirting or a cornice along the walls you pick.
 - **Go back and change them** -- a structure remembers the numbers that made it. Select a piece, adjust anything, and it rebuilds in place — where you moved it to, keeping the materials you painted on it, and telling you first if a rebuild would overwrite work you did by hand.
 - **Paint floors and terrain** -- grid-based floor paint with heightmaps, multi-material blending, auto-connectors (ramps/stairs), and foliage scatter.
-- **Bake when ready** -- one click produces merged meshes, collision shapes (trimesh, per-brush convex, or per-visgroup partitioned), lightmap UVs, navmeshes, and LODs.
+- **Bake when ready** -- one click produces merged meshes, collision shapes (trimesh, per-brush convex, or per-visgroup partitioned), lightmap UVs, navmeshes, and LODs, with round brushes shaded smooth, ramp collision on stairs and collision-only clip brushes.
 
 HammerForge is a single `addons/` folder. No external tools, no custom builds, no export plugins. Drop it in, enable, draw.
 
@@ -163,9 +163,13 @@ This repository does not vendor any third-party MCP server or editor bridge. If 
 | Document | Description |
 |----------|-------------|
 | [User Guide](docs/HammerForge_UserGuide.md) | Complete usage documentation |
+| [Commands](docs/commands.md) | Every command with its default key, what it needs, and its bridge parameters, built from the registry |
+| [Glossary](docs/glossary.md) | One word for each idea, as the editor and the docs use it |
+| [Parity](docs/parity.md) | How much of the classic brush editors' tool set HammerForge covers, tool by tool |
 | [MVP Guide](docs/HammerForge_MVP_GUIDE.md) | Architecture and contributor reference |
 | [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) | Setup, upgrade, and cache reset |
 | [Design Constraints](docs/HammerForge_Design_Constraints.md) | Explicit tradeoffs and limits |
+| [Performance and Limits](docs/HammerForge_Performance.md) | Measured editing, bake and file costs by brush count, and the caps the code enforces |
 | [Data Portability](docs/HammerForge_Data_Portability.md) | .hflevel / .map / .glb workflow |
 | [Shipping a Level](docs/HammerForge_Shipping_A_Level.md) | Taking a finished level into a game |
 | [Agent Bridge (MCP)](docs/HammerForge_Agent_Bridge.md) | Letting an agent that speaks MCP build in the open level, and what it can and cannot do |
@@ -178,7 +182,7 @@ This repository does not vendor any third-party MCP server or editor bridge. If 
 | [Spec](HammerForge_SPEC.md) | Technical specification |
 | [Changelog](CHANGELOG.md) | What changed, release by release and week by week |
 | [Roadmap](ROADMAP.md) | Planned features and priorities |
-| [Brand](docs/brand/BRAND.md) | The mark, palette, and asset generators |
+| [Brand](docs/brand/BRAND.md) | The mark, the palette, and the scripts that build the assets |
 | [AI Disclosure](AI.md) | How AI is used here, what checks it, and where it does not help |
 | [Contributing](CONTRIBUTING.md) | How to contribute |
 | [Code of Conduct](CODE_OF_CONDUCT.md) | Expected behavior and how to report a problem |

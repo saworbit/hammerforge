@@ -56,38 +56,287 @@ static func toggle_mode(plugin: Object, root: Node) -> void:
 # Commands
 # ---------------------------------------------------------------------------
 
+## Merge Vertices, from its key and from the palette and toolbar alike: in each
+## brush with two or more vertices selected, those vertices go to their centroid,
+## every brush in one undo step. A brush the merge would break is left as it was
+## and the vertex system says why. The selection is cleared after, as a merge
+## renumbers the brush's vertices. True when any brush changed.
+# ---------------------------------------------------------------------------
+# Many corners at once (#1713)
+# ---------------------------------------------------------------------------
 
-static func merge_selected(root: Node) -> void:
-	var vs = root.vertex_system
+
+## Each of these edits the selected corners as one undo step and says why when
+## it is refused, through the vertex system's own message.
+static func delete_selected(plugin: Object, root: Node) -> bool:
+	var vs = root.vertex_system if root else null
+	if vs == null or not vs.has_selection():
+		return false
+	return _committed(plugin, root, vs.delete_selected(), "Delete Vertices")
+
+
+## Add a corner to `brush_id` at `world_point`.
+static func add_corner(plugin: Object, root: Node, brush_id: String, world_point: Vector3) -> bool:
+	var vs = root.vertex_system if root else null
+	if vs == null:
+		return false
+	return _committed(plugin, root, vs.add_corner(brush_id, world_point), "Add Vertex")
+
+
+## Move the selected corners by `world_delta`, as the arrow keys do.
+static func nudge_selected(plugin: Object, root: Node, world_delta: Vector3) -> bool:
+	var vs = root.vertex_system if root else null
+	if vs == null or not vs.has_selection():
+		return false
+	return _committed(plugin, root, vs.offset_selected(world_delta), "Nudge Vertices")
+
+
+## Turn the selected corners by the rotate step, about the picked pivot when one
+## is picked and about their middle otherwise, round the locked axis or Y.
+static func turn_selected(plugin: Object, root: Node, direction: int) -> bool:
+	var vs = root.vertex_system if root else null
+	if vs == null or not vs.has_selection():
+		return false
+	var step := absf(float(root.rotate_snap_degrees))
+	if is_zero_approx(step):
+		step = 15.0
+	var axis: Vector3 = [Vector3.RIGHT, Vector3.UP, Vector3.BACK][root.transform_axis_index(1)]
+	var turn := Basis(axis, deg_to_rad(step if direction >= 0 else -step))
+	return _committed(
+		plugin,
+		root,
+		vs.transform_selected(_about(root, vs, turn), "Turn rejected"),
+		"Turn Vertices"
+	)
+
+
+## Scale the selected corners by `factors`, about the picked pivot or their middle.
+static func scale_selected(plugin: Object, root: Node, factors: Vector3) -> bool:
+	var vs = root.vertex_system if root else null
+	if vs == null or not vs.has_selection():
+		return false
+	if not factors.is_finite() or factors.x <= 0.0 or factors.y <= 0.0 or factors.z <= 0.0:
+		root.emit_signal("user_message", "Scale rejected: each factor has to be more than 0", 1)
+		return false
+	var scale := Basis.from_scale(factors)
+	return _committed(
+		plugin,
+		root,
+		vs.transform_selected(_about(root, vs, scale), "Scale rejected"),
+		"Scale Vertices"
+	)
+
+
+## Ask for three factors, then scale the selected corners by them.
+static func open_scale_dialog(plugin: Object, root: Node) -> ConfirmationDialog:
+	var vs = root.vertex_system if root else null
+	if vs == null or not vs.has_selection():
+		if root:
+			root.emit_signal("user_message", "Scale Vertices: select vertices first", 1)
+		return null
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Scale Vertices"
+	var row := HBoxContainer.new()
+	var spins: Array = []
+	for axis_name in ["X", "Y", "Z"]:
+		var label := Label.new()
+		label.text = axis_name
+		row.add_child(label)
+		var spin := SpinBox.new()
+		spin.name = axis_name
+		spin.min_value = 0.01
+		spin.max_value = 100.0
+		spin.step = 0.01
+		spin.value = 1.0
+		row.add_child(spin)
+		spins.append(spin)
+	dialog.add_child(row)
+	dialog.confirmed.connect(
+		func():
+			scale_selected(plugin, root, Vector3(spins[0].value, spins[1].value, spins[2].value))
+			dialog.queue_free()
+	)
+	dialog.canceled.connect(dialog.queue_free)
+	plugin._add_confirmable_dialog(dialog)
+	dialog.popup_centered()
+	return dialog
+
+
+## `basis` applied about the picked pivot, or the middle of the selected corners.
+static func _about(root: Node, vs: Object, basis: Basis) -> Transform3D:
+	var pivot: Vector3 = (
+		root.transform_pivot_point if int(root.transform_pivot_mode) == 3 else vs.selected_centre()
+	)
+	return (
+		Transform3D(Basis.IDENTITY, pivot)
+		* Transform3D(basis)
+		* Transform3D(Basis.IDENTITY, -pivot)
+	)
+
+
+static func _committed(
+	plugin: Object, root: Node, snapshots: Dictionary, action_name: String
+) -> bool:
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	if snapshots.is_empty():
+		return false
+	commit_op(plugin, root, snapshots, action_name)
+	plugin._update_hud_context()
+	return true
+
+
+static func merge_selected(plugin: Object, root: Node) -> bool:
+	var vs = root.vertex_system if root else null
 	if not vs:
-		return
+		return false
+	var brush_ids: Array = []
 	for brush_id in vs.selected_vertices:
-		var indices: PackedInt32Array = vs.selected_vertices[brush_id]
-		if indices.size() >= 2:
-			vs.merge_vertices(brush_id, indices)
+		if vs.selected_vertices[brush_id].size() >= 2:
+			brush_ids.append(brush_id)
+	if brush_ids.is_empty():
+		root.emit_signal(
+			"user_message", "Merge Vertices: select two or more vertices of one brush", 1
+		)
+		return false
+	var snapshots: Dictionary = {}
+	for brush_id in brush_ids:
+		var merged: bool = vs.merge_vertices(brush_id, vs.selected_vertices[brush_id])
+		# Each merge snapshots only its own brush, and a refused one leaves its
+		# snapshot behind, so take it either way and keep the ones that merged.
+		var taken: Dictionary = vs.get_pre_op_snapshots()
+		if merged:
+			snapshots.merge(taken)
+	vs.clear_selection()
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	if snapshots.is_empty():
+		return false
+	commit_op(plugin, root, snapshots, "Merge Vertices")
+	return true
 
 
-static func split_selected_edge(root: Node) -> void:
-	var vs = root.vertex_system
+## Split Edge, from its key and from the palette and toolbar alike: a vertex at
+## the middle of the one selected edge, as one undo step. True when it split.
+static func split_selected_edge(plugin: Object, root: Node) -> bool:
+	var vs = root.vertex_system if root else null
 	if not vs:
-		return
+		return false
 	var sel: Array = vs.get_single_selected_edge()
-	if sel.size() == 2:
-		vs.split_edge(sel[0], sel[1])
+	if sel.size() != 2:
+		root.emit_signal("user_message", "Split Edge: select one edge first", 1)
+		return false
+	var split: bool = vs.split_edge(sel[0], sel[1])
+	var snapshots: Dictionary = vs.get_pre_op_snapshots()
+	vs.clear_selection()
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	if not split:
+		root.emit_signal("user_message", "Split Edge: the edge is no longer on its brush", 1)
+		return false
+	commit_op(plugin, root, snapshots, "Split Edge")
+	return true
 
 
-static func clip_to_convex(root: Node) -> void:
-	var vs = root.vertex_system
+## Clip to Convex, from the palette and toolbar: each brush with vertices
+## selected that is not convex is rebuilt from its convex hull, every brush in
+## one undo step. True when any brush changed.
+static func clip_to_convex(plugin: Object, root: Node) -> bool:
+	var vs = root.vertex_system if root else null
 	if not vs:
-		return
-	var clipped := false
-	for brush_id in vs.selected_vertices:
-		if vs.clip_to_convex(brush_id):
-			clipped = true
-	if clipped:
-		root.emit_signal("user_message", "Clipped to convex hull", 0)
-	else:
+		return false
+	if not vs.has_selection():
+		root.emit_signal("user_message", "Clip to Convex: select vertices of the brush first", 1)
+		return false
+	var snapshots: Dictionary = {}
+	for brush_id in vs.selected_vertices.keys():
+		var clipped: bool = vs.clip_to_convex(brush_id)
+		var taken: Dictionary = vs.get_pre_op_snapshots()
+		if clipped:
+			snapshots.merge(taken)
+	if snapshots.is_empty():
 		root.emit_signal("user_message", "Brush is already convex", 0)
+		return false
+	# The hull renumbers the brush's vertices, so the selection would name others.
+	vs.clear_selection()
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	commit_op(plugin, root, snapshots, "Clip to Convex")
+	root.emit_signal("user_message", "Clipped to convex hull", 0)
+	return true
+
+
+## Snap Vertices to Grid, from its key and from the palette and toolbar alike, as
+## one undo step. Vertices already on the grid move nothing and record no step.
+## True when the vertices moved.
+static func snap_selected_to_grid(plugin: Object, root: Node) -> bool:
+	var vs = root.vertex_system if root else null
+	if not vs:
+		return false
+	var check: HFOpResult = root.can_snap_to_grid()
+	if not check.ok:
+		root.emit_signal("user_message", check.user_text(), 1)
+		return false
+	if not vs.has_selection():
+		root.emit_signal("user_message", "Snap Vertices to Grid: select vertices first", 1)
+		return false
+	var snapshots: Dictionary = vs.snap_selected_to_grid(root.grid_snap)
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	if snapshots.is_empty():
+		return false
+	commit_op(plugin, root, snapshots, "Snap Vertices to Grid")
+	return true
+
+
+## Put the one selected vertex at [param target], typed in Selection Info (#1404):
+## in world space, or with [param local] in its brush's own space. The brush is
+## judged as a drag's release judges it, bent faces split along their outward
+## fold and a dent refused, and the move is one undo step under the drag's name.
+## A refused place leaves the brush as it was and the vertex system says why.
+## True when the vertex moved.
+##
+## A typed place has no path to follow, so it goes straight to the release's
+## check.
+static func move_selected_vertex_to(
+	plugin: Object, root: Node, target: Vector3, local: bool
+) -> bool:
+	var vs = root.vertex_system if root else null
+	if not vs:
+		return false
+	if vs.is_dragging():
+		root.emit_signal("user_message", "Move rejected: finish the drag first", 1)
+		return false
+	if vs.get_selection_count() != 1:
+		root.emit_signal("user_message", "Type a place for one selected vertex at a time", 1)
+		return false
+	var brush_id: String = vs.selected_vertices.keys()[0]
+	var index: int = vs.selected_vertices[brush_id][0]
+	var brush = root.find_brush_by_id(brush_id)
+	var verts: PackedVector3Array = vs.get_brush_vertices(brush) if brush else PackedVector3Array()
+	if index < 0 or index >= verts.size() or not brush.is_inside_tree():
+		root.emit_signal("user_message", "Move rejected: the vertex is no longer on its brush", 1)
+		return false
+	var xform: Transform3D = brush.global_transform
+	if absf(xform.basis.determinant()) < 0.000001:
+		root.emit_signal("user_message", "Move rejected: the brush is squashed flat", 1)
+		return false
+	var goal: Vector3 = target if local else xform.affine_inverse() * target
+	if not goal.is_finite():
+		root.emit_signal("user_message", "Move rejected: that place is not a number", 1)
+		return false
+	if goal.is_equal_approx(verts[index]):
+		return false
+	# `move_vertices()` takes its delta in the brush's own space.
+	var moved: bool = vs.move_vertices(goal - verts[index])
+	# Taken either way: a refused move leaves its snapshot behind.
+	var snapshots: Dictionary = vs.get_pre_op_snapshots()
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	if not moved or snapshots.is_empty():
+		return false
+	commit_move(plugin, root, snapshots)
+	return true
 
 
 # ---------------------------------------------------------------------------
@@ -100,15 +349,29 @@ static func clip_to_convex(root: Node) -> void:
 ## HFUndoHelper.commit() cannot be used for any of these: it captures undo state
 ## at commit time, which is after the edit, so undo would replay the edit instead
 ## of reverting it. The caller hands us the state it snapshotted beforehand.
+##
+## The vertex selection goes in the step beside the faces. A selected vertex is
+## an index into the brush's vertices as its faces number them, and an edit that
+## splits a face can renumber them (#1561), so each side of the step needs the
+## selection that names its own faces' vertices.
 static func commit_op(
 	plugin: Object, root: Node, pre_op_snapshots: Dictionary, action_name: String
 ) -> void:
 	if not plugin.undo_redo_manager:
 		return
-	var post_state := capture_face_state(root, pre_op_snapshots.keys())
+	var post_state := capture_state(root, pre_op_snapshots.keys())
+	var vs = root.vertex_system if root else null
+	var keeps_selection: bool = vs != null and vs.has_method("selection_state")
 	plugin.undo_redo_manager.create_action(action_name, 0, null, false)
 	plugin.undo_redo_manager.add_do_method(root, "_apply_vertex_faces", post_state)
 	plugin.undo_redo_manager.add_undo_method(root, "_apply_vertex_faces", pre_op_snapshots)
+	if keeps_selection:
+		plugin.undo_redo_manager.add_do_method(
+			root, "_apply_vertex_selection", vs.selection_state()
+		)
+		plugin.undo_redo_manager.add_undo_method(
+			root, "_apply_vertex_selection", vs.selection_before_edit(pre_op_snapshots.keys())
+		)
 	plugin.undo_redo_manager.commit_action()
 	plugin._record_history(action_name)
 
@@ -117,15 +380,13 @@ static func commit_move(plugin: Object, root: Node, pre_drag_snapshots: Dictiona
 	commit_op(plugin, root, pre_drag_snapshots, "Move Vertices")
 
 
-## Serialized face state for the given brush ids, read straight off the tree.
-static func capture_face_state(root: Node, brush_ids: Array) -> Dictionary:
+## Each of the given brushes as it stands, read straight off the tree: its faces
+## and the shape they belong to, the same `geometry_state()` the vertex system
+## snapshots before an edit, so undo and redo both put the shape back (#1538).
+static func capture_state(root: Node, brush_ids: Array) -> Dictionary:
 	var state: Dictionary = {}
 	for brush_id in brush_ids:
 		var brush = root.brush_system.find_brush_by_id(brush_id) if root.brush_system else null
-		if brush and brush.get("faces"):
-			var current: Array = []
-			for face in brush.faces:
-				if face:
-					current.append(face.to_dict())
-			state[brush_id] = current
+		if brush and brush.get("faces") and brush.has_method("geometry_state"):
+			state[brush_id] = brush.geometry_state()
 	return state

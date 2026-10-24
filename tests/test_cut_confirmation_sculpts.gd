@@ -182,3 +182,80 @@ func test_hollow_says_nothing_extra_when_every_sculpt_is_kept():
 	assert_false(
 		_dialog_text().contains("sculpt"), "a box's walls keep their faces whole or square"
 	)
+
+
+# -- The dock's buttons ask the same (#1675) ---------------------------------
+
+const DockScene = preload("res://addons/hammerforge/dock.tscn")
+const HFDockBrushHandler = preload("res://addons/hammerforge/dock_brush_handler.gd")
+
+
+## A dock on `root` with `brush` selected.
+func _dock_with(brush: DraftBrush) -> Node:
+	var dock: Node = DockScene.instantiate()
+	add_child_autoqfree(dock)
+	dock.level_root = root
+	dock._selection_nodes = [brush]
+	return dock
+
+
+## What the dock's confirmation titled `title` asks, closed once read so the
+## key's can open: a window holds one modal child at a time.
+func _dock_dialog(dock: Node, title: String) -> String:
+	for child in dock.get_children():
+		if child is ConfirmationDialog and child.title == title:
+			var text: String = child.dialog_text
+			child.hide()
+			child.free()
+			return text
+	return ""
+
+
+## The dock's Clip on the same diamond-sided box says what the key says.
+func test_the_dock_clip_button_says_when_a_sculpt_will_be_dropped():
+	var brush := _box("b1", Vector3.ZERO, Vector3(32, 32, 32), Basis(Vector3.RIGHT, PI / 4.0))
+	_sculpt(_face_along(brush, Vector3.RIGHT))
+	var dock := _dock_with(brush)
+	HFDockBrushHandler.on_clip(dock)
+	var text := _dock_dialog(dock, "Clip Brush")
+	assert_string_contains(text, "1 sculpt cannot follow this cut and will be dropped")
+	plugin.selection = [brush]
+	HFPluginEditActions.clip_selected(plugin, root)
+	assert_eq(text, _dialog_text(), "the key and the button ask the same")
+	root.clip_preview.clear()
+
+
+func test_the_dock_hollow_button_names_the_walls_as_the_key_does():
+	var brush := _box("b1", Vector3.ZERO, Vector3(64, 64, 64))
+	var dock := _dock_with(brush)
+	HFDockBrushHandler.on_hollow(dock)
+	var text := _dock_dialog(dock, "Hollow Brush")
+	assert_string_contains(text, "6 walls")
+	plugin.selection = [brush]
+	HFPluginEditActions.hollow_selected(plugin, root)
+	assert_eq(text, _dialog_text(), "the key and the button ask the same")
+	root.hollow_preview.clear()
+
+
+## A dock that has a hollow's wall selected, as the Structure row reads it.
+class HollowDock:
+	extends RefCounted
+
+	var _active_hollow_id := "hollow_1"
+	var rehollows := 0
+
+	func get_hollow_thickness() -> float:
+		return 0.25
+
+	func _on_hollow() -> void:
+		rehollows += 1
+
+
+func test_the_hollow_key_on_a_hollow_re_hollows_it_as_the_button_does():
+	var brush := _box("b1", Vector3.ZERO, Vector3(64, 64, 64))
+	var dock := HollowDock.new()
+	plugin.dock = dock
+	plugin.selection = [brush]
+	assert_true(HFPluginEditActions.hollow_selected(plugin, root))
+	assert_eq(dock.rehollows, 1, "the key went to Re-hollow")
+	assert_eq(plugin.dialogs.size(), 0, "with no new hollow asked for")

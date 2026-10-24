@@ -25,6 +25,10 @@ Homepage = "https://github.com/saworbit/hammerforge"
 [tool.hatch.build.targets.wheel]
 packages = ["src/hammerforge_mcp"]
 
+# The building guide rides inside the package, where hammerforge_mcp.guide finds it.
+[tool.hatch.build.targets.wheel.force-include]
+"skills" = "hammerforge_mcp/skills"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # The tests import the package from src/ directly, so CI and a local

@@ -30,6 +30,11 @@ const HFBakeSystemType = preload("../systems/hf_bake_system.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFGeneratorSystem = preload("../systems/hf_generator_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFSolidMeasure = preload("../hf_solid_measure.gd")
+const HFObjectFilter = preload("../hf_object_filter.gd")
+const HFEntityCensus = preload("../hf_entity_census.gd")
+const HFLevelPlan = preload("../hf_level_plan.gd")
+const HFAcceptedFindings = preload("../hf_accepted_findings.gd")
 
 ## World axes a face selector may name.
 const SIDES := {
@@ -87,7 +92,9 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 		return operation_read
 	var operation_name := str(operation_read["value"])
 	if operation_name != "union" and operation_name != "subtract":
-		return HFMcpProtocol.invalid("operation", "operation must be union or subtract")
+		return HFMcpProtocol.invalid(
+			"operation", "operation must be union, a solid brush, or subtract, a cut brush"
+		)
 	var snap_read := HFMcpProtocol.read_bool(params, "snap", true)
 	if not snap_read["ok"]:
 		return snap_read
@@ -152,7 +159,14 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 			"position": HFMcpProtocol.vec3_to_array(position_read["value"]),
 			"size": HFMcpProtocol.vec3_to_array(size_read["value"]),
 		}
-	return {"ok": true, "scope_ids": [], "apply": _apply_place_brush.bind(root, plan)}
+	# A solid only adds a brush, so its step records that brush (#1786). A cut is
+	# a pending one, which a scope does not hold, so it records the level.
+	return {
+		"ok": true,
+		"scope_ids": [],
+		"apply": _apply_place_brush.bind(root, plan),
+		"adds": operation != CSGShape3D.OPERATION_SUBTRACTION,
+	}
 
 
 ## Which shapes take `sides`, and from how many: a round shape below five is
@@ -208,6 +222,11 @@ func _apply_place_brush(root: Node, plan: Dictionary) -> Dictionary:
 	# A name a sibling already has is numbered on by Godot, as Gate2.
 	if plan["name"] != "":
 		info["name"] = plan["name"].validate_node_name()
+	var current: String = (
+		root.visgroup_system.get_current_visgroup() if root.visgroup_system else ""
+	)
+	if current != "":
+		info["visgroups"] = [current]
 	var node = root.create_brush_from_info(info)
 	if node == null or not (node is DraftBrush):
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "HammerForge could not create the brush")
@@ -279,6 +298,38 @@ func _snap_center(
 	if not rotated:
 		placed = (center - size * 0.5).snapped(step) + size * 0.5
 	return {"center": placed, "snapped": not placed.is_equal_approx(center)}
+
+
+## `_read_brush()` for a tool that changes the brush: refused with `locked` when a
+## locked visgroup or Godot's own lock holds it (#1697).
+func _read_brush_to_change(root: Node, params: Dictionary) -> Dictionary:
+	var found := _read_brush(root, params)
+	if found["ok"] and is_locked(root, found["brush"]):
+		return _locked_refusal(found["brush"], str(found["brush"].brush_id))
+	return found
+
+
+## `_read_entity()` for a tool that changes the entity.
+func _read_entity_to_change(root: Node, params: Dictionary) -> Dictionary:
+	var found := _read_entity(root, params)
+	if found["ok"] and is_locked(root, found["entity"]):
+		return _locked_refusal(found["entity"], str(params.get("entity", "")))
+	return found
+
+
+static func is_locked(root: Node, node: Node) -> bool:
+	return root.visgroup_system != null and root.visgroup_system.is_locked(node)
+
+
+static func _locked_refusal(node: Node, named: String) -> Dictionary:
+	return _fail(
+		HFMcpProtocol.E_LOCKED,
+		(
+			"'%s' is locked: its visgroup is locked, or Godot's lock is on it. Unlock it in the editor first"
+			% named
+		),
+		{"name": str(node.name)}
+	)
 
 
 ## The brush `params.brush_id` names, or a refusal.
@@ -449,6 +500,9 @@ func _resolve_material(root: Node, value) -> Dictionary:
 # ---------------------------------------------------------------------------
 
 
+## The brushes `filter`, `bounds` and `brush_ids` pick, a page at a time (#1704).
+## `count` is every match and `returned` this page, so a short level and a cut off
+## answer read differently; `count_only` answers with `count` alone.
 func _read_brushes(root: Node, params: Dictionary) -> Dictionary:
 	var ids_read := HFMcpProtocol.read_string_array(params, "brush_ids", false, [])
 	if not ids_read["ok"]:
@@ -456,19 +510,15 @@ func _read_brushes(root: Node, params: Dictionary) -> Dictionary:
 	var faces_read := HFMcpProtocol.read_bool(params, "include_faces", true)
 	if not faces_read["ok"]:
 		return faces_read
-	var limit_read := HFMcpProtocol.read_int(params, "limit", false, 200, 1, 2000)
-	if not limit_read["ok"]:
-		return limit_read
-	var bounds := AABB()
-	var use_bounds := false
-	if params.get("bounds") != null:
-		var raw = params["bounds"]
-		var low := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "min", true)
-		var high := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "max", true)
-		if not low["ok"] or not high["ok"]:
-			return HFMcpProtocol.invalid("bounds", 'bounds is {"min": [x, y, z], "max": [x, y, z]}')
-		bounds = AABB(low["value"], high["value"] - low["value"]).abs()
-		use_bounds = true
+	var page := _read_page(params)
+	if not page["ok"]:
+		return page
+	var box := _read_box(params)
+	if not box["ok"]:
+		return box
+	var rule := _read_brush_filter(root, params.get("filter"))
+	if not rule["ok"]:
+		return rule
 	var wanted: Array = ids_read["value"]
 	var seen := {}
 	var matches: Array = []
@@ -478,24 +528,187 @@ func _read_brushes(root: Node, params: Dictionary) -> Dictionary:
 			if not (brush.brush_id in wanted):
 				continue
 			seen[brush.brush_id] = true
-		if use_bounds and not root.brush_system.world_bounds_of(brush).intersects(bounds):
+		if box["use"] and not _box_passes(box, root.brush_system.world_bounds_of(brush)):
+			continue
+		if not HFObjectFilter.brush_passes(root, brush, rule["value"]):
 			continue
 		matches.append(brush)
-	var limit: int = limit_read["value"]
+	if page["count_only"]:
+		return {"ok": true, "result": {"count": matches.size()}}
 	var listed: Array = []
 	var palette := _palette(root)
-	for brush in matches.slice(0, limit):
+	for brush in matches.slice(page["offset"], page["offset"] + page["limit"]):
 		listed.append(brush_dict(root, brush, faces_read["value"], palette))
 	var missing: Array = []
 	for brush_id in wanted:
 		if not seen.has(brush_id):
 			missing.append(brush_id)
-	var result := {
-		"brushes": listed,
-		"total": matches.size(),
-		"truncated": matches.size() > limit,
-		"missing": missing,
+	var result := _paged(matches.size(), listed.size(), page["offset"])
+	result["brushes"] = listed
+	result["missing"] = missing
+	return {"ok": true, "result": result}
+
+
+## `offset`, `limit` and `count_only`, as both listings take them.
+func _read_page(params: Dictionary) -> Dictionary:
+	var limit_read := HFMcpProtocol.read_int(params, "limit", false, 200, 1, 2000)
+	if not limit_read["ok"]:
+		return limit_read
+	var offset_read := HFMcpProtocol.read_int(params, "offset", false, 0, 0, 1 << 30)
+	if not offset_read["ok"]:
+		return offset_read
+	var count_read := HFMcpProtocol.read_bool(params, "count_only", false)
+	if not count_read["ok"]:
+		return count_read
+	return {
+		"ok": true,
+		"limit": limit_read["value"],
+		"offset": offset_read["value"],
+		"count_only": count_read["value"],
 	}
+
+
+static func _paged(count: int, returned: int, offset: int) -> Dictionary:
+	return {
+		"count": count,
+		"returned": returned,
+		"offset": offset,
+		"truncated": offset + returned < count,
+	}
+
+
+## `bounds` and `bounds_test`: "touching" picks what meets the box, as before,
+## and "inside" only what is wholly in it.
+func _read_box(params: Dictionary) -> Dictionary:
+	if params.get("bounds") == null:
+		return {"ok": true, "use": false}
+	var raw = params["bounds"]
+	var low := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "min", true)
+	var high := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "max", true)
+	if not low["ok"] or not high["ok"]:
+		return HFMcpProtocol.invalid("bounds", 'bounds is {"min": [x, y, z], "max": [x, y, z]}')
+	var test := str(params.get("bounds_test", "touching"))
+	if not ["touching", "inside"].has(test):
+		return HFMcpProtocol.invalid("bounds_test", 'bounds_test is "touching" or "inside"')
+	return {
+		"ok": true,
+		"use": true,
+		"box": AABB(low["value"], high["value"] - low["value"]).abs(),
+		"inside": test == "inside",
+	}
+
+
+static func _box_passes(box: Dictionary, bounds: AABB) -> bool:
+	var area: AABB = box["box"]
+	if box["inside"]:
+		return area.grow(0.0001).encloses(bounds)
+	return area.intersects(bounds)
+
+
+## A brush filter, checked, with its material read to the palette slot the
+## filter compares. An unknown key is refused by name.
+func _read_brush_filter(root: Node, raw: Variant) -> Dictionary:
+	if raw == null:
+		return {"ok": true, "value": {}}
+	if not (raw is Dictionary):
+		return HFMcpProtocol.invalid("filter", "filter is an object of tests")
+	var rule: Dictionary = (raw as Dictionary).duplicate()
+	var unknown := HFObjectFilter.unknown_test(rule, HFObjectFilter.BRUSH_TESTS)
+	if unknown != "":
+		return HFMcpProtocol.invalid(
+			"filter.%s" % unknown,
+			(
+				"hf_get_brushes has no filter %s; it takes %s"
+				% [unknown, ", ".join(HFObjectFilter.BRUSH_TESTS)]
+			)
+		)
+	for key in rule:
+		var value: Variant = rule[key]
+		var param := "filter.%s" % key
+		match str(key):
+			"operation":
+				if not ["union", "subtract"].has(value):
+					return HFMcpProtocol.invalid(
+						param,
+						'operation is "union" for a solid brush or "subtract" for a cut brush'
+					)
+			"material":
+				var slot := _resolve_material(root, value)
+				if not slot["ok"]:
+					return slot
+				rule[key] = slot["slot"]
+			"shape":
+				if not (value is String and (_shape_by_name.has(value) or value == "custom")):
+					return HFMcpProtocol.invalid(
+						param, "shape is one of %s" % ", ".join(_shape_by_name.keys() + ["custom"])
+					)
+			"brush_entity":
+				if not (value is bool or (value is String and not value.is_empty())):
+					return HFMcpProtocol.invalid(param, "brush_entity is a class, or true or false")
+			_:
+				if not (value is String and not (value as String).is_empty()):
+					return HFMcpProtocol.invalid(param, "%s is a string" % key)
+	return {"ok": true, "value": rule}
+
+
+## A top down plan of the level, drawn from its brushes, so it answers from a
+## headless editor too (#1705): a PNG as the screenshot's image, or SVG text in
+## metres. `y_min` and `y_max` pick a height band, one floor of a level with
+## several, and `filter` takes the brush tests `hf_get_brushes` takes.
+func _read_plan(root: Node, params: Dictionary) -> Dictionary:
+	var low := HFMcpProtocol.read_number(params, "y_min", false, -HFMcpProtocol.WORLD_LIMIT)
+	if not low["ok"]:
+		return low
+	var high := HFMcpProtocol.read_number(params, "y_max", false, HFMcpProtocol.WORLD_LIMIT)
+	if not high["ok"]:
+		return high
+	if float(high["value"]) < float(low["value"]):
+		return HFMcpProtocol.invalid("y_max", "y_max is below y_min")
+	var size := HFMcpProtocol.read_int(params, "size", false, 1024, 64, 4096)
+	if not size["ok"]:
+		return size
+	var format := HFMcpProtocol.read_string(params, "format", false, "png")
+	if not format["ok"]:
+		return format
+	if not ["png", "svg"].has(format["value"]):
+		return HFMcpProtocol.invalid("format", 'format is "png" or "svg"')
+	var labels := HFMcpProtocol.read_bool(params, "labels", false)
+	if not labels["ok"]:
+		return labels
+	var rule := _read_brush_filter(root, params.get("filter"))
+	if not rule["ok"]:
+		return rule
+	var data := HFLevelPlan.shapes(root, low["value"], high["value"], rule["value"])
+	var bounds: Rect2 = data["bounds"]
+	var result := {
+		"bounds":
+		{
+			"min": [bounds.position.x, bounds.position.y],
+			"max": [bounds.end.x, bounds.end.y],
+		},
+		"counts":
+		{
+			"solids": data["solids"].size(),
+			"cuts": data["cuts"].size(),
+			"brush_entities": data["brush_entities"].size(),
+			"entities": data["entities"].size(),
+			"wires": data["wires"].size(),
+		},
+	}
+	if format["value"] == "svg":
+		result["svg"] = HFLevelPlan.svg(data, labels["value"])
+		return {"ok": true, "result": result}
+	var picture := HFLevelPlan.image(data, size["value"])
+	result["image"] = {
+		"mime_type": "image/png",
+		"data": Marshalls.raw_to_base64(picture.save_png_to_buffer()),
+	}
+	result["width"] = picture.get_width()
+	result["height"] = picture.get_height()
+	# The picture's scale bar has no number on it.
+	result["scale_bar_metres"] = HFLevelPlan.scale_bar_metres(
+		bounds.grow(HFLevelPlan.MARGIN).size.x
+	)
 	return {"ok": true, "result": result}
 
 
@@ -513,10 +726,15 @@ func _read_validate(root: Node, _params: Dictionary) -> Dictionary:
 		found.append_array(partial_bake_findings(root, spawns.get_active_spawn()))
 	var report: Dictionary = root.validate_level(false)
 	found.append_array(report.get("findings", []))
+	# A finding accepted for this level is counted, not listed (#1731). Validate
+	# has set its own aside already; the bake and spawn checks are sorted here.
+	var sorted := HFAcceptedFindings.sort(root, found)
+	var accepted_count: int = (sorted["accepted"] as Array).size()
+	accepted_count += (report.get("accepted", []) as Array).size()
 	var issues: Array = []
 	var seen := {}
 	var counts := {"error": 0, "warning": 0, "info": 0}
-	for item in found:
+	for item in sorted["open"]:
 		if not (item is Dictionary):
 			continue
 		var entry := _issue_dict(root, item)
@@ -532,7 +750,7 @@ func _read_validate(root: Node, _params: Dictionary) -> Dictionary:
 		seen[key] = true
 		issues.append(entry)
 		counts[entry["severity"]] += 1
-	return {"ok": true, "result": {"issues": issues, "counts": counts}}
+	return {"ok": true, "result": {"issues": issues, "counts": counts, "accepted": accepted_count}}
 
 
 const _SEVERITIES := ["info", "warning", "error"]
@@ -561,6 +779,10 @@ func _issue_dict(root: Node, item: Dictionary) -> Dictionary:
 		entry["other_brush_id"] = (other as DraftBrush).brush_id
 	if item.has("fix"):
 		entry["fix"] = str(item["fix"])
+	if item.has("check"):
+		entry["check"] = str(item["check"])
+	if item.get("changed_since_accepted", false):
+		entry["changed_since_accepted"] = true
 	return entry
 
 
@@ -789,7 +1011,7 @@ func _read_materials(root: Node, _params: Dictionary) -> Dictionary:
 
 
 func _check_transform_brush(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_brush(root, params)
+	var found := _read_brush_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var brush: DraftBrush = found["brush"]
@@ -842,7 +1064,7 @@ func _apply_transform_brush(root: Node, plan: Dictionary) -> Dictionary:
 
 
 func _check_resize_brush(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_brush(root, params)
+	var found := _read_brush_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var brush: DraftBrush = found["brush"]
@@ -897,7 +1119,7 @@ func _apply_resize_brush(root: Node, plan: Dictionary) -> Dictionary:
 
 
 func _check_delete_brush(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_brush(root, params)
+	var found := _read_brush_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var brush_id: String = (found["brush"] as DraftBrush).brush_id
@@ -919,7 +1141,7 @@ func _apply_delete_brush(root: Node, brush_id: String) -> Dictionary:
 
 
 func _check_extrude_face(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_brush(root, params)
+	var found := _read_brush_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var brush: DraftBrush = found["brush"]
@@ -971,7 +1193,7 @@ func _apply_extrude_face(root: Node, plan: Dictionary) -> Dictionary:
 
 
 func _check_assign_material(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_brush(root, params)
+	var found := _read_brush_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var brush: DraftBrush = found["brush"]
@@ -1007,6 +1229,10 @@ func _apply_assign_material(root: Node, plan: Dictionary) -> Dictionary:
 	var brush := root.find_brush_by_id(brush_id) as DraftBrush
 	if brush == null:
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Brush '%s' went missing" % brush_id)
+	# The browser's Recent row follows the agent's paint as it follows the mapper's.
+	var used: Material = root.material_manager.get_material(plan["slot"])
+	if used:
+		root.material_used.emit(used)
 	return {"ok": true, "result": {"brush": brush_dict(root, brush)}}
 
 
@@ -1019,7 +1245,9 @@ func _apply_assign_material(root: Node, plan: Dictionary) -> Dictionary:
 ## game gets, such as an OmniLight3D. A brush entity class (func_wall, trigger_once)
 ## has none, since it is set on brushes, and the spawn has hf_set_spawn. door_basic
 ## names one and is a brush entity all the same, which the palette leaves out too:
-## placed on its own it is a marker with no door to move (#1232).
+## placed on its own it is a marker with no door to move (#1232). A class for the
+## editor only, the note, builds nothing in a game and is placed all the same, so
+## an agent can leave one where it applies (#1700).
 func placeable_classes(root: Node) -> Array:
 	var names: Array = []
 	var definitions: Dictionary = root.get_entity_definitions()
@@ -1029,7 +1257,10 @@ func placeable_classes(root: Node) -> Array:
 			continue
 		if bool((definition as Dictionary).get("is_brush_entity", false)):
 			continue
-		if str((definition as Dictionary).get("class", "")) != "":
+		if (
+			str((definition as Dictionary).get("class", "")) != ""
+			or (definition as Dictionary).get("editor_only") == true
+		):
 			names.append(str(key))
 	names.sort()
 	return names
@@ -1072,7 +1303,9 @@ func _check_place_entity(root: Node, params: Dictionary) -> Dictionary:
 			return given
 		data.merge(given["value"], true)
 	plan["data"] = data
-	return {"ok": true, "scope_ids": [], "apply": _apply_place_entity.bind(root, plan)}
+	return {
+		"ok": true, "scope_ids": [], "apply": _apply_place_entity.bind(root, plan), "adds": true
+	}
 
 
 func _apply_place_entity(root: Node, plan: Dictionary) -> Dictionary:
@@ -1088,6 +1321,9 @@ func _apply_place_entity(root: Node, plan: Dictionary) -> Dictionary:
 	if authored != "":
 		entity.set_meta("entity_name", authored)
 	root.add_entity(entity)
+	# New work joins the current visgroup, the mapper's or the agent's (#1732).
+	if root.visgroup_system:
+		root.visgroup_system.join_current(entity)
 	var basis := Basis()
 	if plan["rotation"] != null:
 		basis = HFMcpProtocol.basis_from_degrees(plan["rotation"])
@@ -1190,14 +1426,90 @@ static func _entity_value(type_name: String, value) -> Dictionary:
 	return {"ok": false}
 
 
-## Every entity in the level, with what an agent can read back.
-func _read_entities(root: Node, _params: Dictionary) -> Dictionary:
-	var listed: Array = []
+## The entities `filter` and `bounds` pick, a page at a time (#1704), as
+## `hf_get_brushes` pages: `count`, `returned`, `offset` and `truncated`.
+func _read_entities(root: Node, params: Dictionary) -> Dictionary:
+	var by_class := HFMcpProtocol.read_bool(params, "count_by_class", false)
+	if not by_class["ok"]:
+		return by_class
+	if by_class["value"]:
+		return _count_by_class(root, params)
+	var page := _read_page(params)
+	if not page["ok"]:
+		return page
+	var box := _read_box(params)
+	if not box["ok"]:
+		return box
+	var rule := _read_entity_filter(params.get("filter"))
+	if not rule["ok"]:
+		return rule
+	var targeted := HFObjectFilter.targeted_names(root)
+	var matches: Array = []
 	if root.entities_node:
 		for node in root.entities_node.get_children():
-			if node is DraftEntity:
-				listed.append(entity_dict(root, node))
-	return {"ok": true, "result": {"entities": listed}}
+			if not (node is DraftEntity):
+				continue
+			var at := (node as Node3D).global_position
+			if box["use"] and not _box_passes(box, AABB(at, Vector3.ZERO)):
+				continue
+			if HFObjectFilter.entity_passes(root, node, rule["value"], targeted):
+				matches.append(node)
+	if page["count_only"]:
+		return {"ok": true, "result": {"count": matches.size()}}
+	var listed: Array = []
+	for entity in matches.slice(page["offset"], page["offset"] + page["limit"]):
+		listed.append(entity_dict(root, entity))
+	var result := _paged(matches.size(), listed.size(), page["offset"])
+	result["entities"] = listed
+	return {"ok": true, "result": result}
+
+
+## The level's entities counted by class, point and brush entities both, as the
+## Console's Entities tab counts them (#1709). The whole level: a filter or a box
+## would count something else, so they are refused beside it.
+func _count_by_class(root: Node, params: Dictionary) -> Dictionary:
+	for key in ["filter", "bounds"]:
+		if params.get(key) != null:
+			return HFMcpProtocol.invalid(
+				key, "count_by_class counts the whole level; leave %s out" % key
+			)
+	var counts := HFEntityCensus.counts(root)
+	var total := 0
+	for entity_class in counts:
+		total += int(counts[entity_class])
+	return {"ok": true, "result": {"count_by_class": counts, "count": total}}
+
+
+func _read_entity_filter(raw: Variant) -> Dictionary:
+	if raw == null:
+		return {"ok": true, "value": {}}
+	if not (raw is Dictionary):
+		return HFMcpProtocol.invalid("filter", "filter is an object of tests")
+	var rule: Dictionary = raw
+	var unknown := HFObjectFilter.unknown_test(rule, HFObjectFilter.ENTITY_TESTS)
+	if unknown != "":
+		return HFMcpProtocol.invalid(
+			"filter.%s" % unknown,
+			(
+				"hf_get_entities has no filter %s; it takes %s"
+				% [unknown, ", ".join(HFObjectFilter.ENTITY_TESTS)]
+			)
+		)
+	for key in rule:
+		var value: Variant = rule[key]
+		var param := "filter.%s" % key
+		match str(key):
+			"has_outputs", "has_inputs":
+				if not (value is bool):
+					return HFMcpProtocol.invalid(param, "%s is true or false" % key)
+			"property":
+				var problem := HFObjectFilter.property_test_problem(value)
+				if problem != "":
+					return HFMcpProtocol.invalid(param, problem)
+			_:
+				if not (value is String and not (value as String).is_empty()):
+					return HFMcpProtocol.invalid(param, "%s is a string" % key)
+	return {"ok": true, "value": rule}
 
 
 ## An entity the way the entity tools report one. `entity` is its path in the
@@ -1216,6 +1528,7 @@ func entity_dict(root: Node, entity: DraftEntity) -> Dictionary:
 		"properties": properties,
 		"outputs": outputs_of(root, entity),
 		"prefab": prefab_of(root, entity),
+		"locked": is_locked(root, entity),
 	}
 
 
@@ -1283,7 +1596,7 @@ func _read_entity(root: Node, params: Dictionary) -> Dictionary:
 
 
 func _check_transform_entity(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_entity(root, params)
+	var found := _read_entity_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var plan := {"path": str(params["entity"]), "position": null, "rotation": null}
@@ -1364,7 +1677,7 @@ func _apply_set_entity_properties(root: Node, plan: Dictionary) -> Dictionary:
 
 
 func _check_delete_entity(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_entity(root, params)
+	var found := _read_entity_to_change(root, params)
 	if not found["ok"]:
 		return found
 	# The whole level: deleting an entity also takes the wires aimed at it out of
@@ -1390,12 +1703,12 @@ func _read_io_source(root: Node, params: Dictionary) -> Dictionary:
 			"entity", "give entity, a point entity's path, or brush_id, a brush entity's, not both"
 		)
 	if by_entity:
-		var found := _read_entity(root, params)
+		var found := _read_entity_to_change(root, params)
 		if not found["ok"]:
 			return found
 		var path := str(params["entity"])
 		return {"ok": true, "node": found["entity"], "key": "entity", "value": path}
-	var read := _read_brush(root, params)
+	var read := _read_brush_to_change(root, params)
 	if not read["ok"]:
 		return read
 	var brush: DraftBrush = read["brush"]
@@ -1619,7 +1932,7 @@ func _read_tie_brushes(root: Node, params: Dictionary) -> Dictionary:
 		if seen.has(brush_id):
 			return HFMcpProtocol.invalid("brush_ids", "Brush '%s' is listed twice" % brush_id)
 		seen[brush_id] = true
-		var found := _read_brush(root, {"brush_id": brush_id})
+		var found := _read_brush_to_change(root, {"brush_id": brush_id})
 		if not found["ok"]:
 			return found
 		var brush: DraftBrush = found["brush"]
@@ -1791,6 +2104,205 @@ static func partial_bake_findings(root: Node, spawn: Node3D) -> Array:
 	}
 	found.append(floats)
 	return found
+
+
+# ---------------------------------------------------------------------------
+# hf_measure
+# ---------------------------------------------------------------------------
+
+## The most items one hf_measure call takes.
+const MEASURE_LIMIT := 64
+
+
+## Sizes, gaps and angles in one small answer (#1649). Each item is a brush id, a
+## face (`{brush_id, face}`), an entity (`{entity}`, the path hf_get_entities
+## gives) or a point (`[x, y, z]`). Each is described. Two get their gap, the
+## distance between their centres and the gap along each axis, and two faces the
+## angle between them. More than two get their bounds and volume together.
+func _read_measure(root: Node, params: Dictionary) -> Dictionary:
+	var raw = params.get("items")
+	if not (raw is Array) or (raw as Array).is_empty() or (raw as Array).size() > MEASURE_LIMIT:
+		return HFMcpProtocol.invalid(
+			"items", "items is a list of 1 to %d brushes, faces, entities or points" % MEASURE_LIMIT
+		)
+	var items: Array = []
+	var answers: Array = []
+	for i in (raw as Array).size():
+		var read := _measure_item(root, raw[i])
+		if not read["ok"]:
+			return _measure_refused(read, "items[%d]" % i)
+		items.append(read)
+		answers.append(read["answer"])
+	var result := {"items": answers}
+	if items.size() == 2:
+		result["pair"] = _measure_pair(items[0], items[1])
+	elif items.size() > 2:
+		var box: AABB = items[0]["box"]
+		var total := 0.0
+		for item in items:
+			box = box.merge(item["box"])
+			total += float(item.get("volume", 0.0))
+		result["together"] = {
+			"bounds": _measure_box(box), "volume": HFMcpProtocol.clean_number(total)
+		}
+	return {"ok": true, "result": result}
+
+
+## One item read: `{ok, kind, answer, box, centre}`, with its faces, its ring or
+## its point; or a refusal naming the field.
+func _measure_item(root: Node, item) -> Dictionary:
+	if item is String:
+		item = {"brush_id": item}
+	if item is Array:
+		var point := HFMcpProtocol.read_vec3({"point": item}, "point", true)
+		if not point["ok"]:
+			return point
+		var at: Vector3 = point["value"]
+		return _measure_point(at, {"kind": "point", "point": HFMcpProtocol.vec3_to_array(at)})
+	if not (item is Dictionary):
+		return HFMcpProtocol.invalid(
+			"item", 'an item is a brush id, {"brush_id", "face"}, {"entity"} or [x, y, z]'
+		)
+	if (item as Dictionary).has("entity"):
+		var path := str(item["entity"])
+		var node: Node = root.get_node_or_null(NodePath(path)) if path != "" else null
+		if not (node is DraftEntity) or node.get_parent() != root.entities_node:
+			return _fail(
+				HFMcpProtocol.E_ENTITY_NOT_FOUND,
+				"No entity at '%s'; hf_get_entities lists each one's path" % path,
+				{"entity": path}
+			)
+		var spot := (node as Node3D).global_position
+		return _measure_point(
+			spot, {"kind": "entity", "entity": path, "point": HFMcpProtocol.vec3_to_array(spot)}
+		)
+	var found := _read_brush(root, item)
+	if not found["ok"]:
+		return found
+	var brush: DraftBrush = found["brush"]
+	if not (item as Dictionary).has("face"):
+		var faces := HFSolidMeasure.world_faces(brush)
+		var box := HFSolidMeasure.bounds(faces)
+		var volume := HFSolidMeasure.volume(faces)
+		return {
+			"ok": true,
+			"kind": "brush",
+			"faces": faces,
+			"box": box,
+			"centre": box.get_center(),
+			"volume": volume,
+			"answer":
+			{
+				"kind": "brush",
+				"brush_id": brush.brush_id,
+				"bounds": _measure_box(box),
+				"volume": HFMcpProtocol.clean_number(volume),
+				"face_count": faces.size(),
+			},
+		}
+	var face := _resolve_face(brush, item["face"])
+	if not face["ok"]:
+		return face
+	var index: int = face["index"]
+	var xform := brush.global_transform
+	var ring := PackedVector3Array()
+	for point in brush.faces[index].local_verts:
+		ring.append(xform * point)
+	var centre := HFSolidMeasure.face_centre(ring)
+	var normal := HFSolidMeasure.face_normal(ring)
+	return {
+		"ok": true,
+		"kind": "face",
+		"ring": ring,
+		"normal": normal,
+		"box": HFSolidMeasure.bounds([ring]),
+		"centre": centre,
+		"answer":
+		{
+			"kind": "face",
+			"brush_id": brush.brush_id,
+			"face": index,
+			"area": HFMcpProtocol.clean_number(HFSolidMeasure.face_area(ring)),
+			"centre": HFMcpProtocol.vec3_to_array(centre),
+			"normal": HFMcpProtocol.vec3_to_array(normal),
+		},
+	}
+
+
+static func _measure_point(at: Vector3, answer: Dictionary) -> Dictionary:
+	return {
+		"ok": true,
+		"kind": "point",
+		"point": at,
+		"box": AABB(at, Vector3.ZERO),
+		"centre": at,
+		"answer": answer,
+	}
+
+
+## The gap between two items, the distance between their centres and the gap
+## along each axis, negative where they overlap; and for two faces their angle.
+func _measure_pair(a: Dictionary, b: Dictionary) -> Dictionary:
+	var a_box: AABB = a["box"]
+	var b_box: AABB = b["box"]
+	var axis_gaps := Vector3.ZERO
+	for axis in 3:
+		axis_gaps[axis] = maxf(
+			b_box.position[axis] - a_box.end[axis], a_box.position[axis] - b_box.end[axis]
+		)
+	var a_centre: Vector3 = a["centre"]
+	var pair := {
+		"gap": HFMcpProtocol.clean_number(_measure_gap(a, b)),
+		"centre_distance": HFMcpProtocol.clean_number(a_centre.distance_to(b["centre"])),
+		"axis_gaps": HFMcpProtocol.vec3_to_array(axis_gaps),
+	}
+	if a["kind"] == "face" and b["kind"] == "face":
+		var a_normal: Vector3 = a["normal"]
+		var b_normal: Vector3 = b["normal"]
+		var cosine := clampf(a_normal.dot(b_normal), -1.0, 1.0)
+		pair["angle_degrees"] = HFMcpProtocol.clean_number(
+			snappedf(rad_to_deg(acos(cosine)), 0.0001)
+		)
+		var a_ring: PackedVector3Array = a["ring"]
+		var b_ring: PackedVector3Array = b["ring"]
+		var height := a_normal.dot(b_ring[0] - a_ring[0])
+		pair["coplanar"] = absf(absf(cosine) - 1.0) <= 0.0001 and absf(height) <= 0.001
+	return pair
+
+
+static func _measure_gap(a: Dictionary, b: Dictionary) -> float:
+	if a["kind"] == "point" and b["kind"] == "point":
+		var a_point: Vector3 = a["point"]
+		return a_point.distance_to(b["point"])
+	if a["kind"] == "point" or b["kind"] == "point":
+		var point: Dictionary = a if a["kind"] == "point" else b
+		var other: Dictionary = b if a["kind"] == "point" else a
+		if other["kind"] == "brush":
+			return HFSolidMeasure.point_gap(point["point"], other["faces"])
+		return HFSolidMeasure.point_face_distance(point["point"], other["ring"])
+	if a["kind"] == "face" and b["kind"] == "face":
+		return HFSolidMeasure.face_gap(a["ring"], b["ring"])
+	var a_faces: Array = a["faces"] if a["kind"] == "brush" else [a["ring"]]
+	var b_faces: Array = b["faces"] if b["kind"] == "brush" else [b["ring"]]
+	return HFSolidMeasure.solid_gap(a_faces, b_faces)
+
+
+static func _measure_box(box: AABB) -> Dictionary:
+	return {
+		"min": HFMcpProtocol.vec3_to_array(box.position),
+		"max": HFMcpProtocol.vec3_to_array(box.end),
+		"size": HFMcpProtocol.vec3_to_array(box.size),
+		"centre": HFMcpProtocol.vec3_to_array(box.get_center()),
+	}
+
+
+## A refusal for one item, its field named by where it sits in `items`.
+static func _measure_refused(refusal: Dictionary, field: String) -> Dictionary:
+	var error: Dictionary = (refusal.get("error", {}) as Dictionary).duplicate(true)
+	var details: Dictionary = (error.get("details", {}) as Dictionary).duplicate()
+	details["param"] = field if not details.has("param") else "%s.%s" % [field, details["param"]]
+	error["details"] = details
+	return {"ok": false, "error": error}
 
 
 # ---------------------------------------------------------------------------
@@ -2079,6 +2591,7 @@ func brush_dict(
 		"brush_entity": _brush_entity_dict(root, brush),
 		"prefab": prefab_of(root, brush),
 		"structure": structure_of(root, brush),
+		"locked": is_locked(root, brush),
 	}
 	if include_faces:
 		data["faces"] = faces

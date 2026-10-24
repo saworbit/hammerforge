@@ -198,7 +198,7 @@ static func _coerce(spec: Dictionary, value):
 		var fallback = spec.get("default", 0.0)
 		HFLog.warn(
 			(
-				"Generator setting '%s' cannot be a %s, so the default is used instead."
+				"Structure setting '%s' cannot be a %s, so the default is used instead."
 				% [str(spec.get("key", "?")), type_string(typeof(value))]
 			)
 		)

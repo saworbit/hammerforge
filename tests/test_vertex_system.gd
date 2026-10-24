@@ -297,6 +297,134 @@ func test_move_with_no_selection_returns_false():
 
 
 # ===========================================================================
+# Offset (#1441)
+# ===========================================================================
+
+
+## The world position of each vertex of `brush`, so a move is read where the
+## mapper sees it.
+func _world_vertices(brush: DraftBrush) -> Array:
+	var out: Array = []
+	for v in vs.get_brush_vertices(brush):
+		out.append(brush.global_transform * v)
+	return out
+
+
+func _has_world_vertex(brush: DraftBrush, at: Vector3) -> bool:
+	for v in _world_vertices(brush):
+		if v.distance_to(at) < 0.001:
+			return true
+	return false
+
+
+## The offset is a world vector, so on a turned brush it goes the way it was
+## typed, not along the brush's own axes. The face the box turns toward -Z goes 2
+## further that way, and the snapshot taken is the box before it went.
+func test_offset_selected_moves_a_turned_brush_s_vertices_by_a_world_offset():
+	var b = _make_box_brush(Vector3(10, 0, 0), Vector3(4, 4, 4), "off1")
+	b.rotation_degrees = Vector3(0, 90, 0)
+	vs.set_selection([b])
+	_select_face_toward(b, "off1", Vector3.RIGHT)
+	var picked: Array = []
+	for p in vs.get_selected_world_positions():
+		picked.append(p)
+	for p in picked:
+		assert_almost_eq(p.z, -2.0, 0.001, "the picked face is the one facing -Z")
+	var faces_before: Dictionary = b.geometry_state()
+
+	var snapshots: Dictionary = vs.offset_selected(Vector3(0, 0, -2))
+
+	assert_true(snapshots.has("off1"), "the move is snapshotted for undo")
+	assert_eq(snapshots["off1"], faces_before, "as the box was before it")
+	for p in picked:
+		assert_true(_has_world_vertex(b, p + Vector3(0, 0, -2)), "%s went 2 along -Z" % p)
+	assert_true(vs.validate_convexity(b), "and the box is still a solid")
+
+
+## Pushing a corner into the box would dent it: nothing changes, no snapshot is
+## left for a later edit to pick up, and the mapper is told why.
+func test_an_offset_that_would_dent_the_brush_changes_nothing_and_says_why():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(4, 4, 4), "off2")
+	vs.set_selection([b])
+	var corner: int = Array(vs.get_brush_vertices(b)).find(Vector3(2, 2, 2))
+	vs.select_vertex("off2", corner)
+	var before: Dictionary = b.geometry_state()
+	var said: Array = []
+	root.user_message.connect(func(text: String, _level: int): said.append(text))
+
+	var snapshots: Dictionary = vs.offset_selected(Vector3(-3, -3, -3))
+
+	assert_eq(snapshots, {}, "no snapshot: nothing moved")
+	assert_eq(b.geometry_state(), before, "the box is as it was")
+	assert_has(said, "Offset rejected: would create a non-convex brush")
+	assert_eq(vs.get_pre_op_snapshots(), {}, "and nothing is left for the next edit")
+
+
+## A face is moved by its corners together, so the faces round it follow.
+func test_offset_corners_moves_a_face_and_the_box_grows_to_meet_it():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(4, 4, 4), "off3")
+	var top: PackedVector3Array
+	for face in b.faces:
+		if face.normal.y > 0.99:
+			top = face.local_verts
+
+	var snapshots: Dictionary = vs.offset_corners({"off3": top}, Vector3(0, 1.5, 0))
+
+	assert_true(snapshots.has("off3"))
+	var tallest := -INF
+	for v in vs.get_brush_vertices(b):
+		tallest = maxf(tallest, v.y)
+	assert_almost_eq(tallest, 3.5, 0.0001)
+	assert_true(vs.validate_convexity(b))
+
+
+## Bringing the top face down onto the bottom would fold the box flat.
+func test_offset_corners_refuses_to_land_two_vertices_on_one_point():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(4, 4, 4), "off4")
+	var top: PackedVector3Array
+	for face in b.faces:
+		if face.normal.y > 0.99:
+			top = face.local_verts
+	var before: Dictionary = b.geometry_state()
+	var said: Array = []
+	root.user_message.connect(func(text: String, _level: int): said.append(text))
+
+	assert_eq(vs.offset_corners({"off4": top}, Vector3(0, -4, 0)), {})
+	assert_eq(b.geometry_state(), before)
+	assert_has(said, "Offset rejected: two vertices of a brush would land on one point")
+
+
+# ===========================================================================
+# Pick Pivot's snap (#1442)
+# ===========================================================================
+
+
+func test_pick_snap_point_finds_a_vertex_an_edge_midpoint_or_a_face_centre():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(4, 4, 4), "snap1")
+	# A viewport the size of an editor's, so twelve pixels is a distance the
+	# candidates are told apart by.
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(800, 600)
+	add_child_autofree(viewport)
+	var camera := Camera3D.new()
+	viewport.add_child(camera)
+	camera.look_at_from_position(Vector3(9, 12, 15), Vector3.ZERO)
+	camera.current = true
+	for case in [
+		["vertex", Vector3(2, 2, 2)],
+		["edge", Vector3(2, 2, 0)],
+		["face", Vector3(0, 2, 0)],
+	]:
+		var screen: Vector2 = camera.unproject_position(case[1]) + Vector2(2, 2)
+		var hit := vs.pick_snap_point(camera, screen, [b])
+		assert_eq(hit.get("kind", ""), case[0], "a %s" % case[0])
+		_assert_vector_near(hit.get("world_pos", Vector3.INF), case[1], "at %s" % case[1])
+		assert_eq(hit.get("brush_id", ""), "snap1")
+	var far: Vector2 = camera.unproject_position(Vector3(30, 0, 30))
+	assert_eq(vs.pick_snap_point(camera, far, [b]), {}, "nothing in reach is nothing")
+
+
+# ===========================================================================
 # Edited geometry survives a rebuild
 # ===========================================================================
 
@@ -643,3 +771,11 @@ func test_vertex_key_same_for_near_identical_points():
 	var k1 = vs._vertex_key(Vector3(1.0, 2.0, 3.0))
 	var k2 = vs._vertex_key(Vector3(1.0001, 2.0001, 3.0001))
 	assert_eq(k1, k2, "Very close points should hash to same key")
+
+
+## Float noise either side of a whole number is one corner. Truncating sent
+## 0.9999999 to 999 and 1.0000001 to 1000, so one corner had two keys (#1678).
+func test_vertex_key_same_for_float_noise_either_side_of_a_whole_number():
+	var below = vs._vertex_key(Vector3(0.9999999, 2.0, -1.0000001))
+	var above = vs._vertex_key(Vector3(1.0000001, 2.0, -0.9999999))
+	assert_eq(below, above)

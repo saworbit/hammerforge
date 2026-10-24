@@ -324,3 +324,62 @@ func test_a_node_still_in_a_hidden_visgroup_stays_hidden():
 	assert_false(brush.visible, "Hidden by V1")
 	sys.remove_visgroup("V2")
 	assert_false(brush.visible, "V1 is still hiding it")
+
+
+# ---------------------------------------------------------------------------
+# How a visgroup's brushes cast shadows (#1444)
+# ---------------------------------------------------------------------------
+
+
+func test_a_visgroup_leaves_cast_shadows_to_the_level_until_told():
+	sys.create_visgroup("sky")
+	assert_eq(sys.get_visgroup_cast_shadow("sky"), HFBakeSplit.LEVEL_DEFAULT)
+	assert_true(sys.set_visgroup_cast_shadow("sky", GeometryInstance3D.SHADOW_CASTING_SETTING_OFF))
+	assert_eq(sys.get_visgroup_cast_shadow("sky"), GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	assert_false(sys.set_visgroup_cast_shadow("sky", 7), "7 is no shadow casting setting")
+	assert_false(sys.set_visgroup_cast_shadow("nowhere", 0), "nor is there such a visgroup")
+	assert_eq(sys.get_visgroup_cast_shadow("sky"), GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+
+
+func test_a_visgroup_keeps_its_cast_shadows_through_a_rename_and_a_save():
+	sys.create_visgroup("sky")
+	sys.set_visgroup_cast_shadow("sky", GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+	assert_true(sys.rename_visgroup("sky", "backdrop"))
+	assert_eq(
+		sys.get_visgroup_cast_shadow("backdrop"),
+		GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY,
+		"a rename keeps the record"
+	)
+	var captured = JSON.parse_string(JSON.stringify(sys.capture_visgroups()))
+	var sys2 = HFVisgroupSystem.new(root)
+	sys2.restore_visgroups(captured)
+	assert_eq(
+		sys2.get_visgroup_cast_shadow("backdrop"),
+		GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY,
+		"and so does a save, where JSON hands a whole number back as a float"
+	)
+
+
+func test_an_older_or_damaged_payload_leaves_cast_shadows_to_the_level():
+	sys.restore_visgroups({"old": {"visible": true}, "bad": {"visible": true, "cast_shadow": "x"}})
+	assert_eq(sys.get_visgroup_cast_shadow("old"), HFBakeSplit.LEVEL_DEFAULT)
+	assert_eq(sys.get_visgroup_cast_shadow("bad"), HFBakeSplit.LEVEL_DEFAULT)
+
+
+func test_a_nodes_cast_shadows_choices_come_in_the_order_of_the_visgroup_list():
+	var node := _make_brush(root)
+	for vg_name in ["first", "second", "third"]:
+		sys.create_visgroup(vg_name)
+	sys.add_to_visgroup(node, "third")
+	sys.add_to_visgroup(node, "second")
+	sys.add_to_visgroup(node, "first")
+	sys.set_visgroup_cast_shadow("third", GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	sys.set_visgroup_cast_shadow("first", GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+	assert_eq(
+		sys.cast_shadow_overrides_of(node),
+		[
+			["first", GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY],
+			["third", GeometryInstance3D.SHADOW_CASTING_SETTING_OFF],
+		],
+		"the list's order, and only the visgroups that chose"
+	)

@@ -46,9 +46,13 @@ class FakePlugin:
 	var undo_redo_manager = null
 	var _operation_replay = null
 	var reconcile_queues := 0
+	var history_notes := 0
 
 	func _queue_managed_brush_reconcile() -> void:
 		reconcile_queues += 1
+
+	func _note_history_step(_root: Node) -> void:
+		history_notes += 1
 
 	func _get_level_root() -> Node:
 		return active_root

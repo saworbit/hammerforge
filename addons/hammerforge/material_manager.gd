@@ -2,7 +2,18 @@
 extends Node
 class_name MaterialManager
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFSettingsFile = preload("hf_settings_file.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+const HFHiddenFaces = preload("hf_hidden_faces.gd")
+
 @export var materials: Array[Material] = []
+
+## The look this level's Hidden faces wear (#1719), made when one first asks. Not
+## a palette slot: a Hidden face keeps its slot under it.
+var _hidden_face_material: ShaderMaterial = null
 
 ## Path to the last saved/loaded material library (for auto-reload).
 var _library_path := ""
@@ -20,11 +31,30 @@ func get_material(index: int) -> Material:
 	return null
 
 
+func hidden_face_material() -> Material:
+	if _hidden_face_material == null:
+		_hidden_face_material = HFHiddenFaces.make_material()
+	return _hidden_face_material
+
+
 func add_material(material: Material) -> int:
 	if material == null:
 		return -1
 	materials.append(material)
 	return materials.size() - 1
+
+
+## The first slot holding the material saved at `path`, or -1. The Recent row and
+## a material dropped from the FileSystem dock both reuse that slot rather than
+## adding the file again (#1417).
+func slot_of_path(path: String) -> int:
+	if path == "":
+		return -1
+	for i in range(materials.size()):
+		var mat := materials[i]
+		if mat != null and mat.resource_path == path:
+			return i
+	return -1
 
 
 func remove_material(index: int) -> void:
@@ -66,6 +96,24 @@ func palette_matches(other: Array) -> bool:
 	return true
 
 
+## What to call a material where a mapper reads it: the grid, its tooltip and
+## search, the favourites strip, the Active Material button, the face menu's
+## Copy Name and the dock's toasts (#1463). Its own name, else its file's name
+## without the extension, else "Material".
+static func material_label(mat: Material) -> String:
+	if mat == null:
+		return "Material"
+	if mat.resource_name != "":
+		return mat.resource_name
+	var file := mat.resource_path.get_file().get_basename()
+	return file if file != "" else "Material"
+
+
+## Each slot's name as the level's files know it, which is not `material_label()`:
+## a file's name keeps its extension here. A `.map` export writes these as texture
+## names and reads them back to find a slot, `hf_get_materials` lists them for an
+## agent to pass back, and the bake names surfaces by the same rule. Dropping the
+## extension would leave a `.map` written before it with textures no slot answers.
 func get_material_names() -> Array[String]:
 	var names: Array[String] = []
 	for mat in materials:
@@ -112,11 +160,10 @@ func save_library(path: String) -> int:
 			if mat != null:
 				_dropped_slots.append(index)
 	var json = JSON.stringify({"version": 1, "materials": paths})
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		return ERR_CANT_OPEN
-	file.store_string(json)
-	file.close()
+	# Whole or not at all, so a write cut short keeps the old library (#1663).
+	var written := HFSettingsFile.write_text(path, json)
+	if written != OK:
+		return written
 	_library_path = path
 	if not _dropped_slots.is_empty():
 		HFLog.warn(

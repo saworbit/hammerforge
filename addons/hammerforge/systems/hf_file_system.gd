@@ -6,7 +6,11 @@ class_name HFFileSystem
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFLevelIO = preload("../hflevel_io.gd")
+const HFFormatRecord = preload("../hf_format_record.gd")
 const MapIO = preload("../map_io.gd")
+const HFEntityPropUtils = preload("../ui/hf_entity_prop_utils.gd")
+const HFHiddenFaces = preload("../hf_hidden_faces.gd")
+const HFFormatCensus = preload("../hf_format_census.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFMapAdapterType = preload("../map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("../map_adapters/hf_map_quake.gd")
@@ -30,6 +34,9 @@ var last_encode_skipped := false
 ## said once rather than every five minutes -- and said again if the level is
 ## later pointed at a different file that is also somebody else's.
 var _autosave_collision_path := ""
+## The scene this level was, and the file its `.hflevel` goes to, as the editor
+## started saving the scene. Empty outside a save.
+var _scene_save_started := {}
 
 
 func _init(level_root: Node3D) -> void:
@@ -40,6 +47,19 @@ func save_hflevel(path: String = "", force: bool = false, autosave: bool = false
 	var target = path if path != "" else root.resolved_hflevel_path()
 	if target == "":
 		return ERR_INVALID_PARAMETER
+	# A scene a newer build saved holds what this build would leave out (#1638).
+	var newer: String = root.format_refusal() if root.has_method("format_refusal") else ""
+	if newer != "":
+		var refused := (
+			"%s refused: this level %s. Saving it here would drop what that build added."
+			% ["Autosave" if autosave else "Save Level", newer]
+		)
+		HFLog.warn("HammerForge: %s" % refused)
+		if autosave and root.has_signal("autosave_failed"):
+			root.autosave_failed.emit(refused)
+		elif root.has_signal("user_message"):
+			root.user_message.emit(refused, 2)
+		return ERR_UNAVAILABLE
 	if autosave:
 		var occupant := autosave_target_belongs_elsewhere(target)
 		if occupant != "":
@@ -53,10 +73,67 @@ func save_hflevel(path: String = "", force: bool = false, autosave: bool = false
 				if root.has_signal("autosave_failed"):
 					root.autosave_failed.emit(message)
 			return ERR_FILE_CANT_WRITE
+	return _write_hflevel(target, force, autosave)
+
+
+## The editor is about to save the scene this level is in. Under Save Scene As
+## this is the last moment the scene still has its old name.
+func scene_save_starting() -> void:
+	_scene_save_started = {
+		"scene": str(root.scene_source_path()).strip_edges(),
+		"path": str(root.resolved_hflevel_path()),
+	}
+
+
+## The editor has saved the scene this level is in.
+##
+## Save Scene As gives the scene a new name and does not write the `.hflevel`,
+## so the file went on naming the old scene. A `.scn` resolves to the same file
+## as the `.tscn` it was saved from, so every autosave after that was refused as
+## a write over another level's file, until Save Level rewrote the record (#1591).
+##
+## So the record follows the scene here: the level autosaves as soon as the
+## scene has its new name. Only when the file names the scene this level was a
+## moment ago. The editor never has one scene open in two tabs, so no other open
+## level can be the one that file names. A file naming any other scene is left to
+## the autosave's own check, which still refuses it.
+func scene_save_finished() -> void:
+	var started := _scene_save_started
+	_scene_save_started = {}
+	var before := str(started.get("scene", ""))
+	if before == "" or not bool(root.hflevel_autosave_enabled):
+		return
+	# An ordinary Ctrl+S, which leaves the record as true as it was.
+	if str(root.scene_source_path()).strip_edges() == before:
+		return
+	# A new name with a file of its own autosaves there on the timer, as before.
+	var path := str(root.resolved_hflevel_path())
+	if path == "" or path != str(started.get("path", "")):
+		return
+	if read_recorded_scene(path) != before:
+		return
+	_write_hflevel(path, true, true)
+
+
+func _write_hflevel(target: String, force: bool, autosave: bool) -> int:
 	ensure_dir_for_path(target)
 	if root.paint_system:
-		root.paint_system.set_region_base_path(target)
-		var regions: Dictionary = root.paint_system.save_loaded_regions()
+		# The streamed out regions first, while the paint system still names the
+		# folder their files are in (#1665).
+		var regions: Dictionary = {"ok": true}
+		var carried: int = root.paint_system.carry_region_files_to(target)
+		if carried != OK:
+			regions = {
+				"ok": false,
+				"error":
+				(
+					"Could not copy the streamed out paint regions next to %s (%s)"
+					% [target.get_file(), error_string(carried)]
+				),
+			}
+		else:
+			root.paint_system.set_region_base_path(target)
+			regions = root.paint_system.save_loaded_regions()
 		if not bool(regions.get("ok", true)):
 			# The index would claim region data that is missing or stale, and the
 			# level write would still report success. Stop here instead.
@@ -105,7 +182,31 @@ func load_hflevel(path: String = "") -> bool:
 	var state = decoded.get("state", {})
 	root._apply_hflevel_settings(settings if settings is Dictionary else {})
 	root.restore_state(state if state is Dictionary else {})
+	_retype_int_properties()
 	return true
+
+
+## A level file is JSON, and JSON reads every number back a float, so an entity
+## property its class declares an int, such as a clip's Physics Layer, came back
+## a float (#1787). Typed fields take an int back on their own; these do not.
+func _retype_int_properties() -> void:
+	var holders: Array = []
+	if root.entities_node:
+		holders.append_array(root.entities_node.get_children())
+	holders.append_array(root._iter_managed_brush_nodes())
+	for node in holders:
+		var entity_class := HFEntityPropUtils.get_entity_type(node)
+		if entity_class == "":
+			continue
+		var definition: Dictionary = root.get_entity_definition(entity_class)
+		var data := HFEntityPropUtils.get_entity_data(node)
+		for prop in definition.get("properties", []):
+			if not (prop is Dictionary) or str(prop.get("type", "")) != "int":
+				continue
+			var prop_name := str(prop.get("name", ""))
+			var value: Variant = data.get(prop_name)
+			if value is float and is_equal_approx(value, roundf(value)):
+				HFEntityPropUtils.set_entity_property(node, prop_name, int(value))
 
 
 ## Read a level file and check this build can apply it, touching nothing.
@@ -116,24 +217,45 @@ func load_hflevel(path: String = "") -> bool:
 func read_hflevel(path: String) -> Dictionary:
 	var data = HFLevelIO.load_from_path(path)
 	if data.is_empty():
+		if HFLevelIO.has_merge_conflict(FileAccess.get_file_as_string(path)):
+			return {
+				"ok": false,
+				"error":
+				(
+					"%s has an unresolved merge in it: keep one side of each <<<<<<< block, then open it again"
+					% path.get_file()
+				),
+			}
 		return {"ok": false, "error": "could not read %s" % path.get_file()}
 	var decoded = HFLevelIO.decode_variant(data)
 	if not (decoded is Dictionary):
 		return {"ok": false, "error": "%s is not a level file" % path.get_file()}
+	# Here rather than only in `restore_state()`, which `load_hflevel()` reaches
+	# after it has applied the file's settings, so a refused state still changed
+	# the open level (#1641).
+	var settings = decoded.get("settings", {})
+	if not (settings is Dictionary):
+		return {
+			"ok": false, "error": "%s has settings that are not a set of values" % path.get_file()
+		}
+	var state = decoded.get("state", {})
+	if not (state is Dictionary):
+		return {
+			"ok": false, "error": "%s has a level that is not a set of values" % path.get_file()
+		}
+	var problem := HFValidation.level_state_problem(state)
+	if problem != "":
+		return {"ok": false, "error": "%s cannot be read: %s" % [path.get_file(), problem]}
 	# Before anything is applied, because `restore_state()` clears the level first
 	# and a file this build cannot read correctly must not cost the open one. A
 	# missing or zero version is an older file and still loads: every key defaults,
 	# which is the direction that has always been safe.
 	var version := int(decoded.get("version", 0))
-	if version > HFLevelIO.FORMAT_VERSION:
-		return {
-			"ok": false,
-			"error":
-			(
-				"%s was written by a newer build (format %d, this build reads %d)"
-				% [path.get_file(), version, HFLevelIO.FORMAT_VERSION]
-			),
-		}
+	var refusal := HFFormatRecord.refusal(
+		version, decoded.get("format_pending"), HFLevelIO.FORMAT_VERSION
+	)
+	if refusal != "":
+		return {"ok": false, "error": "%s %s" % [path.get_file(), refusal]}
 	return {"ok": true, "error": "", "bundle": decoded}
 
 
@@ -334,14 +456,102 @@ func import_map(
 	var worldspawn = map_data.get("worldspawn", {})
 	if worldspawn is Dictionary and "map_worldspawn_properties" in root:
 		root.map_worldspawn_properties = (worldspawn as Dictionary).duplicate()
+	_build_from_map(map_data, palette)
+	return OK
+
+
+## The brushes and entities `map_data` holds, made in the level as it is, their
+## faces named and pointed at palette slots. `{"brushes": [nodes], "entities":
+## [nodes]}`.
+func _build_from_map(map_data: Dictionary, palette: Dictionary) -> Dictionary:
+	var made := {"brushes": [], "entities": []}
 	for info in map_data.get("brushes", []):
 		if info is Dictionary:
 			var brush = root.create_brush_from_info(info)
 			_apply_map_textures(brush, info, palette)
+			if is_instance_valid(brush):
+				made["brushes"].append(brush)
 	for entity_info in map_data.get("entities", []):
 		if entity_info is Dictionary:
-			root._create_entity_from_map(entity_info)
-	return OK
+			var entity = root._create_entity_from_map(entity_info)
+			if is_instance_valid(entity):
+				made["entities"].append(entity)
+	return made
+
+
+## `.map` text as Copy writes it and as a snippet is shared (#1722): the selection
+## in the Quake family's units, the right way up for them, with nothing of the
+## level's own worldspawn. "" when nothing of `nodes` goes into a `.map`.
+func map_text_of(nodes: Array) -> String:
+	if nodes.is_empty():
+		return ""
+	var text := MapIO.export_map_from_level(
+		root, HFMapQuakeType.new(), MapIO.QUAKE_UNITS_PER_METRE, true, nodes
+	)
+	var parsed := MapIO.parse_map_text(text, MapIO.QUAKE_UNITS_PER_METRE, true)
+	if (
+		(parsed.get("brushes", []) as Array).is_empty()
+		and (parsed.get("entities", []) as Array).is_empty()
+	):
+		return ""
+	return text
+
+
+## Whether `text` reads as `.map` text: at least one brush or entity, as a pasted
+## snippet holds, and not just any text on the clipboard.
+static func is_map_text(text: String) -> bool:
+	if not text.contains("{"):
+		return false
+	var parsed := MapIO.parse_map_text(text, MapIO.QUAKE_UNITS_PER_METRE, true)
+	return not (
+		(parsed.get("brushes", []) as Array).is_empty()
+		and (parsed.get("entities", []) as Array).is_empty()
+	)
+
+
+## Paste `.map` text into the level as it is, through the importer, with the
+## bottom centre of what it makes at `at` (#1722). A line it cannot read is left
+## out and counted, as a hand written snippet may have one, rather than refusing
+## all of it. `{"brushes": [nodes], "entities": [nodes], "dropped": int,
+## "first_dropped": String}`; no brushes and no entities when nothing could be
+## read.
+func paste_map_text(text: String, at: Vector3) -> Dictionary:
+	var palette := _palette_by_texture_token()
+	var map_data := MapIO.parse_map_text(
+		text, MapIO.QUAKE_UNITS_PER_METRE, true, _texture_sizes_by_token(palette)
+	)
+	var errors: Array = map_data.get("errors", [])
+	var made := _build_from_map(map_data, palette)
+	made["dropped"] = errors.size()
+	made["first_dropped"] = str(errors[0]) if not errors.is_empty() else ""
+	var bounds := _bounds_of(made)
+	if not ((made["brushes"] as Array).is_empty() and (made["entities"] as Array).is_empty()):
+		var bottom := Vector3(bounds.get_center().x, bounds.position.y, bounds.get_center().z)
+		var shift := at - bottom
+		for node in made["brushes"] + made["entities"]:
+			(node as Node3D).global_position += shift
+	return made
+
+
+## The box round what `made` holds in the level: brushes by their corners,
+## entities by where they stand.
+static func _bounds_of(made: Dictionary) -> AABB:
+	var bounds := AABB()
+	var first := true
+	for brush in made["brushes"]:
+		var place: Transform3D = (brush as Node3D).global_transform
+		for face in brush.faces:
+			if face == null:
+				continue
+			for corner in face.local_verts:
+				var point: Vector3 = place * corner
+				bounds = AABB(point, Vector3.ZERO) if first else bounds.expand(point)
+				first = false
+	for entity in made["entities"]:
+		var point: Vector3 = (entity as Node3D).global_position
+		bounds = AABB(point, Vector3.ZERO) if first else bounds.expand(point)
+		first = false
+	return bounds
 
 
 ## The palette, keyed the way a texture name is written on a face line, so a name
@@ -417,6 +627,11 @@ func _assign_map_alignment(face, alignment: Variant) -> bool:
 	face.uv_offset = alignment.get("uv_offset", Vector2.ZERO)
 	face.uv_scale = alignment.get("uv_scale", Vector2.ONE)
 	face.uv_rotation = float(alignment.get("uv_rotation", 0.0))
+	# A Valve 220 line also says which way its texture reads, and a pair in the
+	# face's own plane that no world projection writes is the Face projection.
+	var axes = alignment.get("uv_axes", [])
+	if axes is Array and axes.size() == 2 and axes[0] is Vector3 and axes[1] is Vector3:
+		face.read_map_axes(axes[0], axes[1])
 	return true
 
 
@@ -427,6 +642,11 @@ func _assign_map_texture(face, token: String, palette: Dictionary) -> void:
 	if name_token == "" or name_token == MapIO.DEFAULT_TEXTURE:
 		return
 	face.map_texture = name_token
+	# `skip`, `nodraw` and the like name a face the compiler drops: a Hidden face,
+	# with no palette slot made for a texture nobody sees (#1719).
+	if HFHiddenFaces.is_map_name(name_token):
+		face.face_type = FaceData.FaceType.HIDDEN
+		return
 	if not palette.has(name_token):
 		var minted := _mint_palette_slot(name_token)
 		if minted < 0:
@@ -462,17 +682,29 @@ func export_map(
 	var text = MapIO.export_map_from_level(root, adapter, units_per_metre, convert_axes)
 	if text == "":
 		return ERR_INVALID_DATA
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		return ERR_CANT_OPEN
-	file.store_string(text)
-	var err = file.get_error()
+	# Whole, so an export cut short leaves the last one rather than an empty file (#1758).
+	var err := HFLevelIO.write_bytes_atomic(path, text.to_utf8_buffer())
 	if err != OK:
-		push_error("HFLevel: store_string failed for %s (error: %d)" % [path, err])
+		push_error("HFLevel: .map export failed for %s (error: %d)" % [path, err])
 		if root and root.has_signal("user_message"):
 			root.user_message.emit("File save failed: %s" % path.get_file(), 2)
 		return err
+	_say_left_out(".map")
 	return OK
+
+
+## Say what an export left out: what the format has no place for, as the
+## portability page's table has it (#1706), and how many brushes and entities a
+## visgroup kept out of it (#1732).
+func _say_left_out(format: String) -> void:
+	var dropped := HFFormatCensus.left_out(root, format)
+	if dropped != "" and root.has_signal("user_message"):
+		root.user_message.emit("%s export %s" % [format, dropped], 0)
+	var count: int = root.visgroup_system.left_out_count() if root.visgroup_system else 0
+	if count > 0 and root.has_signal("user_message"):
+		root.user_message.emit(
+			"%s export left out %d in visgroups kept out of the bake" % [format, count], 0
+		)
 
 
 func export_baked_gltf(path: String) -> int:
@@ -487,7 +719,11 @@ func export_baked_gltf(path: String) -> int:
 	var err = doc.append_from_scene(root.baked_container, state)
 	if err != OK:
 		return err
-	return doc.write_to_filesystem(state, path)
+	err = doc.write_to_filesystem(state, path)
+	if err == OK:
+		# The bake left them out already; this says so.
+		_say_left_out(".glb")
+	return err
 
 
 func ensure_dir_for_path(path: String) -> void:

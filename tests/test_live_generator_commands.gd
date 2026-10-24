@@ -199,11 +199,17 @@ func test_regeneration_validates_before_it_deletes_anything():
 	var source := FileAccess.get_file_as_string(
 		"res://addons/hammerforge/systems/hf_generator_system.gd"
 	)
+	# An Update and a Re-pick (#1414) rebuild through the one function.
 	var start := source.find("func regenerate(")
 	assert_gt(start, -1)
+	assert_true(source.substr(start, 400).contains("return _rebuild("), "an Update rebuilds there")
+	start = source.find("func _rebuild(")
+	assert_gt(start, -1)
 	var body := source.substr(start, 1600)
+	assert_gt(body.find("_delete_brushes"), -1, "the old pieces go in the rebuild")
+	assert_gt(body.find("_check(record.type, settings, run)"), -1, "after a check")
 	assert_lt(
-		body.find("validate(record.type, settings)"),
+		body.find("_check(record.type, settings, run)"),
 		body.find("_delete_brushes"),
 		"an unbuildable change must be refused before the old structure is gone"
 	)
@@ -211,6 +217,11 @@ func test_regeneration_validates_before_it_deletes_anything():
 		body.find("build_faces"),
 		body.find("_delete_brushes"),
 		"and the replacement must be known to exist first"
+	)
+	start = source.find("static func _check(")
+	assert_true(
+		source.substr(start, 300).contains("validate(type, settings)"),
+		"and the check is the settings' own, with the run's for a run"
 	)
 
 
@@ -273,7 +284,7 @@ func test_adding_a_generator_type_has_one_place_to_do_it():
 		assert_true(source.contains(name), "%s must stay the seam" % name)
 	assert_eq(
 		Array(HFGeneratorSystemScript.known_types()),
-		["arch", "stairs", "spiral_stairs", "dome"],
+		["arch", "stairs", "spiral_stairs", "dome", "ring", "door_frame"],
 		"update this test deliberately when another generator lands"
 	)
 
@@ -309,6 +320,8 @@ func test_each_type_has_a_readable_name_for_the_dropdown():
 	assert_eq(HFGeneratorSystemScript.display_name("stairs"), "Stairs")
 	assert_eq(HFGeneratorSystemScript.display_name("spiral_stairs"), "Spiral Stairs")
 	assert_eq(HFGeneratorSystemScript.display_name("dome"), "Dome")
+	assert_eq(HFGeneratorSystemScript.display_name("ring"), "Ring")
+	assert_eq(HFGeneratorSystemScript.display_name("door_frame"), "Door Frame")
 
 
 func test_an_unknown_type_is_refused_and_says_what_is_known():

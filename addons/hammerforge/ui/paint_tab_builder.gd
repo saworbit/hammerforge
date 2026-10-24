@@ -4,6 +4,7 @@ extends RefCounted
 ## Extracted from dock.gd — purely organizational, no behavior changes.
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
+const FaceDataType = preload("../face_data.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -125,7 +126,7 @@ func build(parent: Control) -> void:
 	# Convert selection to heightmap
 	dock.heightmap_convert_btn = Button.new()
 	dock.heightmap_convert_btn.text = "Convert Selection → Heightmap"
-	dock.heightmap_convert_btn.tooltip_text = "Convert selected additive brushes into a sculptable heightmap layer\nUses mesh bounds (including displacements). Subtract brushes are skipped."
+	dock.heightmap_convert_btn.tooltip_text = "Convert selected solid brushes into a sculptable heightmap layer\nUses mesh bounds (including displacements). Cut brushes are skipped."
 	HFUIFactoryType.wrap_text(dock.heightmap_convert_btn)
 	hmc.add_child(dock.heightmap_convert_btn)
 
@@ -334,6 +335,8 @@ func build(parent: Control) -> void:
 	dock.material_browser = HFMaterialBrowser.new()
 	dock.material_browser.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dock.material_browser.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# How the open level uses each material, counted once per face change (#1725).
+	dock.material_browser.use_provider = dock.material_use_counts
 	mc.add_child(dock.material_browser)
 	# The count the grid shows goes in the header rather than on a row of its own.
 	dock.material_browser.status_changed.connect(mat_sec.set_note)
@@ -366,6 +369,9 @@ func build(parent: Control) -> void:
 	dock.material_remove_unused = Button.new()
 	dock.material_remove_unused.text = "Remove Unused"
 	mat_btn_row.add_child(dock.material_remove_unused)
+	dock.material_replace = Button.new()
+	dock.material_replace.text = "Replace..."
+	mat_btn_row.add_child(dock.material_replace)
 	dock.material_clear = Button.new()
 	dock.material_clear.text = "Clear"
 	mat_btn_row.add_child(dock.material_clear)
@@ -394,26 +400,44 @@ func build(parent: Control) -> void:
 	dock._uv_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	mc.add_child(dock._uv_hint_label)
 
+	# What to do with the picked faces on one row, how they are picked on the
+	# next, each wrapping in a narrow dock. Three to a row was wider than a
+	# 400 px dock, and the extra line pushed the Paint tab into scrolling.
+	var picked_row := HFUIFactoryType.make_wrap_row()
 	dock.material_assign = Button.new()
 	dock.material_assign.text = "Assign to Selected Faces"
-	mc.add_child(dock.material_assign)
+	dock.material_assign.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	picked_row.add_child(dock.material_assign)
 
-	# One row for both, wrapping in a narrow dock.
+	dock.face_clear = Button.new()
+	dock.face_clear.text = "Clear Face Selection"
+	dock.face_clear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	picked_row.add_child(dock.face_clear)
+	mc.add_child(picked_row)
+
 	var face_row := HFUIFactoryType.make_wrap_row()
 	dock.face_select_mode = CheckBox.new()
 	dock.face_select_mode.text = "Face Select Mode"
 	dock.face_select_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	face_row.add_child(dock.face_select_mode)
 
-	dock.face_clear = Button.new()
-	dock.face_clear.text = "Clear Face Selection"
-	dock.face_clear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	face_row.add_child(dock.face_clear)
+	# Beside the mode it changes: the marquee takes every face in the box (#1432).
+	dock.face_select_xray = CheckBox.new()
+	dock.face_select_xray.text = "X-ray"
+	face_row.add_child(dock.face_select_xray)
 	mc.add_child(face_row)
+
+	# --- Face Tools section ---
+	# Everything that acts on the face Face Select picked, under one header. The
+	# dock adds Displacement and Face Inset after the UV Editor. One header rather
+	# than three, so the Materials grid keeps the height #1366 gave it.
+	dock._face_tools_section = hf_collapsible_section.create("Face Tools", false)
+	root_vbox.add_child(dock._face_tools_section)
+	dock._register_section(dock._face_tools_section, "Face Tools")
 
 	# --- UV section ---
 	var uv_sec = hf_collapsible_section.create("UV Editor", false)
-	root_vbox.add_child(uv_sec)
+	dock._face_tools_section.get_content().add_child(uv_sec)
 	dock._register_section(uv_sec, "UV Editor")
 	var uc = uv_sec.get_content()
 
@@ -421,6 +445,21 @@ func build(parent: Control) -> void:
 	var uv_instance = uv_editor_scene.instantiate()
 	dock.uv_editor = uv_instance as UVEditor
 	uc.add_child(uv_instance)
+
+	# UV Snap, under the canvas whose drags it snaps
+	var uv_snap_row := HFUIFactoryType.make_wrap_row()
+	dock.uv_snap_check = dock._make_check("UV Snap", true)
+	uv_snap_row.add_child(dock.uv_snap_check)
+	dock.uv_snap_preset_opt = HFUIFactoryType.fit_option(OptionButton.new())
+	for i in UVEditor.SNAP_PRESET_LABELS.size():
+		dock.uv_snap_preset_opt.add_item(UVEditor.SNAP_PRESET_LABELS[i], i)
+	dock.uv_snap_preset_opt.select(UVEditor.SNAP_PRESETS.find(UVEditor.DEFAULT_SNAP_STEP))
+	uv_snap_row.add_child(dock.uv_snap_preset_opt)
+	# No step of its own, so a typed 1/32 is not rounded to the box's step.
+	dock.uv_snap_step_spin = dock._make_spin(0.001, 64.0, 0.0, UVEditor.DEFAULT_SNAP_STEP)
+	dock.uv_snap_step_spin.custom_arrow_step = UVEditor.SNAP_PRESETS[0]
+	uv_snap_row.add_child(dock.uv_snap_step_spin)
+	uc.add_child(uv_snap_row)
 
 	dock.uv_reset = Button.new()
 	dock.uv_reset.text = "Reset Projected UVs"
@@ -436,6 +475,7 @@ func build(parent: Control) -> void:
 	dock.uv_projection_opt.add_item("Planar Z", 2)
 	dock.uv_projection_opt.add_item("Box UV", 3)
 	dock.uv_projection_opt.add_item("Cylindrical", 4)
+	dock.uv_projection_opt.add_item("Face", 5)
 	dock.uv_projection_opt.selected = 3
 	uc.add_child(dock.uv_projection_opt)
 
@@ -444,22 +484,38 @@ func build(parent: Control) -> void:
 	dock.uv_reproject_btn.tooltip_text = "Apply selected projection mode to selected face"
 	uc.add_child(dock.uv_reproject_btn)
 
+	# Slide, stretch and turn the picked faces' texture in the viewport (#1420)
+	dock.uv_texture_gizmo_check = dock._make_check("Texture Gizmo", false)
+	uc.add_child(dock.uv_texture_gizmo_check)
+
 	# Per-face UV scale / offset / rotation
 	var uv_params_label = Label.new()
 	uv_params_label.text = "UV Transform:"
 	uc.add_child(uv_params_label)
 
-	var uv_sc_row = HBoxContainer.new()
+	# Wraps x2 and /2 under the boxes in a narrow dock.
+	var uv_sc_row := HFUIFactoryType.make_wrap_row()
 	var uv_sc_lbl = Label.new()
 	uv_sc_lbl.text = "Scale"
 	uv_sc_lbl.custom_minimum_size.x = 48
 	uv_sc_row.add_child(uv_sc_lbl)
-	dock.uv_scale_x = dock._make_spin(-100.0, 100.0, 0.01, 1.0)
+	var scale_limit := HFBrushSystem.UV_SCALE_LIMIT
+	dock.uv_scale_x = dock._make_spin(-scale_limit, scale_limit, HFBrushSystem.UV_SCALE_STEP, 1.0)
 	dock.uv_scale_x.tooltip_text = "UV scale X"
 	uv_sc_row.add_child(dock.uv_scale_x)
-	dock.uv_scale_y = dock._make_spin(-100.0, 100.0, 0.01, 1.0)
+	dock.uv_scale_link = Button.new()
+	dock.uv_scale_link.text = "Link"
+	dock.uv_scale_link.toggle_mode = true
+	uv_sc_row.add_child(dock.uv_scale_link)
+	dock.uv_scale_y = dock._make_spin(-scale_limit, scale_limit, HFBrushSystem.UV_SCALE_STEP, 1.0)
 	dock.uv_scale_y.tooltip_text = "UV scale Y"
 	uv_sc_row.add_child(dock.uv_scale_y)
+	dock.uv_scale_up_btn = Button.new()
+	dock.uv_scale_up_btn.text = "x2"
+	uv_sc_row.add_child(dock.uv_scale_up_btn)
+	dock.uv_scale_down_btn = Button.new()
+	dock.uv_scale_down_btn.text = "/2"
+	uv_sc_row.add_child(dock.uv_scale_down_btn)
 	uc.add_child(uv_sc_row)
 
 	var uv_off_row = HBoxContainer.new()
@@ -486,6 +542,35 @@ func build(parent: Control) -> void:
 	uv_rot_row.add_child(dock.uv_rotation_spin)
 	uc.add_child(uv_rot_row)
 
+	# Flip and quarter turn, each about the face's middle
+	var uv_turn_row := HFUIFactoryType.make_wrap_row()
+	dock.uv_flip_u_btn = Button.new()
+	dock.uv_flip_u_btn.text = "Flip U"
+	dock.uv_flip_u_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	uv_turn_row.add_child(dock.uv_flip_u_btn)
+	dock.uv_flip_v_btn = Button.new()
+	dock.uv_flip_v_btn.text = "Flip V"
+	dock.uv_flip_v_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	uv_turn_row.add_child(dock.uv_flip_v_btn)
+	dock.uv_rotate_90_btn = Button.new()
+	dock.uv_rotate_90_btn.text = "Rotate 90"
+	dock.uv_rotate_90_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	uv_turn_row.add_child(dock.uv_rotate_90_btn)
+	uc.add_child(uv_turn_row)
+
+	# How the selected faces shade (#1429)
+	var uv_smooth_row = HBoxContainer.new()
+	var uv_smooth_lbl = Label.new()
+	uv_smooth_lbl.text = "Smoothing"
+	uv_smooth_row.add_child(uv_smooth_lbl)
+	dock.uv_smoothing_spin = dock._make_spin(0.0, FaceData.MAX_SMOOTHING_GROUP, 1.0, 0.0)
+	dock.uv_smoothing_spin.tooltip_text = (
+		"Smoothing group of the selected faces. 0 shades them flat; faces in the same "
+		+ "group above 0 shade round where they meet, across brushes, in the bake"
+	)
+	uv_smooth_row.add_child(dock.uv_smoothing_spin)
+	uc.add_child(uv_smooth_row)
+
 	# Justify alignment buttons
 	var justify_label = Label.new()
 	justify_label.text = "Justify:"
@@ -497,6 +582,14 @@ func build(parent: Control) -> void:
 	dock.justify_fit_btn.text = "Fit"
 	dock.justify_fit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	justify_grid.add_child(dock.justify_fit_btn)
+	dock.justify_fit_u_btn = Button.new()
+	dock.justify_fit_u_btn.text = "Fit U"
+	dock.justify_fit_u_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	justify_grid.add_child(dock.justify_fit_u_btn)
+	dock.justify_fit_v_btn = Button.new()
+	dock.justify_fit_v_btn.text = "Fit V"
+	dock.justify_fit_v_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	justify_grid.add_child(dock.justify_fit_v_btn)
 	dock.justify_center_btn = Button.new()
 	dock.justify_center_btn.text = "Center"
 	dock.justify_center_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -517,10 +610,86 @@ func build(parent: Control) -> void:
 	dock.justify_bottom_btn.text = "Bottom"
 	dock.justify_bottom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	justify_grid.add_child(dock.justify_bottom_btn)
+	# Face or Box UV on every selected face, beside the buttons that place it
+	var align_row := HFUIFactoryType.make_wrap_row()
+	dock.uv_align_face_btn = Button.new()
+	dock.uv_align_face_btn.text = "Align to Face"
+	dock.uv_align_face_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	align_row.add_child(dock.uv_align_face_btn)
+	dock.uv_align_world_btn = Button.new()
+	dock.uv_align_world_btn.text = "Align to World"
+	dock.uv_align_world_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	align_row.add_child(dock.uv_align_world_btn)
+	uc.add_child(align_row)
+	# Turn to an edge, fit whole repeats, or one strip of a trim sheet (#1727)
+	var fit_row := HFUIFactoryType.make_wrap_row()
+	dock.uv_align_edge_btn = Button.new()
+	dock.uv_align_edge_btn.text = "Align to Edge"
+	dock.uv_align_edge_btn.tooltip_text = ("Turn the texture to run along an edge of each selected face. Press again for the next edge")
+	fit_row.add_child(dock.uv_align_edge_btn)
+	var repeats_label := Label.new()
+	repeats_label.text = "Repeats"
+	fit_row.add_child(repeats_label)
+	dock.fit_repeats_u = dock._make_spin(0, 64, 1, 3)
+	dock.fit_repeats_u.tooltip_text = "Whole repeats across; 0 keeps the texture's aspect"
+	fit_row.add_child(dock.fit_repeats_u)
+	dock.fit_repeats_v = dock._make_spin(0, 64, 1, 0)
+	dock.fit_repeats_v.tooltip_text = "Whole repeats down; 0 keeps the texture's aspect"
+	fit_row.add_child(dock.fit_repeats_v)
+	var repeats_btn := Button.new()
+	repeats_btn.name = "FitRepeats"
+	repeats_btn.text = "Fit"
+	repeats_btn.tooltip_text = "Show exactly that many repeats, ending at both edges"
+	repeats_btn.pressed.connect(dock._on_fit_repeats)
+	fit_row.add_child(repeats_btn)
+	uc.add_child(fit_row)
+	var strip_row := HFUIFactoryType.make_wrap_row()
+	var strip_label := Label.new()
+	strip_label.text = "Strip"
+	strip_row.add_child(strip_label)
+	dock.fit_strip_index = dock._make_spin(1, 4, 1, 1)
+	dock.fit_strip_index.tooltip_text = "Which strip of the trim sheet, counted down from the top"
+	strip_row.add_child(dock.fit_strip_index)
+	var of_label := Label.new()
+	of_label.text = "of"
+	strip_row.add_child(of_label)
+	dock.fit_strip_count = dock._make_spin(1, 64, 1, 4)
+	dock.fit_strip_count.tooltip_text = "How many equal strips the texture holds across V"
+	dock.fit_strip_count.value_changed.connect(dock._on_fit_strip_count_changed)
+	strip_row.add_child(dock.fit_strip_count)
+	var strip_btn := Button.new()
+	strip_btn.name = "FitStrip"
+	strip_btn.text = "Fit"
+	strip_btn.tooltip_text = "Fit that strip to each selected face, stretched along U"
+	strip_btn.pressed.connect(dock._on_fit_strip)
+	strip_row.add_child(strip_btn)
+	uc.add_child(strip_row)
+	# Treat as One, and the surfaces that stay one after edits
+	var surface_row := HFUIFactoryType.make_wrap_row()
 	dock.justify_treat_as_one = CheckBox.new()
 	dock.justify_treat_as_one.text = "Treat as One"
 	dock.justify_treat_as_one.tooltip_text = "Align selected faces as a single unified surface"
-	uc.add_child(dock.justify_treat_as_one)
+	surface_row.add_child(dock.justify_treat_as_one)
+	dock.uv_link_btn = Button.new()
+	dock.uv_link_btn.text = "Link"
+	surface_row.add_child(dock.uv_link_btn)
+	dock.uv_unlink_btn = Button.new()
+	dock.uv_unlink_btn.text = "Unlink"
+	surface_row.add_child(dock.uv_unlink_btn)
+	dock.uv_select_group_btn = Button.new()
+	dock.uv_select_group_btn.text = "Select Group"
+	surface_row.add_child(dock.uv_select_group_btn)
+	uc.add_child(surface_row)
+
+	# Carry the selected face's texture over an edge onto the faces clicked next
+	dock.uv_wrap_btn = Button.new()
+	dock.uv_wrap_btn.text = "Wrap"
+	uc.add_child(dock.uv_wrap_btn)
+
+	# The look the Texture Picker read, onto every selected face
+	dock.uv_apply_look_btn = Button.new()
+	dock.uv_apply_look_btn.text = "Apply Picked Look"
+	uc.add_child(dock.uv_apply_look_btn)
 
 	# --- Surface Paint section ---
 	var sp_sec = hf_collapsible_section.create("Surface Paint", false)
@@ -634,8 +803,12 @@ func connect_signals() -> void:
 			dock._on_browser_material_double_clicked
 		)
 		dock.material_browser.material_context_menu.connect(dock._on_browser_context_menu)
+		dock.material_browser.material_add_requested.connect(
+			dock._on_browser_material_add_requested
+		)
 		dock.material_browser.material_hovered.connect(dock._on_browser_material_hovered)
 		dock.material_browser.material_hover_ended.connect(dock._on_browser_material_hover_ended)
+		dock.material_browser.hidden_swatch_applied.connect(dock._on_hidden_swatch_applied)
 	if dock.materials_list:
 		dock.materials_list.item_selected.connect(dock._on_material_selected)
 	if dock.material_add:
@@ -646,6 +819,8 @@ func connect_signals() -> void:
 		dock.material_load_prototypes.pressed.connect(dock._on_material_load_prototypes)
 	if dock.material_remove_unused:
 		dock.material_remove_unused.pressed.connect(dock._on_material_remove_unused)
+	if dock.material_replace:
+		dock.material_replace.pressed.connect(dock.open_replace_material.bind(-1))
 	if dock.material_clear:
 		dock.material_clear.pressed.connect(dock._on_material_clear)
 	if dock.material_save_library:
@@ -658,6 +833,8 @@ func connect_signals() -> void:
 		dock.face_clear.pressed.connect(dock._on_face_clear)
 	if dock.face_select_mode:
 		dock.face_select_mode.toggled.connect(dock._on_face_select_mode_toggled)
+	if dock.face_select_xray:
+		dock.face_select_xray.toggled.connect(dock._on_face_xray_toggled)
 	if dock.uv_reset:
 		dock.uv_reset.pressed.connect(dock._on_uv_reset)
 	if dock.uv_reproject_btn:
@@ -672,8 +849,32 @@ func connect_signals() -> void:
 		dock.uv_offset_y.value_changed.connect(dock._on_uv_param_changed.bind("offset_y"))
 	if dock.uv_rotation_spin:
 		dock.uv_rotation_spin.value_changed.connect(dock._on_uv_param_changed.bind("rotation"))
+	if dock.uv_smoothing_spin:
+		dock.uv_smoothing_spin.value_changed.connect(dock._on_uv_smoothing_changed)
+	if dock.uv_scale_link:
+		dock.uv_scale_link.toggled.connect(dock._on_uv_scale_link_toggled)
+	for edit_button in [
+		[dock.uv_scale_up_btn, "scale_up"],
+		[dock.uv_scale_down_btn, "scale_down"],
+		[dock.uv_flip_u_btn, "flip_u"],
+		[dock.uv_flip_v_btn, "flip_v"],
+		[dock.uv_rotate_90_btn, "rotate_90"],
+	]:
+		if edit_button[0]:
+			edit_button[0].pressed.connect(dock._on_uv_edit.bind(edit_button[1]))
+	if dock.uv_snap_check:
+		dock.uv_snap_check.toggled.connect(dock._on_uv_snap_toggled)
+	if dock.uv_texture_gizmo_check:
+		dock.uv_texture_gizmo_check.toggled.connect(dock._on_texture_gizmo_toggled)
+	if dock.uv_snap_preset_opt:
+		dock.uv_snap_preset_opt.item_selected.connect(dock._on_uv_snap_preset_selected)
+	if dock.uv_snap_step_spin:
+		dock.uv_snap_step_spin.value_changed.connect(dock._on_uv_snap_step_changed)
 	if dock.uv_editor:
 		dock.uv_editor.uv_changed.connect(dock._on_uv_changed)
+		dock.uv_editor.drag_started.connect(dock._on_uv_drag_started)
+		dock.uv_editor.drag_finished.connect(dock._on_uv_drag_finished)
+		dock.uv_editor.drag_canceled.connect(dock._on_uv_drag_canceled)
 	if dock.surface_paint_layer_select:
 		dock.surface_paint_layer_select.item_selected.connect(dock._on_surface_paint_layer_selected)
 	if dock.surface_paint_layer_add:
@@ -684,6 +885,10 @@ func connect_signals() -> void:
 		dock.surface_paint_texture.pressed.connect(dock._on_surface_paint_texture)
 	if dock.justify_fit_btn:
 		dock.justify_fit_btn.pressed.connect(dock._on_justify.bind("fit"))
+	if dock.justify_fit_u_btn:
+		dock.justify_fit_u_btn.pressed.connect(dock._on_justify.bind("fit_u"))
+	if dock.justify_fit_v_btn:
+		dock.justify_fit_v_btn.pressed.connect(dock._on_justify.bind("fit_v"))
 	if dock.justify_center_btn:
 		dock.justify_center_btn.pressed.connect(dock._on_justify.bind("center"))
 	if dock.justify_left_btn:
@@ -694,6 +899,26 @@ func connect_signals() -> void:
 		dock.justify_top_btn.pressed.connect(dock._on_justify.bind("top"))
 	if dock.justify_bottom_btn:
 		dock.justify_bottom_btn.pressed.connect(dock._on_justify.bind("bottom"))
+	if dock.uv_align_face_btn:
+		dock.uv_align_face_btn.pressed.connect(
+			dock._on_uv_align.bind(FaceDataType.UVProjection.FACE)
+		)
+	if dock.uv_align_world_btn:
+		dock.uv_align_world_btn.pressed.connect(
+			dock._on_uv_align.bind(FaceDataType.UVProjection.BOX_UV)
+		)
+	if dock.uv_align_edge_btn:
+		dock.uv_align_edge_btn.pressed.connect(dock._on_align_to_edge.bind(null))
+	if dock.uv_wrap_btn:
+		dock.uv_wrap_btn.pressed.connect(dock._on_uv_wrap)
+	if dock.uv_link_btn:
+		dock.uv_link_btn.pressed.connect(dock._on_uv_link)
+	if dock.uv_unlink_btn:
+		dock.uv_unlink_btn.pressed.connect(dock._on_uv_unlink)
+	if dock.uv_select_group_btn:
+		dock.uv_select_group_btn.pressed.connect(dock._on_uv_select_group)
+	if dock.uv_apply_look_btn:
+		dock.uv_apply_look_btn.pressed.connect(dock._on_apply_picked_look)
 	# Scatter / foliage signals
 	if dock.scatter_mesh_btn:
 		dock.scatter_mesh_btn.pressed.connect(dock._on_scatter_mesh_pick)

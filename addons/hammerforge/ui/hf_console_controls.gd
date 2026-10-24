@@ -52,6 +52,51 @@ const GROUPS := [
 				"Radial menu, coach marks and operation replay. Off by default to keep the core loop quiet."
 			},
 			{
+				"pref": "size_at_cursor",
+				"dock": "size_at_cursor",
+				"label": "Size at cursor",
+				"help":
+				"The brush's size beside the cursor while you draw, and the depth while you extrude. A typed number shows in brackets."
+			},
+			{
+				"pref": "draw_hover_preview",
+				"dock": "draw_hover_preview",
+				"label": "Draw hover preview",
+				"help":
+				"Before you click, tints the face a draw would start on and marks the snapped start point, with the two grid lines through it."
+			},
+			{
+				"pref": "snap_labels",
+				"label": "Name the snap",
+				"help":
+				"A word beside the snap marker says what the point is on: Vertex, Midpoint, Centre, Perpendicular or Grid. The marker's shape says it too."
+			},
+			{
+				"pref": "nudge_follows_view",
+				"label": "Arrows follow the view",
+				"help":
+				"The arrow keys move the selection along the world axis nearest their direction on screen. Off, Up is always -Z and Right +X."
+			},
+			{
+				"pref": "duplicate_keeps_prefab_link",
+				"label": "Duplicate keeps prefab link",
+				"help":
+				"Ctrl+D of a whole linked prefab copy places another linked copy, with what the copy keeps, instead of ordinary geometry."
+			},
+			{
+				"pref": "show_agent_changes",
+				"label": "Show agent changes",
+				"help":
+				"Outlines what an agent changed over the bridge for a moment, with an arrow at the viewport's edge when it is out of view."
+			},
+			{
+				"pref": "show_selection_size",
+				"dock": "show_selection_size",
+				"label": "Show selection size",
+				"help":
+				"Labels the width, depth and height of the selection's bounds in the viewport, and follows every move and resize."
+			},
+			{
 				"dock": "_show_io_lines",
 				"label": "I/O connection lines",
 				"help": "Draws the wiring between entities that trigger each other."
@@ -59,8 +104,8 @@ const GROUPS := [
 			{
 				"key": "show_subtract_preview",
 				"dock": "_show_subtract_preview",
-				"label": "Subtract preview",
-				"help": "Shows what a subtract brush will remove before you commit the cut."
+				"label": "Cut preview",
+				"help": "Shows what a cut brush will remove before you commit the cut."
 			},
 			{
 				"dock": "_show_spawn_debug",
@@ -196,6 +241,18 @@ const GROUPS := [
 				"label": "Auto-spawn player",
 				"help":
 				"Adds a debug player when this level's own scene is run on its own. Test Level builds its own player and does not read this. Never applies to a release build."
+			},
+			{
+				"key": "validate_warns_open_todos",
+				"label": "Validate warns about open To Do notes",
+				"help":
+				"Validate lists each To Do note not marked Done. Kept in the level, so everyone's check of it agrees."
+			},
+			{
+				"pref": "check_for_updates",
+				"label": "Check for a newer HammerForge",
+				"help":
+				"Once a day, asks the Asset Library which version is current, when the editor is online and its own update check is on. Sends nothing about you or your levels, and never installs anything."
 			},
 			{
 				"key": "debug_logging",

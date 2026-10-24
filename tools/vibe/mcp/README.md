@@ -47,9 +47,15 @@ For each scenario, and undone after it whatever happens:
   from it first.
 - Two scratch scenes go in `res://vibe_mcp_scratch/`: `level.tscn`, a bare
   LevelRoot, and `other.tscn`, with no level. The folder is deleted after, and
-  git ignores it.
+  git ignores it. So is `res://.hammerforge/vibe_mcp_scratch/`, where their
+  levels save their `.hflevel` files.
 - A windowed editor can rewrite tracked `.import` files. Any it changed that were
   clean before the run are reverted.
+
+Not undone: your own `user://hammerforge_prefs.json`, which the editor a run
+starts shares with yours. Each scenario fingerprints it before and after, and one
+that changed it is flagged, as GUT and the GDScript vibe runner flag theirs. It is
+not put back, since an editor you have open saves to the same file (#1626).
 
 Logs and screenshots stay in `.vibe/mcp/`: `<scenario>.editor.log`, and the PNGs
 the `prompts` scenario saves for you to look at.
@@ -71,7 +77,7 @@ When a `known` line turns `ok`, the issue may be fixed: check it and close it.
 |---|---|
 | `basics` | Status and place, the revision holding still, a person's edit ending the agent's undo chain, tab switches, unticking the box |
 | `undo` | The dock's Create Starter as one step, and `hf_undo` against Ctrl+Z and Ctrl+Shift+Z (#1028) |
-| `room` | Starter, walls, a cut, paint, extrude, a turn, the spawn, undo rules, then save and reload |
+| `room` | Starter, walls, a cut, paint, extrude, a turn, the spawn, undo rules, then save and reload; Save Level, Save Scene As `.scn`, and the autosave after it writes (#1591) |
 | `bake` | A room in one batch, validate, bake to `<scene>_mcp.tscn`, current and stale |
 | `review` | Pending cuts moving the revision, a replayed bake, a scene tab closed mid-bake |
 | `entities` | A named brush, then a timer and a lamp wired in one batch, the lamp moved, retuned and deleted steps later, and undo bringing it back (#1082, #1083, #1086); the brush made a `trigger_once` and wired to the lamp, a point class refused, and the timer's wire taken back (#1096, #1098); two leaves tied as one door in a batch, its speed set on both, a property the class does not declare refused, and the leaves untied (#1105) |
@@ -80,6 +86,7 @@ When a `known` line turns `ok`, the issue may be fixed: check it and close it.
 | `prefabs` | Two boxes saved as a prefab into a scratch library, listed by `hf_list_commands`, placed turned and placed linked, each one `MCP: place prefab` step; a placed piece naming its copy; a person's Ctrl+Z taking a placement back; `hf_undo` and `hf_redo`; an unknown name refused (#1301) |
 | `paint` | Floor paint by cell: the layers listed, a rectangle painted and a cell erased, its walls raised, a room stamped and raised, each one `MCP: ...` step; a person's Ctrl+Z taking the raise back; `hf_undo` and `hf_redo` of the room; a second layer the person adds, painted by name, and the connector between the two confirmed once, then undone; a raise over nothing and a layer the level lacks refused (#1299) |
 | `cordons` | A cordon moved to a box and one added round a brush, each one `MCP: ...` step; the dock's Cordon section showing the agent's edits and a person's spin nudge after one keeping the agent's bounds (#968); a person's Ctrl+Z taking an add back; a refused batch leaving the cordons as they were (#1300); `hf_bake` cut to them saying it is partial, and a bake without them whole (#1317) |
+| `guide` | The building guide's worked example run as written: the starter made when the level is missing, each of its three batches sent from the page, the counts it states, every `hf_measure` row of its table, and `hf_validate` clean (#1650) |
 | `prompts` | Each example prompt's tools as an agent reads them, with screenshots. Opens a window |
 | `views` | Screenshots from a side, from above with the ceiling left out, from the player's eye, with the cuts left out (#1040), and of the bake alone (#1084). Opens a window |
 
@@ -97,7 +104,8 @@ A scenario is a module in `scenarios/` with `DESCRIPTION`, `START_SCENE`
   `save_as`, `reload`, `undo` (the scene history directly, as the dock's button
   does), `manager_undo` and `manager_redo` (Ctrl+Z and Ctrl+Shift+Z),
   `human_nudge`, `human_hide_floor`, `dock_create_starter`, `close_on_bake`,
-  `disable`.
+  `save_level`, `autosave` (what the timer does), `level_file` (the scene the
+  level's `.hflevel` records), `disable`.
 - `v.expect(condition, what, seen)`, `v.known(issue, condition, what, seen)`,
   `v.note(label, value)`, and `v.save_image(answer, filename)`.
 

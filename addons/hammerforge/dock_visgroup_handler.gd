@@ -3,12 +3,14 @@ class_name HFDockVisgroupHandler
 extends RefCounted
 ## Visgroup, grouping, and cordon controls extracted from dock.gd.
 
-# Preloaded under its global name so the script parses before Godot has
+# Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFCollapsibleSection = preload("ui/collapsible_section.gd")
 const HFUIFactory = preload("ui/hf_ui_factory.gd")
+const HFBakeSplit = preload("hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFViewFiltersType = preload("hf_view_filters.gd")
 
 ## How far a cordon bound may sit from the origin.
 ##
@@ -20,6 +22,92 @@ const HFUIFactory = preload("ui/hf_ui_factory.gd")
 ## the level - so the next bake produced an empty level and the control that
 ## caused it read 9999 as though that were the number the mapper chose.
 const CORDON_LIMIT := 131072.0
+
+
+## The View Filters section (#1720): a tick for each kind, ticked while it is
+## shown, and below them a row for each brush entity and point entity class in
+## the level. Unticking hides every one of that kind, made later or not.
+static func setup_view_filters_ui(dock: Object) -> void:
+	if dock == null or not dock.manage_tab:
+		return
+	var manage_vbox = dock.manage_tab.get_node_or_null("ManageMargin/ManageVBox")
+	if not manage_vbox:
+		return
+	var section = HFCollapsibleSection.create("View Filters", true)
+	manage_vbox.add_child(section)
+	manage_vbox.move_child(section, mini(3, manage_vbox.get_child_count() - 1))
+	dock._register_section(section, "View Filters")
+	var content = section.get_content()
+	var note := Label.new()
+	note.text = "Shown in the editor. The level and the bake are not changed."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.add_theme_font_size_override("font_size", 11)
+	note.modulate = Color(1, 1, 1, 0.6)
+	content.add_child(note)
+	dock.view_filters_box = VBoxContainer.new()
+	dock.view_filters_box.name = "ViewFilterRows"
+	content.add_child(dock.view_filters_box)
+	var show_all := Button.new()
+	show_all.text = "Show All"
+	show_all.tooltip_text = "Show every kind again"
+	show_all.pressed.connect(dock._on_view_filters_show_all)
+	content.add_child(show_all)
+	refresh_view_filters(dock)
+
+
+## Rebuild the View Filters rows from the level: the kinds, then the classes in
+## it, each ticked unless it is hidden. A hidden class with none left in the
+## level keeps its row, so it can be shown again.
+static func refresh_view_filters(dock: Object) -> void:
+	var box: VBoxContainer = dock.get("view_filters_box")
+	if box == null or not is_instance_valid(box):
+		return
+	for child in box.get_children():
+		box.remove_child(child)
+		child.queue_free()
+	var root = dock.level_root
+	var hidden: Dictionary = root.view_filters if root else {}
+	for kind in HFViewFiltersType.KINDS:
+		_view_filter_row(dock, box, kind, HFViewFiltersType.LABELS[kind], hidden)
+	var classes: Dictionary = (
+		HFViewFiltersType.classes_in(root) if root else {"brush_entity": [], "entity": []}
+	)
+	for kind in HFViewFiltersType.CLASS_KINDS:
+		var names: Array = (classes.get(kind, []) as Array).duplicate()
+		for key in hidden:
+			var name_of := str(key).trim_prefix(kind + ":")
+			if str(key).begins_with(kind + ":") and not names.has(name_of):
+				names.append(name_of)
+		names.sort()
+		if names.is_empty():
+			continue
+		var head := Label.new()
+		head.text = "Brush entity classes" if kind == "brush_entity" else "Point entity classes"
+		head.add_theme_font_size_override("font_size", 11)
+		head.modulate = Color(1, 1, 1, 0.7)
+		box.add_child(head)
+		for class_name_shown in names:
+			_view_filter_row(
+				dock, box, "%s:%s" % [kind, class_name_shown], "  " + class_name_shown, hidden
+			)
+	dock.set("_view_filter_classes", classes)
+	var chip: Button = dock.get("_view_filter_chip")
+	if chip != null and is_instance_valid(chip):
+		chip.visible = not hidden.is_empty()
+		chip.text = "Filtered: %d kind%s" % [hidden.size(), "" if hidden.size() == 1 else "s"]
+
+
+static func _view_filter_row(
+	dock: Object, box: VBoxContainer, key: String, text: String, hidden: Dictionary
+) -> void:
+	var check := CheckBox.new()
+	check.name = key.replace(":", "_")
+	check.text = text
+	check.button_pressed = not hidden.has(key)
+	check.tooltip_text = "Untick to hide every one in the editor"
+	check.add_theme_font_size_override("font_size", 11)
+	check.toggled.connect(dock._on_view_filter_toggled.bind(key))
+	box.add_child(check)
 
 
 static func setup_visgroup_ui(dock: Object) -> void:
@@ -77,6 +165,46 @@ static func setup_visgroup_ui(dock: Object) -> void:
 	_fill_lines(visgroup_buttons)
 	content.add_child(visgroup_buttons)
 
+	# How the highlighted visgroup's brushes cast shadows when they do not say
+	# themselves (#1444).
+	dock.visgroup_cast_shadow_opt = HFUIFactory.make_cast_shadow_option(true)
+	dock.visgroup_cast_shadow_opt.tooltip_text = (
+		"How the highlighted visgroup's brushes cast shadows. A brush's own Cast Shadows "
+		+ "beats it; between two visgroups, the one higher in this list wins"
+	)
+	dock.visgroup_cast_shadow_opt.item_selected.connect(dock._on_visgroup_cast_shadow_selected)
+	content.add_child(HFUIFactory.make_label_row("Cast Shadows:", dock.visgroup_cast_shadow_opt))
+
+	# Where new work goes, and geometry kept in the editor only (#1732).
+	var visgroup_flags = HFUIFactory.make_wrap_row()
+	dock.visgroup_current_check = CheckBox.new()
+	dock.visgroup_current_check.text = "Current"
+	dock.visgroup_current_check.tooltip_text = (
+		"New brushes, entities, structures and placed or pasted prefabs join the "
+		+ "highlighted visgroup. Untick for none"
+	)
+	dock.visgroup_current_check.toggled.connect(dock._on_visgroup_current_toggled)
+	visgroup_flags.add_child(dock.visgroup_current_check)
+	dock.visgroup_bake_check = CheckBox.new()
+	dock.visgroup_bake_check.text = "Leave out of bake"
+	dock.visgroup_bake_check.tooltip_text = (
+		"The highlighted visgroup stays visible and editable, and no bake or export "
+		+ "takes it: guide brushes, a scale figure, a reference copy"
+	)
+	dock.visgroup_bake_check.toggled.connect(dock._on_visgroup_bake_toggled)
+	visgroup_flags.add_child(dock.visgroup_bake_check)
+	dock.visgroup_lock_check = CheckBox.new()
+	dock.visgroup_lock_check.text = "Locked"
+	dock.visgroup_lock_check.tooltip_text = (
+		"The highlighted visgroup's brushes and entities are drawn faded, and nothing selects"
+		+ " or changes them: no tool, command or agent. Godot's lock in the Scene dock does the same"
+	)
+	dock.visgroup_lock_check.toggled.connect(dock._on_visgroup_lock_toggled)
+	visgroup_flags.add_child(dock.visgroup_lock_check)
+	_fill_lines(visgroup_flags)
+	content.add_child(visgroup_flags)
+	_setup_view_controls(dock, content)
+
 	content.add_child(HSeparator.new())
 	var group_buttons = HFUIFactory.make_wrap_row()
 	dock.group_sel_btn = Button.new()
@@ -93,6 +221,215 @@ static func setup_visgroup_ui(dock: Object) -> void:
 	content.add_child(group_buttons)
 
 
+## What is shown, apart from each visgroup's own eye (#1697): isolate, hide the
+## selection, step back, and named views kept with the level.
+static func _setup_view_controls(dock: Object, content: Control) -> void:
+	content.add_child(HSeparator.new())
+	var view_buttons = HFUIFactory.make_wrap_row()
+	for spec in [
+		[
+			"Isolate",
+			"Show only the highlighted visgroup, or the visgroups of the selection, and hide the rest",
+			"_on_view_isolate"
+		],
+		[
+			"Isolate Sel",
+			"Show only the selection and hide everything else",
+			"_on_view_isolate_selection"
+		],
+		[
+			"End Isolate",
+			"Put back exactly what was shown before the isolate",
+			"_on_view_end_isolate"
+		],
+		[
+			"Hide Sel",
+			"Hide the selection without a visgroup (Alt+H). Not saved with the level",
+			"_on_view_hide_selection"
+		],
+		[
+			"Show Hidden",
+			"Show what Hide Sel and an isolate hid (Shift+Alt+H)",
+			"_on_view_show_hidden"
+		],
+		[
+			"Previous",
+			"Go back to the visibility before the last show, hide or isolate, up to 20 times. Undoes no edit",
+			"_on_view_previous"
+		],
+	]:
+		var button := Button.new()
+		button.text = spec[0]
+		button.tooltip_text = spec[1]
+		button.pressed.connect(Callable(dock, spec[2]))
+		view_buttons.add_child(button)
+	_fill_lines(view_buttons)
+	content.add_child(view_buttons)
+	# Shown while anything is hidden apart from the visgroups, so nobody loses
+	# brushes to a hide they forgot.
+	dock.view_hidden_label = Label.new()
+	dock.view_hidden_label.name = "ViewHidden"
+	dock.view_hidden_label.visible = false
+	content.add_child(dock.view_hidden_label)
+	var views_row := HBoxContainer.new()
+	dock.view_saved_opt = OptionButton.new()
+	dock.view_saved_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dock.view_saved_opt.tooltip_text = "Visibility states saved with the level"
+	views_row.add_child(dock.view_saved_opt)
+	for spec in [
+		["Show", "Show the visgroups the picked view showed", "_on_view_restore"],
+		["Delete", "Forget the picked view", "_on_view_delete"],
+	]:
+		var button := Button.new()
+		button.text = spec[0]
+		button.tooltip_text = spec[1]
+		button.pressed.connect(Callable(dock, spec[2]))
+		views_row.add_child(button)
+	content.add_child(HFUIFactory.make_label_row("Views:", views_row))
+	var save_row := HBoxContainer.new()
+	dock.view_name_input = LineEdit.new()
+	dock.view_name_input.placeholder_text = "View name"
+	dock.view_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	save_row.add_child(dock.view_name_input)
+	var save := Button.new()
+	save.text = "Save View"
+	save.tooltip_text = "Keep which visgroups are shown now, under this name, with the level"
+	save.pressed.connect(Callable(dock, "_on_view_save"))
+	save_row.add_child(save)
+	content.add_child(save_row)
+
+
+## Isolate the highlighted visgroup, or with none highlighted the selection's.
+static func on_view_isolate(dock: Object) -> void:
+	var system = _visgroups(dock)
+	if system == null:
+		return
+	var names: Array = []
+	var highlighted := get_selected_visgroup_name(dock)
+	if highlighted != "":
+		names.append(highlighted)
+	else:
+		for node in dock._selection_nodes:
+			for vg_name in system.get_visgroups_of(node):
+				if not names.has(vg_name):
+					names.append(vg_name)
+	if not system.isolate_visgroups(names):
+		dock.show_toast("Isolate: highlight a visgroup, or select something in one", 1)
+		return
+	refresh_visgroup_ui(dock)
+	dock._set_status("Isolated %s" % ", ".join(names))
+
+
+static func on_view_isolate_selection(dock: Object) -> void:
+	var system = _visgroups(dock)
+	if system == null:
+		return
+	if not system.isolate_nodes(dock._selection_nodes):
+		dock.show_toast("Isolate Sel: select what to keep shown", 1)
+		return
+	refresh_visgroup_ui(dock)
+
+
+static func on_view_end_isolate(dock: Object) -> void:
+	var system = _visgroups(dock)
+	if system and system.end_isolate():
+		refresh_visgroup_ui(dock)
+
+
+static func on_view_hide_selection(dock: Object) -> void:
+	var system = _visgroups(dock)
+	if system == null or dock._selection_nodes.is_empty():
+		return
+	var nodes: Array = dock._selection_nodes.duplicate()
+	system.hide_from_view(nodes)
+	var selection = EditorInterface.get_selection() if dock.editor_interface else null
+	if selection:
+		for node in nodes:
+			if is_instance_valid(node):
+				selection.remove_node(node)
+	refresh_visgroup_ui(dock)
+
+
+static func on_view_show_hidden(dock: Object) -> void:
+	var system = _visgroups(dock)
+	if system:
+		system.show_hidden()
+		refresh_visgroup_ui(dock)
+
+
+static func on_view_previous(dock: Object) -> void:
+	var system = _visgroups(dock)
+	if system == null:
+		return
+	if not system.previous_view():
+		dock.show_toast("No earlier visibility to go back to", 1)
+	refresh_visgroup_ui(dock)
+
+
+## Saving a view changes the level, so it is an undo step.
+static func on_view_save(dock: Object) -> void:
+	if _visgroups(dock) == null or dock.view_name_input == null:
+		return
+	var view_name: String = dock.view_name_input.text.strip_edges()
+	if view_name == "":
+		dock.show_toast("Save View: name the view first", 1)
+		return
+	dock._commit_state_action("Save View", "save_visibility_view", [view_name])
+	dock.view_name_input.text = ""
+	refresh_visgroup_ui(dock)
+
+
+static func on_view_restore(dock: Object) -> void:
+	var system = _visgroups(dock)
+	var view_name := _picked_view(dock)
+	if system and view_name != "" and system.restore_saved_view(view_name):
+		refresh_visgroup_ui(dock)
+
+
+static func on_view_delete(dock: Object) -> void:
+	var view_name := _picked_view(dock)
+	if _visgroups(dock) == null or view_name == "":
+		return
+	dock._commit_state_action("Delete View", "remove_visibility_view", [view_name])
+	refresh_visgroup_ui(dock)
+
+
+static func _picked_view(dock: Object) -> String:
+	var opt = dock.get("view_saved_opt")
+	if opt == null or opt.selected < 0:
+		return ""
+	return opt.get_item_text(opt.selected)
+
+
+static func _visgroups(dock: Object):
+	if dock == null or not dock.level_root:
+		return null
+	return dock.level_root.get("visgroup_system")
+
+
+## The Hidden chip and the saved views list.
+static func _sync_view_controls(dock: Object, system) -> void:
+	var label = dock.get("view_hidden_label")
+	if label:
+		var hidden: int = system.view_hidden_nodes().size() if system else 0
+		var isolating: bool = system != null and system.is_isolating()
+		label.visible = hidden > 0 or isolating
+		label.text = (
+			("Isolated, %d hidden" % hidden)
+			if isolating
+			else ("Hidden: %d, not saved with the level" % hidden)
+		)
+	var opt = dock.get("view_saved_opt")
+	if opt:
+		var picked := _picked_view(dock)
+		opt.clear()
+		if system:
+			for view_name in system.get_saved_view_names():
+				opt.add_item(view_name)
+				if view_name == picked:
+					opt.select(opt.item_count - 1)
+
+
 ## Let the buttons of a wrapping row share each line evenly.
 static func _fill_lines(row: Container) -> void:
 	for button in row.get_children():
@@ -106,9 +443,137 @@ static func refresh_visgroup_ui(dock: Object) -> void:
 	if not dock.level_root or not dock.level_root.get("visgroup_system"):
 		return
 	var system = dock.level_root.get("visgroup_system")
+	var current: String = system.get_current_visgroup()
 	for visgroup_name in system.get_visgroup_names():
 		var prefix = "[V] " if system.is_visgroup_visible(visgroup_name) else "[H] "
-		dock.visgroup_list.add_item(prefix + visgroup_name)
+		var label: String = prefix + visgroup_name
+		var notes := PackedStringArray()
+		if visgroup_name == current:
+			label += "  (current)"
+			notes.append("New work joins it")
+		if not system.visgroup_bakes(visgroup_name):
+			label += "  (not baked)"
+			notes.append("Left out of every bake and export")
+		if system.is_visgroup_locked(visgroup_name):
+			label += "  (locked)"
+			notes.append("Nothing selects or changes its members")
+		var index: int = dock.visgroup_list.add_item(label)
+		dock.visgroup_list.set_item_metadata(index, visgroup_name)
+		if not system.visgroup_bakes(visgroup_name):
+			dock.visgroup_list.set_item_custom_fg_color(index, HFThemeUtils.muted_text())
+		var cast: int = system.get_visgroup_cast_shadow(visgroup_name)
+		if cast != HFBakeSplit.LEVEL_DEFAULT:
+			notes.append("Cast Shadows: %s" % HFBakeSplit.cast_shadow_name(cast))
+		if not notes.is_empty():
+			dock.visgroup_list.set_item_tooltip(index, ". ".join(notes))
+	sync_visgroup_cast_shadow(dock)
+	_sync_view_controls(dock, system)
+
+
+## Show the highlighted visgroup's Cast Shadows, whether it is current and
+## whether it is baked, and nothing with none highlighted.
+static func sync_visgroup_cast_shadow(dock: Object) -> void:
+	if dock == null or not dock.visgroup_cast_shadow_opt:
+		return
+	var visgroup_name := get_selected_visgroup_name(dock)
+	var system = dock.level_root.get("visgroup_system") if dock.level_root else null
+	for check in [
+		dock.get("visgroup_current_check"),
+		dock.get("visgroup_bake_check"),
+		dock.get("visgroup_lock_check")
+	]:
+		if check:
+			check.disabled = visgroup_name == "" or system == null
+	if visgroup_name == "" or system == null:
+		dock.visgroup_cast_shadow_opt.select(-1)
+		_set_check_quietly(dock.get("visgroup_current_check"), false)
+		_set_check_quietly(dock.get("visgroup_bake_check"), false)
+		_set_check_quietly(dock.get("visgroup_lock_check"), false)
+		return
+	HFUIFactory.select_cast_shadow(
+		dock.visgroup_cast_shadow_opt, system.get_visgroup_cast_shadow(visgroup_name)
+	)
+	_set_check_quietly(
+		dock.get("visgroup_current_check"), system.get_current_visgroup() == visgroup_name
+	)
+	_set_check_quietly(dock.get("visgroup_bake_check"), not system.visgroup_bakes(visgroup_name))
+	_set_check_quietly(dock.get("visgroup_lock_check"), system.is_visgroup_locked(visgroup_name))
+
+
+static func _set_check_quietly(check: Variant, pressed: bool) -> void:
+	if check is CheckBox:
+		(check as CheckBox).set_pressed_no_signal(pressed)
+
+
+## Lock the highlighted visgroup or free it (#1697). A view change, as its eye
+## is, so Previous Visibility steps back over it rather than undo.
+static func on_visgroup_lock_toggled(dock: Object, locked: bool) -> void:
+	var system = _visgroups(dock)
+	var visgroup_name := require_visgroup_name(dock, "Lock visgroup")
+	if system == null or visgroup_name == "":
+		sync_visgroup_cast_shadow(dock)
+		return
+	system.set_visgroup_locked(visgroup_name, locked)
+	# What is selected and now locked leaves the selection.
+	if locked and dock.editor_interface:
+		var selection = EditorInterface.get_selection()
+		if selection:
+			for node in system.get_members_of(visgroup_name):
+				selection.remove_node(node)
+	var row := get_selected_visgroup_index(dock)
+	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
+
+
+## Make the highlighted visgroup the one new work joins, or none (#1732). A
+## setting of the level, not an edit, so it is not an undo step.
+static func on_visgroup_current_toggled(dock: Object, pressed: bool) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var visgroup_name := require_visgroup_name(dock, "Current visgroup")
+	if visgroup_name == "":
+		sync_visgroup_cast_shadow(dock)
+		return
+	var row := get_selected_visgroup_index(dock)
+	dock.level_root.current_visgroup = visgroup_name if pressed else ""
+	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
+
+
+## Leave the highlighted visgroup out of the bake, or put it back, as one undo
+## step (#1732).
+static func on_visgroup_bake_toggled(dock: Object, left_out: bool) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var visgroup_name := require_visgroup_name(dock, "Leave out of bake")
+	if visgroup_name == "":
+		sync_visgroup_cast_shadow(dock)
+		return
+	var row := get_selected_visgroup_index(dock)
+	dock._commit_state_action_if_changed(
+		"Leave Visgroup Out of Bake" if left_out else "Bake Visgroup",
+		"set_visgroup_bakes",
+		[visgroup_name, not left_out]
+	)
+	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
+
+
+static func on_visgroup_cast_shadow_selected(dock: Object, index: int) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var visgroup_name := require_visgroup_name(dock, "Visgroup Cast Shadows")
+	if visgroup_name == "":
+		sync_visgroup_cast_shadow(dock)
+		return
+	var row := get_selected_visgroup_index(dock)
+	dock._commit_state_action_if_changed(
+		"Visgroup Cast Shadows",
+		"set_visgroup_cast_shadow",
+		[visgroup_name, HFUIFactory.cast_shadow_at(dock.visgroup_cast_shadow_opt, index)]
+	)
+	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
 
 
 ## The highlighted row, or -1. `refresh_visgroup_ui()` clears the list and
@@ -126,6 +591,7 @@ static func reselect_visgroup_row(dock: Object, index: int) -> void:
 		return
 	if index < dock.visgroup_list.item_count:
 		dock.visgroup_list.select(index)
+	sync_visgroup_cast_shadow(dock)
 
 
 ## The name on the highlighted row, or "". Commands that need one report the
@@ -143,6 +609,11 @@ static func get_selected_visgroup_name(dock: Object) -> String:
 	var selected = dock.visgroup_list.get_selected_items()
 	if selected.is_empty():
 		return ""
+	# The row's text carries markers now, "(current)" and "(not baked)", so the
+	# name is read from its metadata.
+	var named: Variant = dock.visgroup_list.get_item_metadata(selected[0])
+	if named is String and named != "":
+		return named
 	var text = dock.visgroup_list.get_item_text(selected[0])
 	if text.begins_with("[V] ") or text.begins_with("[H] "):
 		return text.substr(4)
@@ -179,8 +650,7 @@ static func on_visgroup_item_clicked(
 		return
 	dock.level_root.set_visgroup_visible(visgroup_name, not was_visible)
 	refresh_visgroup_ui(dock)
-	if index < dock.visgroup_list.item_count:
-		dock.visgroup_list.select(index)
+	reselect_visgroup_row(dock, index)
 
 
 static func on_visgroup_add_selection(dock: Object) -> void:

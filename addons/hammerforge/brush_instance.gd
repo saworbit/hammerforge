@@ -10,13 +10,18 @@ const BrushShape = LevelRootType.BrushShape
 const PrefabFactory = preload("prefab_factory.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
+const HFBrushEntity = preload("hf_brush_entity.gd")
+const HFSmoothing = preload("hf_smoothing.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
+const HFOverlayColors = preload("hf_overlay_colors.gd")
 
 @export var shape: int = BrushShape.BOX:
 	set = set_shape
 @export var size: Vector3 = Vector3(32, 32, 32):
 	set = set_size
+## Union (0) adds the brush, Subtraction (2) cuts it out. Read-only on a cut
+## waiting for Apply: apply it, or delete it, first.
 @export var operation: int = CSGShape3D.OPERATION_UNION:
 	set = set_operation
 ## The sides a pyramid or a round shape is built with. A round shape given fewer
@@ -48,6 +53,13 @@ var _gizmo_update_queued := false
 ## from anywhere else.
 var _unit_shape := -1
 var _unit_size := Vector3.ZERO
+## The shape `faces` were built or read for, so a rebuild can tell a new shape,
+## whose faces take their own smoothing, from a resize. -1 when not known, as for
+## faces a scene loaded, which then keep theirs.
+var _faces_shape := -1
+## How nearly straight up or down a face of a cylinder or a cone has to face to be
+## a cap, which shades flat.
+const ROUND_CAP_DOT := 0.9999
 ## The faces a box had as it was loaded, when they were not in the order the box
 ## builder makes them. A box rebuilds into that order when its scene opens, and an
 ## `.hflevel` box is put into it as it is read. A hollow's or a structure's record
@@ -67,6 +79,18 @@ const OVERLAY_KIND_ENTITY := &"entity"
 const ADDITIVE_OVERLAY_NAME := &"_AdditiveWireOverlay"
 const SUBTRACT_OVERLAY_NAME := &"_SubtractWireOverlay"
 const ENTITY_OVERLAY_NAME := &"_BrushEntityOverlay"
+## Marks a material that is only the editor's look for a brush. See `is_editor_look()`.
+const EDITOR_LOOK_META := &"_hammerforge_editor_look"
+## Set on a cut waiting in the pending container. See `set_pending_cut()`.
+const PENDING_CUT_META := &"pending_subtract"
+
+## Whether a face of this brush shades smooth, as of its last redraw (#1625).
+var _smooths_any := false
+## The smoothed brushes this one was joined to at its last redraw.
+var _joined: Array = []
+var _join_redraw_queued := false
+var _join_redraw_for_neighbour := false
+var _drawing_for_neighbour := false
 
 
 func _ready() -> void:
@@ -75,6 +99,11 @@ func _ready() -> void:
 	# so a face that does not know where its brush is textures as though the brush
 	# were at the origin (#652).
 	set_notify_transform(true)
+	# That notification arrives a frame later. The brush's own transform is heard
+	# as it is set, so a UV edit, or an undo step's capture, in the frame a brush
+	# is placed or turned sees where it stands (#1540). The one above is kept for a
+	# parent that moves.
+	set_notify_local_transform(true)
 	sync_face_world_transform()
 	_reading_loaded_faces = not faces.is_empty()
 	_update_visuals()
@@ -82,8 +111,12 @@ func _ready() -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_TRANSFORM_CHANGED:
+	if what == NOTIFICATION_TRANSFORM_CHANGED or what == NOTIFICATION_LOCAL_TRANSFORM_CHANGED:
 		sync_face_world_transform()
+		# A smoothed brush that moves leaves one join and may make another
+		# (#1625), so it is drawn again, and so are the brushes on either side.
+		if _smooths_any:
+			_queue_join_redraw(false)
 
 
 ## Tell each face where its brush is, so a world space projection can be taken.
@@ -171,12 +204,47 @@ func mark_faces_authoritative() -> void:
 	shape = BrushShape.CUSTOM
 
 
+## The faces, and the shape, size and sides they belong to: what a vertex edit
+## changes, for its undo step. Faces alone are not enough, because the edit makes
+## the brush CUSTOM through `mark_faces_authoritative()`, and a box given back its
+## faces but not its shape keeps no resize handles and ignores `size` (#1538).
+func geometry_state() -> Dictionary:
+	return {"shape": shape, "size": size, "sides": sides, "faces": serialize_faces()}
+
+
+## Put back what `geometry_state()` took, with the faces exactly as they were.
+##
+## The faces go on first. A CUSTOM brush keeps whatever faces it is handed, so a
+## state that is CUSTOM turns the brush CUSTOM before that. Going back to a
+## primitive, the shape setter then builds the primitive again, and with the
+## recorded faces on the brush it hands their data over one to one. Built from
+## the edited faces, it would match them by place and warn about UVs a merged
+## face had nowhere to go. The recorded faces then go on once more, so the brush
+## ends as it was taken rather than as a rebuild of it.
+func apply_geometry_state(state: Dictionary) -> void:
+	var to_shape := int(state.get("shape", shape))
+	var to_size: Vector3 = state.get("size", size)
+	var to_sides := int(state.get("sides", sides))
+	var data: Array = state.get("faces", [])
+	if to_shape == BrushShape.CUSTOM and shape != to_shape:
+		shape = to_shape
+	apply_serialized_faces(data)
+	if to_shape == shape and to_size == size and to_sides == sides:
+		return
+	sides = to_sides
+	size = to_size
+	shape = to_shape
+	apply_serialized_faces(data)
+
+
 func assign_material_to_faces(mat_idx: int, face_indices: Array[int]) -> void:
 	for idx in face_indices:
 		if idx < 0 or idx >= faces.size():
 			continue
 		var face: FaceData = faces[idx]
 		face.material_idx = mat_idx
+		# A material laid on a Hidden face shows it again (#1719).
+		face.face_type = FaceData.FaceType.NORMAL
 	rebuild_preview()
 
 
@@ -212,7 +280,10 @@ static func normalized_size_for_shape(shape_value: int, requested: Vector3) -> V
 
 
 func set_operation(val: int) -> void:
+	var was_pending := is_pending_cut()
 	operation = val
+	if is_pending_cut() != was_pending:
+		notify_property_list_changed()
 	_update_visuals()
 
 
@@ -222,7 +293,16 @@ func get_sides() -> int:
 
 ## The Inspector's Sides stops where the shape stops honouring it: 5 for a round
 ## shape, 3 for the rest. Above the cap is still typed in, as for a cylinder.
+##
+## Its Operation is read-only on a pending cut. Everything else reads a brush in
+## the pending container as a cut: its undo record, the `.hflevel`, Apply, and
+## the bake, which leaves the container out. One the Inspector turned into a
+## solid drew as a solid and came back, or was applied, as a cut (#1551).
 func _validate_property(property: Dictionary) -> void:
+	if property.name == "operation":
+		if is_pending_cut():
+			property.usage = int(property.get("usage", 0)) | PROPERTY_USAGE_READ_ONLY
+		return
 	if property.name != "sides":
 		return
 	var least := MIN_ROUND_SIDES if shape in ROUND_SHAPES else 3
@@ -264,6 +344,37 @@ func set_brush_entity_class(entity_class: String) -> void:
 func clear_editor_material() -> void:
 	editor_material = null
 	_refresh_preview_visuals()
+
+
+## Mark this brush a cut waiting for Apply, or no longer one. `HFBrushSystem`
+## calls this as it moves a brush in or out of the pending container.
+##
+## The pending look follows from this and the operation (`_default_material()`),
+## rather than being handed over as `editor_material` by whoever moved the brush.
+## Nothing took a handed look off again, so a cut applied and then turned into a
+## solid stayed red (#1531).
+func set_pending_cut(pending: bool) -> void:
+	var was := bool(get_meta(PENDING_CUT_META, false))
+	set_meta(PENDING_CUT_META, pending)
+	if was != pending:
+		# The Inspector asks again whether Operation is read-only.
+		notify_property_list_changed()
+		_refresh_preview_visuals()
+
+
+## Whether this brush is a cut waiting for Apply. The Inspector cannot change its
+## operation (`_validate_property()`); one a script turns into a solid is drawn
+## as a solid.
+func is_pending_cut() -> bool:
+	return operation == CSGShape3D.OPERATION_SUBTRACTION and bool(get_meta(PENDING_CUT_META, false))
+
+
+## Draw this brush's editor look and its outline again, in the overlay colours
+## as they are now. The plugin calls this on every brush when a mapper changes
+## one (#1446), since each look is made when the brush is drawn.
+func refresh_editor_look() -> void:
+	_refresh_preview_visuals()
+	_queue_gizmo_update()
 
 
 func _refresh_preview_visuals() -> void:
@@ -326,10 +437,29 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 	var material_manager = _resolve_material_manager()
 	var use_paint := _can_use_paint_preview()
 	var groups: Dictionary = {}
+	# The bake's shading: this brush's faces, and the smoothed faces of the
+	# brushes it touches, placed in its own space, so a join between two brushes
+	# in one group shades as the bake shades it (#1429, #1625).
+	var shading := HFSmoothing.new()
+	var handles: Dictionary = {}
+	var cut := operation == CSGShape3D.OPERATION_SUBTRACTION
+	_smooths_any = false
+	for face in faces:
+		if face != null:
+			face.ensure_geometry()
+			handles[face] = shading.add_face(face, Transform3D.IDENTITY, cut)
+			_smooths_any = _smooths_any or handles[face] >= 0
+	var touching: Array = _touching_smoothed_brushes() if _smooths_any else []
+	var into_here := global_transform.affine_inverse() if is_inside_tree() else Transform3D.IDENTITY
+	for other in touching:
+		var place: Transform3D = into_here * (other as DraftBrush).global_transform
+		var other_cut: bool = other.operation == CSGShape3D.OPERATION_SUBTRACTION
+		for face in other.faces:
+			if face != null:
+				shading.add_face(face, place, other_cut)
 	for face in faces:
 		if face == null:
 			continue
-		face.ensure_geometry()
 		var tri = face.triangulate()
 		var verts: PackedVector3Array = tri.get("verts", PackedVector3Array())
 		var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
@@ -345,10 +475,19 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 				"normals": PackedVector3Array()
 			}
 		var group = groups[key]
+		var smoothed := HFSmoothing.fan(shading.corner_normals(handles[face]))
+		# A sculpted face's own normals, worked out over its grid, as the bake
+		# takes them. With only the face's normal the relief shaded flat (#1597).
+		var own: PackedVector3Array = tri.get("normals", PackedVector3Array())
 		for i in range(verts.size()):
 			group["verts"].append(verts[i])
 			group["uvs"].append(uvs[i] if uvs.size() > i else Vector2.ZERO)
-			group["normals"].append(face.normal)
+			if smoothed.size() > i:
+				group["normals"].append(smoothed[i])
+			elif own.size() > i:
+				group["normals"].append(own[i])
+			else:
+				group["normals"].append(face.normal)
 	if groups.size() > MAX_PREVIEW_SURFACES:
 		mesh_instance.mesh = base_mesh
 		_apply_material()
@@ -374,6 +513,96 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 	mesh_instance.mesh = mesh if surface_count > 0 else base_mesh
 	mesh_instance.material_override = null
 	_sync_visual_overlays()
+	_tell_joined(touching)
+
+
+## The brushes in the level with a smoothed face whose bounds touch this one's,
+## whose faces can share a corner with it (#1625).
+func _touching_smoothed_brushes() -> Array:
+	var out: Array = []
+	if not is_inside_tree():
+		return out
+	var root := _level_root()
+	if root == null:
+		return out
+	var bounds := _world_face_bounds().grow(HFSmoothing.WELD * 2.0)
+	for node in root._iter_managed_brush_nodes():
+		if node == self or not (node is DraftBrush) or not is_instance_valid(node):
+			continue
+		var other := node as DraftBrush
+		if not other.is_inside_tree() or other.is_queued_for_deletion():
+			continue
+		var smooths := false
+		for face in other.faces:
+			if HFSmoothing.smooths(face):
+				smooths = true
+				break
+		if smooths and bounds.intersects(other._world_face_bounds()):
+			out.append(other)
+	return out
+
+
+## The box round this brush's face corners in the level.
+func _world_face_bounds() -> AABB:
+	var place := global_transform if is_inside_tree() else transform
+	var bounds := AABB()
+	var first := true
+	for face in faces:
+		if face == null:
+			continue
+		for corner in face.local_verts:
+			var point: Vector3 = place * corner
+			if first:
+				bounds = AABB(point, Vector3.ZERO)
+				first = false
+			else:
+				bounds = bounds.expand(point)
+	return bounds
+
+
+func _level_root() -> Node:
+	var current: Node = get_parent()
+	while current != null and not current.has_method("_iter_managed_brush_nodes"):
+		current = current.get_parent()
+	return current
+
+
+## Draw again the brushes this one was joined to and is joined to now, so the
+## other side of a join changes with it. A brush drawn again for a neighbour tells
+## nobody, or two joined brushes would draw each other for ever.
+func _tell_joined(touching: Array) -> void:
+	var before := _joined
+	_joined = touching
+	if _drawing_for_neighbour:
+		return
+	var tell: Array = touching.duplicate()
+	for other in before:
+		if is_instance_valid(other) and not tell.has(other):
+			tell.append(other)
+	for other in tell:
+		if is_instance_valid(other):
+			(other as DraftBrush)._queue_join_redraw(true)
+
+
+## Draw this brush again at the end of the frame, once however often it is asked.
+## `for_neighbour` when another brush asks, so this one tells nobody in turn.
+func _queue_join_redraw(for_neighbour: bool) -> void:
+	_join_redraw_for_neighbour = (
+		for_neighbour if not _join_redraw_queued else (_join_redraw_for_neighbour and for_neighbour)
+	)
+	if _join_redraw_queued or not is_inside_tree():
+		return
+	_join_redraw_queued = true
+	call_deferred("_redraw_for_join")
+
+
+func _redraw_for_join() -> void:
+	_join_redraw_queued = false
+	if not is_inside_tree() or is_queued_for_deletion():
+		return
+	_drawing_for_neighbour = _join_redraw_for_neighbour
+	rebuild_preview()
+	_drawing_for_neighbour = false
 
 
 ## Geometry setters and face rebuilds often cascade through several preview
@@ -417,10 +646,34 @@ func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
 		unit_shape = shape
 	elif base_mesh:
 		next_faces = _faces_from_mesh(base_mesh, mesh_scale)
+	_give_round_faces_smoothing(next_faces)
 	_transfer_face_data(old_faces, next_faces)
+	# The groups the old faces had were about another shape's faces: a box made
+	# a cylinder is a new cylinder, and shades round (#1429). The rest of the look
+	# carries over as it always has.
+	if _faces_shape != -1 and _faces_shape != shape:
+		_give_round_faces_smoothing(next_faces)
 	faces = next_faces
+	_faces_shape = shape
 	_unit_shape = unit_shape
 	_unit_size = size
+
+
+## Put the curved faces of a round shape in smoothing group 1 and every other
+## face in 0 (#1429): a cylinder's or a cone's sides and not its caps, and all of
+## a sphere, an ellipsoid, a capsule and a torus. Any other shape is all flat. A
+## new brush shades round; a rebuild then hands each face the group it had.
+func _give_round_faces_smoothing(face_list: Array) -> void:
+	for face in face_list:
+		if face == null:
+			continue
+		var group := 0
+		if shape in [BrushShape.CYLINDER, BrushShape.CONE]:
+			# A cap faces straight up or down; a side, even a cone's, does not.
+			group = 0 if absf(face.normal.y) > ROUND_CAP_DOT else 1
+		elif shape in ROUND_SHAPES:
+			group = 1
+		face.smoothing_group = group
 
 
 ## Shapes whose generated corners scale with the brush, axis by axis. Their faces
@@ -656,6 +909,8 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 		if old_face == null or new_face == null:
 			continue
 		new_face.copy_appearance_from(old_face)
+		# The same face built again, so the same surface (#1437).
+		new_face.copy_texture_group_from(old_face)
 		if old_face.custom_uvs.size() == new_face.local_verts.size():
 			new_face.custom_uvs = old_face.custom_uvs
 		if old_face.paint_layers.size() > 0:
@@ -703,6 +958,7 @@ func _transfer_face_data_by_place(old_faces: Array, new_faces: Array) -> void:
 			0 if uniform else _nearest_normal(normals, new_face.normal)
 		]
 		new_face.copy_appearance_from(old_face)
+		new_face.copy_texture_group_from(old_face)
 		if old_face.paint_layers.size() > 0:
 			new_face.paint_layers = old_face.paint_layers.duplicate(true)
 	# Corner-anchored data looks for the face with its corners, rather than riding
@@ -1639,6 +1895,102 @@ static func faces_in_box_order(face_list: Array, box_size: Vector3) -> Array:
 	return placed
 
 
+## The faces a brush of `shape_value`, `size_value` and `sides_value` is built
+## with, from a brush of its own that never enters the tree, in the order the
+## shape's builder makes them.
+static func generated_faces(
+	shape_value: int, size_value: Vector3, sides_value: int
+) -> Array[FaceData]:
+	var reference := DraftBrush.new()
+	reference.sides = sides_value
+	reference.shape = shape_value
+	reference.size = size_value
+	var build: Dictionary = reference._build_base_mesh()
+	reference._rebuild_faces(build.get("mesh", null), build.get("scale", Vector3.ONE))
+	var built: Array[FaceData] = reference.faces.duplicate()
+	reference.free()
+	return built
+
+
+## Give each face of `targets` the data of the face in `sources` that has the
+## same corners, wherever each starts: its look, its paint, and the custom UVs and
+## sculpt laid against its corners, relabelled to the target's order. The corners
+## are matched as `faces_in_box_order()` matches them, against the targets'
+## bounds.
+##
+## All or nothing: false, having changed nothing, unless every target has a source
+## of its own.
+static func take_face_data_by_corners(sources: Array, targets: Array) -> bool:
+	if sources.size() != targets.size() or targets.is_empty():
+		return false
+	var bounds := _vertex_bounds(targets)
+	var buckets := _faces_by_centre(sources, bounds)
+	var pairs: Array = []
+	var taken := {}
+	for target in targets:
+		var data := target as FaceData
+		if data == null:
+			return false
+		var found: FaceData = null
+		var shift := -1
+		for candidate in _faces_near(buckets, _centre_in_bounds(data, bounds)):
+			if taken.has(candidate):
+				continue
+			shift = _turn_onto(candidate.local_verts, bounds, data.local_verts, bounds)
+			if shift >= 0:
+				found = candidate
+				break
+		if found == null:
+			return false
+		taken[found] = true
+		pairs.append([data, found, shift])
+	for pair in pairs:
+		var target: FaceData = pair[0]
+		var source: FaceData = pair[1]
+		target.copy_appearance_from(source)
+		# The same face rebuilt, so it stays in its linked surface (#1437), which a
+		# look copied onto another face does not join.
+		target.copy_texture_group_from(source)
+		target.custom_uvs = (
+			source.custom_uvs
+			if source.custom_uvs.size() == target.local_verts.size()
+			else PackedVector2Array()
+		)
+		target.paint_layers = source.paint_layers.duplicate()
+		target.displacement = source.displacement
+		target.relabel_corner_data(int(pair[2]))
+	return true
+
+
+## One face per flat surface of one surface of `mesh`, merged as a primitive's
+## faces are (`_faces_from_mesh()`), with the surface's own UVs. Empty for a
+## surface that is not triangles. A mesh converted to a brush is read a surface at
+## a time, so each face can carry its surface's material (#1440).
+static func faces_of_mesh_surface(mesh: Mesh, surface: int) -> Array[FaceData]:
+	var out: Array[FaceData] = []
+	if mesh == null or surface < 0 or surface >= mesh.get_surface_count():
+		return out
+	if not surface_is_triangles(mesh, surface):
+		return out
+	var arrays: Array = mesh.surface_get_arrays(surface)
+	if arrays.is_empty():
+		return out
+	var single := ArrayMesh.new()
+	single.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var builder := DraftBrush.new()
+	out = builder._faces_from_mesh(single, Vector3.ONE)
+	builder.free()
+	return out
+
+
+## Whether a surface of `mesh` is triangles. A primitive mesh's always are; an
+## `ArrayMesh` says, and only it can hold lines or points.
+static func surface_is_triangles(mesh: Mesh, surface: int) -> bool:
+	if mesh is ArrayMesh:
+		return (mesh as ArrayMesh).surface_get_primitive_type(surface) == Mesh.PRIMITIVE_TRIANGLES
+	return true
+
+
 func _scale_vec3(value: Vector3, factor: Vector3) -> Vector3:
 	return Vector3(value.x * factor.x, value.y * factor.y, value.z * factor.z)
 
@@ -1662,25 +2014,93 @@ func _resolve_material_manager() -> MaterialManager:
 func _material_for_face(
 	face: FaceData, material_manager: MaterialManager, include_paint: bool = true
 ) -> Material:
+	# A clip is drawn in its own tint whatever its faces carry, so it never reads
+	# as geometry the player will see (#1409).
+	if HFBrushEntity.is_clip(self):
+		return _default_material()
 	var mat := face.resolved_material(
 		material_manager, material_override, editor_material, include_paint
 	)
-	return mat if mat else _make_default_material()
+	return mat if mat else _default_material()
 
 
-func _make_default_material() -> Material:
-	var base = StandardMaterial3D.new()
+## The see-through look of a brush with nothing to draw with: orange for a cut
+## waiting for Apply, the Subtractive brush colour for a cut, the Additive brush
+## colour for a solid (red and green unless a mapper picked others under Test >
+## Settings > Colours, `HFOverlayColors`), and blue over either for a brush
+## entity. A face that resolves no material and a primitive with none both wear
+## it, so a func_detail reads as one whichever way it is drawn (#1461).
+## A clip wears its violet whatever it is painted with (#1409).
+## It is decided here from what the brush is, so an Apply, an operation change
+## and an undo of either all redraw it right (#1531).
+##
+## A new one each call, not one shared per look: the preview groups faces by
+## material, and a func_detail bakes from its preview mesh, so a shared one would
+## change how many surfaces the baked brush has. The bake leaves the material
+## itself behind (`is_editor_look()`).
+func _default_material() -> StandardMaterial3D:
+	if is_pending_cut():
+		return pending_cut_look()
+	var base := StandardMaterial3D.new()
+	# The glow is the fill's own colour, so a picked colour reads the same lit or
+	# in shadow.
 	if operation == CSGShape3D.OPERATION_SUBTRACTION:
-		base.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
-		base.emission = Color(1.0, 0.2, 0.2)
-		base.emission_energy = 0.2
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.SUBTRACTIVE_BRUSH)
+		base.emission_energy_multiplier = 0.2
 	else:
-		base.albedo_color = Color(0.2, 0.8, 0.2, 0.35)
-		base.emission = Color(0.2, 0.7, 0.2)
-		base.emission_energy = 0.1
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.ADDITIVE_BRUSH)
+		base.emission_energy_multiplier = 0.1
+	# A brush entity's look is a Settings colour as well, so High Contrast and a
+	# mapper's own picks reach it (#1760).
+	var entity_class := str(get_meta("brush_entity_class", ""))
+	if entity_class == "func_detail":
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.FUNC_DETAIL)
+		base.emission_energy_multiplier = 0.15
+	elif entity_class.begins_with("trigger_"):
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.TRIGGER)
+		base.emission_energy_multiplier = 0.3
+	elif entity_class == "func_wall":
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.FUNC_WALL)
+		base.emission_energy_multiplier = 0.1
+	elif entity_class == HFBrushEntity.CLIP_CLASS:
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.FUNC_CLIP)
+		base.emission_energy_multiplier = 0.2
+	elif entity_class != "":
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.BRUSH_ENTITY)
+		base.emission_energy_multiplier = 0.1
+	base.emission = HFOverlayColors.with_alpha(base.albedo_color, 1.0)
 	base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	base.roughness = 0.6
+	base.set_meta(EDITOR_LOOK_META, true)
 	return base
+
+
+## The look of a cut waiting for Apply, orange unless a mapper picked another
+## under Test > Settings > Colours. A pending cut wears it as its default, and the
+## Draw tool's preview of a cut as its `editor_material` (#1680).
+static func pending_cut_look() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.PENDING_CUT)
+	mat.emission = HFOverlayColors.with_alpha(mat.albedo_color, 1.0)
+	mat.emission_energy_multiplier = 1.0
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.roughness = 0.6
+	mat.set_meta(EDITOR_LOOK_META, true)
+	return mat
+
+
+## Whether `mat` is one of the editor's see-through looks for a brush: this
+## default, the pending cut look, or a drag preview's look `HFBrushSystem` hands
+## a brush as its `editor_material`. The bake reads a brush's preview mesh for a
+## brush entity that keeps its own node and for a custom shape it cuts through
+## CSG, and leaves every one of these looks behind (#1092, #1518).
+##
+## A mark set where each look is made, because nothing else tells them apart: a
+## new material each call has no identity to compare, and a mapper's material
+## can share a colour. The mark is metadata, so it outlives a save and a reload.
+static func is_editor_look(mat: Material) -> bool:
+	return mat != null and bool(mat.get_meta(EDITOR_LOOK_META, false))
 
 
 func _material_group_key(face: FaceData, mat: Material) -> Variant:
@@ -1727,6 +2147,13 @@ func _should_use_face_preview() -> bool:
 			return true
 		if _face_has_paint(face):
 			return true
+		# The shape's own mesh has no sculpt in it, so an unpainted sculpted brush
+		# drew as the plain shape (#1597).
+		if face.displacement != null:
+			return true
+		# Nor any Hidden face's pattern (#1719).
+		if face.is_hidden():
+			return true
 	return false
 
 
@@ -1757,7 +2184,10 @@ func apply_serialized_faces(data: Array) -> void:
 	var check_fully_inverted := false
 	for entry in data:
 		if entry is Dictionary:
-			var version := int(entry.get("winding_version", 0))
+			# A record without one is older than the winding fixes and is turned.
+			# One that is not a number was damaged, not written old, so it is read
+			# as written now rather than turning every face (#1641).
+			var version := FaceData._read_whole(entry.get("winding_version", 0), 3)
 			if version < 1:
 				needs_winding_migration = true
 			elif version < 2 and shape in INVERTED_BUILDER_SHAPES:
@@ -1772,6 +2202,7 @@ func apply_serialized_faces(data: Array) -> void:
 	if shape == BrushShape.BOX:
 		_store_in_box_order()
 	geometry_dirty = false
+	_faces_shape = shape
 	rebuild_preview()
 
 
@@ -1819,6 +2250,8 @@ func make_face_resources_unique() -> void:
 			continue
 		var face_copy := FaceData.new()
 		face_copy.copy_appearance_from(source_face)
+		# A duplicate of a panel extends the surface it was part of (#1437).
+		face_copy.copy_texture_group_from(source_face)
 		face_copy.custom_uvs = source_face.custom_uvs.duplicate()
 		face_copy.local_verts = source_face.local_verts.duplicate()
 		face_copy.ensure_geometry()
@@ -2043,41 +2476,15 @@ func _apply_material(force: bool = false) -> void:
 		_sync_visual_overlays()
 		return
 	var mat: Material = null
-	if material_override:
+	# A clip's tint wins over a material, as on its faces (`_material_for_face()`).
+	if HFBrushEntity.is_clip(self):
+		mat = _default_material()
+	elif material_override:
 		mat = material_override
 	elif editor_material:
 		mat = editor_material
 	else:
-		var base = StandardMaterial3D.new()
-		if operation == CSGShape3D.OPERATION_SUBTRACTION:
-			base.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
-			base.emission = Color(1.0, 0.2, 0.2)
-			base.emission_energy = 0.2
-		else:
-			base.albedo_color = Color(0.2, 0.8, 0.2, 0.35)
-			base.emission = Color(0.2, 0.7, 0.2)
-			base.emission_energy = 0.1
-		# Apply brush entity class tint — blue for entities
-		var bec = str(get_meta("brush_entity_class", ""))
-		if bec == "func_detail":
-			base.albedo_color = Color(0.3, 0.5, 1.0, 0.35)
-			base.emission = Color(0.3, 0.5, 0.9)
-			base.emission_energy = 0.15
-		elif bec.begins_with("trigger_"):
-			base.albedo_color = Color(0.4, 0.55, 1.0, 0.3)
-			base.emission = Color(0.4, 0.5, 0.9)
-			base.emission_energy = 0.3
-		elif bec == "func_wall":
-			base.albedo_color = Color(0.25, 0.45, 0.9, 0.25)
-			base.emission = Color(0.25, 0.4, 0.8)
-			base.emission_energy = 0.1
-		elif bec != "":
-			base.albedo_color = Color(0.35, 0.5, 0.85, 0.2)
-			base.emission = Color(0.3, 0.45, 0.8)
-			base.emission_energy = 0.1
-		base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		base.roughness = 0.6
-		mat = base
+		mat = _default_material()
 	mesh_instance.material_override = mat
 	_sync_visual_overlays()
 
@@ -2155,6 +2562,8 @@ func _configure_entity_overlay(overlay: MeshInstance3D, brush_entity_class: Stri
 		mat.albedo_color = Color(0.2, 0.35, 0.85, 0.08)
 	elif brush_entity_class.begins_with("trigger_"):
 		mat.albedo_color = Color(0.3, 0.45, 1.0, 0.15)
+	elif brush_entity_class == HFBrushEntity.CLIP_CLASS:
+		mat.albedo_color = Color(0.7, 0.3, 1.0, 0.12)
 	else:
 		mat.albedo_color = Color(0.3, 0.4, 0.8, 0.1)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -2173,7 +2582,10 @@ func _configure_subtract_overlay(overlay: MeshInstance3D) -> void:
 		mat = StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.no_depth_test = false
-	mat.albedo_color = Color(1.0, 0.25, 0.2, 0.7)
+	mat.albedo_color = HFOverlayColors.with_alpha(
+		HFOverlayColors.get_color(HFOverlayColors.SUBTRACTIVE_BRUSH),
+		HFOverlayColors.SUBTRACT_OUTLINE_ALPHA
+	)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	overlay.material_override = mat

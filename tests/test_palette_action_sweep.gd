@@ -45,6 +45,7 @@ const WHOLE_LEVEL_ACTIONS := [
 ## "action|state": issue. Their errors are let through and the case is marked
 ## pending; once one stops failing, the sweep says to take it off.
 const KNOWN := {}
+const KnownFailures = preload("res://tests/support/known_failures.gd")
 
 
 ## A grep on purpose: the dispatcher's own arms are the list of actions, so a
@@ -64,6 +65,7 @@ func test_the_sweep_reads_every_dispatched_action():
 		var parts: PackedStringArray = str(key).split("|")
 		assert_has(actions, parts[0], "KNOWN names a real action: %s" % key)
 		assert_has(STATES, parts[1], "KNOWN names a real state: %s" % key)
+	KnownFailures.check_shape(self, KNOWN)
 
 
 func test_every_action_in_every_state(action = use_parameters(dispatch_actions())):
@@ -96,6 +98,7 @@ func _check(action: String, state: String) -> void:
 	var label := "%s in %s" % [action, state]
 	var root = await _enter_state(state)
 	var before := _snapshot(root)
+	var locked_before := _locked_records(root) if state == "locked" else ""
 	var errors_before := get_errors().size()
 	if _keymap.has_action(action):
 		plugin._on_hotkey_palette_action(action)
@@ -110,15 +113,12 @@ func _check(action: String, state: String) -> void:
 	if KNOWN.has(known):
 		for e in errors:
 			e.handled = true
-		if errors.is_empty():
-			fail_test("%s no longer fails; take it off KNOWN (%s)" % [label, KNOWN[known]])
-		else:
-			pending("%s: %s" % [label, KNOWN[known]])
-	else:
-		assert_eq(_describe(errors), [], "%s raised no error" % label)
+	KnownFailures.settle(self, KNOWN, known, "%s raised no error" % label, _describe(errors))
 	if state == "no_level":
 		assert_eq(_level_roots(), 0, "%s made no level" % label)
 	elif state == "nothing_selected" and not WHOLE_LEVEL_ACTIONS.has(action):
 		assert_eq(_snapshot(root), before, "%s left the level as it was" % label)
+	elif state == "locked":
+		assert_eq(_locked_records(root), locked_before, "%s left the locked brushes alone" % label)
 	_escape_to_idle(root)
 	await _leave_level(root)

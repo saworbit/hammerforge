@@ -39,16 +39,30 @@ const BY_DIRECTION := {
 const APPEARANCE := [
 	"material_idx",
 	"map_texture",
+	# Hidden goes with the texture (#1719).
+	"face_type",
 	"uv_projection",
 	"uv_scale",
 	"uv_offset",
 	"uv_rotation",
 	"legacy_wall_axes",
+	"smoothing_group",
 ]
 ## The rest of what a face stores: its corners and what is derived from them, the
 ## data laid against the corners, and paint, which each caller shares or copies.
+## A face's texture group (#1437) is which faces are one surface, not how a face
+## looks: Apply Picked Look, Align, a bevel, an inset and a cut's cap all lay one
+## face's look on another, and none of them makes the two one surface. The places
+## that build the same face again carry it with `copy_texture_group_from()`.
 const NOT_APPEARANCE := [
-	"local_verts", "normal", "bounds", "custom_uvs", "displacement", "paint_layers"
+	"local_verts",
+	"normal",
+	"bounds",
+	"custom_uvs",
+	"displacement",
+	"paint_layers",
+	"uv_group",
+	"uv_group_justify",
 ]
 
 ## A world brush named per face, and a trigger. Both are axis aligned, so both
@@ -244,6 +258,18 @@ func test_copy_appearance_carries_every_appearance_field():
 	for field in APPEARANCE:
 		assert_eq(face.get(field), source.get(field), "'%s' is copied" % field)
 	assert_true(face.appearance_matches(source), "and the two faces look alike")
+
+
+func test_the_face_projection_is_part_of_the_look():
+	# A face laid in its own plane (#1419) passes that on: copied onto a face
+	# leaning another way, it is laid in that face's plane.
+	var source := FaceData.new()
+	source.uv_projection = FaceData.UVProjection.FACE
+	var face := FaceData.new()
+	assert_false(face.appearance_matches(source), "a Box UV face does not look like it")
+	face.copy_appearance_from(source)
+	assert_eq(face.uv_projection, FaceData.UVProjection.FACE, "the projection is copied")
+	assert_true(face.appearance_matches(source))
 
 
 func test_copy_texture_carries_the_slot_and_the_name_together():
@@ -513,3 +539,176 @@ func test_an_update_that_would_drop_a_named_piece_says_so():
 	assert_eq(at_risk.size(), 1, "a name is worth warning about, like paint")
 	var record = root.generator_system.generators[generator_id]
 	assert_eq(str(at_risk[0]), str(record.brush_ids[8]), "and the piece past the new end is named")
+
+
+# ===========================================================================
+# A clip brush is clip collision on the way in and on the way out (#1409)
+# ===========================================================================
+
+const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
+const CLIP := "func_clip"
+
+
+## A box brush in `.map` units from `lo` to `hi`, its faces named `names` in the
+## order bottom, top, west, east, south, north, or all `names[0]` when one is given.
+static func _map_box(lo: Vector3i, hi: Vector3i, names: Array) -> String:
+	var a := lo
+	var b := hi
+	var planes := [
+		[Vector3i(a.x, a.y, a.z), Vector3i(b.x, a.y, a.z), Vector3i(b.x, b.y, a.z)],
+		[Vector3i(a.x, a.y, b.z), Vector3i(b.x, b.y, b.z), Vector3i(b.x, a.y, b.z)],
+		[Vector3i(a.x, a.y, a.z), Vector3i(a.x, b.y, a.z), Vector3i(a.x, b.y, b.z)],
+		[Vector3i(b.x, a.y, a.z), Vector3i(b.x, a.y, b.z), Vector3i(b.x, b.y, b.z)],
+		[Vector3i(a.x, a.y, a.z), Vector3i(a.x, a.y, b.z), Vector3i(b.x, a.y, b.z)],
+		[Vector3i(a.x, b.y, a.z), Vector3i(b.x, b.y, a.z), Vector3i(b.x, b.y, b.z)],
+	]
+	var lines: Array[String] = ["{"]
+	for i in planes.size():
+		var p: Array = planes[i]
+		var texture: String = names[i] if names.size() > 1 else names[0]
+		var points := []
+		for v: Vector3i in p:
+			points.append("( %d %d %d )" % [v.x, v.y, v.z])
+		lines.append("%s %s 0 0 0 1 1" % [" ".join(points), texture])
+	lines.append("}")
+	return "\n".join(lines)
+
+
+## A floor, three clip brushes as the Quake family, Quake 3 and Source name them,
+## and a brush with one face that is not clip.
+static func _clip_map() -> String:
+	var not_all_clip := ["clip", "floor1", "clip", "clip", "clip", "clip"]
+	return (
+		"\n"
+		. join(
+			[
+				"{",
+				'"classname" "worldspawn"',
+				_map_box(Vector3i(0, 0, 0), Vector3i(128, 128, 16), ["floor1"]),
+				_map_box(Vector3i(0, 0, 16), Vector3i(64, 16, 80), ["clip"]),
+				_map_box(Vector3i(64, 0, 16), Vector3i(128, 16, 80), ["COMMON/CLIP"]),
+				_map_box(Vector3i(0, 112, 16), Vector3i(64, 128, 80), ["tools/toolsclip"]),
+				_map_box(Vector3i(64, 112, 16), Vector3i(128, 128, 80), not_all_clip),
+				"}",
+			]
+		)
+	)
+
+
+func _import(text: String, path := MAP_PATH) -> LevelRoot:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(text)
+	f.close()
+	var root := _fresh_root()
+	assert_eq(root.file_system.import_map(path), OK, "the map imports")
+	return root
+
+
+func _of_class(root: LevelRoot, entity_class: String) -> Array:
+	var out: Array = []
+	for brush in _brushes(root):
+		if HFBrushEntity.entity_class(brush) == entity_class:
+			out.append(brush)
+	return out
+
+
+## What a clip brush is, as a round trip has to give it back: where it stands, its
+## size, its face names and everything that makes it an entity.
+static func _clip_records(brushes: Array) -> Array:
+	var out: Array = []
+	for brush: DraftBrush in brushes:
+		var names := _names(brush.get_faces())
+		names.sort()
+		(
+			out
+			. append(
+				[
+					str(brush.global_position.snapped(Vector3.ONE * 0.001)),
+					str(brush.size.snapped(Vector3.ONE * 0.001)),
+					names,
+					HFBrushEntity.fields(brush),
+				]
+			)
+		)
+	out.sort_custom(func(a: Array, b: Array) -> bool: return str(a) < str(b))
+	return out
+
+
+func test_a_world_brush_named_clip_on_every_face_imports_as_a_clip():
+	var root := _import(_clip_map())
+	var clips := _of_class(root, CLIP)
+	assert_eq(clips.size(), 3, "clip, common/clip and tools/toolsclip, in any case")
+	assert_eq(_of_class(root, "").size(), 2, "the floor, and the brush with one face not clip")
+	var spelled: Array = []
+	for brush in clips:
+		spelled.append(brush.get_faces()[0].map_texture)
+	spelled.sort()
+	assert_eq(spelled, ["COMMON/CLIP", "clip", "tools/toolsclip"], "each face keeps its name")
+
+
+func test_a_clip_exported_then_imported_comes_back_unchanged():
+	var root := _import(_clip_map())
+	var before := _clip_records(_of_class(root, CLIP))
+	assert_eq(before.size(), 3, "fixture: three clips")
+	assert_eq(root.file_system.export_map(MAP_OUT, "quake"), OK, "the level exports")
+	var text := FileAccess.get_file_as_string(MAP_OUT)
+	assert_false(text.contains('"%s"' % CLIP), "every clip went into worldspawn")
+	var again := _import(text, MAP_OUT)
+	assert_eq(_clip_records(_of_class(again, CLIP)), before, "the same clips, as they were")
+	assert_eq(_of_class(again, "").size(), 2, "and the same world")
+
+
+func test_a_clip_drawn_here_exports_as_a_world_brush_named_clip():
+	var root := _fresh_root()
+	var brick := StandardMaterial3D.new()
+	brick.resource_name = "brick"
+	var slot: int = root.material_manager.add_material(brick)
+	var box := _root_box(root)
+	var custom := _root_box(root, Vector3(64, 0, 0))
+	custom.mark_faces_authoritative()
+	var cylinder := (
+		(
+			root
+			. create_brush_from_info(
+				{
+					"shape": root.BrushShape.CYLINDER,
+					"size": Vector3(32, 32, 32),
+					"transform": Transform3D(Basis.IDENTITY, Vector3(-64, 0, 0)),
+				}
+			)
+		)
+		as DraftBrush
+	)
+	assert_eq(custom.shape, root.BrushShape.CUSTOM, "fixture: one of each writer")
+	for brush: DraftBrush in [box, custom, cylinder]:
+		for face in brush.get_faces():
+			face.material_idx = slot
+		root.tie_brushes_to_entity([str(brush.brush_id)], CLIP)
+	assert_eq(root.file_system.export_map(MAP_OUT, "quake"), OK, "the level exports")
+	var text := FileAccess.get_file_as_string(MAP_OUT)
+	assert_false(text.contains("brick"), "a clip's faces are named clip, not what they wear")
+	assert_false(text.contains('"%s"' % CLIP), "in worldspawn, as Hammer and TrenchBroom write one")
+	var parsed := MapIO.parse_map_text(text)
+	var classes: Array = []
+	for info in parsed.get("brushes", []):
+		classes.append(str(info.get("brush_entity_class", "")))
+	assert_eq(classes, [CLIP, CLIP, CLIP], "every face of every one says clip")
+
+
+func test_a_clip_on_its_own_layer_travels_as_a_func_clip_block():
+	var root := _fresh_root()
+	var brush := _root_box(root)
+	root.tie_brushes_to_entity([str(brush.brush_id)], CLIP)
+	brush.set_meta(HFBrushEntity.DATA_META, {"layer": 5})
+	assert_eq(root.file_system.export_map(MAP_OUT, "quake"), OK, "the level exports")
+	var text := FileAccess.get_file_as_string(MAP_OUT)
+	assert_string_contains(text, '"classname" "%s"' % CLIP, "a world brush has no Layer")
+	assert_string_contains(text, '"layer" "5"')
+	var again := _import(text, MAP_OUT)
+	var clips := _of_class(again, CLIP)
+	assert_eq(clips.size(), 1, "it comes back a clip")
+	if clips.size() == 1:
+		var data: Dictionary = clips[0].get_meta(HFBrushEntity.DATA_META, {})
+		assert_eq(int(str(data.get("layer", ""))), 5, "on its layer")
+		for face in clips[0].get_faces():
+			assert_eq(face.map_texture, "clip", "its faces still named clip")

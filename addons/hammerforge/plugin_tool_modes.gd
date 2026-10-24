@@ -12,6 +12,12 @@ extends RefCounted
 
 const EXTRUDE_TOOL_UP := 2
 const EXTRUDE_TOOL_DOWN := 3
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 ## The active level, or the one discovery can find. Every entry point here needs
@@ -28,6 +34,16 @@ static func _root(plugin: Object) -> Node:
 static func prepare_transition(
 	plugin: Object, root: Node, notify_user: bool = true, settle_custom_gizmo: bool = true
 ) -> void:
+	# A click would still be Wrap's under the new owner of the pointer.
+	HFPluginUVWrap.end(plugin, false)
+	# A tool change the mapper asked for lets go of Repeat's stamp (#1407). The
+	# quiet ones, a selection change or the window losing focus, leave it armed.
+	var stamp = plugin.get("_brush_stamp") if notify_user else null
+	if stamp != null:
+		stamp.disarm()
+	# An armed pick is a click waiting for the old owner, so it goes with it. Said
+	# when the user asked for the switch; quietly when focus left the editor.
+	HFPluginTransformTools.cancel_pivot_pick(plugin, "Pick Pivot cancelled" if notify_user else "")
 	var cancelled := false
 	if (
 		settle_custom_gizmo
@@ -94,6 +110,10 @@ static func activate_external(plugin: Object, tool_id: int, root: Node) -> void:
 		plugin._record_history,
 		settings_host
 	)
+	# A tool that acts on what is selected, as Clip does, reads it through here.
+	var active = plugin._tool_registry.get_active_tool()
+	if active and "selection_source" in active:
+		active.selection_source = Callable(plugin, "_current_selection_nodes")
 
 
 # ---------------------------------------------------------------------------

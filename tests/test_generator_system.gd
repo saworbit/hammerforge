@@ -221,21 +221,47 @@ func test_the_surviving_prefix_keeps_its_materials_when_the_count_shrinks():
 	)
 
 
-func test_extra_pieces_take_the_default_when_the_count_grows():
-	assert_true(_create({"segments": 2, "arc_degrees": 90.0}).ok)
+## Give a quarter arch of `painted.size()` pieces each its material in order, null
+## leaving one plain, rebuild it as `segments` pieces, and read every piece's back.
+func _materials_after_growing(painted: Array, segments: int) -> Array:
+	assert_true(_create({"segments": painted.size(), "arc_degrees": 90.0}).ok)
 	var record = _only_record()
+	for i in painted.size():
+		brushes.find_brush_by_id(str(record.brush_ids[i])).material_override = painted[i]
+	var grown := _arch({"segments": segments, "arc_degrees": 90.0})
+	assert_true(generators.regenerate(record.generator_id, grown).ok)
+	var out: Array = []
+	for brush_id in _only_record().brush_ids:
+		out.append(brushes.find_brush_by_id(str(brush_id)).material_override)
+	return out
+
+
+func test_extra_pieces_take_the_material_the_pieces_share_when_the_count_grows():
+	# The new pieces came back translucent beside painted ones (#1526).
 	var mat := StandardMaterial3D.new()
-	for brush_id in record.brush_ids:
-		brushes.find_brush_by_id(str(brush_id)).material_override = mat
-	assert_true(
-		generators.regenerate(record.generator_id, _arch({"segments": 5, "arc_degrees": 90.0})).ok
+	assert_eq(_materials_after_growing([mat, mat], 5), [mat, mat, mat, mat, mat])
+
+
+func test_extra_pieces_take_the_material_most_pieces_have_and_the_rest_keep_theirs():
+	var stone := StandardMaterial3D.new()
+	var brick := StandardMaterial3D.new()
+	assert_eq(
+		_materials_after_growing([stone, brick, brick], 5), [stone, brick, brick, brick, brick]
 	)
-	var rebuilt = _only_record()
-	assert_eq(brushes.find_brush_by_id(str(rebuilt.brush_ids[0])).material_override, mat)
-	assert_null(
-		brushes.find_brush_by_id(str(rebuilt.brush_ids[4])).material_override,
-		"a piece with nothing to inherit takes the default"
+
+
+func test_when_as_many_pieces_have_each_material_the_earliest_piece_decides():
+	var stone := StandardMaterial3D.new()
+	var brick := StandardMaterial3D.new()
+	assert_eq(
+		_materials_after_growing([brick, stone, stone, brick], 6),
+		[brick, stone, stone, brick, brick, brick]
 	)
+
+
+func test_extra_pieces_stay_plain_when_most_pieces_are():
+	var brick := StandardMaterial3D.new()
+	assert_eq(_materials_after_growing([null, brick, null], 4), [null, brick, null, null])
 
 
 func test_regenerating_with_invalid_settings_leaves_the_structure_alone():
@@ -547,6 +573,8 @@ func test_a_structure_of_any_type_rebuilds_from_new_settings():
 		"stairs": {"steps": 5},
 		"spiral_stairs": {"steps": 5},
 		"dome": {"rings": 2, "segments": 6},
+		"ring": {"ring_segments": 6},
+		"door_frame": {"head": 1},
 	}
 	for type in cases:
 		var name := str(type)
@@ -1462,3 +1490,128 @@ func test_a_deleted_piece_an_update_puts_back_joins_what_every_piece_shared():
 	brushes.delete_brush_by_id(str(record.brush_ids[2]))
 	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 4})).ok)
 	assert_eq(_membership(_pieces()[2]), [["Walls"], "Arch", false], "hidden with the rest")
+
+
+# ===========================================================================
+# A stair that turns (#1410) and the ramp it bakes (#1416)
+# ===========================================================================
+
+
+func _stairs(overrides: Dictionary = {}) -> Dictionary:
+	var settings: Dictionary = HFGeneratorSystemScript.default_settings("stairs")
+	for key in overrides:
+		settings[key] = overrides[key]
+	return settings
+
+
+## The world box of each piece of a record, in its order.
+func _piece_boxes(record) -> Array:
+	var out: Array = []
+	for brush_id in record.brush_ids:
+		var brush = brushes.find_brush_by_id(str(brush_id))
+		out.append(HFBakeSystem.brush_world_aabb(brush, brush.global_transform))
+	return out
+
+
+func test_an_update_that_changes_the_turn_rebuilds_the_landing_and_second_flight_in_place():
+	var placement := Transform3D(Basis(Vector3.UP, deg_to_rad(30.0)), Vector3(4, 0, 2))
+	assert_true(generators.create("stairs", _stairs({"steps": 9}), placement).ok)
+	var record = _only_record()
+	# Dragged somewhere first, so in place means where it stands now.
+	for brush_id in record.brush_ids:
+		brushes.find_brush_by_id(str(brush_id)).global_position += Vector3(10, 1, 0)
+	var straight := _piece_boxes(record)
+	var generator_id: String = record.generator_id
+	for turn in [1, 2, 3, 4, 0]:
+		var settings := _stairs({"steps": 9, "turn": turn, "before_landing": 4})
+		assert_true(generators.regenerate(generator_id, settings).ok, "turn %d" % turn)
+		assert_eq(generators.generators.size(), 1, "the same structure, rebuilt")
+		var now := _piece_boxes(record)
+		assert_eq(now.size(), 9, "turn %d: a landing in place of one step" % turn)
+		var stays := 9 if turn == 0 else 3
+		for i in stays:
+			assert_true(
+				(
+					now[i].position.is_equal_approx(straight[i].position)
+					and now[i].size.is_equal_approx(straight[i].size)
+				),
+				"turn %d: step %d of the first flight stayed where it was" % [turn, i]
+			)
+		if turn != 0:
+			assert_ne(now[8], straight[8], "turn %d: the flight after the landing moved" % turn)
+		assert_eq(generators.edited_piece_count(generator_id), 0, "nothing reads as edited")
+
+
+func test_a_stair_with_steps_collision_asks_for_no_ramp():
+	assert_true(generators.create("stairs", _stairs(), Transform3D.IDENTITY).ok)
+	assert_eq(generators.ramp_collision(_only_record().generator_id), {})
+
+
+func test_a_ramp_stands_where_the_structure_now_stands():
+	assert_true(generators.create("stairs", _stairs({"collision": 1}), Transform3D.IDENTITY).ok)
+	var record = _only_record()
+	var at_first: Dictionary = generators.ramp_collision(record.generator_id)
+	assert_eq(at_first["covers"], record.brush_ids, "it stands in for every piece")
+	var delta := Vector3(3, 2, 1)
+	for brush_id in record.brush_ids:
+		brushes.find_brush_by_id(str(brush_id)).global_position += delta
+	var moved: Dictionary = generators.ramp_collision(record.generator_id)
+	var was: PackedVector3Array = at_first["pieces"][0]["points"]
+	var now: PackedVector3Array = moved["pieces"][0]["points"]
+	for i in was.size():
+		assert_true(now[i].is_equal_approx(was[i] + delta), "point %d did not follow" % i)
+	assert_eq(moved["pieces"][0]["over"], str(record.brush_ids[0]), "it lies over the first step")
+
+
+func test_a_structure_edited_by_hand_has_its_ramp_refused():
+	assert_true(generators.create("stairs", _stairs({"collision": 1}), Transform3D.IDENTITY).ok)
+	var record = _only_record()
+	brushes.find_brush_by_id(str(record.brush_ids[2])).global_position += Vector3(0, 0.1, 0)
+	var ramp: Dictionary = generators.ramp_collision(record.generator_id)
+	assert_string_contains(str(ramp.get("refused", "")), "1 of its pieces has been edited by hand")
+	brushes.delete_brush_by_id(str(record.brush_ids[5]))
+	ramp = generators.ramp_collision(record.generator_id)
+	assert_string_contains(str(ramp.get("refused", "")), "2 of its pieces have")
+
+
+func test_a_builder_s_summary_reaches_the_section():
+	var text := HFGeneratorSystemScript.summary(
+		"stairs", _stairs({"height_from": 2, "total": 3.0, "rise": 0.2})
+	)
+	assert_string_contains(text, "15 steps of 0.2")
+	assert_eq(HFGeneratorSystemScript.summary("arch", _arch()), "", "an arch works nothing out")
+	assert_eq(HFGeneratorSystemScript.summary("nothing", {}), "")
+
+
+func test_stairs_at_their_smallest_build_nothing_the_brush_system_widens():
+	# A piece under the brush minimum is widened to it as it is made, with a
+	# warning, and its box rebuilds at that size when its scene opens, so the stair
+	# changed shape on reopen (#1582). Every field that sizes a piece is at the
+	# least its schema takes, through each Fill and Turn.
+	HFLog.begin_test_capture(["cannot be built"])
+	var schema := HFGeneratorSystemScript.settings_schema("stairs")
+	var smallest := {"steps": 4, "before_landing": 2}
+	for key in ["width", "tread", "rise", "tread_thickness", "landing"]:
+		smallest[key] = float(HFGeneratorSchema.field(schema, key)["min"])
+	var made := 0
+	for fill in [0, 1]:
+		for turn in 5:
+			var settings := _stairs(smallest)
+			settings["fill"] = fill
+			settings["turn"] = turn
+			var placement := Transform3D(Basis.IDENTITY, Vector3(10.0 * made, 0, 10.0 * fill))
+			assert_true(generators.create("stairs", settings, placement).ok, "%d %d" % [fill, turn])
+			made += 1
+	var warned := HFLog.get_captured_warnings()
+	HFLog.end_test_capture()
+	assert_eq(warned, [], "no piece is under the brush minimum")
+	for record in generators.generators.values():
+		for brush_id in record.brush_ids:
+			var brush: DraftBrush = brushes.find_brush_by_id(str(brush_id))
+			var was := HFBakeSystem.brush_world_aabb(brush, brush.global_transform)
+			# What a reopen does to a box.
+			brush.size = brush.size
+			var now := HFBakeSystem.brush_world_aabb(brush, brush.global_transform)
+			assert_true(
+				now.size.is_equal_approx(was.size), "%s rebuilt as %s" % [was.size, now.size]
+			)

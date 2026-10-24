@@ -7,11 +7,16 @@ const HFQuickProperty = preload("ui/hf_quick_property.gd")
 const HFCoachMarks = preload("ui/hf_coach_marks.gd")
 const HFOperationReplay = preload("ui/hf_operation_replay.gd")
 const HFRadialMenu = preload("ui/hf_radial_menu.gd")
-# Preloaded under its global name so the script parses before Godot has
+const HFViewportDropTarget = preload("ui/hf_viewport_drop_target.gd")
+# Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const HFPluginCommands = preload("plugin_commands.gd")
+const HFPluginEditActionsType = preload("plugin_edit_actions.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFOverlayColors = preload("hf_overlay_colors.gd")
 
 ## The overlays that belong over the 3D viewport rather than in the toolbar row.
 ## Named by property so host adoption can re-home whichever of them exist.
@@ -35,6 +40,8 @@ const VIEWPORT_OVERLAY_ANCHORS := {
 	"_hotkey_palette": ["center", 0.0],
 	"_coach_marks": ["bottom_center", 12.0],
 	"_operation_replay": ["bottom_left", 12.0],
+	# Above the coach marks, which share the bottom edge (#1696).
+	"_command_line_overlay": ["bottom_center", 56.0],
 }
 
 
@@ -76,12 +83,26 @@ static func detach_viewport_overlay(plugin: Object, control: Control) -> void:
 
 ## Godot hands the draw-over Control to every viewport of a split layout on every
 ## draw. Keep the first live one: adopting each call in turn would drag the
-## overlays between viewports every frame.
+## overlays between viewports every frame. A host the layout has hidden is not
+## live, so the overlays go to a viewport that is still shown (#1627).
 static func adopt_viewport_overlay_host(plugin: Object, host: Control) -> void:
 	if plugin == null or host == null or not is_instance_valid(host):
 		return
 	var current = plugin._viewport_overlay_host
-	if current != null and is_instance_valid(current) and current.is_inside_tree():
+	if (
+		current != null
+		and is_instance_valid(current)
+		and current.is_inside_tree()
+		and (current.is_visible_in_tree() or not host.is_visible_in_tree())
+	):
+		return
+	move_viewport_overlays(plugin, host)
+
+
+## Put the overlays over `host`, the viewport the mapper is working in now: a
+## click in another viewport of a split layout takes them there (#1627).
+static func move_viewport_overlays(plugin: Object, host: Control) -> void:
+	if plugin == null or host == null or not is_instance_valid(host):
 		return
 	plugin._viewport_overlay_host = host
 	for property in VIEWPORT_OVERLAY_PROPERTIES:
@@ -89,6 +110,67 @@ static func adopt_viewport_overlay_host(plugin: Object, host: Control) -> void:
 		if control is Control and is_instance_valid(control):
 			_rehome_viewport_overlay(control, host)
 			place_viewport_overlay(plugin, control)
+
+
+## Keep a drop target on each viewport host, behind every overlay, so a drag
+## over any viewport of a split layout reaches `_can_drop_data()` and
+## `_drop_data()` (#1417, #1627). Each answers for the viewport it is on, with that
+## viewport's camera. It is not one of the overlays above: it covers the whole host
+## and has nothing to show, and adoption would put it on top of them.
+## `_viewport_drop_target` is the one on the overlays' host.
+static func ensure_viewport_drop_target(plugin: Object, host: Control = null) -> void:
+	if host == null:
+		host = plugin._viewport_overlay_host
+	if host == null or not is_instance_valid(host):
+		return
+	var targets: Dictionary = plugin._viewport_drop_targets
+	for key in targets.keys():
+		if not is_instance_valid(targets[key]):
+			targets.erase(key)
+	var target = targets.get(host.get_instance_id())
+	if target == null:
+		target = HFViewportDropTarget.new()
+		target.can_drop = Callable(plugin, "_can_drop_data_on").bind(host)
+		target.drop = Callable(plugin, "_drop_data_on").bind(host)
+		targets[host.get_instance_id()] = target
+	if host == plugin._viewport_overlay_host:
+		plugin._viewport_drop_target = target
+	var camera := camera_for_host(host)
+	if camera:
+		plugin._viewport_hosts_by_camera[camera.get_instance_id()] = host
+	if target.get_parent() == host:
+		return
+	_rehome_viewport_overlay(target, host)
+	host.move_child(target, 0)
+
+
+static func free_viewport_drop_target(plugin: Object) -> void:
+	plugin._viewport_drop_target = null
+	var targets: Dictionary = plugin._viewport_drop_targets
+	for target in targets.values():
+		if target == null or not is_instance_valid(target):
+			continue
+		if target.get_parent():
+			target.get_parent().remove_child(target)
+		target.free()
+	targets.clear()
+	plugin._viewport_hosts_by_camera.clear()
+
+
+## The camera of the viewport `host` draws over. In the editor the draw-over
+## Control sits beside the viewport it covers, under one parent; a host inside a
+## viewport of its own, as a test builds one, has that viewport's camera.
+static func camera_for_host(host: Control) -> Camera3D:
+	if host == null or not is_instance_valid(host):
+		return null
+	var parent := host.get_parent()
+	if parent != null and not (parent is Viewport):
+		for found in parent.find_children("*", "SubViewport", true, false):
+			var camera := (found as SubViewport).get_camera_3d()
+			if camera:
+				return camera
+	var own := host.get_viewport()
+	return own.get_camera_3d() if own else null
 
 
 static func _rehome_viewport_overlay(control: Control, host: Control) -> void:
@@ -303,15 +385,28 @@ static func update_vertex_overlay(plugin: Object, root: Node) -> void:
 	# at; drawing them a root transform away makes the tool unusable off the origin.
 	plugin._vertex_overlay_mesh.global_transform = Transform3D.IDENTITY
 	plugin._vertex_overlay_imesh.clear_surfaces()
+	var handle_color := HFOverlayColors.get_color(HFOverlayColors.VERTEX_HANDLE)
+	var selected_color := HFOverlayColors.get_color(HFOverlayColors.SELECTED_VERTEX)
+	# Full strength, unlike the hover outline round a brush: a handle is a thin
+	# cross that has to read against the brush it sits on.
+	var hover_color := HFOverlayColors.with_alpha(
+		HFOverlayColors.get_color(HFOverlayColors.HOVER), 1.0
+	)
 	var edge_data = vertex_system.get_all_edge_world_positions()
 	if not edge_data.is_empty():
 		plugin._vertex_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
 		for edge in edge_data:
-			var edge_color := Color(0.5, 0.5, 0.5, 0.5)
+			# An edge is the handle colour at half brightness and half strength.
+			var edge_color := Color(
+				handle_color.r * 0.5,
+				handle_color.g * 0.5,
+				handle_color.b * 0.5,
+				handle_color.a * 0.5
+			)
 			if edge.selected:
-				edge_color = Color.ORANGE
+				edge_color = selected_color
 			elif edge.hovered:
-				edge_color = Color.YELLOW
+				edge_color = hover_color
 			plugin._vertex_overlay_imesh.surface_set_color(edge_color)
 			plugin._vertex_overlay_imesh.surface_add_vertex(edge.a)
 			plugin._vertex_overlay_imesh.surface_set_color(edge_color)
@@ -320,11 +415,11 @@ static func update_vertex_overlay(plugin: Object, root: Node) -> void:
 	plugin._vertex_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
 	for entry in vertex_data:
 		var position: Vector3 = entry.pos
-		var color := Color.WHITE
+		var color := handle_color
 		if entry.selected:
-			color = Color.ORANGE
+			color = selected_color
 		elif entry.hovered:
-			color = Color.YELLOW
+			color = hover_color
 		var size := 0.4
 		for offset in [
 			Vector3(-size, 0, 0),
@@ -337,6 +432,46 @@ static func update_vertex_overlay(plugin: Object, root: Node) -> void:
 			plugin._vertex_overlay_imesh.surface_set_color(color)
 			plugin._vertex_overlay_imesh.surface_add_vertex(position + offset)
 	plugin._vertex_overlay_imesh.surface_end()
+
+
+## Take the overlay colours from the preferences and redraw what is up in the old
+## ones (#1446): the gizmo outlines, the level's hover outline, cordon and brush
+## looks, the Face Select mark and the vertex handles. What draws later reads
+## the new colours as it draws. Nothing is redrawn when no colour changed.
+static func apply_overlay_colors(plugin: Object) -> void:
+	if plugin == null:
+		return
+	if HFOverlayColors.apply_prefs(plugin.get("_user_prefs")):
+		var gizmo_plugin = plugin.get("brush_gizmo_plugin")
+		if gizmo_plugin and gizmo_plugin.has_method("apply_overlay_colors"):
+			gizmo_plugin.apply_overlay_colors()
+	var root = plugin.get("active_root")
+	if root == null or not is_instance_valid(root):
+		root = plugin.call("_get_level_root")
+	refresh_overlay_colors(plugin, root)
+
+
+## Redraw `root`'s overlays when they were drawn under an older palette, and mark
+## it drawn under this one. A level in another scene tab misses a change made
+## while it is out of sight, so the plugin asks again when it comes back.
+static func refresh_overlay_colors(plugin: Object, root: Node) -> void:
+	# Out of the tree a brush cannot draw, so a level there is left marked stale.
+	if plugin == null or root == null or not is_instance_valid(root) or not root.is_inside_tree():
+		return
+	var drawn: Dictionary = plugin.get("_overlay_colors_drawn")
+	var id := root.get_instance_id()
+	var now := Vector2i(HFOverlayColors.revision(), HFOverlayColors.brush_revision())
+	var was: Vector2i = drawn.get(id, Vector2i.ZERO)
+	if was == now:
+		return
+	drawn[id] = now
+	if root.has_method("refresh_overlay_colors"):
+		root.refresh_overlay_colors(was.y != now.y)
+	var face_mark = plugin.get("_face_selection_overlay")
+	if face_mark:
+		face_mark.refresh()
+	if plugin.get("_vertex_mode"):
+		update_vertex_overlay(plugin, root)
 
 
 static func ensure_vertex_overlay(plugin: Object, root: Node) -> void:
@@ -535,8 +670,17 @@ static func draw_marquee_overlay(plugin: Object, viewport_control: Control) -> v
 		)
 		. abs()
 	)
-	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.12))
-	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.7), false, 1.5)
+	var color := marquee_color(plugin)
+	viewport_control.draw_rect(rect, Color(color, 0.12))
+	viewport_control.draw_rect(rect, Color(color, 0.7), false, 1.5)
+
+
+## The face marquee's colour: blue, or amber while X-ray has it take every face
+## in the box, so a box that reaches through walls looks like one (#1432).
+static func marquee_color(plugin: Object) -> Color:
+	var dock = plugin.get("dock") if plugin != null else null
+	var xray: bool = dock != null and dock.is_face_xray_enabled()
+	return Color(1.0, 0.6, 0.2) if xray else Color(0.3, 0.6, 1.0)
 
 
 static func handle_double_tap(plugin: Object, keycode: int, root: Node, paint_mode: bool) -> bool:
@@ -641,6 +785,14 @@ static func on_quick_property_committed(plugin: Object, property_type: int, valu
 		HFQuickProperty.PropertyType.PAINT_RADIUS:
 			if plugin.dock and not values.is_empty() and plugin.dock.surface_paint_radius:
 				plugin.dock.surface_paint_radius.value = float(values[0])
+		HFQuickProperty.PropertyType.OFFSET:
+			if values.size() >= 4:
+				HFPluginTransformTools.apply_offset(
+					plugin,
+					root,
+					Vector3(float(values[0]), float(values[1]), float(values[2])),
+					bool(values[3])
+				)
 
 
 static func show_coach_mark_for_action(plugin: Object, action: String) -> void:
@@ -699,8 +851,7 @@ static func show_viewport_context_menu(plugin: Object, root: Node, tool_id: int)
 	var menu = plugin._viewport_context_menu
 	if not menu or not is_instance_valid(menu):
 		return
-	var state := {}
-	build_viewport_state(plugin, state, root, tool_id)
+	var state := build_viewport_state(plugin, root, tool_id)
 	var screen_pos := DisplayServer.mouse_get_position()
 	var win: Window = plugin.get_window()
 	var window_pos := Vector2(screen_pos)
@@ -709,42 +860,67 @@ static func show_viewport_context_menu(plugin: Object, root: Node, tool_id: int)
 	menu.show_at(window_pos, state)
 
 
-## Summarise what the pointer is over and what is selected, so the menu can show
-## only the entries that would actually do something.
-static func build_viewport_state(
-	plugin: Object, state: Dictionary, root: Node, tool_id: int
-) -> void:
-	var dock = plugin.dock
-	state["has_root"] = root != null
-	state["tool"] = tool_id
-	state["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
-	state["vertex_mode"] = plugin._vertex_mode
-	state["is_subtract"] = dock.get_operation() != 0 if dock else false
-	var input_mode := 0
-	if root and root.input_state:
-		input_mode = root.input_state.mode
-	state["input_mode"] = input_mode
-	var selection_nodes: Array = plugin._current_selection_nodes()
-	state["mixed_selection"] = (
-		plugin.classify_selection_scope(selection_nodes, root) == plugin.SelectionScope.MIXED
-		if root
-		else false
-	)
-	var brush_count := 0
-	var entity_count := 0
-	for node in selection_nodes:
-		if node is DraftBrush:
-			brush_count += 1
-		elif root and root.has_method("is_entity_node") and root.is_entity_node(node):
-			entity_count += 1
-	state["brush_count"] = brush_count
-	state["entity_count"] = entity_count
-	var face_count := 0
-	if root and root.get("face_selection") is Dictionary:
-		for key in root.face_selection.keys():
-			var indices = root.face_selection.get(key, [])
-			face_count += indices.size()
-	state["face_count"] = face_count
-	# The prefab selected in the library, for Place Selected Prefab.
+## Summarise what is selected and what mode the editor is in, so the menu can
+## show only the entries that would actually do something. The state every
+## command surface reads, plus the menu's own.
+static func build_viewport_state(plugin: Object, root: Node, tool_id: int) -> Dictionary:
+	var state := HFPluginCommands.build_command_state(plugin, root, tool_id)
+	# The prefab selected in the library, for Place Selected Prefab. Only this menu
+	# offers it, so it is read as the menu opens and not on every HUD update.
+	var dock = plugin.get("dock")
 	var library = dock.get("_prefab_library") if dock else null
 	state["library_prefab"] = library.get_selected_path() if library else ""
+	state.merge(menu_level_state(plugin, root))
+	return state
+
+
+## What the menu's level rows read (#1724): where the cursor was when it opened,
+## the entity classes by category and the brush entity classes, the visgroups,
+## whether a selected brush is tied to an entity or in a group, and the material
+## of the first picked face.
+static func menu_level_state(plugin: Object, root: Node) -> Dictionary:
+	var state := {
+		"cursor_screen": plugin.get("last_3d_mouse_pos"),
+		"entity_classes": {},
+		"brush_entity_classes": [],
+		"visgroups": [],
+		"tied": false,
+		"grouped": false,
+		"face_material": -1,
+		"can_paste": false,
+	}
+	if root == null or not is_instance_valid(root):
+		return state
+	# Paste Here (#1722): the buffer, or `.map` text copied since.
+	if root.prefab_system:
+		state["can_paste"] = (
+			not root.prefab_system.clipboard_is_empty() or root.prefab_system.newer_map_text() != ""
+		)
+	var points := {}
+	var brushes: Array = []
+	var definitions: Dictionary = root.get_entity_definitions()
+	for entity_class in definitions:
+		var definition = definitions[entity_class]
+		if not (definition is Dictionary):
+			continue
+		if definition.get("is_brush_entity") == true:
+			brushes.append(str(entity_class))
+			continue
+		var category := str(definition.get("category", "Other"))
+		if not points.has(category):
+			points[category] = []
+		(points[category] as Array).append(str(entity_class))
+	for category in points:
+		(points[category] as Array).sort()
+	brushes.sort()
+	state["entity_classes"] = points
+	state["brush_entity_classes"] = brushes
+	state["visgroups"] = Array(root.get_visgroup_names())
+	for node in plugin._current_selection_nodes():
+		if node is DraftBrush:
+			if str(node.get_meta("brush_entity_class", "")) != "":
+				state["tied"] = true
+			if str(node.get_meta("group_id", "")) != "":
+				state["grouped"] = true
+	state["face_material"] = HFPluginEditActionsType.first_face_material(root)
+	return state

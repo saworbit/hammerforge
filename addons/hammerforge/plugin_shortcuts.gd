@@ -15,6 +15,9 @@ const SHORTCUT_APPLY := -3
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
+const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
+const HFPluginVertexOpsType = preload("plugin_vertex_ops.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -58,6 +61,12 @@ static func handle(plugin: Object, event: InputEvent) -> void:
 	# the 3D viewport. Claim managed selections here as well so every entry point
 	# uses HammerForge's undo, stable-ID, and reference-cleanup boundaries.
 	if plugin._keymap.matches("delete", event):
+		# Corners picked in vertex mode are what Delete takes then (#1713).
+		var corners = root.get("vertex_system")
+		if plugin.get("_vertex_mode") and corners and corners.has_selection():
+			HFPluginVertexOpsType.delete_selected(plugin, root)
+			mark_handled(plugin)
+			return
 		if _claim(plugin, root, "Delete"):
 			plugin._delete_selected(root)
 		return
@@ -172,6 +181,10 @@ static func cancel_transient_preview(plugin: Object, root: Node) -> bool:
 ## Returns true when a rung was taken, which is what tells the caller to consume
 ## the key instead of letting Godot act on it.
 static func cancel_escape_step(plugin: Object, root: Node) -> bool:
+	# A texture drag puts every face back as the press found it.
+	var texture_gizmo = plugin.get("_texture_gizmo")
+	if texture_gizmo and texture_gizmo.cancel():
+		return true
 	if plugin._hotkey_palette and plugin._hotkey_palette.visible:
 		plugin._hotkey_palette.visible = false
 		return true
@@ -185,6 +198,16 @@ static func cancel_escape_step(plugin: Object, root: Node) -> bool:
 		plugin._texture_picker_active = false
 		if plugin.dock:
 			plugin.dock.show_toast("Texture Picker cancelled", 1)
+		return true
+	if HFPluginUVWrap.end(plugin, true):
+		return true
+	var stamp = plugin.get("_brush_stamp")
+	if stamp != null and stamp.disarm():
+		if plugin.dock:
+			plugin.dock.show_toast("Repeat stopped", 0)
+		plugin._update_hud_context()
+		return true
+	if HFPluginTransformTools.cancel_pivot_pick(plugin):
 		return true
 	if HFPluginPaintInput.cancel_floor_paint(plugin, root):
 		return true

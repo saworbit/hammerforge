@@ -6,6 +6,14 @@ extends "res://tests/mcp/mcp_dispatcher_case.gd"
 ## the listing that tells an agent which layers there are.
 
 const HFPaintTool = preload("res://addons/hammerforge/paint/hf_paint_tool.gd")
+## Where the streamed-region tests write their region files, a name of their own
+## so no other suite's files are in the way.
+const STREAM_LEVEL := "user://hf_mcp_paint_stream_test.hflevel"
+
+
+func after_each() -> void:
+	_clean_stream_dir()
+	super()
 
 
 func run(command: String, args = null) -> Dictionary:
@@ -438,6 +446,153 @@ func test_the_listing_without_a_level_lists_no_layers():
 	for entry in r["result"]["commands"]:
 		if entry["command"] == "paint_ramp":
 			assert_eq(entry["paint_layers"], [])
+
+
+# ===========================================================================
+# Streamed regions (#1502)
+# ===========================================================================
+
+
+func _clean_stream_dir() -> void:
+	var dir := ProjectSettings.globalize_path(STREAM_LEVEL.get_basename() + ".hfregions")
+	if not DirAccess.dir_exists_absolute(dir):
+		return
+	for file_name in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(file_name))
+	DirAccess.remove_absolute(dir)
+
+
+## A level whose paint streams in regions of 32 cells, one resident at a time,
+## with cell (1, 1) painted, its walls at 2 m, and its region (0, 0) written
+## out and dropped from memory.
+func streamed_level() -> LevelRoot:
+	var level := make_level()
+	level.hflevel_compress = false
+	_clean_stream_dir()
+	var sys := level.paint_system
+	sys.region_streaming_enabled = true
+	sys.region_manager.region_size_cells = 32
+	sys.region_manager.streaming_radius = 0
+	sys._sync_region_manager()
+	sys.set_region_base_path(STREAM_LEVEL)
+	layer(level).set_cell(cell(1, 1), true)
+	layer(level).set_wall_height(cell(1, 1), 2.0)
+	sys.region_manager.mark_loaded(Vector2i.ZERO)
+	assert_true(sys._unload_region(Vector2i.ZERO), "the region was written out")
+	assert_false(layer(level).get_cell(cell(1, 1)), "and left memory")
+	return level
+
+
+func assert_no_pins(level: LevelRoot, note: String) -> void:
+	assert_true(level.paint_system._paint_region_pins.is_empty(), "%s: pins let go" % note)
+	assert_false(level.paint_system.region_manager.is_pinned(Vector2i.ZERO), note)
+
+
+func test_a_raise_loads_a_streamed_out_region_and_one_undo_puts_its_heights_back():
+	var level := streamed_level()
+	var r := await run("paint_raise", {"from": [1, 1], "height": 4.0})
+	assert_true(r.get("ok", false), str(r))
+	if not r.get("ok", false):
+		return
+	assert_eq(r["result"]["raised"], 1, "the saved cell counts as painted")
+	assert_eq(r["result"]["heights_changed"], 1)
+	assert_almost_eq(layer(level).get_wall_height(cell(1, 1), -1.0), 4.0, 0.001)
+	assert_no_pins(level, "after the raise")
+	assert_eq(undo.scene_history.get_history_count(), 1)
+	await call_tool("hf_undo")
+	assert_true(layer(level).get_cell(cell(1, 1)), "undo keeps the paint the region held")
+	assert_almost_eq(
+		layer(level).get_wall_height(cell(1, 1), -1.0), 2.0, 0.001, "and its walls' old height"
+	)
+	assert_true(level.paint_system.region_manager.is_loaded(Vector2i.ZERO))
+
+
+func test_a_raise_over_unpainted_cells_of_a_streamed_out_region_takes_no_step():
+	var level := streamed_level()
+	var r := await run("paint_raise", {"from": [5, 5], "to": [6, 6], "height": 4.0})
+	assert_refused(r, "operation_failed", "nothing painted there, even on disk")
+	if r.get("ok", true):
+		return
+	assert_string_contains(r["error"]["message"], "paint_ramp")
+	assert_false(r["error"]["details"].has("rolled_back"), "refused in the check")
+	assert_eq(undo.scene_history.get_history_count(), 0)
+	assert_no_pins(level, "after the refusal")
+
+
+func test_a_rectangle_painted_into_a_streamed_out_region_undoes_to_what_it_held():
+	var level := streamed_level()
+	var r := await run("paint_ramp", {"from": [2, 2], "to": [3, 3]})
+	assert_true(r.get("ok", false), str(r))
+	assert_no_pins(level, "after the paint")
+	await call_tool("hf_undo")
+	assert_false(layer(level).get_cell(cell(2, 2)), "undo takes the new paint")
+	assert_true(layer(level).get_cell(cell(1, 1)), "and keeps what the region held")
+	assert_almost_eq(layer(level).get_wall_height(cell(1, 1), -1.0), 2.0, 0.001)
+
+
+func test_a_room_stamped_into_a_streamed_out_region_undoes_to_what_it_held():
+	var level := streamed_level()
+	var r := await run("paint_room", {"at": [2, 2], "width": 2, "depth": 2, "height": 3.5})
+	assert_true(r.get("ok", false), str(r))
+	assert_no_pins(level, "after the stamp")
+	await call_tool("hf_undo")
+	assert_false(layer(level).get_cell(cell(2, 2)), "undo takes the room")
+	assert_true(layer(level).get_cell(cell(1, 1)), "and keeps what the region held")
+	assert_almost_eq(layer(level).get_wall_height(cell(1, 1), -1.0), 2.0, 0.001)
+
+
+func test_a_batch_into_a_streamed_out_region_undoes_to_what_it_held():
+	var level := streamed_level()
+	var r := await call_tool(
+		"hf_batch",
+		{
+			"ops":
+			[
+				{
+					"tool": "hf_run_command",
+					"params": {"command": "paint_ramp", "params": {"from": [2, 2], "to": [3, 3]}}
+				},
+				{
+					"tool": "hf_run_command",
+					"params":
+					{
+						"command": "paint_raise",
+						"params": {"from": [1, 1], "to": [3, 3], "height": 4.0}
+					}
+				},
+			]
+		}
+	)
+	assert_true(r.get("ok", false), str(r))
+	if not r.get("ok", false):
+		return
+	assert_eq(r["result"]["results"][1]["result"]["raised"], 5, "the saved cell and the new four")
+	assert_no_pins(level, "after the batch")
+	await call_tool("hf_undo")
+	assert_false(layer(level).get_cell(cell(2, 2)), "undo takes the batch's paint")
+	assert_true(layer(level).get_cell(cell(1, 1)), "and keeps what the region held")
+	assert_almost_eq(layer(level).get_wall_height(cell(1, 1), -1.0), 2.0, 0.001)
+
+
+func test_a_batch_refused_before_its_paint_runs_lets_the_regions_go():
+	var level := streamed_level()
+	var r := await call_tool(
+		"hf_batch",
+		{
+			"ops":
+			[
+				{"tool": "hf_place_brush", "params": {"size": "large"}},
+				{
+					"tool": "hf_run_command",
+					"params": {"command": "paint_ramp", "params": {"from": [2, 2]}}
+				},
+			]
+		}
+	)
+	assert_refused(r, "batch_failed", "the brush op is refused")
+	assert_eq(undo.scene_history.get_history_count(), 0)
+	assert_no_pins(level, "after the refusal")
+	assert_false(layer(level).get_cell(cell(2, 2)))
 
 
 # ===========================================================================

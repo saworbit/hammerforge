@@ -237,7 +237,7 @@ func test_operation_toggle_draw_section():
 	var section = toolbar._sections[HFContextToolbar.Context.DRAW_IDLE]
 	var toggle = section.get_node_or_null("OpToggle")
 	assert_not_null(toggle)
-	assert_eq(toggle.text, "Add")
+	assert_eq(toggle.text, "Solid")
 
 
 func test_subtract_mode_updates_toggle():
@@ -258,7 +258,7 @@ func test_subtract_mode_updates_toggle():
 	)
 	var section = toolbar._sections[HFContextToolbar.Context.DRAW_IDLE]
 	var toggle = section.get_node_or_null("OpToggle")
-	assert_eq(toggle.text, "Sub")
+	assert_eq(toggle.text, "Cut")
 
 
 # ===========================================================================
@@ -459,6 +459,57 @@ func test_set_favorite_materials():
 	assert_true(toolbar._material_thumbs[0].visible)
 	assert_true(toolbar._material_thumbs[1].visible)
 	assert_false(toolbar._material_thumbs[2].visible)
+
+
+func _nine_favourites() -> Array:
+	var infos: Array = []
+	for i in range(9):
+		infos.append({"index": 10 + i, "name": "Fav %d" % (i + 1)})
+	return infos
+
+
+## The strip grew from five to nine, one for each of Alt+1 to Alt+9 (#1439), and
+## button N is the browser's favourite N.
+func test_the_favourites_strip_holds_nine_numbered_in_the_browsers_order():
+	toolbar.set_favorite_materials(_nine_favourites())
+	assert_eq(toolbar._material_thumbs.size(), 9)
+	var received := []
+	toolbar.material_quick_apply.connect(func(idx): received.append(idx))
+	for i in range(9):
+		var btn: Button = toolbar._material_thumbs[i]
+		assert_true(btn.visible, "button %d shows" % (i + 1))
+		assert_eq(btn.text, str(i + 1), "numbered as its slot")
+		assert_string_contains(btn.tooltip_text, "Fav %d" % (i + 1), "naming the material")
+		assert_string_contains(btn.tooltip_text, "Alt+%d" % (i + 1), "and the key that applies it")
+		toolbar._on_material_thumb(i)
+	assert_eq(received, [10, 11, 12, 13, 14, 15, 16, 17, 18], "each applies its own favourite")
+
+
+func _state(face_count: int, brush_count: int, entity_count := 0) -> Dictionary:
+	return {
+		"has_root": true,
+		"brush_count": brush_count,
+		"entity_count": entity_count,
+		"face_count": face_count,
+		"input_mode": 0,
+		"tool": 1,
+		"vertex_mode": false,
+	}
+
+
+## A favourite goes on the selected faces or else the selected brushes, so the
+## strip shows for either. It used to belong to the face section alone.
+func test_the_favourites_strip_shows_for_faces_and_for_brushes():
+	toolbar.set_favorite_materials(_nine_favourites())
+	toolbar.update_state(_state(3, 1))
+	assert_true(toolbar._favorites_strip.visible, "for selected faces")
+	toolbar.update_state(_state(0, 2))
+	assert_true(toolbar._favorites_strip.visible, "for selected brushes")
+	toolbar.update_state(_state(0, 0, 1))
+	assert_false(toolbar._favorites_strip.visible, "not for entities")
+	toolbar.update_state(_state(0, 2))
+	toolbar.set_favorite_materials([])
+	assert_false(toolbar._favorites_strip.visible, "nor with no favourite to show")
 
 
 func test_material_quick_apply_signal():

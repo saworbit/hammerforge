@@ -6,7 +6,7 @@ description: "Day-to-day reference for building levels with HammerForge: the doc
 
 Last updated: October 18, 2026
 
-This guide covers the current HammerForge workflow in Godot 4.7: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
+This guide covers the current HammerForge workflow in Godot 4.7: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs. The [glossary](glossary.md) gives the one word this guide and the editor use for each idea.
 
 ## Quick Start
 1. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge.
@@ -49,7 +49,7 @@ for a new level moved.
 
 Open it from **HammerForge** in the main-screen switcher. The overall lamp also sits in the 3D viewport toolbar while you build; clicking it opens the Console.
 
-Three tabs.
+Six tabs, and a command line under them.
 
 ### Status
 
@@ -60,7 +60,7 @@ Eight checks, each a red / amber / green lamp with what was measured, what it me
 | Check | Green | Amber | Red |
 |---|---|---|---|
 | **Level root** | A `LevelRoot` is in the open scene | — | No `LevelRoot`, so every tool is inert — *Create Starter Level* |
-| **Geometry budget** | 50 brushes + entities or fewer | Above 50; bakes get slower | Above 100; dragging starts to stutter |
+| **Geometry budget** | 100 brushes + entities or fewer | Above 100; an edit takes longer than a frame to settle | Above 1,000; every edit pauses the editor ([measured](HammerForge_Performance.md#editing)) |
 | **Bake** | Baked meshes match the drafts | Never baked, or brushes edited since — *Bake Now* | — |
 | **Level check** | Scanned, no faults | 1–5 issues — *Check + Fix* | 6 or more |
 | **Material palette** | Every slot loaded | Empty (fine for greyboxing), or some slots did not resolve — *Load Palette* | No slot resolved, or empty **and** face-material bake is on |
@@ -70,9 +70,17 @@ Eight checks, each a red / amber / green lamp with what was measured, what it me
 
 A grey lamp means **not measured yet** — usually because no level is open. It is not a fault.
 
+After an editor session that did not close cleanly, a **Did not close cleanly** row comes first, with **Open Folder**, **Copy Report** and **Dismiss**. See [When the editor crashes](#when-the-editor-crashes).
+
+When a newer HammerForge is on the Asset Library, a grey line at the top says so, such as "HammerForge 0.4.2 is out", with **What's New**, **Skip This Version** and **Later**. It never downloads anything, and grey never colours the headline. See [Upgrade](HammerForge_Install_Upgrade.md#upgrade) ([#1656](https://github.com/saworbit/hammerforge/issues/1656)).
+
+A level with notes in it gets a grey **Notes** row, counting the open ones by kind, with **Show Notes**. See [Notes](#notes).
+
 Every lamp carries a shape as well as a colour (tick, exclamation, cross, dash), so the board reads the same with a red/green colour deficiency. Hover any row for the thresholds behind it. **Needs attention only** hides the checks that are already fine.
 
-The header carries the overall lamp, the live scope line (`Arena · 74 brushes · 9 entities · ~3120 verts · 256 KiB paint`), and when the board was last checked. Counts refresh once a second while the Console is open; the two measurements that walk the whole level refresh on a slower beat or when you press **Re-check**.
+The header carries the overall lamp, the live scope line (`Arena · 74 brushes · 9 entities · ~3120 verts · 256 KiB paint`), and when the board was last checked.
+
+**Report a Problem** in the header asks what happened, what you expected and how to get there, all optional, and opens the bug form in your browser filled in with them and with what the editor knows: the HammerForge and Godot versions, the system, the renderer and graphics adapter, and, if you leave them ticked, the level's counts, the tool in use, the last 10 undo steps, what a level check finds and the last 50 HammerForge log lines. After a crash, the crash report goes in its own field. Paths are cut down to `res://`, `user://` and `~`. A report too long for a link opens the form with the title and versions, and puts the whole report on your clipboard to paste. **Save a viewport screenshot** writes one to `user://hammerforge/reports` and opens that folder, so you can drag it into the form. Nothing is sent until you submit the form yourself ([#1655](https://github.com/saworbit/hammerforge/issues/1655)). Counts refresh once a second while the Console is open; the two measurements that walk the whole level refresh on a slower beat or when you press **Re-check**.
 
 ### Controls
 
@@ -80,9 +88,9 @@ Every HammerForge switch on one screen, grouped by what it affects:
 
 ![The Console Controls tab, with the Viewport, Bake and Safety net groups and a caption under each switch](images/ui_console_controls.png)
 
-- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
+- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, draw hover preview, name the snap, show selection size, I/O connection lines, cut preview, spawn debug, texture lock, cordon
 - **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh (cell size and height, agent height, radius, climb and slope), visible only, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
-- **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), debug logging
+- **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), Validate warns about open To Do notes (off by default, kept in the level, see [Notes](#notes)), check for a newer HammerForge (once a day, from the Asset Library, see [Upgrade](HammerForge_Install_Upgrade.md#upgrade)), debug logging
 
 Each switch is captioned with what it does, and **Find a setting** searches those captions as well as the names, so "pathfinding" finds *Bake navmesh*. Turn **Descriptions** off to fit more on screen; the text stays on the tooltips. A switch with nowhere to write — no level open — is disabled rather than shown at a made-up default.
 
@@ -96,6 +104,54 @@ These are the same settings as **Test → Settings** and **Test → Advanced Bak
 HammerForge's own messages, separate from Godot's Output panel where every addon's output is mixed together. The level buttons show how many of each arrived this session and double as the filter — click **Errors 2** to see just those two. **Follow** keeps the newest line in view, and **Copy** / **Save…** take whatever is currently shown.
 
 A message that repeats collapses to one row with a count (`(x4)`) rather than filling the buffer. The buffer trims down to the most recent 600 entries in batches, so it holds up to 663; the footer says how many it holds and how many older ones were dropped.
+
+### Entities
+
+Every entity class in the level with how many there are, most first: point entities and brush entities both, so a trigger counts as a `trigger_once` ([#1709](https://github.com/saworbit/hammerforge/issues/1709)). **Count in** narrows it to what stands inside the active cordons or to one visgroup. Click a class to select every one of it.
+
+**Export Entities...** writes the entities in that scope to a CSV: one row each, with its kind, class, name, position, rotation, a brush entity's bounds, its visgroups, how many outputs it has and how many aim at it, then one column per property, blank where a class has none. Numbers use a decimal point whatever your system's language, a colour is `#rrggbb` and a vector `x y z`, and a value with a comma or a quote in it is quoted, so the file opens cleanly in any spreadsheet. The same table comes from the command line, for a build script:
+
+```
+godot --headless -s res://tools/export_entities.gd --path . -- level.hflevel out.csv
+```
+
+### Notes
+
+A **Note** is text left in the level for the people working on it: "the lift goes here", "temporary wall, remove after the art pass", "players get stuck on this ledge" ([#1700](https://github.com/saworbit/hammerforge/issues/1700)). Place one from the **Editor** category of the entity palette, or from **Place Entity Here** in the viewport menu. It has a **Title**, a **Body**, a **Kind** (Note, To Do or Playtest), an **Author** and **Done**. A new note is signed with the author of the last note you signed, so you type your name once.
+
+In the viewport a note is a marker with its title over it: a sphere for a Note, a diamond for a To Do, a cylinder for a Playtest. Its body shows under the title while the cursor is over it, and a done note fades.
+
+The Console's **Notes** tab lists every note under its kind, with how many are open, and clicking one selects it, so **F** frames it. The Status board counts open notes in a grey **Notes** row, which never colours the headline. Turn on **Validate warns about open To Do notes** under Safety net in the Console's Controls and Validate lists each open To Do note as `Open To Do note: <title>`, with Select on its row; Note and Playtest notes never warn. The setting is kept in the level and the scene, off by default, so everyone's check of a level agrees ([#1818](https://github.com/saworbit/hammerforge/issues/1818)).
+
+Notes save with the level, the scene and a prefab like any entity, and never reach a bake, a playtest, a running game, a `.glb` or a `.map` export; either export says how many it left out. An agent can place, change and list notes over the bridge with `hf_place_entity`, `hf_set_entity_properties` and `hf_get_entities`.
+
+### Compare
+
+**Compare With...** in the dock's **File** section, beside **Load .hflevel**, shows what changed between the open level and another `.hflevel`: an older save, an autosave, or a file taken out of git with `git show HEAD~3:level.hflevel > old.hflevel` ([#1701](https://github.com/saworbit/hammerforge/issues/1701)). **Compare with File** in the palette does the same.
+
+The **Compare** tab names the file and sums up, such as "3 brushes, 1 face, 1 entity changed", then lists each change: "brush 'stair_03': moved 0.5 m up", "brush 'wall_12': face +x: material changed from brick to plaster", "entity 'lamp' (light_point): added". Click one to select what it names, and **F** frames it.
+
+The viewport outlines the same changes: what the open level added is drawn solid, what changed is drawn twice, and what it removed is drawn dashed where the file has it. Each has its own line as well as its own colour, and the colours are in **Settings** with the other overlay colours, so **High Contrast** covers them.
+
+Brushes are matched by id, and a brush whose id changed but whose shape and place did not is still the same brush. Entities are matched by name, then by class and place. Visgroups, cordons and paint layers are counted too.
+
+The compare only looks: the open level is not changed and nothing goes into the undo history. **End Compare**, in the tab or the palette, takes the outlines and the list off.
+
+For CI or a pull request, `godot --headless -s res://tools/compare_levels.gd --path . -- old.hflevel new.hflevel` prints the same list. It exits 0 when nothing changed, 1 when something did and 2 when a file does not read, as `diff` does.
+
+### Command Line
+
+A line at the bottom of the Console takes a command and its values as you would say them: `hollow 0.125` hollows the selected brush with walls 0.125 m thick, in one undo step ([#1696](https://github.com/saworbit/hammerforge/issues/1696)). **Shift+;** (a colon) opens the same line over the 3D viewport, so you can type without leaving the level, and Escape on an empty line closes it.
+
+- **The command** is its id, its name or an alias: `move_to_floor`, `move to floor` and `Move to Floor` are the same command, as in the palette.
+- **Values** go in by place, in the order the command takes them, or by name: `hollow 0.125` and `hollow thickness=0.125` are the same. A vector is three numbers with commas, `position=1,2,3`; a floor cell two, `at=4,-2`; yes and no are `yes`, `no`, `on`, `off`, `true` or `false`; a structure's settings are JSON, `{"steps": 8}`. Quote a value with spaces in it: `place_prefab "corner desk" position=0,0,4`.
+- **What it asks.** A command typed with no values asks for each one, with the default in angle brackets, `Thickness <0.25>:`; Enter takes the default and Escape cancels. A command given some values asks only for what it cannot do without.
+- **Help while typing.** Up to eight commands are offered under the line as you type, the one you typed exactly first, and Tab takes the top one. Once the command is named, a hint lists what it takes and in what range.
+- **Refusals** name the value, as the Agent Bridge does: `hollow 500` says the thickness is past 128.
+- **History.** Up and Down step through the lines run this session, on either line, and Enter on an empty line runs the last one again. Each line run goes into the **Log** as `> hollow 0.125`, with what it did, so it can be copied into a report.
+- **Scripts.** **Run Script...** beside the line, or **Run Command Script** in the palette, runs a text file of such lines, one command a line, each its own undo step. A line starting with `#` is a comment. It stops at the first line that does not read or is refused, and says which line and why.
+
+The commands the Agent Bridge runs (`hf_list_commands`) are read and checked by the bridge's own code, on the selection, so a line and an agent's request mean the same thing. Any other command, such as **Toggle Paint Mode**, takes no values and runs as the palette runs it. A step typed on the line is yours, not the agent's: the bridge's **hf_undo** will not take it back.
 
 ## Viewport Mouse Controls
 
@@ -118,7 +174,7 @@ Once a transform/property widget or yellow resize handle claims a press, it owns
 
 Godot's visible `EditorSelection` is authoritative. HammerForge reads native click and region results after Godot finishes them, maps internal entity-preview children back to their object, and expands brush groups as one selection unit. Clearing the Scene tree or clicking empty space remains a real empty selection; HammerForge does not preserve a hidden stale selection behind it.
 
-**Face Select Mode** is a focused modal state rather than a second object-selection layer. Enabling it switches to the Select tool, turns Paint off, saves the current object selection, and temporarily clears it. That hides Godot's transform widget and HammerForge's resize handles so they cannot overlap a face click or marquee. Face Select has its own deliberate modifiers: **Shift adds faces; Ctrl/Cmd toggles faces**. Turning the mode off manually clears the face selection and restores still-valid objects from the snapshot. Leaving the Paint tab, choosing an incompatible built-in or external tool, or entering Vertex Edit closes Face Select through the same restore path. Selecting an object in the Scene tree exits immediately and keeps that newly selected object instead of restoring the old snapshot. Escape clears selected faces first; press it again to exit and restore objects, or press it once to exit when no faces are selected.
+**Face Select Mode** is a focused modal state rather than a second object-selection layer. Enabling it switches to the Select tool, turns Paint off, saves the current object selection, and temporarily clears it. That hides Godot's transform widget and HammerForge's resize handles so they cannot overlap a face click or marquee. Face Select has its own deliberate modifiers: **Shift adds faces; Ctrl/Cmd toggles faces**. Each picked face is tinted orange and outlined, drawn through any brush in front of it, until it is deselected. Turning the mode off manually clears the face selection and restores still-valid objects from the snapshot. Leaving the Paint tab, choosing an incompatible built-in or external tool, or entering Vertex Edit closes Face Select through the same restore path. That is why the tools that act on picked faces, the UV Editor, Face Inset and Displacement, sit on the Paint tab under **Face Tools**. Selecting an object in the Scene tree exits immediately and keeps that newly selected object instead of restoring the old snapshot. Escape clears selected faces first; press it again to exit and restore objects, or press it once to exit when no faces are selected.
 
 During an interaction that already owns the pointer, RMB keeps its local meaning: it cancels an active draw, extrusion, Face Select marquee, or vertex drag, and steps back one point while Polygon or Path placement is active. An active paint stroke keeps pointer ownership until LMB is released. Explicitly cancelled releases and buttonless motion restore or settle HammerForge-owned transient edits. On application/window focus loss, HammerForge clears its transient owners while Godot settles any native or custom gizmo it owns, so one gesture is never committed and restored by two systems. In the Measure tool, use **Ctrl+Click** (or **Cmd+Click** on macOS) to set a snap reference. Press **Space** for HammerForge's contextual viewport menu.
 
@@ -161,7 +217,7 @@ When you activate an advanced tool for the first time, a floating overlay appear
 | Extrude | E/U/J keys | Select brush → click face → drag → confirm |
 | Carve | Ctrl+Shift+R | Select brushes → preview (green wireframe) → confirm → delete fragments. A carver that overlaps nothing says so without asking |
 | Clip | Shift+X | Select → preview (cyan wireframe + orange plane) → confirm → split |
-| Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow. Select a wall afterwards to **Re-hollow** at a new thickness |
+| Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow. Select a wall afterwards and press Ctrl+H or **Re-hollow** to shell it again at a new thickness |
 | Measure | M key | Click start → click end → Shift+Click to chain → Ctrl+Click for snap ref |
 | Decal | N key | Click surface → resize/rotate → assign material |
 | Floor Paint | Shift+P toggle | R Rect; X/Z mirror; Y raise; H room; Enter connector |
@@ -206,10 +262,12 @@ Destructive geometry operations show a wireframe preview overlay before permanen
 | Operation | Preview Color | What It Shows |
 |-----------|--------------|---------------|
 | Carve (Ctrl+Shift+R) | Green wireframe | All resulting slice pieces |
+| Intersect (Ctrl+Shift+I) | Green wireframe | The one brush that is kept |
+| Hull of Selection | Green wireframe | The one brush that wraps them all |
 | Clip (Shift+X) | Cyan wireframe + orange plane | Two resulting halves + the cut surface |
 | Hollow (Ctrl+H) | Yellow wireframe | 6 wall pieces at the chosen thickness |
 | Extrude (U/J) | Semi-transparent brush | New brush being extruded from the face |
-| Subtract (toggle) | Red CSG cut | Live intersection of overlapping subtract/additive brushes |
+| Cut Preview (toggle) | Red CSG cut | Live intersection of overlapping cut and solid brushes |
 
 Each preview appears immediately, then a confirmation dialog gives you the option to **Cancel** and abort without changing anything.
 
@@ -221,7 +279,7 @@ Deleting 3 or more brushes at once prompts a confirmation dialog. The dialog rem
 
 During an unfinished Draw or Extrude, Ctrl+Z cancels the preview and leaves earlier brushes and undo history unchanged. Press it again when idle to undo the last committed action.
 
-All brush operations (draw, delete, carve, clip, hollow, extrude, move, resize, merge, material assignment, UV changes) are fully undoable via Ctrl+Z. The Undo History Browser (**Test** tab) provides visual navigation with thumbnails.
+All brush operations (draw, delete, carve, clip, hollow, extrude, move, resize, merge, intersect, material assignment, UV changes) are fully undoable via Ctrl+Z. The Undo History Browser (**Test** tab) provides visual navigation with thumbnails.
 
 ## Measure Tool (Multi-Ruler)
 
@@ -236,7 +294,7 @@ Press **M** to activate the Measure tool. It supports persistent multi-ruler mea
 - Press **Escape** to clear all rulers.
 - The HUD shows ruler count, distance of the last ruler, and alignment status.
 
-## Generators: Structures From Numbers
+## Structures From Numbers
 
 ### Hollow
 
@@ -305,14 +363,19 @@ of numbers. Pick what you want from the **Type** dropdown and the settings below
 it change to that shape's own — a dome has rings and a sweep, a staircase has a
 tread and a rise, and neither of them has a wall thickness.
 
-There are four: **Arch**, **Stairs**, **Spiral Stairs** and **Dome**.
+There are seven: **Arch**, **Stairs**, **Spiral Stairs**, **Dome**, **Ring**,
+**Door Frame**, and **Trim Run**, which is built along wall faces you pick rather
+than at the selection. Each type keeps the settings you last gave it, so a look at the
+stairs does not cost the arch you tuned, and the type and its settings come
+back next session.
 
 Scripts that create or update a structure must pass settings in their declared types: booleans as `true` or `false`, numeric settings as numbers, and integer settings as whole numbers. Numeric strings and fractional integers are refused before building.
 
 Press the button (or `Ctrl+Shift+A`) and it lands centred on whatever you have
 selected, **facing the way that selection faces** — select a wall standing at
 forty-five degrees and the arch you build on it stands at forty-five degrees too.
-With nothing selected it lands on the world origin, square. Then treat it like
+With nothing selected it stands on the world origin, square, with its lowest
+point at y = 0 rather than its middle, so it stands on a floor there. Then treat it like
 any other geometry: rotate it, carve a doorway through it, clip a piece off.
 
 A selection has to agree with itself to hand its facing over: pick two brushes
@@ -328,8 +391,27 @@ press the button — the ghost is what you would get if you did.
 
 If a combination cannot be built the ghost disappears and the section says why,
 so you find out while you are still choosing rather than after you have pressed
-the button. The ghost belongs to the section: collapse it, or move to another
+the button. Every piece has to be a brush the level can keep. A piece that is a
+box is at least 0.1 on every side, the least a box can be, so Door Frame's Wall
+and Frame start at 0.1. Any other piece, an arch's, a dome's or a ring's, is
+refused only when it would be a sliver that Validate reports, and the message
+says what is thin and what to change: fewer segments, a larger Radius, a thicker
+Wall ([#1605](https://github.com/saworbit/hammerforge/issues/1605)). The ghost belongs to the section: collapse it, or move to another
 tab, and it goes.
+
+**Presets keep a house style.** The **Preset** row under Type lists the presets
+saved for that type, with **Defaults** first. Set the numbers, press **Save** and
+give them a name; a name already saved for the type asks before it is replaced.
+Picking a preset only fills the settings, and the ghost follows: nothing is built
+and nothing moves until you press the button. With a piece of a structure
+selected, the preset loads into its settings and **Update** is still a press of
+its own. **Delete** removes the preset the row is on, on a second press. The row
+reads **Custom** once you change a number by hand.
+
+Presets live in `res://hammerforge_presets/structure_presets.json`, beside the bake
+profiles, so commit it and everyone on the project has them. A preset with a
+value out of range, from an old or hand edited file, is refused by name and the
+settings keep their values; a setting the structure no longer has is dropped.
 
 ### Arch
 
@@ -350,16 +432,48 @@ segments. The arch will tell you the minimum if you ask for too few.
 
 ### Stairs
 
-A straight flight, one brush per step.
+A flight of stairs, one brush per step, straight or turning at a landing.
 
 | Setting | What it does |
 |---------|--------------|
 | Width | How wide the flight is, across the direction of travel |
 | Tread | How far one step carries you forward |
-| Rise | How far one step carries you up |
-| Steps | One brush per step |
+| Height from | **Rise**: each step climbs Rise. **Total**: Steps share the Total. **Fit**: the fewest steps no higher than Rise that climb the Total |
+| Total | The height the stair climbs, floor to floor. Used by Total and Fit |
+| Rise | How far one step carries you up, or with Fit the most it may. Not used by Total |
+| Steps | How many risers it climbs, one brush each. Not used by Fit |
 | Fill | **Solid** fills under each step down to the base; **Open** leaves floating treads |
-| Slab | How thick a floating tread is. Only used when Fill is Open |
+| Slab | How thick a floating tread or a nosing is |
+| Nosing | How far a tread overhangs the riser below. 0 is none |
+| Collision | **Steps** collide as they look; **Ramp** bakes a smooth slope over them instead (see below) |
+| Turn | **Straight**, or **L left**, **L right**, **U left** or **U right** at a landing, seen walking up |
+| Before landing | Risers in the first flight, the last of them onto the landing |
+| Landing | How deep the landing is along the first flight |
+| Gap | The space between the two flights of a U |
+
+**Total and Fit start from the floor height**, which is the number you know. A
+3 m climb in 16 steps is risers of 0.1875, which the Rise field cannot hold;
+Height from Total gives it exactly. Fit with a Rise of 0.2 and a Total of 3 takes
+15 steps. The line under the settings says what they came to: the steps, the rise
+of each, the climb, where the landing is and, with Ramp collision, how steep the
+ramp is. Every piece of a stair is a box, and no box is thinner than 0.1, so every
+size starts there, and a solid flight whose Total or Fit comes to risers under 0.1
+is refused, since its first
+step is one riser tall ([#1582](https://github.com/saworbit/hammerforge/issues/1582)).
+
+**A turn** puts a landing at the top of the Before landing riser and sends the
+rest of the steps off it. An L leaves the landing's side at its far end, a
+quarter turn, so an L landing is at least as deep as the stair is wide. A U comes
+back beside the first flight with the Gap between them, and its landing spans
+both. Every piece is still a box, and the first flight stands where a straight
+flight of the same steps would, so changing the turn on Update rebuilds only the
+landing and the flight after it ([#1410](https://github.com/saworbit/hammerforge/issues/1410)).
+
+**Nosing** on a solid step is a slab of its own hung off the top of its riser,
+because a step with a lip is not convex. A nosing is a box, and no box is thinner
+than 0.1, so a solid nosing is at least 0.1 deep and its Slab at least 0.1 thick. An open tread
+just grows forward, so its nosing can be any depth. A stair is at most 128
+brushes, nosings included.
 
 Solid is what most stairs in a level are — you cannot see under them, so there is
 nothing to build there. Open is for a flight you can see through.
@@ -385,11 +499,49 @@ that radius actually is, which is what a radial array of a box cannot give you.
 | Newel post | Fills the middle with a post the full height of the flight |
 
 Twelve treads at thirty degrees is one full turn. A tread cannot turn through half
-a circle or more, for the same reason an arch segment cannot.
+a circle or more, for the same reason an arch segment cannot. Nor can a tread or
+the post be under 0.1 across: a tread turning a degree or two, or nearly half a
+circle, is a sliver, and the section says so ([#1582](https://github.com/saworbit/hammerforge/issues/1582)).
 
 The newel post needs an inner radius to occupy — with the hole set to zero the
 treads already meet in the middle, and the section says so rather than quietly
 skipping the post.
+
+Spiral Stairs has a **Collision** setting too, Steps or Ramp.
+
+### Ramp collision
+
+A game's own `CharacterBody3D` usually has no step up, so it walks into the
+first riser of a baked stair and stops. Set **Collision** to **Ramp** on Stairs
+or Spiral Stairs and the steps still bake as they look, but their faces leave the
+baked collision and a smooth slope goes in their place
+([#1416](https://github.com/saworbit/hammerforge/issues/1416)):
+
+- **Stairs**: one convex piece per flight, its top through the front edge of
+  every tread, from the floor a tread in front of the first and flat over the top
+  tread, and one box per landing.
+- **Spiral Stairs**: a sloped piece up to each tread along the walking line, half
+  way across the treads, each starting where the last one ends, and the top tread
+  flat. The newel post keeps its own collision.
+
+The bake lays the ramp where the structure stands when you bake, so moving it
+moves the ramp. It goes on a body of its own, `RampCollision`, on the level's
+Physics Layer, with no mesh; Collision Mode 2 puts it in its stair's visgroup
+body instead, and Mode 0 names each shape after the material of the tread under
+it, as it names every surface.
+
+A stair keeps the collision of its steps, and the Console says why, when the
+ramp would not fit it: a piece edited by hand or deleted, a cut reaching it, a
+piece tied to a brush entity class, a Bake Selected that takes only part of it,
+or a slope steeper than the 45 degrees the player walks up, which a body would
+slide down.
+
+Validate reads a Ramp stair the way the bake will build it: where the bake lays
+the ramp, steps over the player's step height say nothing, and wherever it keeps
+the steps' collision they are reported as before. A Bake Selected, cordon or Bake
+Visible Only that takes only part of a stair is about that bake, not the level,
+so Validate does not count it; the bake says so in the Console
+([#1588](https://github.com/saworbit/hammerforge/issues/1588)).
 
 ### Dome
 
@@ -406,13 +558,118 @@ A hemisphere built in rings, one brush per panel.
 | Start | The angle the dome begins at |
 
 A brush dome is faceted, because a patch of a sphere is not a convex solid with
-flat faces and a brush has to be. Four rings of twelve panels reads as round from
-inside a room. It is `rings × segments` brushes, so it will refuse a dome past a
+flat faces and a brush has to be. Its outer and inner faces are in smoothing group
+1, so it bakes shaded round (see [Smoothing Groups](#smoothing-groups)). Four rings
+of twelve panels reads as round from inside a room. It is `rings × segments` brushes, so it will refuse a dome past a
 few hundred and tell you the number you asked for.
 
 A **Sweep** below 90 stops short of the crown and leaves it open — an oculus, or
 the base for a lantern. A **Wall** equal to the **Radius** makes a solid dome
 rather than a shell, which is the shape of a hill.
+
+### Ring
+
+A ring with a round tube, one brush per segment, lying flat around its centre: a
+pipe bend, a ring moulding, a curved handrail.
+
+| Setting | What it does |
+|---------|--------------|
+| Radius | From the centre of the ring to the middle of the tube |
+| Tube Radius | How thick the tube is. Less than the Radius |
+| Ring Segments | One brush per segment. More segments, smoother curve |
+| Tube Segments | Sides around the tube, 3 to 32. More sides, rounder tube |
+| Start | The angle the ring begins at |
+| Sweep | Degrees it goes round. 360 closes it, 90 makes a quarter bend |
+
+Unlike the **Torus** brush shape, each piece is an ordinary convex brush, so it can
+be hollowed, carved and vertex edited like any other, and the tube is as thick as
+you set it rather than following the ring's size. A piece cannot span half a turn
+or more, for the same reason an arch segment cannot, and a **Tube Radius** at or
+past the **Radius** is refused, because the tube would fold over itself at the
+centre.
+
+### Door Frame
+
+A framed doorway: two posts and a head round a clear opening, and the cut that
+makes the opening, all one structure.
+
+| Setting | What it does |
+|---------|--------------|
+| Width | How wide the clear opening is, between the posts |
+| Height | How high the clear opening is: to the head, or to the crown of an arched one |
+| Wall | How thick the wall is that the frame wraps |
+| Frame | How wide each post and the head are on the wall's face |
+| Proud | How far the frame stands out from each face of the wall |
+| Head | **Flat**, a lintel over the opening, or **Arched**, a half round arch on the posts |
+| Segments | Pieces in an arched head, 2 to 64. More segments, smoother curve |
+| Cut opening | Also make the cut for the opening |
+
+The posts' inner faces and the head's underside bound exactly the opening you set.
+An arched head is the Arch structure's half circle, its inside the opening's width,
+resting on the posts, so its Height must be at least half its Width and 0.1 more,
+for posts a brush tall.
+
+With **Cut opening** on, the opening is a Cutout like one you draw: it waits in
+Pending Cuts until you apply it. Change the width and Update, and the cut is
+resized with the frame, whether you have applied it yet or not; one already
+applied stays applied. An arched opening's cut is one convex piece, so Validate
+measures the doorway to its crown and reports one lower than the player.
+
+Like every structure, it lands centred on what you have selected and facing its
+way, with its width along that selection's X and the wall's thickness along its Z.
+
+### Trim Run
+
+A skirting along the foot of a room's walls, or a cornice along their tops, as
+one structure: a trim profile swept along the wall faces you pick, mitred at every
+corner and stopped square at every doorway.
+
+Pick the wall faces in **Face Select**, then run **Run Trim Along Faces**
+(`Shift+Alt+T`, the command palette, or the Space menu while faces are picked). Or
+set the Structure section's Type to **Trim Run** and press **Create Trim Run**,
+which does the same. Either way it builds with the settings the section holds for
+a Trim Run.
+
+| Setting | What it does |
+|---------|--------------|
+| Edge | **Bottom**, a skirting on the faces' bottom edges, or **Top**, a cornice hung from their top edges |
+| Offset | How far in from that edge the trim stands: up from the bottom, down from the top. A dado rail is a Bottom run with an Offset |
+| Profile | Flat, Chamfer, Round, Cove, Ogee or Stepped, the profiles the Path tool's trim has |
+| Width | How far the trim stands out from the wall |
+| Height | How tall the trim is up the wall |
+| Segments | How many pieces a curve of the profile is cut into |
+
+How the faces are read:
+
+- Only upright faces are taken. Pick a sloped one and nothing is built, and the
+  message names the face.
+- An edge is where a face is open to the room. Another brush in front of a face
+  hides what it covers, so a wall that runs on under the floor or past the room's
+  corner gives the edge you see, on the floor and in the corner. A face another
+  brush hides completely is left out, and the message names it.
+- Edges that meet end to start chain into runs, closed round a room or open along
+  a few walls. A run breaks where the picked faces do not meet.
+- Every corner, inside or outside, is cut on the plane that bisects its two walls,
+  so the pieces meet with no gap and no overlap.
+- A cut brush through a wall, pending or applied, is a doorway: the trim stops
+  square either side of it, leaving a gap exactly the cut's width. A cut the trim
+  does not reach, a window above a skirting, leaves it whole; raise the Offset to
+  the window's height and the same window breaks a rail.
+- A profile that is not convex is cut into bands as the Path tool's trim is, each
+  band a brush of its own.
+
+The run is kept on the structure beside its settings. Select any piece and the
+section reads **Update Trim Run**: change the profile, the size, the edge or the
+offset and Update rebuilds along the same run, in a level saved and reopened too.
+The run is read when you build, so a wall moved afterwards keeps its old trim
+until you **Re-pick**: select a piece of the trim, open Face Select, pick the faces
+it should follow now and press **Re-pick** beside the section's button, or pick
+**Re-pick Trim Run** in the Space menu. Re-pick keeps the settings and replaces the
+run; the faces it already follows change nothing. A face too short for the trim
+to turn both its corners is refused by name, and the trim already there stays.
+
+A Trim Run's own pieces hide no wall, so a cornice or a rail can be run along
+walls that already have a skirting.
 
 ### Changing a structure after you have built one
 
@@ -430,7 +687,9 @@ you can see the arch getting wider before you agree to rebuild it. Press
 **Update** and the structure rebuilds in place. Everything
 you painted on it comes back on the same faces: per-face materials, UV projection,
 scale, offset and rotation, and paint layers. If you increase the piece count, the
-new pieces start plain, because there is nothing for them to inherit.
+new pieces take the whole-brush material most of the pieces have (the earliest
+piece's on a tie), and their faces start plain, because there is no face of theirs
+to inherit from.
 A brush entity you tied the pieces to comes back too, with its name, wires and
 properties, and when the whole structure was one entity the new pieces join it.
 Each piece keeps its node name, so a wire aimed at one still finds it.
@@ -475,7 +734,7 @@ Detach is a choice you make rather than a lesson you learn.
 > (#873, #878).
 
 **Detach** stops a structure being a structure. It keeps every brush exactly where
-it is and forgets that a generator made them. Use it once you have started editing
+it is and forgets that a structure made them. Use it once you have started editing
 pieces by hand. Ctrl+Z will bring an overwritten edit back, but detaching is the
 deliberate answer.
 
@@ -483,7 +742,7 @@ Turning a whole structure is not recovered the way moving it is — a rebuild
 squares it back up. The warning fires, because every piece reads as edited.
 
 A structure that has been clipped or carved still updates; the pieces the
-generator does not recognise any more are simply left alone.
+structure does not recognise any more are simply left alone.
 
 ## Cutting: Clip and Carve
 
@@ -497,7 +756,9 @@ nothing in the undo history (#1267).
 |-----|--------|
 | `Shift+X` | Clip the selected brush across its middle, level with the floor |
 | `Shift+Alt+X` | Clip along the selected face's plane |
+| `C` | The Clip tool: cut along a plane you place with points |
 | `Ctrl+Shift+R` | Carve |
+| `Ctrl+Shift+I` | Intersect |
 
 ### Clipping along an angle
 
@@ -516,10 +777,37 @@ That face can belong to any brush, including one you drew purely as a guide and
 delete afterwards — draw a box, rotate it to the angle you want, and use one of its
 faces as a straightedge.
 
+### The Clip tool
+
+For a cut that no face lines up with, press `C` with the brushes to cut
+selected, and place the plane with points. Points land on a face or on the grid,
+and snap as a drawn point does.
+
+- **Two points** make a plane through them that runs along the axis the view
+  looks down most. Two clicks in a top view make an upright cut; two in a front
+  view make one that runs front to back.
+- **A third point** makes the plane through all three, for a sloped roof or a
+  corner taken off.
+- **A drag** places the first two points at the press and the release.
+- **Drag a placed point** to move it. The preview follows.
+- **Keep** in the tool's settings, or `Tab`, chooses what stays: both pieces, the
+  piece in front of the plane or the piece behind. The piece that would go draws
+  faded red and a kept one cyan.
+- **Enter** cuts every selected brush the plane passes through, as one undo step
+  named Clip. A brush it misses, or one in a locked visgroup, is left alone.
+- `Backspace` takes off the last point. `Escape` clears the points, and leaves the
+  tool when there are none.
+
+The new faces take the material of the face the first point was placed on. When
+the first point is on the grid they take the Active Material if it is in the
+palette, and otherwise the material of the face beside them, as Clip does.
+
 ### What you get back
 
 Half a box is still a box: it keeps its resize handles and behaves exactly as it
-did before. An angled piece cannot be described by a box, so it comes back as a
+did before. A box piece thinner than 0.1, the least a box can be, comes back
+**Custom** instead, so it keeps the thickness it was cut to, and so do Carve's and
+Hollow's (#1598). An angled piece cannot be described by a box, so it comes back as a
 **Custom** brush — still fully editable, but sized by its vertices rather than by
 width, height and depth.
 
@@ -528,8 +816,9 @@ visgroups, its group and its entity class. A face imported from a `.map` keeps t
 texture name it came in with, so a cut trigger is still `AAATRIGGER` on export. If the
 brush was part of a brush entity, every piece is that entity, with its name or tie,
 its properties and its wiring, so a door clipped to fit a frame is still one door.
-Carve and Hollow do the same, and Merge makes the brushes of one entity one brush of
-it. Merge refuses brushes that are not all one entity, or not all plain geometry.
+Carve and Hollow do the same, and Merge and Intersect make the brushes of one entity
+one brush of it. Both refuse brushes that are not all one entity, or not all plain
+geometry.
 
 Surface paint comes through too. Each piece of a painted face keeps the paint that
 was on that part of it, and the new cut surface starts unpainted. The pieces' paint
@@ -556,8 +845,74 @@ cut leaves a few pieces and a slot driven right through leaves two.
 A carver that would swallow a brush entirely leaves that brush alone rather than
 deleting it — nothing vanishes without a preview showing it first.
 
+A hidden brush is left alone too. A mapper who hides the outer walls to work inside
+a room can carve a doorway through an inner wall without cutting the wall they cannot
+see, and the confirmation counts the hidden brushes the carve skips ([#1710](https://github.com/saworbit/hammerforge/issues/1710)).
+
+### Intersecting
+
+Intersect (`Ctrl+Shift+I`) keeps only the volume the selected brushes share, as one
+convex brush: a box and a cylinder overlapping at a corner give a quarter round
+column, and a wedge intersected with its room is trimmed to fit it. Select the
+brush to keep first. It is cut down by the planes of each of the others in turn,
+and what is left replaces them all in one undo step, so one `Ctrl+Z` brings every
+brush back. The green wireframe shows the brush that is kept before you confirm.
+
+What is left is a piece of the first brush: it keeps that brush's operation,
+visgroups, group and brush entity, and its faces keep their textures, paint and
+sculpts as a piece of a carve does. A face cut by another brush takes the look of
+that brush's face, its texture and how it is laid on. Brushes that share no volume,
+that mix solid brushes and cuts, or that are not all one entity are refused, and
+nothing changes.
+
+### Hull of Selection
+
+**Hull of Selection** (the command palette, or **Hull** on the context toolbar)
+replaces the selected brushes with one brush, the convex hull of all their
+corners, whether they touch or not: a ramp from one ledge down to another, a
+column tapering from a small top block to a wide base, a wedge between two posts.
+Merge stays as it is, the exact union that refuses brushes that do not touch, so
+nobody asking for a union gets a hull. The green wireframe shows the brush before
+you confirm, and it is one undo step.
+
+The brush is turned as the first selected one is and keeps its operation,
+visgroups, group and brush entity. A face of the hull on an old face's plane takes
+that face's material and texture, the largest one there; a face on no old plane
+takes the Active Material, or with none set the look of the old face it most
+nearly faces as. A face that grew cannot keep a sculpt, and the confirmation and
+the message both say how many go. Brushes that mix solid brushes and cuts, or
+that are not all one entity, are refused.
+
 > Hollow (`Ctrl+H`) handles rotation too. It shells a brush against its own face
 > planes, so a turned box gives you six turned walls. See [Hollow](#hollow).
+
+## Moving by an Exact Offset
+
+**Offset** (`Alt+G`, the command palette, or **Offset...** in the Space menu)
+opens a small popup at the cursor with **X**, **Y** and **Z** and a **World** /
+**Local** choice. Type the distance and press **Enter**: placing a brush 3.25 up,
+or a vertex 0.5 along a wall, no longer means changing the grid, nudging and
+changing it back. The move is exact, never rounded to the grid, and it is one undo
+step.
+
+What it moves is what you have picked:
+
+- **Brushes and entities** move as a nudge moves them.
+- In **vertex mode**, the selected vertices move, and the faces round them follow.
+- In **Face Select**, each picked face moves by its corners together, so the
+  faces round it stretch to meet it.
+
+A vertex or face move that would leave a brush other than a convex solid changes
+nothing and says why, as a vertex drag does.
+
+**Local** goes along the selection's own axes, so a turned wall can be pushed
+along its own length. When the selection does not all face one way, or a part of
+it is mirrored or scaled, there are no axes to share: the popup says so under
+**Local**, and the move goes along the world's.
+
+The fields keep the last offset and choice, so doing it again is `Alt+G`,
+`Enter`. During a draw or an extrude, `Alt+G` does nothing; typed numbers there
+are the draw's.
 
 ## Rotating and Mirroring
 
@@ -568,17 +923,33 @@ Select anything — brushes, entities, or both — and turn it.
 | `R` | Rotate counter-clockwise by the step |
 | `Shift+R` | Rotate clockwise by the step |
 | `Shift+M` | Flip (mirror) the selection |
+| `Alt+M` | Mirror Copy: keep the selection and add mirrored copies |
 | `Alt+R` | Reset rotation |
+| `Alt+P` | Pick Pivot: click the point to turn about |
+| `Shift+Alt+P` | Clear Pivot: back to the selection's centre |
 
 **Which axis.** If you have an axis lock set (`X` / `Y` / `Z`), that is the axis.
 Otherwise rotate uses **Y** — a yaw, which is what you want almost every time —
 and flip uses **X**, a left-right mirror.
 
 **What it turns around.** The **Pivot** picker in Selection Tools chooses between
-the centre of your selection, the world origin, and the first object you
-selected. The selection centre is the median of the objects' own positions, which
-means pressing `R` four times with a 90° step puts everything back exactly where
-it started, however lopsided the selection is.
+the centre of your selection, the world origin, the first object you selected,
+and **Pick**, a point you click. The selection centre is the median of the
+objects' own positions, which means pressing `R` four times with a 90° step puts
+everything back exactly where it started, however lopsided the selection is.
+
+**Picking a pivot.** Choose **Pick**, or run **Pick Pivot** (`Alt+P`), and click
+in the viewport: the pivot snaps to the brush vertex, edge midpoint or face centre
+nearest the cursor, within a few pixels. A door then hinges on its edge, and a
+wall swings round its corner post. A small cyan cross marks the pivot for as long
+as Pick is the Pivot. Rotate, Flip, a radial Duplicate Array and Mirror Copy
+through the Pivot all use it until you choose another, or **Clear Pivot**
+(`Shift+Alt+P`) goes back to the selection's centre. The point is saved with the
+level.
+
+The pick waits for one click and the mode banner says so. A click with nothing in
+reach says that and waits for another. `Escape`, a right click, changing tool or
+mode, the editor losing focus or switching scenes put it away.
 
 **The step.** Set it in Selection Tools. 15° by default; 45° and 90° are the
 other two you will reach for.
@@ -612,6 +983,31 @@ you turned a brush by exactly 90°, it folds that quarter turn into the brush's
 dimensions instead of snapping the brush back to its old footprint, so the brush
 stays exactly where it looks like it is.
 
+### Apply Rotation and Scale
+
+A brush stretched with Godot's scale gizmo keeps its old `size`, so typed sizes,
+the resize handles and Hollow's wall thickness all work in units that are not
+metres along the stretched axis. **Apply Rotation and Scale** (Build > Selection
+Tools > Transform, and the command palette; no default key) folds each selected
+brush's rotation and scale into its shape and leaves it with no rotation or scale
+of its own. Nothing moves in the world, and every face keeps its look.
+
+A box under a scale or a quarter turn stays a box, with the change in its size,
+and a sphere stretched unevenly becomes an ellipsoid. A mirrored brush comes out
+the right way out. Anything else keeps its exact shape as a Custom brush. The
+toast names each brush that could not keep everything:
+
+- a turned round shape, or a cylinder stretched unevenly across its round side,
+  becomes Custom and loses its resize handles and Sides
+- a Cylindrical face is projected in the brush's own space, so the UVs it shows
+  are written into its custom UVs
+- a sculpted face cannot keep its heights under an uneven scale, so that brush is
+  left alone; a turn and an even scale keep the sculpt
+- a structure piece now reads as edited, and Update warns before rebuilding over it
+
+One press is one undo step, and undo gives back the shape, size and transform each
+brush had.
+
 ### Flip
 
 Mirroring is exact. A mirrored box is still a box and keeps its resize handles; a
@@ -626,6 +1022,58 @@ the original sculpt exactly. A box keeps its resize handles here too, and
 resizing it afterwards keeps the mirrored sculpt the way round the flip left it.
 The same goes for a sculpted brush mirrored through a negative scale in the
 Inspector: the mirror is taken off and the sculpt stays where it was.
+
+### Mirror Copy
+
+Symmetric rooms and paired stairs are one half and its mirror. **Mirror Copy**
+(`Alt+M`, or the button on the **Mirror** row under Transform) leaves the
+selection where it is and adds a mirrored copy of it across each axis ticked on
+that row, **X**, **Y** and **Z**, and across each combination of them: X alone
+makes one copy, X and Z make three, all three make seven. `Alt+M` runs with the
+boxes as they stand, and the whole of it is one undo step.
+
+**Where the mirror stands.** With **Selection Edge** ticked, which it is to begin
+with, each plane goes through the far (+X, +Y, +Z) side of the selection's bounds,
+so the copy lands flush beside the original, touching it and overlapping nothing.
+Untick it and the planes go through the **Pivot** the rest of Transform uses.
+
+Each copy is a duplicate put through Flip, so everything under **Flip** above holds
+for it: it is the right way out, a box stays a box, and each face's material, UV
+settings, paint and sculpt land on the face the mirror sends them to. Entities are
+copied with their angles mirrored. A copy gets its own brush id and, like a
+duplicate, is a brush entity of its own, with a fresh name. The copies join the
+selection, so the mirrored whole moves as one and a second Mirror Copy mirrors all
+of it.
+
+**Texture Lock decides the texture**, as it does for a move. On, the texture is
+mirrored with the copy, so the copy shows the mirror image of the original. Off,
+the copy reads the level's texture where it lands, as Flip leaves a brush.
+
+### Shear
+
+Leaning walls, sloped buttresses, a parallelogram floor and a staircase rising
+along a slanted wall are all shears. **Shear** leans the whole selection at once:
+one side of its box moves along an axis and the opposite side stays put, so
+everything between leans by the same amount and brushes that met still meet.
+
+- **The Shear tool** (the command palette, or a key you give it in the Shortcuts
+  dialog) draws the selection's box with a handle in the middle of each side. Drag
+  a handle along its side: that side moves, held to the grid, and the opposite side
+  stays put. Hold **Ctrl** to drag off the grid, and press **Escape** to let the
+  drag go. A green outline shows each brush leaned before you let go.
+- **The Shear command** asks for it in numbers: the axis that moves, the axis it
+  leans over, the amount in metres per metre or in degrees, and which side stays
+  put. A wall leaned 0.5 m over 3 m is 0.167 metres per metre, or 9.46 degrees.
+  The dialog opens as you last left it.
+
+Every corner of every brush moves by the one shear, and a shear keeps a flat face
+flat, so a convex brush stays convex. Each brush keeps its turn, with the lean
+folded into its faces, so a box becomes custom, as Apply Rotation and Scale makes
+one. A point entity moves with its origin and is not turned. A brush with a sculpt
+is left alone, since a lean would stretch it, and the toast names it. With
+**Texture Lock** on, each face keeps its texture where it showed it; off, the
+face's projection is laid on its new corners afresh. It is one undo step, named
+Shear.
 
 ### Arrays
 
@@ -713,6 +1161,31 @@ goes ahead on the first press.
 > the whole rotate/flip group is skipped while paint mode is on, so the two never
 > fight over the key.
 
+## Convert to Brushes
+
+A blockout made with Godot's CSG nodes, or a crate modelled as a mesh, can join a
+level as brushes. Select the nodes and pick **Convert to Brushes** from the
+command palette or the Space menu:
+
+- a `MeshInstance3D` whose mesh is a closed convex solid becomes one Custom brush,
+  a face per flat side, each wearing its surface's material with the mesh's own UVs
+- a `CSGBox3D` becomes a box, a `CSGCylinder3D` a cylinder, or a cone when its
+  Cone is on, with its sides, and a `CSGSphere3D` a sphere; a cylinder of three or
+  four sides becomes a Custom prism or pyramid
+- a `CSGPolygon3D` in Depth mode with a convex outline becomes a Custom prism
+- a CSG node's material goes on every face, and a shape inside another CSG node
+  that subtracts becomes a cutting brush, placed after the shapes it cuts
+
+Each brush stands where its node stood, keeping the node's turn. A scale or a
+mirror on the node is folded into the brush as Apply Rotation and Scale folds it,
+so its size reads in metres. A material joins the palette when it is not in it.
+
+A concave mesh or polygon, a mesh that is not closed, a CSG node with CSG
+children, and one that intersects its parent are refused, each named in the
+toast with why, and left as they were. The nodes that convert are hidden, not
+deleted, and the brushes are selected. The whole conversion is one undo step:
+Ctrl+Z takes the brushes away and shows the nodes again.
+
 ## Command Palette (Ctrl+K)
 
 ![The command palette over the viewport, filtered to the two rotate actions and their keys](images/ui_command_palette.png)
@@ -720,12 +1193,20 @@ goes ahead on the first press.
 
 The command palette is a searchable action list. Open it with **Shift+?**, **F1**, or **Ctrl+K**.
 
-- Type to filter actions by name or keybinding
-- **Fuzzy search**: if no exact match, the palette finds approximate matches using subsequence matching with word-boundary bonuses
+- Type to filter actions by name, by keybinding, or by another word for the command. The best match is the top row: an exact name, then an exact other word, then a name that starts with what you typed.
+- **Other words**: "shell" finds Hollow, "slice" and "split" find Clip, "subtract" finds Toggle Solid / Cut, "texture" finds Apply to Brush, "ho" finds Hollow. The row shows the word it matched, as "Hollow (shell)".
+- **Your own words**: put them in `hammerforge_presets/aliases.txt`, one `alias = command_id` a line, `#` for a comment. Yours win over the built in ones. A line the palette cannot read, or one that names no command, is left out with one warning in the Output panel. The file is read when the editor starts.
+- **Fuzzy search**: if nothing holds what you typed, the palette finds approximate matches using subsequence matching with word-boundary bonuses
 - **"Did you mean: ..."** suggestion appears when fuzzy matching kicks in
 - Actions gray out when unavailable (e.g., Hollow requires a brush selection)
-- Press **Enter** to execute the first visible enabled action
+- Press **Enter** to execute the top enabled row
 - Press **Esc** to close without executing
+
+### Repeat Last Command
+
+**Repeat Last Command** runs the last command that changed the level or the selection again, on what is selected now: hollow one room, select the next, Repeat. It uses the settings the dock holds, so Hollow keeps its wall thickness. Toggles, views, panels, Select All and Deselect All never become the command it repeats. A selection the command refuses gets the command's own message. It has no key by default; give it one in the shortcut dialog.
+
+With nothing typed, the palette shows **Repeat: Hollow** as its top row when there is something to repeat, then the last eight commands you ran under **Recent**, newest first.
 
 ## Example Library
 
@@ -733,7 +1214,7 @@ The **Test** tab contains an **Examples** section (collapsed by default) with 5 
 
 | Example | Difficulty | Key Concepts |
 |---------|------------|--------------|
-| Simple Room | Beginner | Additive brushes, floor |
+| Simple Room | Beginner | Solid brushes, floor |
 | Corridor with Doorway | Beginner | Subtract operations, spatial planning |
 | Jump Puzzle Platforms | Intermediate | Multiple brushes, player spawn entity |
 | Hollowed Building | Intermediate | Hollow + subtract for windows |
@@ -773,7 +1254,9 @@ A colored banner between the toolbar and tabs always shows your current tool and
 - **Extrude ▲** (green) / **Extrude ▼** (red) -- "Extruding..."
 - **Paint** (orange)
 
-When typing numeric input during a gesture, the value appears in brackets (e.g. "[64]").
+When typing numeric input during a gesture, the value appears in brackets (e.g. "[64]"). A base typed as width, depth and height shows each one, with the value being typed in brackets (see Typed sizes under Brush Creation).
+
+Sizes print as many decimal places as the grid step needs, so a 0.25 step reads "0.25 x 2 x 1", with at least two places for a size off the grid. The same size follows the cursor through both stages of a Draw drag, just below and to the right of the pointer, with a typed number in brackets; an Extrude shows its depth there ("Depth 1.5"). It goes when the brush is placed or the drag is cancelled, and is drawn over the viewport, never put in the scene. Turn it off with **Size at cursor** in **Test → Settings** or the Console's Viewport group.
 
 ### Toolbar
 The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Paint**, **More**, and **Help**. Operation and advanced geometry commands live in Build sections, the context toolbar, or **More**. **Help** opens the guide and shortcut discovery; **Shift+?**, **F1**, or **Ctrl+K** opens the command palette.
@@ -786,20 +1269,26 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Shape**: choose from 15 built-in shapes with recognizable icons (plus Custom). Sides appears for a pyramid, and for a cylinder, cone, sphere, ellipsoid, capsule or torus, where it is how many segments go round: 16 to start with, 5 at least, up to 64. More is smoother and costs faces, a sphere being 128 faces at 16 and 2,048 at 64. A pyramid and the round shapes each keep their own number. The Inspector's Sides on a placed round brush stops at 5 too, and a cylinder from an older level that stored 4 shows the 16 it has (#1103).
   A drawn brush is inscribed in the box you dragged. For a box that is the box itself; for a cylinder, cone, capsule or sphere the smaller side of the base rectangle is the diameter and the footprint is centred on the rectangle, so the brush always ends up inside the ground you dragged over. A sphere is uniform in all three axes, so its height stage takes part in the diameter rather than setting a separate height. Use **Ellipsoid** when you want three independent axes.
 - **Size** X/Y/Z: defaults for new brushes, in metres. A new level starts at 2 x 2 x 2.
+- **Repeat Last Brush** (`Shift+D`, or **Repeat** in the context toolbar's Draw section, which names the brush, such as "Cyl 2 x 3 x 2"): a stamp of the brush the last Draw made, with its shape, size, Sides, Solid or Cutout and material. A ghost follows the cursor, standing on the face or the grid under it where a Draw would start, and each left click places a copy as one undo step and stays armed, so a row of pillars is a row of clicks. Esc, a right click or another tool lets go. Before the first Draw the button is disabled.
+- **Kept between sessions**: Shape and each kind's Sides, Solid or Cutout, the snap toggles, Hollow's wall and the Bevel and Face Inset boxes come back as you last left them, and so do the Structure section's type and each type's own settings and every tool's Tool Settings. They are kept with your preferences, not in the level. **Reset Tool Settings** in the Test tab's Settings puts them all back to their defaults. A value edited out of range in `user://hammerforge_prefs.json` comes back at the nearer end, with a warning naming the file and the key.
 - **Grid Snap**: snap increment in metres, with quick preset buttons (0.1, 0.25, 0.5, 1, 2, 4, 8). A new level starts at 0.5.
 - **Grid Up / Grid Down**: move the drawing plane one snap step along its current axis (`Alt+PageUp` / `Alt+PageDown`). A manual position stays put while drawing. **Reset Grid** (`Alt+Home`) returns it to the LevelRoot origin, flat. Without a manual position, a completed draw keeps the grid on that brush's base plane; loading or undoing brushes does not move it.
 - **Align Grid to Selection** (`Alt+End`): selected vertices use their average on the current axis. Otherwise a selected face chooses the dominant axis of its world normal and a plane through its center; an angled face does not tilt the grid. A brush selection uses the top of its world bounds. Nothing selected resets the grid. Face and vertex context toolbars offer the same command. These are view controls and add no undo step; the held plane is not saved with the level.
-  A held plane currently replaces the height of physics-backed surface hits ([#1501](https://github.com/saworbit/hammerforge/issues/1501)). Use **Reset Grid** before drawing on those surfaces.
+  A held plane answers only where the cursor meets no surface: a draw that starts on a brush face or a collision surface starts on that surface.
 
 - **Snap Modes**: G (Grid), V (Vertex), C (Center), E (Edge midpoint), and P (Perpendicular projection). Toggle independently; the closest eligible geometry candidate within the threshold beats grid snap.
-- **Material**: active material picker.
+- **Draw on Face** (the **On Face** button beside the Snap row, **L**, or the command palette): a draw that starts on a brush face builds on that face's plane instead of a flat one. See [Brush Creation](#brush-creation-cad-style).
+- **Material**: the Active Material, the whole-brush material every new brush is made with: a drawn brush, a Polygon brush, each piece of a Path and of a new structure, and a dropped preset. Paint mode puts it on a brush you click. An Extrude takes its source brush's material and a Cutout keeps the cut look. **Clear** sends new brushes back to the translucent default and leaves brushes already made as they are. It is saved with the scene, not in the `.hflevel` file, and a structure's Update keeps each piece's own material.
 - **Physics Layer**: which collision layer the baked world goes on. Godot's own `CharacterBody3D`, `RigidBody3D` and every raycast default to mask 1, so **Static World (Layer 1)** is the one the player walks on and the other two entries produce a level the player falls through unless your game looks at that layer deliberately. The baked body's own mask is always 0: it never moves, so a mask buys it nothing and only widens the broadphase.
 - **Texture Lock**: UV alignment preserved on move, resize, and rotate (enabled by default).
+- **Selection Info** (above Selection Tools, whenever brushes, faces, vertices or edges are selected, in Vertex mode and Face Select too): one brush shows its centre and size, one face its centre, normal and area, one edge its length and midpoint, and several of anything their count and the centre and size of their bounds. A selection of more than one kind lists each with its count (Brushes 14, Cuts 2, Entities 3); click one to keep only that kind. One vertex shows X, Y and Z as fields: type a number and press Enter, or leave the field, and the vertex moves there as one undo step. The move is judged as a drag is when you let go, so a place that would leave the brush non-convex is refused, the field goes back and the reason shows. **World / Local** picks the space: Local is the brush's own space for a vertex, edge or face, and the parent's space for a brush, as the Inspector shows it. Several things in different spaces are shown in world space, and the section says so.
 - **Selection Tools** (visible when brushes are selected, grouped by domain):
   - **Brush Modification**: Hollow (wall thickness spinner + button, Ctrl+H) with yellow wireframe preview; Clip Selected (Shift+X) with cyan wireframe preview + orange split plane. Carve (Ctrl+Shift+R) with green wireframe preview. Merge (Ctrl+Shift+M) combining 2+ brushes.
-  - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C).
-  - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. Reset Rotation (Alt+R) clears a rotation without moving the geometry.
+  - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). **Snap to Grid** (Ctrl+B) moves each selected brush the least distance that puts the lowest corner of its world bounds on a grid point, and a selected entity's origin onto the nearest one. Size and rotation stay, so a brush sized in whole grid steps ends with every corner on the grid. A grid point is a whole number of grid snap steps from the world origin; a held drawing plane does not move them. One press is one undo step, a selection already on the grid adds none, and Texture Lock treats the move as it does a nudge. The context toolbar and the command palette offer it too.
+  - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active / Pick, a clicked vertex, edge midpoint or face centre). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. The Mirror row ticks X, Y and Z, and Selection Edge, for Mirror Copy (Alt+M), which keeps the selection and adds mirrored copies beside it. Reset Rotation (Alt+R) clears a rotation without moving the geometry. Apply Rotation and Scale folds a rotation and scale into the brush's shape, so its size reads in metres and nothing moves.
+  - **Bake**: **Cast Shadows** (Level Default, On, Off, Double Sided, Shadows Only) and **Lightmap Scale** (0.125 to 8, default 1) for the selected brushes, set on all of them at once as one undo step. The dropdown shows nothing, and the scale says *(mixed)*, when the selected brushes differ. Level Default leaves Cast Shadows to the brush's visgroups and then to **Cast Shadows** in Advanced Bake. Shadows Only casts shadows without being seen, for a blocker that shapes the light through a window; Off suits a sky shell or a far backdrop. Lightmap Scale multiplies the lightmap detail Lightmap UV2's **Texel Size** gives the brush: 4 is four times as fine, for a lit floor or a wall a window shadow falls on, 0.5 half, for a ceiling. A mesh casts shadows one way and has one lightmap density, so brushes that differ in either bake into meshes of their own and the rest still merge ([#1444](https://github.com/saworbit/hammerforge/issues/1444), [#1438](https://github.com/saworbit/hammerforge/issues/1438)). Both are saved with the brush in the `.hflevel` and kept by undo, duplicate and the pieces of a Clip, Hollow, Carve, Intersect or Merge ([#1660](https://github.com/saworbit/hammerforge/issues/1660)); `.map` export leaves them out.
   - **Entity Binding**: Tie/Untie brush entity class (populated from entity definitions), with an optional name. The name is the address an I/O connection targets, so a door has to have one before anything can open it. Brushes tied in one go are one entity whether or not they are named, so a two-leaf door exports as one `func_door` rather than two that move independently; tying two doors separately keeps them separate. A field set in the Entity panel goes on every brush of the entity, and so does a wire, so a trigger of several brushes fires from whichever brush a body enters. Its wires go out once per event, not once per brush, and a `trigger_once` of several brushes fires once in all ([#1129](https://github.com/saworbit/hammerforge/issues/1129)). That holds for a tie with no name as well ([#1133](https://github.com/saworbit/hammerforge/issues/1133)), and a `.map` import gives such an entity back tied as one ([#1134](https://github.com/saworbit/hammerforge/issues/1134)). Untie takes the brush's wires and properties with it, and tying a brush as another class keeps only what that class has.
+  - **Clip brushes**: tie a brush as `func_clip` for collision the player cannot see: a smooth slope over stairs or rubble, a barrier along a ledge, a fill over a jagged cliff. The bake makes the brush's convex hull into collision and draws nothing, and every clip on one physics layer shares one body, so twenty cost one node; a named clip keeps a body of its own. Its **Physics Layer** in the Entity panel is the layer it goes on, 1 to 32. 0, the default, is the level's Physics Layer, so a player meets it wherever it meets the world; a game that wants bullets to pass through puts it on a layer only its player collides with. The editor draws it violet whatever material its faces carry. It takes no part in the world's CSG, so a cut never carves it. It does cut the baked navmesh, since an agent's body meets it as the player's does, and Validate's stairs, ramp and doorway checks leave it out ([#1409](https://github.com/saworbit/hammerforge/issues/1409)).
   - **Duplicate Array**: Layout (Linear / Radial / Grid), count, X/Y/Z offset, and the controls for the chosen layout — axis, step degrees and a Fill 360 helper for Radial; per-axis cell counts for Grid, which uses the X/Y/Z offset as its spacing. A live wireframe of the copies and a line saying how many. Create/Remove Array buttons; selecting any piece of an existing array turns Create into **Update Array** and shows **Detach** beside it.
   - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
 
@@ -812,8 +1301,11 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
 - **Foliage & Scatter**: Interactive scatter brush for foliage and object placement. Pick a mesh resource or a scene — a `.glb` or `.gltf` from an artist imports as a scene, and the first mesh inside it is what gets scattered — then set density/radius/height constraints/slope filter/scale variation. Choose Circle or Spline brush shape. Preview generates a MultiMesh preview (Dots/Wireframe/Full). Scatter commits as a permanent `MultiMeshInstance3D`, in one undo step, owned by the scene so a save keeps it. Clear removes the preview. A stroke asking for more than 50,000 instances is refused with the count, so wind the radius or the density down rather than waiting for it. Spline mode uses selected nodes as path control points with a configurable width band.
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
-- **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, a Prototypes/Palette/Favorites view toggle, and the count the grid shows in the section header. Add/Remove/Refresh Prototypes/Remove Unused/Clear buttons under **Material Library**, closed by default. Face Select Mode toggle. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name). Favorites are kept in `user://hammerforge_prefs.json` by resource path, so they survive a dock rebuild and an editor restart; a material built in the session and not saved to disk has no path and cannot be starred, and the status line says so. Hover a thumbnail to preview on selected faces. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
-- **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout). Justify moves a layout dragged out by hand rather than resetting it, so the UV editor and the Justify buttons compose.
+- **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, a Prototypes/Palette/Favorites view toggle, and the count the grid shows in the section header. Add/Remove/Refresh Prototypes/Remove Unused/Replace.../Clear buttons under **Material Library**, closed by default. Face Select Mode toggle, with **X-ray** beside it for a face marquee that takes covered and back faces. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Set as Active Material, Replace Material, Toggle Favorite, Copy Name). Set as Active Material makes that material the Build tab's Active Material, the one Paint Mode puts on a clicked brush. Favorites are kept in `user://hammerforge_prefs.json` by resource path, so they survive a dock rebuild and an editor restart; a material built in the session and not saved to disk has no path and cannot be starred, and the status line says so. The first nine favorites carry their number in the Favorites view, the number Alt applies them with. A favorite whose file is gone shows there as "!" with its old path in the tooltip, and right-clicking it offers Remove Favorite. In the Palette view an empty slot shows as "!" where it stands, since faces keep using its index. A **Recent** row above the grid holds the last eight materials applied to faces or brushes by any route (the Apply button, a double-click, a drop, a Paint Mode click, a favorite, Apply Last Texture, Apply Picked Look, the agent bridge), newest first and each once, kept beside the favorites so it survives a restart. A material with no path is left out. Clicking one selects it; one this level's palette does not hold is added to it first, as one undo step. Hover a thumbnail to preview on selected faces. Drag a thumbnail, or a material file (`.tres`, `.material`) from Godot's FileSystem dock, onto a brush face in the viewport to paint that face; dropped on a face that is in the face selection, it paints every selected face. In a split layout each viewport takes a drop through its own camera, and the overlays (the context toolbar, the palette, the coach marks) go to the viewport you click in ([#1627](https://github.com/saworbit/hammerforge/issues/1627)). A file the palette already holds reuses its slot, and one it does not is added, in the same undo step as the paint. An image is not a material and is refused with a toast; a scene, a mesh or a sound is left to Godot's own drop. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
+- **Face Tools**: the tools that act on the faces Face Select picked, each in a section of its own.
+  - **UV Editor**: Per-face UV editing with drag handles over the face's texture, UV Snap, Reset Projected UVs, Scale with x2, /2 and a U/V link, Flip U, Flip V and Rotate 90, a Smoothing group, and a Justify grid (Fit, Fit U, Fit V, Center, Left, Right, Top, Bottom), Align to Face and Align to World, Link, Unlink and Select Group, and Wrap. Justify moves a layout dragged out by hand rather than resetting it, so the UV editor and the Justify buttons compose. **Texture Gizmo** (also **Giz** in the context toolbar's UV group) puts a gizmo at the middle of the faces Face Select picked, its axes along the texture's U and V: drag the middle square to slide the texture a grid step at a time along the face, an axis end to stretch it along that axis in eighths (Shift stretches both), and the ring to turn it by Selection Tools > Step. The slide and the stretch snap as any drag does: Grid (G) decides, and holding Ctrl turns it the other way. Holding Ctrl lets the ring turn freely. Every picked face takes the same change on its own U and V, and a layout dragged by hand moves with it. One drag is one undo step, and right click or Escape puts the texture back.
+  - **Displacement**: Create, Destroy, Power, Elevation, Sew, and the sculpt brush. See [Displacement Surfaces](#displacement-surfaces).
+  - **Face Inset**: Inset and Height for **Inset Face**. See [Face Inset](#face-inset).
 - **Surface Paint**: Paint Target (Floor/Surface), layers, texture picker, radius/strength.
 
 ### Objects tab
@@ -823,8 +1315,8 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - Create DraftEntity button.
 - Entity palette with drag-and-drop placement. A class with presets gets a button for each one beside its own, such as **Point Light: Warm Ceiling**, which places the light with that preset's values.
 - Selected `DraftEntity` nodes use the same managed **Delete**, **Ctrl+D Duplicate**, arrow-key X/Z nudge, and PageUp/PageDown Y nudge workflow as brushes, including HammerForge undo/state cleanup.
-- **Entity Properties** (collapsible, context-hidden): auto-generated typed controls based on entity definition. Visible when a point entity is selected, and when a brush tied to an entity class is — a `func_door`'s Speed, Wait and Angle are set here, and so are a `func_button`'s Wait and Locked. A brush entity's values are stored with the brush and survive a `.hflevel` save and a `.map` round trip. Selecting several tied brushes edits the first of them, the way selecting several point entities does. Each edit is an undo step, and typing in one field makes one step rather than one per key. A class with presets starts the panel with a **Preset** list: picking one sets every value it names as one undo step. Lights come with Warm Ceiling, Cool Fluorescent and Practical, and the directional light with Sun. A property that names a file, such as an `ambient_sound`'s **Stream** or a light's **Projector**, has a **...** button beside it that picks one, and a sound has a **Play** button that plays it in the editor. Press Play again to stop it; it also stops when the selection changes.
-- **Entity I/O** (collapsible, context-hidden): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output button. The list of an entity’s connections, and the Remove that acts on it, live once, on the **I/O Wiring** panel below. An output needs a name, a target and an input — blank is refused rather than added as a connection that does nothing — and the delay has to be zero seconds or more. Only visible when an entity is selected; connections auto-refresh on selection change. **Show I/O Lines** checkbox to visualize connections in the viewport.
+- **Entity Properties** (collapsible, context-hidden): auto-generated typed controls based on entity definition. Visible when a point entity is selected, and when a brush tied to an entity class is — a `func_door`'s Speed, Wait and Angle are set here, and so are a `func_button`'s Wait and Locked. A brush entity's values are stored with the brush and survive a `.hflevel` save and a `.map` round trip. Select several entities, point entities and tied brushes alike, and the panel edits them together: it lists every property any of them has, one only some have says how many, as **Angle (3 of 12)**, and one whose values differ shows a dash. A value typed goes on each selected entity that has the property, as one undo step, so twelve lights take one Energy at once. The Entity I/O and wiring sections stay one entity's, the first selected, and the panel says which ([#1729](https://github.com/saworbit/hammerforge/issues/1729)). A value still at its class default reads lighter than one set on purpose, which has a **Reset** beside it that puts the default back. **Reset to Default** under the properties puts every one back, and **Write Defaults** gives each selected entity the default of any property its class has and it does not hold yet, such as one a definition file gained since, leaving set values alone. Each edit is an undo step, and typing in one field makes one step rather than one per key. A class with presets starts the panel with a **Preset** list: picking one sets every value it names as one undo step. Lights come with Warm Ceiling, Cool Fluorescent and Practical, and the directional light with Sun. A property that names a file, such as an `ambient_sound`'s **Stream** or a light's **Projector**, has a **...** button beside it that picks one, and a sound has a **Play** button that plays it in the editor. Press Play again to stop it; it also stops when the selection changes.
+- **Entity I/O** (collapsible, context-hidden): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output button. The list of an entity’s connections, and the Remove that acts on it, live once, on the **I/O Wiring** panel below. An output needs a name, a target and an input — blank is refused rather than added as a connection that does nothing — and the delay has to be zero seconds or more. Only visible when an entity is selected; connections auto-refresh on selection change. **Show I/O Lines** checkbox to visualize connections in the viewport. **Wires** beside it chooses which ([#1730](https://github.com/saworbit/hammerforge/issues/1730)): **All wires**; **Chain from selection**, every wire reachable from the selected entities, following outputs to their targets and inputs back to their sources as far as they go, drawn from bright yellow at the selection's own wires to faded blue five hops out, so the order of a sequence reads; or **Selection only**, the wires that start or end at a selected entity. A loop of wires is walked once. **Cycle I/O Wires** in the command palette steps through none, all, chain and selection only, and can be given a key. The choice is kept in your preferences, not in the level.
 - **I/O Wiring** (collapsible, context-hidden, collapsed by default): the entity’s current outputs with a **Remove Output** button beside them, and a quick-wire form (output name, target dropdown, input name, parameter, delay, fire-once). The target dropdown lists a named brush entity once by its name, and a brush entity with no name by each of its brushes' node names, any of which reaches the whole entity. Only visible when an entity is selected. Connection summary shows triggers and triggered-by counts. **Highlight** toggle button pulses all linked entities in the viewport. **Connection Presets** picker with 4 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, Timer Lights), written in the names the shipped classes raise and answer, plus user-saved presets, with **Save** and **Delete** beside it. Target tag mapping lets you assign preset target placeholders to actual entity names; a tag you leave empty is skipped and named in the status line rather than wired at an entity called after the tag. A saved preset whose name is already in the list gets a number, so two rows never read the same.
 
 > **Progressive disclosure:** During greyboxing, the Objects tab shows only the entity palette and create button. Entity Properties, Entity I/O, and I/O Wiring sections appear automatically when you select an entity, keeping the UI clean when you're focused on shapes and layout.
@@ -891,13 +1383,13 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Test Level**: **Test Level (Bake + Play)** is the one-click default. **Check Only** validates without baking and **Bake Only** produces geometry without launching. **Play from Camera** and **Play Selected Area** remain available for focused testing.
 - **Advanced Bake**: Bake Selected/Changed, dry run, mesh, LOD, lightmap, navmesh, face material, preview, collision, chunking, occluder, and connector controls are collapsed until needed.
 - **Actions**: Create Starter, Create Empty/Create Floor, Apply/Clear/Commit/Restore Cuts, and Clear Brushes.
-- **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` over the middle of the level, on the top of the floor there, at the height Validate Spawn checks for: 0.1 for the feet plus the `height_offset` default of one metre), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
-- **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
+- **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` over the middle of the level, on the top of the floor there, at the height Validate Spawn checks for: 0.1 for the feet plus the `height_offset` default of one metre. Under a ceiling too low for that, such as a standard 3 metre room, it takes the most height offset that still leaves the player room, written into its own **Height Offset**, rather than going out onto the roof), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
+- **File**: Save/Load .hflevel, **Compare With...** (what changed since another `.hflevel`; see [Compare](#compare)), Import/Export .map (Classic Quake / Valve 220), Export .glb, and **Export Plan...**. A `.map` or `.glb` export, and a prefab saved from the selection, says in the Console what it left out, such as "left out 2 cordons, paint on 14 faces"; [What Each Format Keeps](HammerForge_Data_Portability.md#what-each-format-keeps) is the whole table ([#1706](https://github.com/saworbit/hammerforge/issues/1706)). **Export Plan...** which writes a top down plan of the level as an `.svg` and a `.png` beside it: solid brushes filled, cut brushes hatched, entities by kind, I/O wires, cordons dashed, a scale bar and an arrow to -Z, drawn from the brushes so it needs no window ([#1705](https://github.com/saworbit/hammerforge/issues/1705)). For one floor of several, or for CI, `godot --headless -s res://tools/export_plan.gd --path . -- level.hflevel plans/upper --y-min=3 --y-max=6` writes the same plan for a height band.
 - **Presets**: Save/rename presets grid. Presets are saved in `res://hammerforge_presets/`, so replacing the addon folder on an upgrade keeps them.
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
-- **Settings**: Show HUD, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import. Cursor following slides along the current drawing plane and keeps an aligned height exact.
-- **Performance**: Health summary (green/yellow/red), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time, recommended chunk size.
-- **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Group Sel/Ungroup.
+- **Settings**: Show HUD, Size at cursor, Draw hover preview, Show agent changes, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import, Reset Tool Settings. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level. Under the **Colours** heading at the end of Settings, a colour button sets each overlay colour: Selected brush (the outline of a selected brush or entity, drawn faintly round the rest), Selected face (the tint on faces picked in Face Select), Hover (the outline of the brush under the cursor, and a hovered vertex or edge), Vertex handle and Selected vertex (edges draw the handle colour at half strength), Solid brush and Cut brush (the see-through look of a solid or a cut with no material, and a cut's outline), Cordon wireframe (fainter for a cordon switched off), Extrude up and Extrude down (the hovered face and the ghost while extruding), Draw preview (the solid being drawn), Pending cut (a cut waiting for Apply, and a cut being drawn) ([#1680](https://github.com/saworbit/hammerforge/issues/1680)), the brush entity looks: func_detail, trigger_*, func_wall, func_clip and Other brush entity ([#1760](https://github.com/saworbit/hammerforge/issues/1760)), and Agent change (the outline round what an agent just changed over the bridge, which **Show agent changes** turns off) ([#1653](https://github.com/saworbit/hammerforge/issues/1653)). A change shows in the viewport at once, on what is already drawn. **High Contrast** sets all eighteen to colours that stay apart for the common kinds of colour blindness, with solids and cuts told apart by brightness as well as hue and no brush entity drawn blue under the blue selection, and **Reset** puts the defaults back. The colours are kept with your preferences, not in the level, and never reach a bake.
+- **Performance**: Health summary (green Healthy, yellow Edits Slowing above 100 brushes and entities, red Edits Pause above 1,000; the pause after an edit is what grows with the count, [#1622](https://github.com/saworbit/hammerforge/issues/1622)), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time from pressing Bake to the result, waits included ([#1623](https://github.com/saworbit/hammerforge/issues/1623)), recommended chunk size.
+- **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Cast Shadows for the highlighted visgroup, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, cordon list with Remove, a Bake checkbox and a name for the chosen cordon, min/max spinboxes for it, Set from Selection, Add from Selection.
 - **Prefabs**: Save/search/filter/delete prefabs. Browse with tag filtering and variant indicators. Drag-from the library to instantiate. Save Linked for live propagation. Right-click for variant/tag editing.
 - **Agent Bridge**: Allow agent connections (MCP), a lamp, what the bridge is doing, and what the agent last did. See [Agent Bridge (MCP)](HammerForge_Agent_Bridge.md).
@@ -938,9 +1430,9 @@ See [Shipping a Level](HammerForge_Shipping_A_Level.md) for the bake options a s
 
 #### Export Playtest Build
 Click **Export Playtest Build** in **Test → Advanced Bake** to create a standalone playable scene:
-- Validates spawn (severity ≥ 2 blocks the export).
 - If no spawn exists, auto-creates a default (fully undoable with state capture).
 - Bakes the level in Full mode.
+- Validates the spawn on the baked level, as Test Level does: severity ≥ 2 shows the fix dialog, where Fix & Play or Play Anyway goes on to export and launch, and severity 1 warns and carries on.
 - Packs baked geometry, brush entities, point entities, DefaultSun and the starter's TempFloor (if present), and fallback lighting (a DirectionalLight3D if no light exists) into a temporary scene at `user://hammerforge_playtest.tscn`. The environment is the level's own `WorldEnvironment` when you added one to the level, and a flat grey one when you did not.
 - Adds the playtest player controller at the active spawn and applies the spawn's yaw. It walks on **WASD**, jumps on **Space**, and presses a `func_button` with **E** when the reticle is on one within 2.5 units.
 - Preserves world transforms while reparenting export content and recursively owns nested geometry/collision so it survives scene packing.
@@ -950,9 +1442,9 @@ Click **Export Playtest Build** in **Test → Advanced Bake** to create a standa
 - A toast confirms "Playtest launched" on success.
 
 ### Incremental Bake
-For faster iteration on large levels:
+For iteration on large levels. Both can end up rebuilding the whole level, as below; [Performance and Limits](HammerForge_Performance.md#baking) has measured bake times by brush count.
 - **Bake Selected**: bakes only the currently selected brushes and merges the output into the existing baked container. Geometry baked from other brushes is preserved, and an earlier Bake Selected of the same brushes is replaced rather than doubled. A full Bake merges brushes into one mesh that cannot lose one of them, so Bake Selected on a brush the last full Bake holds bakes the whole level instead and says so.
-- **Bake Changed**: bakes only brushes and painted ground that have been modified (dirty-tagged) since the last successful bake. With Navmesh on, a `prop_static` moved, added, deleted or given another Scene is a change too, so the navmesh is cut where the prop is now. A paint connector confirmed with Enter, or taken back by Undo, is a change as well. Dirty tags survive failed bakes and accumulate until the next success.
+- **Bake Changed**: bakes when brushes or painted ground have been modified (dirty-tagged) since the last successful bake, and says there is nothing to do when none have. When it bakes, it rebuilds the whole level, so it takes as long as **Bake**. With Navmesh on, a `prop_static` moved, added, deleted or given another Scene is a change too, so the navmesh is cut where the prop is now. A paint connector confirmed with Enter, or taken back by Undo, is a change as well. Dirty tags survive failed bakes and accumulate until the next success.
 
 A bake runs over several frames. Switch to another scene tab before it finishes and it stops with a message, keeping its dirty tags; bake again once you are back. Close the tab and it stops quietly (#1290).
 
@@ -978,6 +1470,7 @@ The **Test → Advanced Bake** section exposes additional controls:
   - **Picking one** sets its options as one undo step, and a toast says how many changed. Picking a saved profile puts its name in the box, so **Save** updates it and **Delete** removes it. Delete asks for a second press, because a deleted profile is not on the undo stack.
   - **Custom** shows when the options match no profile, for example after you change one by hand. The list reads the options each time, so it follows a load, an undo or an Inspector edit. When two profiles match, the one that sets more options is shown.
   - A profile never touches **Bake Visible Only** or the cordons. Those decide what goes into the bake, not how it is built.
+- **Cast Shadows** (On, Off, Double Sided, Shadows Only; default On): how every baked mesh casts shadows, painted ground and connectors included, unless a brush in **Selection Tools** or one of its visgroups says otherwise. A brush's own setting beats its visgroups', and the visgroups' beat this one. A bake profile carries it, and the `.hflevel` saves it ([#1444](https://github.com/saworbit/hammerforge/issues/1444)).
 - **Chunk Size** (SpinBox, 0-16384, default 0): spatial chunk size for bake grouping. 0 means one mesh, which is what a level wants until it is big enough not to; the Status board offers **Set chunk size N** once it is. The range is the level's own bound, so the Status board's recommended chunk size is a value this control can hold. Chunking applies on both bake paths, including the per-face one that `Use Face Materials` selects by default.
 - **Bake Visible Only** (checkbox): skips hidden visgroups and invisible brushes during bake.
 - **Material Atlas** (checkbox): packs per-face textures into a single atlas image so all atlased geometry renders in one draw call. Requires **Use Face Materials** to be enabled. Faces with tiling UVs (scale > 1) are automatically excluded and rendered as separate surfaces with their original material so texture repeat works correctly. Best for levels with many small non-tiling textures. HammerForge’s default projection maps world units into UV space, so an ordinary 64-unit face is 0..64 and counts as tiling: on a level built with the defaults this switch usually packs nothing. The bake now says which it did, in the Console Log — `Atlas: packed 4 of 6 material groups into one atlas`, or `Atlas: skipped, 6 of 6 material groups have tiling UVs`. Scale the face UVs into 0..1 on the materials you want atlased. Textures with painted layers or ShaderMaterials are not atlased. The atlas is at most 4096 pixels square, so a level carrying more texture than that holds packs what fits and renders the rest on their own materials, with a warning saying how many.
@@ -985,8 +1478,8 @@ The **Test → Advanced Bake** section exposes additional controls:
   - **Cost.** Each packed slot is a second full-size atlas image, so a level whose materials carry all four maps holds five atlases rather than one. Slots no material supplies are never built.
   - **When a slot is skipped.** The atlas material holds one multiplier and one texture-channel selector per slot, so every material supplying a map has to agree on them. If they disagree — different `roughness_texture_channel` values, different `normal_scale`, a metallic map left at the default `metallic = 0` multiplier — that slot is left out rather than baked wrong. Albedo still atlases. Give the mapped materials matching settings (multiplier 1.0 is the usual fix) to bring the slot back in.
 - **Collision Mode** (0/1/2, default 0): controls how baked collision shapes are generated.
-  - **0 — Trimesh** (default): single ConcavePolygonShape3D per chunk. Simple but worst-case for physics broadphase.
-  - **1 — Per-brush convex**: each brush gets a ConvexPolygonShape3D (convex hull). Much better for physics queries and bot navigation.
+  - **0 — Trimesh** (default): one ConcavePolygonShape3D per material surface in each chunk, so a ray hit can name the material it landed on. Simple but worst-case for physics broadphase.
+  - **1 — Per-brush convex**: each brush gets a ConvexPolygonShape3D (convex hull), and a brush a cut goes through gets one for each piece left round the cut, so a doorway stays open. A cut that is not convex, such as a torus, leaves the cut mesh's triangles instead, and the bake says so. Much better for physics queries and bot navigation.
   - **2 — Per-visgroup partitioned**: separate StaticBody3D per visgroup, each containing convex hulls for its member brushes. Best for navigation mesh generation and room-based broadphase.
 - **Convex Clean** (checkbox, default on): deduplicate vertices before building convex hulls. Disable to keep raw vertex data (degeneracy guard still runs).
 - **Convex Simplify** (slider, 0.0–1.0, default 0.0): reduce convex hull complexity by merging nearby vertices into an AABB-proportional grid. Higher values = fewer vertices = simpler collision.
@@ -1003,14 +1496,14 @@ The **Test → Advanced Bake** section exposes additional controls:
   **Step H** and the navmesh's **Agent Climb** have to agree. A step taller than the agent can climb bakes a staircase nothing that follows the navmesh can use, and both default to 0.25, so they start exactly on each other. Bake Check works out the connectors the bake would actually build, counts the staircases whose step is over the limit and names the tallest, so it stays quiet in *Ramp* mode, where **Step H** is never read, and it still measures a staircase you placed by hand with the connector tool, which carries its own step and bakes whether or not auto-connectors are on. The playtest player is separate and steps up to its own `max_step_height` (0.4 by default).
   A ramp has the same problem against **Agent Slope**. Its run is one grid cell and its rise is the height difference between the two cells, so with the default cell size and the default 45 degrees, a drop of more than about a metre bakes a ramp no agent will walk. Bake Check measures the connectors the bake would actually build, counts the ones over the limit and names the steepest.
 
-The main **Bake** button is smart: if only specific brushes have been modified since the last bake, it automatically uses incremental bake (`Bake Changed`) instead of a full re-bake. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.
+When only specific brushes have been modified since the last bake, the main **Bake** button runs **Bake Changed**, which rebuilds the whole level as **Bake** does. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.
 
 ### Bake Issue Detection
 Click **Check Bake Issues** to scan for potential problems before baking. The findings are listed under the button, one row each. **Select** selects the object a row names. Where the fix is one mechanical edit, **Fix** makes it as one undo step and checks again; a finding whose fix is a judgement call, such as how deep a floating cutter should sink, has no Fix. The list holds:
 - **Degenerate brush** (severity 2): near-zero thickness on any axis — blocks play.
 - **Oversized brush** (severity 1): very large dimensions — warning only.
-- **Floating subtract** (severity 1): a subtractive brush that doesn't intersect any additive brush.
-- **Overlapping subtracts** (severity 1): two subtractive brushes with intersecting AABBs.
+- **Floating cut** (severity 1): a cut brush that does not overlap any solid brush.
+- **Overlapping cuts** (severity 1): two cut brushes with intersecting AABBs.
 - **Open edges** (severity 1): edges shared by only one face — geometry is not watertight.
 - **Non-manifold edges** (severity 2): edges shared by 3+ faces — may cause bake artifacts.
 - **Non-planar faces** (severity 1): faces with 4+ vertices where a vertex drifts off the face plane beyond `planarity_tolerance` (default 0.01 units). Common in imported .map geometry with floating-point drift.
@@ -1020,15 +1513,22 @@ Click **Check Bake Issues** to scan for potential problems before baking. The fi
 - **Stairs above agent climb** (severity 1): one or more connector staircases the bake would build have a step taller than the navmesh agent's max climb, so nothing that pathfinds can use them. Reported once with a count and the tallest. Only when Navmesh is on and the level has stairs to build, which means *Stairs* or *Auto* mode for generated connectors, or a staircase committed with the connector tool.
 - **No player spawn** (severity 1): a level with brushes and no `player_start`. **Fix** makes one in the middle of the level, standing clear of anything there.
 - **Spawn inside a brush** (severity 2): the line the player's capsule stands on runs through a solid brush, by the brush's own faces, where no cutter has cut it away. A room cut out of a block, a ramp and a trigger volume do not count. **Fix** moves the spawn sideways along the floor it stands on, a grid step at a time, to the nearest place it stands clear. This reads the brushes, so it needs no bake; **Validate Spawn** is the full physics check.
+- **Visgroups disagree on Cast Shadows** (severity 1): a brush with no Cast Shadows of its own is in two visgroups that set different ones. The visgroup higher in the visgroup list decides, and the row names the brush, the visgroups and what it bakes with. Give the brush its own Cast Shadows in Selection Tools to settle it.
 - **Ramp above agent slope** (severity 1): one or more connector ramps the bake would build are steeper than the navmesh agent's max slope. Reported once with a count and the steepest. Only when Navmesh is on and the level has connectors to build.
 
 **Auto-fix helpers** (also reachable directly on `level_root.validation_system`):
 - `weld_brush_vertices(brush)` — snaps near-coincident vertices to their average. Refreshes face normals and bounds automatically.
 - `fix_non_planar_faces(brush)` — projects drifting vertices back onto the face plane.
 
-Validate also measures what you build for the player to walk through against the playtest player itself: a flight of three or more steps whose risers are over the 0.4 m it steps up, a doorway (a cut right through a wall, down to its foot) narrower than the player or lower than it even crouched, and a wedge ramp steeper than 45 degrees that leads up onto a floor. A step is read by its top, so the floating slabs of an open flight and the treads of the Spiral Stairs generator count as steps ([#1212](https://github.com/saworbit/hammerforge/issues/1212)), and the playtest player stops at a riser over its step height from any angle ([#1216](https://github.com/saworbit/hammerforge/issues/1216)). A cut that runs out of the top of a low wall leaves nothing over the gap, so only its width is measured ([#1215](https://github.com/saworbit/hammerforge/issues/1215)). A doorway the player has to crouch through is an info, not a warning. Each names both brushes, and **Select** picks the pair. Stairs, walls and ramps turned together to any angle are measured as if square to the world, and box steps each turned their own way, such as a spiral of boxes, are followed step by step from above ([#1095](https://github.com/saworbit/hammerforge/issues/1095)). A flight that turns partway is one flight, reported once ([#1104](https://github.com/saworbit/hammerforge/issues/1104)).
+Validate also measures what you build for the player to walk through against the playtest player itself: a flight of three or more steps whose risers are over the 0.4 m it steps up, a doorway (a cut right through a wall, down to its foot) narrower than the player or lower than it even crouched, and a wedge ramp steeper than 45 degrees that leads up onto a floor. A step is read by its top, so the floating slabs of an open flight and the treads of the Spiral Stairs structure count as steps ([#1212](https://github.com/saworbit/hammerforge/issues/1212)), and the playtest player stops at a riser over its step height from any angle ([#1216](https://github.com/saworbit/hammerforge/issues/1216)). A cut that runs out of the top of a low wall leaves nothing over the gap, so only its width is measured ([#1215](https://github.com/saworbit/hammerforge/issues/1215)). A doorway the player has to crouch through is an info, not a warning. Each names both brushes, and **Select** picks the pair. Stairs, walls and ramps turned together to any angle are measured as if square to the world, and box steps each turned their own way, such as a spiral of boxes, are followed step by step from above ([#1095](https://github.com/saworbit/hammerforge/issues/1095)). A flight that turns partway is one flight, reported once ([#1104](https://github.com/saworbit/hammerforge/issues/1104)). A stair whose Collision is Ramp is measured by the ramp the bake lays over it, not its steps ([#1588](https://github.com/saworbit/hammerforge/issues/1588)). A cut through a `func_wall` or a `func_detail` is no doorway, because the bake never opens one, and a cutter tied to an entity class makes none ([#1563](https://github.com/saworbit/hammerforge/issues/1563)). A `func_clip` is left out of the stair, doorway and ramp checks.
 
 **Validate** and **Validate + Fix** list what they find in the same rows as Check Bake Issues, each with **Select** on the brush or entity it names, and still log every line to the Output. Validate + Fix lists what is left after its repairs. Its findings have no Fix button of their own; the repairs it can make are the ones Validate + Fix already makes.
+
+**Accept a finding that is fine** ([#1731](https://github.com/saworbit/hammerforge/issues/1731)). Every row has **Accept**, which asks why, such as "decorative, not walked". An accepted finding is not listed again, and Validate's count, the Status board and the bridge's `hf_validate` leave it out; `hf_validate` counts it under `accepted`. It is kept in the level, with the note and the date, so it saves with the `.hflevel` and the scene and undoes like an edit. When what it names changes, it comes back, marked *changed since accepted*. **Show accepted** below the rows lists the accepted ones, each with **Un-accept**.
+
+**Choose which checks run.** **Checks** below the rows lists the kinds of check Validate runs: brush shape and size, brushes inside or on top of others, level data, entity names and wiring, the player spawn, stairs, doorways and ramps, and open To Do notes. Untick one and Validate leaves it out, which also makes the pass quicker. The choice is the project's, kept in `hammerforge_presets/validation_checks.json`, so a team that commits it checks the same things.
+
+**The list keeps up.** After a Validate, an edit to a brush is checked again once the level has been still for a second: its own size, place and faces, and whether it sits inside or on top of the brushes near it. A row it fixed goes, and a problem it made comes in, without pressing Validate or running a whole pass. An entity added or removed checks the names and wiring again. The spawn, the stairs and doorways, and the To Do notes wait for the next Validate.
 
 `validate_level(true)` runs both over every brush in the level as part of its geometry pass, so a level imported from another editor can be cleaned up without calling them per brush. That pass also reports a brush whose size or transform is not a number, a brush with no faces (which auto-fix deletes, since there is nothing to repair), and a vertex that is not a number (reported only — there is no nearest position to a NaN).
 
@@ -1037,6 +1537,14 @@ Validate also measures what you build for the player to walk through against the
 It also says when the level has no player spawn, or when the spawn sits outside the level's bounds. A spawn standing on the level's top, as on the ground of an outdoor level, counts as in it. This one is deliberately geometric rather than the physics check behind **Validate Spawn**: that needs collision, and collision comes from the bake, which is why the button bakes first. Validate runs on an unbaked level, so it answers the question it can answer honestly without one.
 
 It reports two brushes in the same place: `2 brushes occupy the same space: crate_1, crate_2`. That is Ctrl+D followed by a drag that did not take — the copy is exactly on the original, so nothing looks wrong in the viewport, and what the level gets is doubled triangles over the whole overlap and z-fighting on every coincident face. The check is deliberately narrow: position, size and shape all matching within an epsilon. Brushes are meant to intersect, so ordinary overlap is not reported. There is no auto-fix, because deleting one of a pair is a guess about which one you want.
+
+It also reports brushes that add nothing to the bake, none of which shows in the viewport ([#1708](https://github.com/saworbit/hammerforge/issues/1708)):
+
+- `Cut brush cuts no solid brush: Cut_7`. A cut left behind when the wall it cut moved, or placed a little off. It removes nothing, and it still sends the whole bake down the CSG path rather than the face material one. The cut is measured against each solid as a convex shape, so a turned cut whose box crosses a wall it misses is still found. A bake that takes the CSG path names these cuts in the Console as well.
+- `Solid brush is wholly inside another: crate inside hall`. Every corner of the first is inside the second, to within a millimetre. It adds nothing to the outside surface and leaves faces inside the solid. One poking out by a centimetre is not reported.
+- `Brushes are the same to within 1 mm: wall, wall_2`. The check above with a tolerance, for a copy moved by a rounding error rather than not at all. The row is on the later brush, the copy.
+
+Below the rows, each of these kinds gets a row of its own with **Select All**, which selects the brush each finding is about (the cut, the brush inside, the later of each pair), so you can look and press Delete. The near pairs also get **Keep First**, which deletes the later brush of each pair as one undo step and validates again. Nothing is deleted until you press it.
 
 A prefab instance whose `.hfprefab` has been deleted or moved is reported as a missing dependency. The instance goes on working, because its brushes are real brushes, so the only other sign is Cycle Variant doing nothing.
 
@@ -1050,7 +1558,7 @@ Issues appear as color-coded toast notifications.
 When **Use Face Materials** is enabled, full bakes yield back to the editor every 8 brushes so the UI stays responsive during large bakes. A progress label shows "Collecting faces N/M" as geometry is processed. The bake operates on a snapshot of brush state taken at the start, so editing brushes while a bake is running will not produce mixed results — changes are picked up on the next bake.
 
 ### Bake Time Estimate
-The Test tab shows an estimated bake time based on the last bake duration and current brush count. Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a "Chunking recommended" tip appears.
+The Test tab shows an estimated bake time: the last bake's time divided by the brushes that bake took, times the brushes in the level now, or 2 ms a brush before the first bake. A Bake Selected takes only its selection, so after one the estimate is still a whole level's ([#1590](https://github.com/saworbit/hammerforge/issues/1590)). Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a tip to chunk the bake so the game can cull it appears; chunking does not shorten the bake ([measured](HammerForge_Performance.md#baking)).
 
 **player_start properties** (set in the Entity Properties panel):
 - `primary` (bool) -- preferred spawn when multiple exist.
@@ -1082,13 +1590,13 @@ Each tab shows a contextual hint at the bottom guiding you through the workflow:
 
 In **Select mode**, click a visible surface or begin on empty viewport space and drag. Godot decides the click target, drag threshold, region hits, modifier meaning, transform/property-widget hits, and resulting `EditorSelection`; HammerForge does not approximate those private shapes with a circular dead zone. Brush gizmos register filled triangles from the real brush faces. Entity gizmos combine visible nested preview triangles with restrained local markers for any broken or line-only sibling, including top-level preview children, so one healthy component cannot hide an incomplete one. A truly geometry-less entity gets a one-unit marker at its origin; hidden previews and hidden parents leave no invisible target. Hold **Shift** for Godot's native additive/active-selection behavior. Ctrl/Cmd remain Godot-owned rather than acting as a HammerForge object toggle. Grouped HammerForge brushes are normalized as one unit after Godot finishes.
 
-In **Face Select mode**, the saved object selection and its transform/resize gizmos are hidden, and HammerForge owns face click and marquee selection. Drag at least 6 pixels across one or more brushes. A candidate face must be on a canonical, visible brush and have its screen-projected center inside the rectangle; HammerForge then ray-picks that center and accepts the face only when the same brush/face is the frontmost visible hit. Hidden, back-facing, or occluded faces do not come along merely because their centers overlap the rectangle. Shift adds and Ctrl/Cmd toggles using the modifier state captured at LMB-down. Disable the mode to return to the prior object selection, leave Paint or choose an incompatible tool to close it cleanly, or select an object in the Scene tree to edit that object directly.
+In **Face Select mode**, the saved object selection and its transform/resize gizmos are hidden, and HammerForge owns face click and marquee selection. Drag at least 6 pixels across one or more brushes. A candidate face must be on a canonical, visible brush and have its screen-projected center inside the rectangle; HammerForge then ray-picks that center and accepts the face only when the same brush/face is the frontmost visible hit. Hidden, back-facing, or occluded faces do not come along merely because their centers overlap the rectangle. Tick **X-ray** beside Face Select Mode, or press **Alt+X**, and the marquee instead takes every face of a visible brush whose center is inside the rectangle and in front of the camera, covered or facing away, so one drag over a room seen from outside takes its inside walls too. While X-ray is on the HUD says so and the rectangle is drawn amber rather than blue. A brush hidden on its own or by a visgroup still gives no faces. Shift adds and Ctrl/Cmd toggles using the modifier state captured at LMB-down. Disable the mode to return to the prior object selection, leave Paint or choose an incompatible tool to close it cleanly, or select an object in the Scene tree to edit that object directly.
 
 ### Resize Handles and Widget Protection
 
 Selected non-custom brushes show six yellow face handles; custom face-defined shapes keep their truthful boundary outline without misleading box handles. A handle drag owns its full press/motion/release sequence, so it cannot also click an object, start a marquee, paint, or activate another tool. Godot's move/rotate/scale widget and native property gizmos receive the same protection and remain responsible for their own exact hit-testing.
 
-Resize distances and grid snap are measured in world units, which are metres (see **World scale**). If a brush is below a rotated or non-uniformly scaled parent, the grabbed face follows the transformed local axis, the opposite face stays fixed in world space, and the local brush size is adjusted to produce the requested world extent. Sphere handles keep X/Y/Z equal. On cylinders, cones, and capsules, either X or Z handle changes the shared X/Z radius; Y changes height, but a capsule can never become shorter than its diameter. Odd-sided prisms and adjustable pyramids now fill their centered stored bounds, so their visible faces and handle planes agree. Other supported shapes keep independent axes. A collapsed or invalid transform axis is ignored instead of causing a jump. One completed resize creates one undo step; a click with no change, an explicit cancel, or a recovered lost release creates none. During lost-release recovery the original preview is restored and frozen; if Godot never sends its matching release callback, HammerForge releases the local input latch after the recovery turn and ignores a late callback, so the next handle gesture cannot remain blocked.
+Resize distances and grid snap are measured in world units, which are metres (see **World scale**). A handle snaps its extent to the grid while Grid (G) is on, and **Ctrl** held turns that the other way; with Vertex (V) on, or **Alt** held, the face stops level with another brush's vertex near the cursor (see **Snap Modes**). If a brush is below a rotated or non-uniformly scaled parent, the grabbed face follows the transformed local axis, the opposite face stays fixed in world space, and the local brush size is adjusted to produce the requested world extent. Sphere handles keep X/Y/Z equal. On cylinders, cones, and capsules, either X or Z handle changes the shared X/Z radius; Y changes height, but a capsule can never become shorter than its diameter. Odd-sided prisms and adjustable pyramids now fill their centered stored bounds, so their visible faces and handle planes agree. Other supported shapes keep independent axes. A collapsed or invalid transform axis is ignored instead of causing a jump. One completed resize creates one undo step; a click with no change, an explicit cancel, or a recovered lost release creates none. During lost-release recovery the original preview is restored and frozen; if Godot never sends its matching release callback, HammerForge releases the local input latch after the recovery turn and ignores a late callback, so the next handle gesture cannot remain blocked.
 
 ### Picking Visibility and Depth
 
@@ -1103,57 +1611,107 @@ Press **Alt+F** or click the **Flt** button on the context toolbar to open the S
 |----------|---------|-------------|
 | **By Normal** | Walls, Floors, Ceilings | Select faces by surface direction. The three partition every direction between them: a face within 17 degrees of vertical is a wall, everything else is a floor or a ceiling by its sign, so ramps and chamfers come out with the floors |
 | **By Material** | Same Material | Select all faces matching the selected face's material |
-| **Select Similar** | Similar Faces, Similar Brushes | Faces: match material + normal (15°). Brushes: match size (20% tolerance, orientation-agnostic) |
+| **Select Similar** | Similar Faces, Similar Brushes, Similar Entities, and a row of ticks for each | What must be the same, ticked here and kept with your preferences. Brushes: material, shape, add or cut, size (20% tolerance, orientation-agnostic), visgroup, group, structure, entity class. Faces: material, UV scale, normal (15°). Entities: class, and a property you name. Untouched, faces match material and normal, brushes size and entities class |
+| **Quick Select** | Brushes or Entities, Properties, In selection, Select, Add, Take Away | Select by a typed rule, below |
+| **Grow / Shrink** | Grow, Shrink, Same plane only, Max angle | The same as **Ctrl+]** and **Ctrl+[**, below, with the options they use |
 | **By Visgroup** | *(dynamic)* | One button per visgroup — select all members |
 | **By Type** | Detail, Structural | func_detail vs worldspawn brushes |
 
 Filters only ever reach brushes you can see. A brush hidden on its own or by a visgroup is left out, so a material assignment made straight after a filter cannot land on geometry you hid on purpose. A filter that matches nothing leaves the current selection alone and says why ("No detail brushes in this level", "Select a face first, then Same Material").
 
 ### Select Similar
-Press **Shift+S** to quickly select similar geometry without opening the filter popover:
-- When **faces** are selected: selects every face on a visible brush with matching material AND normal direction (within 15°). These are the same faces **Similar Faces** in the popover selects.
-- When **brushes** are selected: selects every visible brush with similar dimensions (within 20% tolerance, ignoring orientation/rotation), the same brushes as **Similar Brushes** in the popover.
+Press **Shift+S** to quickly select similar geometry without opening the filter popover. It matches on what is ticked in Selection Filters, and the ticks are kept between sessions:
+- When **faces** are selected: selects every face on a visible brush that matches on the ticked keys, material and normal (within 15°) unless you tick others. These are the same faces **Similar Faces** in the popover selects.
+- When **brushes** are selected: selects every visible brush that matches on the ticked keys, size (within 20% tolerance, ignoring orientation/rotation) unless you tick others, the same brushes as **Similar Brushes** in the popover. With **Material** ticked it takes every brush that has the first brush's main material on any face.
+- When **entities** are selected: selects every visible entity of the same class, or with the same value of the property named beside **Property**.
+- With nothing ticked for a kind, it says so rather than select everything.
+
+### Quick Select
+Run **Quick Select** from the command palette, or open Selection Filters (**Alt+F**), to select by a rule. Pick **Brushes** or **Entities**, type the rule and press **Enter** or **Select**:
+- A rule is a property, a test and a value, such as `operation is cut` or `class is light_point and energy > 2`. Join more with `and` or a comma.
+- Tests: `is`, `is not`, `>`, `>=`, `<`, `<=` and `matches`, which takes `*` for any run of characters, as in `name matches door_*`. Names and classes ignore case. Put a value with spaces or commas in double quotes.
+- Brushes take `operation` (add or cut), `material` (a palette name or file), `shape`, `visgroup`, `group`, `structure`, `prefab`, `brush_entity` (a class, or true or false) and `name`. Entities take `class`, `name`, `visgroup`, `has_outputs`, `has_inputs`, and any of their own properties by name, which compare as numbers when both sides are numbers. **Properties** adds one to the rule.
+- **Select** replaces the selection, **Add** adds to it and **Take Away** takes the matches out of it. **In selection** looks only among what is selected now.
+- These are the same tests the MCP bridge's `hf_get_brushes` and `hf_get_entities` filter by, so a rule picks the same set either way.
+- A rule that cannot be read, or matches nothing visible, says why and leaves the selection alone.
+
+### Grow and Shrink Selection
+Press **Ctrl+]** to grow the selection by one ring and **Ctrl+[** to shrink it by one. Both are also in the command palette and in the **Grow / Shrink** row of Selection Filters.
+- When **faces** are selected, Grow adds every face that shares an edge with a selected face: on the same brush, or on another brush whose edge runs along it. Faces that only meet at a corner are not added. Shrink drops every selected face that has an edge on a face Grow would add, so a Grow and then a Shrink gives a patch back.
+- **Same plane only** keeps the grow to faces in the plane of the face they border, facing the same way: a floor made of several brushes, without climbing the walls standing on it. **Max angle** (degrees between the two faces' normals, 180 by default) stops the grow at a sharper turn: at 30, a grow goes round a 16-sided cylinder's sides and stops at its caps. Both apply to Shrink too, so shrink a selection of floor tops with Same plane only ticked: without it every top borders its own brush's sides.
+- When **brushes** are selected, Grow adds every brush whose solid touches or overlaps a selected one, and Shrink drops every selected brush that touches one that is not selected. Touching is measured on the brushes' real shapes, not their bounding boxes, so a turned brush beside a staircase is not added because its box reaches a step.
+- A brush hidden on its own or by a visgroup is never added. A Shrink that would leave nothing selected leaves the selection alone and says so, and one with nothing to add or drop says why. Selecting is not an undo step, so neither is a Grow or a Shrink.
+
+### Invert, and Select With a Brush
+**Invert Selection** selects every visible brush and entity that is not selected, and deselects the rest, so "everything except these" is two clicks ([#1717](https://github.com/saworbit/hammerforge/issues/1717)). What a visgroup hides stays out, so hiding the rest and then inverting does what you expect.
+
+To pick a room, draw a throwaway brush around it, keep it selected and run one of these. The brush is deleted as one undo step, so the level is as it was and only the selection changes; Ctrl+Z brings the brush back.
+
+- **Select Inside**: every brush wholly inside it, and every entity standing in it.
+- **Select Partly Inside**: the same, and every brush that goes into it at all.
+- **Select Touching**: every brush that touches or overlaps it, and every entity on it or in it.
+- **Select Column**: as Select Inside, with its footprint running from the bottom of the level to the top, so a small box drawn on the floor in a top view picks what is above and below it on every floor.
+
+The brush is measured as the shape it is, so a turned box picks what is in it and not what is in its bounding box. All five are in the command palette and in the viewport's right-click menu: Invert Selection at the bottom, and the four under **Select With This Brush** with a brush selected. None has a key by default; give one in the shortcut dialog.
 
 ### Apply Last Texture
-Press **Shift+T** to apply the last texture you sampled with the Texture Picker (T key) to the current selection. Works on both face and brush selections. This enables a fast pick-and-paint workflow: press T to sample a material from any face, then Shift+T to stamp it onto other faces or brushes.
+Press **Shift+T** to apply the last texture you sampled with the Texture Picker (T key) to the current selection. Works on both face and brush selections. This enables a fast pick-and-paint workflow: press T to sample a material from any face, then Shift+T to stamp it onto other faces or brushes. Shift+T carries the material only; each face keeps its own projection, scale, offset and rotation. On several brushes it is one undo step, so one Ctrl+Z puts them all back.
+
+### Replace Material
+**Replace Material...** swaps one material for another on every face that wears it: the grey prototype wall for the real plaster, in one pass ([#1726](https://github.com/saworbit/hammerforge/issues/1726)). Open it from the command palette, the **Replace...** button under Paint > Material Library, or a thumbnail's right-click menu, which starts **Find** on that material. **Find** lists the materials the level's faces wear, each with how many faces wear it, and **Use Picked** takes the one the Texture Picker (T) last read. **Replace with** is any palette material. **Where** is the whole level, the selected faces and brushes (the default when something is selected), or shown brushes only, which leaves a hidden visgroup alone. The dialog says how many faces on how many brushes will change, and marks them in the viewport while it is open; Cancel puts the selection back. The faces keep their UV scale, offset and rotation unless **Reset UVs** is ticked. Replace is one undo step, and the faces it changed become the face selection, so Fit or Align is one more click. The agent bridge runs the same pass as `replace_material`.
+
+### Apply Picked Look
+The Texture Picker also keeps the whole look of the face it samples: its material and how the texture is laid on, the projection, scale, offset and rotation. Press **Alt+T** to give that look to every selected face, as one undo step. Planar and Box UV textures are projected from where a face sits in the level, so two faces in one plane with the same look show one continuous texture: a wall built from several brushes lines up with T on one face and Alt+T on the rest. The same command is the **Apply Picked Look** button in Paint > Face Tools > UV Editor and an entry in the command palette.
+
+- A selected face whose UVs were dragged by hand in the UV editor loses that layout, so the copied settings show. Ctrl+Z brings it back.
+- Paint layers and displacement sculpts on the selected faces are left alone.
+- A hand-made layout on the picked face does not travel. Only its settings are copied, and the toast says so.
+- It works on faces, not brushes: select them with Face Select first.
+
+### Apply Favorite
+Press **Alt+1** to **Alt+9** to apply a favorite material: Alt+N applies favorite N, the button numbered N on the context toolbar's strip and the thumbnail numbered N in the Favorites view. Favorites are numbered in palette order. It goes on the selected faces, or on the selected brushes when no face is selected, as one undo step. An empty slot shows a toast naming it and changes nothing. While a draw or extrude is under way the digit is a typed size, so Alt+digit never changes a material mid-gesture. Each one is also an entry in the command palette and can be rebound.
 
 ### Smart Contextual Toolbar
 A floating mini-toolbar appears in the 3D viewport showing context-sensitive actions based on your current selection and tool state. It eliminates the need to switch dock tabs for common operations:
 
 Each section uses small muted **group labels** (e.g. "Extrude", "Modify", "Select") to visually cluster related tools following Gestalt proximity principles.
 
-- **Brushes selected** → [Extrude] Ext▲/Ext▼ | [Modify] Hollow, Clip, Carve, Merge | Duplicate, Delete | [Select] All, ⌂, Similar, Filters | [Preview] Bake▷ toggle. Prefab buttons appear for instances. Shows "N brush(es) selected" count.
-- **Faces selected** → Material thumbnails (favorites strip) | [UV] Fit/Center/L/R/T/B | [Apply] All, Last | Select Similar. Shows "N faces on M brush(es)" count.
+- **Brushes selected** → [Extrude] Ext▲/Ext▼ | [Modify] Hollow, Clip, Carve, Merge, Intersect | Duplicate, Delete | [Select] All, ⌂, Similar, Filters | [Preview] Bake▷ toggle. Prefab buttons appear for instances. Shows "N brush(es) selected" count.
+- **Faces selected** → Material thumbnails (favorites strip, up to nine, numbered as Alt+1 to Alt+9 apply them; it shows for a brush selection too) | [UV] Fit/Center/L/R/T/B, Giz (Texture Gizmo) toggle | [Apply] All, Last | Select Similar. Shows "N faces on M brush(es)" count.
 - **Entities selected** → [Entity] I/O, Properties | Highlight toggle + I/O summary | Duplicate, Delete. Shows "N entities selected" count.
-- **Draw mode (idle)** → [Shape] Box/Cyl/Sph/Cone | Add/Subtract toggle. When pending cuts exist: Apply, Commit, Clear buttons + "N pending" badge.
+- **Draw mode (idle)** → [Shape] Box/Cyl/Sph/Cone | Add/Subtract toggle | Repeat, showing the last drawn brush's icon and size (disabled before the first Draw). When pending cuts exist: Apply, Commit, Clear buttons + "N pending" badge.
 - **Dragging** → Live dimensions display | Axis Lock (X/Y/Z) | Cancel.
-- **Vertex mode** → [Mode] Vertex/Edge toggle | [Edit] Merge, Split, Convex | Exit.
+- **Vertex mode** → [Mode] Vertex/Edge toggle | [Edit] Merge, Split, Convex, Snap | Exit.
 
 If Godot's visible selection mixes HammerForge objects with ordinary Godot nodes, selection-dependent HammerForge sections are unavailable. Finish the edit on one domain at a time; this prevents a toolbar action from changing only the HammerForge subset.
 
 An **auto-mode hint bar** appears during brush drawing, showing the current operation mode (e.g. "Drawing in Add mode — press Subtract to toggle") with a one-click toggle button.
 
 ### Command Palette
-Press **Shift+?** or **F1** to open the command palette — a searchable list of all HammerForge actions with key bindings. Actions that cannot run in the current state are grayed out (e.g. Hollow is disabled when nothing is selected, paint tools are disabled outside paint mode). Type to filter, press **Enter** to execute the first matching action, **Esc** to close.
+Press **Shift+?**, **F1** or **Ctrl+K** to open the command palette: a searchable list of all HammerForge actions with key bindings. Actions that cannot run in the current state are grayed out (e.g. Hollow is disabled when nothing is selected, paint tools are disabled outside paint mode). Type to filter, press **Enter** to execute the first matching action, **Esc** to close.
 
 Selection-dependent managed actions are also grayed out for a mixed HammerForge/Godot selection. If selection changes between opening and invoking the palette, the final dispatcher repeats the same safety check.
 
 ### Viewport Context Menu
 Press **Space** to open a context-sensitive popup menu at the cursor position in the 3D viewport. The menu adapts to your current selection and tool state:
 
-- **Brush selected** → Extrude Up/Down, Hollow, Clip, Carve, Duplicate, Delete, grid snap presets, draw shapes
-- **Face selected** → UV operations (Fit, Center, Left/Right/Top/Bottom justify), texture tools
-- **Entity selected** → I/O Connect, Properties, Duplicate, Delete
-- **Draw mode (idle)** → Shape selector, Add/Subtract toggle, grid snap presets
+- **Brush selected** → Place Entity Here, Extrude Up/Down, Hollow, Clip, Carve, Make Brush Entity, Back to World for a brush tied to one, Group, Ungroup for a grouped brush, Add to Visgroup, Duplicate, Delete
+- **Face selected** → UV operations (Fit, Center, Left/Right/Top/Bottom justify), texture tools, Show Material in Browser, Run Trim Along Faces, and Re-pick Trim Run while a piece of a trim run was selected on the way into Face Select
+- **Entity selected** → Place Entity Here, I/O Connect, Properties, Add to Visgroup, Duplicate, Delete
+- **Draw mode (idle)** → Place Entity Here, Shape selector, Draw as Add and Draw as Cut (the current one ticked), Toggle Grid
 - **Vertex mode** → Merge, Split, sub-mode toggle
 
+**Place Entity Here** lists the level's point entity classes by category and puts the chosen one on the surface under where the cursor was when the menu opened, standing on it as a drop from the palette does. **Make Brush Entity** lists the brush entity classes and ties the selected brushes to the chosen one, as the Entity panel's Tie does; **Back to World** unties them. **Add to Visgroup** lists the level's visgroups and **New Visgroup**, which makes "Visgroup 1" (or the next free number) holding the selection, to rename in the dock. **Show Material in Browser** brings the Paint tab forward with the picked face's material selected in the browser's palette. Each change is one undo step; a row that does not apply to the selection is left out ([#1724](https://github.com/saworbit/hammerforge/issues/1724)).
+
 **Place <name> Here** appears above the footer while a prefab is selected in the Prefab Library, and places it at the cursor.
+
+**Convert to Brushes** appears at the top while Godot meshes or CSG shapes are selected (see [Convert to Brushes](#convert-to-brushes)).
 
 **Common footer** (in every context): Select All, Deselect All, Grid Snap submenu (0.1/0.25/0.5/1/2/4/8 m), Quick Bake, Undo, Redo.
 
 **Highlight Connected** appears as a check item — it reads the current state and toggles it.
 
-The menu only activates when idle (no active drag, paint, or external tool operation). The keybinding is configurable via `hf_keymap.gd`.
+The menu only activates when idle (no active drag, paint, or external tool operation). Its key, Space by default, can be rebound in `user://hammerforge_keymap.json` (see Customizable Keyboard Shortcuts).
 
 With a mixed HammerForge/Godot selection, managed selection commands are unavailable. The final context-menu action handler also checks again before editing, so stale menu state cannot produce a partial change.
 
@@ -1172,24 +1730,25 @@ Press **`` ` ``** (backtick) to open an 8-sector pie menu centered on the cursor
 | Vertex | Enter Vertex Edit mode |
 | Tex Pick | Activate Texture Picker |
 | Measure | Activate Measure tool |
-| Clip | Activate Clip tool |
+| Clip | Clip the selected brush across its middle, as Shift+X does |
 
 **Dead zone:** Moving inside the inner ring (center area) deselects all sectors. Moving outside the outer ring also clears the selection — the cursor must be within the ring to select.
 
-**Dismiss:** Press Escape, backtick, or right-click to close without selecting.
+**Dismiss:** Press Escape, the Radial Menu key again (backtick by default), or right-click to close without selecting.
 
-While the radial menu is open, it intercepts all viewport input. The keybinding is configurable via `hf_keymap.gd`.
+While the radial menu is open, it intercepts all viewport input. Its key can be rebound in `user://hammerforge_keymap.json`, and the menu then closes on the new key.
 
 Radial sectors that start a selection-dependent managed action, such as Clip or Vertex Edit, use the same mixed-selection guard as keyboard and contextual UI. General tool switches remain available when they do not mutate the selected subset.
 
 ### Quick Property Popups
-Double-tap a key to open a small inline editor for a numeric property:
+Double-tap a key, or press Alt+G for Offset, to open a small inline editor for a numeric property:
 
 | Keys | Property | Controls |
 |------|----------|----------|
 | **G G** | Grid Snap | 1 SpinBox (snap size) |
 | **B B** | Brush Size | 3 SpinBoxes (X, Y, Z dimensions) |
 | **R R** | Paint Radius | 1 SpinBox (radius) |
+| **Alt+G** | Offset | 3 SpinBoxes (X, Y, Z) and World / Local; see [Moving by an Exact Offset](#moving-by-an-exact-offset) |
 
 The popup appears at the cursor position. Type a value and press **Enter** to apply, or **Escape** to cancel. Clicking outside the popup dismisses it (the click is consumed and does not pass through to the scene).
 
@@ -1211,10 +1770,14 @@ HammerForge keeps operation types recognizable without covering ordinary geometr
 |-----------|--------------------|
 | **Additive** (Union) | Clean green-tinted surface; no always-on wireframe |
 | **Subtractive** | Red tint with one red semantic wireframe |
+| **Pending cut** | Orange-red tint with a glow until it is applied, then red like any cut. The look follows the brush's own state, so Apply, its undo and a reload all draw it right |
 | **func_detail** entity | Bright blue tint |
 | **trigger_*** entity | Medium blue tint |
 | **func_wall** entity | Muted blue tint |
+| **func_clip** entity | Violet tint, whatever material its faces carry |
 | **Other** brush entity | Slate blue tint |
+
+Each of these colours can be changed under **Test → Settings → Colours**, and **High Contrast** changes them all.
 
 Hovering or selecting a brush adds one concise semantic outline. A box shows its 12 actual boundary edges, and wedges, pyramids, prisms, and polyhedra keep only true boundaries and creases—not diagonals introduced when faces are triangulated. Cylinder, cone, sphere, ellipsoid, capsule, and torus shapes use sparse profiles that communicate their silhouette without reproducing every render triangle or falling back to a box. Hover and the selected gizmo share this source, and a selected brush does not receive a second overlapping hover outline. Polygon, path, merged, and imported custom brushes follow their real face boundaries and do not show misleading box-resize handles. Full triangle topology remains available deliberately through **Test → Advanced Bake → Preview Mode → Wireframe** and the dedicated geometry-editing modes.
 
@@ -1228,8 +1791,8 @@ The viewport HUD shows the current grid snap value (e.g. "Grid: 0.5") persistent
 - **`[`** — halve grid snap (e.g. 0.5 → 0.25), minimum 0.125
 - **`]`** — double grid snap (e.g. 0.5 → 1), maximum 512
 
-### Subtract Preview
-Enable **Subtract Preview** in Test tab → Settings to see the live CSG cut between overlapping additive and subtractive DraftBrushes. A translucent red mesh shows the volume that will be removed; a wireframe AABB is used only while CSG is catching up or when too many subtractors are active. The preview updates when brushes are added, removed, or moved (0.15s debounce). It does not CSG the entire level.
+### Cut Preview
+Enable **Cut Preview** in Test tab → Settings to see the live CSG cut between overlapping additive and subtractive DraftBrushes. A translucent red mesh shows the volume that will be removed; a wireframe AABB is used only while CSG is catching up or when too many subtractors are active. The preview updates when brushes are added, removed, or moved (0.15s debounce). It does not CSG the entire level. A brush tied to an entity class, such as `func_detail`, `func_wall` or `func_clip`, is never cut by the bake, so the preview shows no cut through it, and a cutter tied to one cuts nothing ([#1563](https://github.com/saworbit/hammerforge/issues/1563)).
 
 ### Status bar
 - Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).
@@ -1239,19 +1802,32 @@ Enable **Subtract Preview** in Test tab → Settings to see the live CSG cut bet
 - Bake progress bar updates during chunked bakes.
 - Performance panel shows active brushes, paint memory, bake chunks, and last bake time.
 - **Autosave warning**: a red "Autosave failed!" label appears if a threaded save fails. Auto-hides after 30 seconds.
+- **Autosave waiting for a pause** shows while a timed autosave is put off until editing pauses, and goes when it runs.
 
 ## Snap Modes
 HammerForge supports five snap modes that can be combined:
 
 | Mode | Button | Behavior |
 |------|--------|----------|
-| **Grid** | G | Snap to grid increments (default, always-on) |
-| **Vertex** | V | Snap to the 8 transformed AABB corners of existing brushes |
+| **Grid** | G | Snap to grid increments (on by default; hold Ctrl in a drag to turn it the other way) |
+| **Vertex** | V | Snap to the corners of existing brushes: a box's 8, or a wedge's, a polygon's or any other brush's own |
 | **Center** | C | Snap to the center point of existing brushes |
-| **Edge** | E | Snap to the midpoint of an existing brush AABB edge |
-| **Perpendicular** | P | Snap to the closest perpendicular projection on a brush AABB edge |
+| **Edge** | E | Snap to the midpoint of an existing brush's edge |
+| **Perpendicular** | P | Snap to the closest perpendicular projection on a brush's edge |
 
-Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row in the Build tab. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 0.1 m) determines how close you need to be to a geometry candidate for it to take effect.
+A brush of more than 64 faces snaps to the corners and edges of its box instead.
+
+Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row in the Build tab. The toggles are kept with your preferences and every level you open snaps with them. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 0.1 m) determines how close you need to be to a geometry candidate for it to take effect.
+
+**Snapping while you drag.** Grid (G) decides the grid for a draw's corners and height, a resize handle and a vertex or edge drag alike: with it off, none of them snap to the grid. Hold **Ctrl** during any of those drags to turn the grid the other way for as long as it is held: off while G is on, on while G is off. It is read on every mouse motion, so it can be pressed or let go mid drag, and the viewport HUD shows **Snap off** or **Snap on** while it is held. Vertex, Center, Edge and Perpendicular snaps still apply to the draw's corners.
+
+With **Vertex (V)** on, a vertex drag lands the vertex you grabbed on another brush's vertex within 10 pixels of the cursor, and the rest of the selection moves by the same amount; a resize handle moves its face level with that vertex along the handle's axis. Hold **Alt** during either drag for the same thing while V is off. The brush you are editing is never a target, and a cyan marker sits on the target while the snap holds. With an axis lock the vertex goes level with the target along the locked axis. The usual checks still apply: a move that would leave the brush non-convex is refused and the brush put back, and one undo reverts a snapped drag. Both keys are rebindable (`snap_invert_hold`, `snap_vertex_hold`).
+
+**What the snap found.** Wherever a pointer tool snaps, a marker on the snapped point says what it is on, by its shape: a square for a vertex, a triangle for an edge's midpoint, a circle for a brush's centre, a right angle for a perpendicular, a diamond for the Measure tool's snap line and a plain cross for the grid. The marker is the same size at every zoom, and a word beside it names the kind; untick **Name the snap** under Viewport in the Console's Controls to keep the shapes alone. Draw, Polygon, Path, Measure and Clip show it, and a vertex drag shows it on the vertex it lands on ([#1691](https://github.com/saworbit/hammerforge/issues/1691)).
+
+**Tab to the next snap.** When candidates of more than one kind are in reach, the nearest wins, and **Tab** steps to the next kind, then the next, and back round. The marker follows, and the click takes the one shown. Moving the cursor away, or taking the pick, goes back to the nearest. A typed number's Tab still applies the number, the Clip tool's Tab still steps its side, and with no marker showing Tab does what it always did.
+
+**One pick of one kind.** **Next Pick: Vertex Only**, **Midpoint Only**, **Centre Only**, **Perpendicular Only** and **Grid Only** limit the next pick to that kind, whatever snaps are on, and every snap that was on returns after it. They are in the command palette and ship with no key; give one a key in the shortcut dialog.
 
 **Tip:** Use Vertex for corner alignment, Center for centered placement, Edge for exact midpoints, and Perpendicular for a right-angle projection onto an edge.
 
@@ -1270,6 +1846,30 @@ To add custom entity types:
 
 A `LevelRoot` can read from somewhere else instead through its `entity_definitions_path` export. Both pickers follow it.
 
+### Entity classes from an FGD
+
+`entity_definitions_path` can name an `.fgd` file as well as a JSON one, or
+several files joined with `;`, read in order, a class in a later file replacing
+the one of that name in an earlier.
+
+- `@PointClass` is a point entity class and `@SolidClass` a brush entity class.
+  A `@BaseClass` lends its properties, inputs and outputs to every class that
+  names it in `base()`, and is no class of its own.
+- `size()` is the box the entity draws as, and `color()` its colour.
+- Properties keep their type: `string`, `integer`, `float`, `choices` (a list
+  showing each choice's label), `flags` (a tick for each bit), `color255` and
+  `color1` (a colour), and `target_source`, `target_destination` and the rest as
+  text. Defaults, labels and descriptions come across.
+- `input` and `output` lines are what the I/O wiring panel offers.
+- `@include "other.fgd"` reads a file beside it.
+- What HammerForge has no use for, a model, a sprite or a helper for another
+  editor, is skipped. The file says once how much it skipped and the line of the
+  first. Base classes that name each other in a loop are refused, and the warning
+  names the loop.
+- **Convert Entity Definitions to JSON** in the palette writes the classes as an
+  `entities.json` beside the first FGD, to edit them in that form. Point the
+  level's `entity_definitions_path` at it to use it.
+
 ## Material Library
 The material palette can be saved and loaded as a JSON library file. **Save Library** and **Load Library** sit in the Paint tab -> Materials -> Material Library, beside Refresh Prototypes:
 - **Save Library**: records the resource path of each palette material. A material made in the editor session has no resource path and cannot be recorded, so its slot is written empty and the status line says how many were left that way. Save the material to disk first if it has to survive the trip.
@@ -1279,6 +1879,8 @@ The material palette can be saved and loaded as a JSON library file. **Save Libr
 ## Prototype Textures
 HammerForge includes 150 built-in SVG prototype textures organized as 15 patterns in 10 color variations. Click **Refresh Prototypes** in the Paint tab → Materials → Material Library to add them all to the palette. **Remove Unused** drops every slot no face is wearing and **Clear** empties the palette outright, both in one pass over the level rather than one pass per slot; a face whose material goes is unset and keeps its geometry. The **Material Browser** displays them as a visual thumbnail grid with search and pattern/color filters — no need to memorize names. Patterns include solid, brick, checker, cross, diamond, dots, hex, stripes (diagonal/horizontal), triangles, zigzag, and directional arrows (up/down/left/right).
 
+The browser knows what the open level uses ([#1725](https://github.com/saworbit/hammerforge/issues/1725)). A green dot marks each material a face uses, and its tooltip says how many, the texture's size in pixels and its file. The **In Use** view shows just those, the most used first. The search takes every word you type, in any order, in the name or the path, so `brick red` finds `wall_brick_red_02`. The slider beside them sizes the thumbnails from 48 to 192 pixels, and the size is kept with your preferences. Right-click a material for **Select Faces Using This**, which turns Face Select on with every face that wears it, and **Select Brushes Using This**; both leave out hidden and locked brushes. The counts are kept by the level and worked out again only when a face changes, so the browser stays quick on a large level.
+
 For GDScript API usage, see `docs/HammerForge_Prototype_Textures.md`.
 
 ## Pending Cuts Workflow
@@ -1286,7 +1888,7 @@ For GDScript API usage, see `docs/HammerForge_Prototype_Textures.md`.
 ![A cut waiting in a wall, drawn red, with Apply, Commit and Clear on the toolbar and one pending](images/ui_pending_cut.png)
 
 
-Subtractive brushes are staged as **Pending Cuts** until explicitly applied. This gives you a chance to preview, adjust, and batch your subtract operations before committing.
+Cut brushes are staged as **Pending Cuts** until explicitly applied. This gives you a chance to preview, adjust, and batch your subtract operations before committing.
 
 **Applying cuts** (three methods, all equivalent):
 1. **Context toolbar** (recommended): When in Draw mode with pending cuts, the toolbar shows **Apply** / **Commit** / **Clear** buttons with a count badge. This is the fastest path — no tab switching needed.
@@ -1303,11 +1905,14 @@ Apply Cuts records one **Apply Pending Cuts** undo step, just as applying cuts b
 
 All cut buttons are disabled during active bakes to prevent race conditions. Commit does not consume a cut until its bake succeeds, and Undo/Redo restores both the editable brushes and the exact baked output, including its Full/Wireframe/Proxy preview mode.
 
+A pending cut stays a cut: its **Operation** is read-only in the Inspector until it is applied. To make it a solid, apply it first, or delete it and draw a solid.
+
 ## Design Constraints (Summary)
 - DraftBrush previews are lightweight. Final geometry comes from bake.
-- Subtractive brushes are staged as Pending Cuts until applied.
+- Cut brushes are staged as Pending Cuts until applied.
 - Floor paint is grid-based; heightmaps displace floors only.
 - `.map` export/import is for blockouts. Export writes each face's texture name and UV numbers. Import brings both back, from any editor's file. The offset and scale are in texels, as other editors write them, so they are converted through the size of the palette texture with that name, or 64 pixels for a face with no texture. Neither carries the material itself, surface paint or sculpts.
+- A `.map` world brush whose every face is named `clip`, `common/clip` or `tools/toolsclip`, in any case, imports as a `func_clip`. A `func_clip` exports into `worldspawn` with every face named clip, as Hammer and TrenchBroom write one, so export then import gives it back unchanged. One with a Physics Layer, a name or another property of its own goes out as a `func_clip` block instead, its faces still named clip, so it comes back with them.
 
 For details, see `docs/HammerForge_Design_Constraints.md`.
 
@@ -1331,16 +1936,17 @@ The contexts and what their full lists cover:
 | Context | Shortcuts Shown |
 |---------|----------------|
 | Draw (idle) | Click+Drag, Shift/Alt modifiers, X/Y/Z axis lock, Ctrl+Scroll size, Ctrl+D, Delete |
-| Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Click: Height stage, Right-click: Cancel. Live dimensions shown in banner |
-| Draw (adjusting height) | Mouse: Change height, Click: Confirm, Right-click: Cancel. Live dimensions shown in banner |
+| Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Hold Ctrl: Grid Snap Off/On, Click: Height stage, Right-click: Cancel. Live dimensions shown in banner |
+| Draw (adjusting height) | Mouse: Change height, Hold Ctrl: Grid Snap Off/On, Click: Confirm, Right-click: Cancel. Live dimensions shown in banner |
 | Select | Native click/Shift object selection; Face Select Shift-add/Ctrl-toggle; Escape, Delete, Ctrl+D, Arrow nudge, Ctrl+H Hollow, Shift+X Clip, Ctrl+Shift+F/C Floor/Ceiling |
-| Extrude Up/Down (idle) | Click face + drag, U/J tool switch, Right-click cancel |
+| Extrude Up/Down (idle) | Click face + drag, Shift+Click face + drag to move the face, U/J tool switch, Right-click cancel |
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
 | Floor Paint | LMB paint, Alt erase, Shift axis lock, Ctrl/Cmd pick, X/Z mirror, Y raise, H room, Enter connector, Esc cancel; live cells/metres and ghosts |
 | Surface Paint | Click+Drag paint, Alt+Drag erase, radius/strength info |
-| Vertex Edit | Click vertex to select, drag to move, E: edge mode, Ctrl+W: merge, Ctrl+E: split |
-| Polygon Tool | Click to place verts, Enter: close, Escape: remove last |
-| Path Tool | Click to place waypoints, Enter: finalize, Escape: remove last |
+| Vertex Edit | Click vertex to select, drag to move, drag on empty space to box select, E: edge mode, Ctrl+W: merge, Ctrl+E: split, Del: delete corners, Alt+Click: add a corner, arrows: nudge corners, R: turn corners |
+| Polygon Tool | Click to place verts, Shift: lock to axis, Enter: close, Escape: remove last |
+| Path Tool | Click to place waypoints, Shift: lock to axis, Enter: finalize, Escape: remove last |
+| Hull Tool | Click: point, double click a face: its corners, Shift drag a face: pull its corners out, Enter: make the brush, Backspace/RMB: take back, Escape: cancel |
 
 The HUD also shows current axis lock state (e.g. "[X Locked]"), and a grid indicator with the snap, plane axis and position (`Grid: 0.5  Y 1.3`). It flashes when the snap changes. Fractional snaps display exactly.
 
@@ -1348,7 +1954,7 @@ The full list is also available two other ways: the searchable shortcut dialog (
 
 ## Customizable Keyboard Shortcuts
 
-All keyboard shortcuts are data-driven and can be customized. The default bindings match the shortcuts shown throughout this guide.
+All keyboard shortcuts are data-driven and can be customized. The default bindings match the shortcuts shown throughout this guide. [Commands](commands.md) lists every command with its default key, what it needs selected and what it does ([#1658](https://github.com/saworbit/hammerforge/issues/1658)).
 
 **Default bindings:**
 
@@ -1360,7 +1966,8 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Extrude Down | J | Switch to Extrude Down mode (Shift+E skipped in paint/vertex modes) |
 | Extrude Up (alt) | E | Extrude Up outside Paint and Vertex modes |
 | Extrude Down (alt) | Shift+E | Extrude Down outside Paint and Vertex modes |
-| Toggle Add / Cut | Q | Switch the drawing operation between Add and Cut |
+| Repeat Last Brush | Shift+D | Arm a stamp of the brush the last Draw made: each click places one |
+| Toggle Solid / Cut | Q | Switch the drawing operation between Solid and Cut |
 | Toggle Paint Mode | Shift+P | Turn Paint mode on or off |
 | Quick Play | Ctrl+Enter | Bake and test the level |
 | Validate Level | Ctrl+Shift+Enter | Check the level for issues |
@@ -1368,22 +1975,34 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Duplicate | Ctrl+D | Duplicate selected brushes and DraftEntities |
 | Copy | Ctrl+C | Put the selection on the clipboard |
 | Paste | Ctrl+V | Place what is on the clipboard, where it was copied from |
+| Paste at Cursor | Ctrl+Alt+V | Place what is on the clipboard standing on the point under the cursor |
+| Command Line | Shift+; | Type a command and its values on a line over the viewport |
 | Group | Ctrl+G | Group selected brushes |
 | Ungroup | Ctrl+U | Ungroup selection |
 | Hollow | Ctrl+H | Convert brush to hollow room |
+| Hide Selection | Alt+H | Hide the selection without a visgroup, until Show Hidden |
+| Show Hidden | Shift+Alt+H | Show what Hide Selection and an isolate hid |
 | Clip | Shift+X | Split brush along axis plane |
 | Clip to Face Plane | Shift+Alt+X | Clip the selected brushes to the selected face plane |
 | Create Structure | Ctrl+Shift+A | Open the structure builder |
+| Run Trim Along Faces | Shift+Alt+T | Run a skirting or cornice along the wall faces picked in Face Select |
 | Carve | Ctrl+Shift+R | Boolean-subtract from intersecting brushes |
 | Merge Brushes | Ctrl+Shift+M | Merge the selected brushes |
+| Intersect | Ctrl+Shift+I | Keep only the volume the selected brushes share |
 | Save Selection as Prefab | Ctrl+Shift+P | Save the selected brushes and entities as a prefab |
 | Cycle Prefab Variant | Ctrl+Shift+V | Switch the selected prefab instance to its next variant |
 | Move to Floor | Ctrl+Shift+F | Snap to nearest surface below |
 | Move to Ceiling | Ctrl+Shift+C | Snap to nearest surface above |
+| Snap to Grid | Ctrl+B | Put each selected brush's bounds corner, or entity's origin, on the grid |
 | Rotate CCW | R | Turn the selection counterclockwise |
 | Rotate CW | Shift+R | Turn the selection clockwise |
 | Flip Selection | Shift+M | Flip the selection |
+| Mirror Copy | Alt+M | Keep the selection and add copies mirrored across the ticked axes |
+| Shear | (palette) | Lean the selection: one side moves along an axis, the opposite side stays put |
 | Reset Rotation | Alt+R | Return the selection to its unrotated orientation |
+| Offset | Alt+G | Move the selection, its vertices or its faces by a typed X, Y, Z |
+| Pick Pivot | Alt+P | Click a brush vertex, edge or face to turn and flip about |
+| Clear Pivot | Shift+Alt+P | Go back to turning about the selection's centre |
 | Paint Brush | B | Paint floor cells in Paint mode |
 | Erase | E | Erase floor cells in Paint mode |
 | Ramp / Rect | R | Paint a rectangular footprint in Paint mode |
@@ -1399,15 +2018,31 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Edge Mode | E | Toggle vertex/edge sub-mode (in vertex mode) |
 | Merge Vertices | Ctrl+W | Merge selected vertices to centroid |
 | Split Edge | Ctrl+E | Insert midpoint on selected edge |
-| Texture Picker | T | Eyedropper — sample face material |
+| Snap Vertices to Grid | Ctrl+B | Move the selected vertices to their nearest grid points (in vertex mode) |
+| Texture Picker | T | Eyedropper: sample a face's material and its whole look, for Shift+T and Alt+T |
 | Apply Last Texture | Shift+T | Apply last picked texture to selection |
+| Apply Picked Look | Alt+T | Give the selected faces the last picked face's material and alignment |
+| Apply Favorite 1 | Alt+1 | Apply favorite 1 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 2 | Alt+2 | Apply favorite 2 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 3 | Alt+3 | Apply favorite 3 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 4 | Alt+4 | Apply favorite 4 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 5 | Alt+5 | Apply favorite 5 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 6 | Alt+6 | Apply favorite 6 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 7 | Alt+7 | Apply favorite 7 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 8 | Alt+8 | Apply favorite 8 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 9 | Alt+9 | Apply favorite 9 of the context toolbar strip to the selected faces or brushes |
 | Select All | A | Select all brushes and entities (clears face selection) |
 | Deselect All | Shift+A | Deselect everything (brushes, entities, faces) |
-| Select Similar | Shift+S | Select faces/brushes similar to current selection |
+| Select Similar | Shift+S | Select faces, brushes or entities similar to the selection, on what Selection Filters ticks |
 | Selection Filters | Alt+F | Open selection filter popover |
+| Grow Selection | Ctrl+] | Add the faces next to the selected faces, or the brushes touching the selected brushes |
+| Shrink Selection | Ctrl+[ | Drop the selected faces or brushes on the edge of the selection |
+| Toggle Face X-ray | Alt+X | Let the face marquee take covered and back faces |
+| Show Selection Size | Alt+D | Label the width, depth and height of the selection in the viewport |
 | Lock X | X | Constrain the drawing to X |
 | Lock Y | Y | Constrain the drawing to Y |
 | Lock Z | Z | Constrain the drawing to Z |
+| Draw on Face | L | Build a draw on the plane of the face it starts on (L is the Line tool while Paint is on) |
 | Grid Increase | ] | Double grid snap (max 512) |
 | Grid Decrease | [ | Halve grid snap (min 0.125) |
 | Grid Up | Alt+PgUp | Raise the drawing plane one snap step |
@@ -1416,22 +2051,26 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Align Grid to Selection | Alt+End | Use the selected face, vertices or brush top |
 | Context Menu | Space | Open the context menu at the cursor while idle |
 | Radial Menu | &#96; | Open the radial menu when Power-user overlays are on |
+| Operation Replay Timeline | Ctrl+Shift+T | Show or hide the operation replay timeline when Power-user overlays are on |
+| Invert Grid Snap (hold) | Ctrl | Held in a draw, vertex or resize handle drag: no grid snap with Grid on, grid snap with it off |
+| Snap to Vertices (hold) | Alt | Held in a vertex or resize handle drag: land on another brush's vertex, as Vertex snap does |
 | Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
-| Decal | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
-| Polygon | P | Draw convex polygon, extrude to brush |
-| Path | ; | Place waypoints, extrude corridor brushes |
+| Decal Tool | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
+| Polygon Tool | P | Draw a polygon, extrude to brushes (a concave one splits into convex brushes) |
+| Path Tool | ; | Place waypoints, extrude corridor brushes |
+| Clip Tool | C | Cut the selected brushes along a plane placed with two or three points |
+| Hull Tool | (palette) | Click points or a face's corners and make one brush around them |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
-| Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
 
-**Rebinding:** Create `user://hammerforge_keymap.json` in the project's user data folder (Project > Open User Data Folder). HammerForge does not write it, so an action you leave out keeps its default and picks up any later change to it. Each entry maps an action name to `{"keycode": "F", "ctrl": bool, "shift": bool, "alt": bool}`, for example `{"selection_filter": {"keycode": "G", "alt": true}}`. `keycode` is a key name as Godot spells it (`"F"`, `"Delete"`, `"PageDown"`, `"BracketLeft"`) or Godot's integer keycode; modifiers go in their own fields, not in the name. Restart the plugin after editing. The JSON file is the interface; there is no rebinding UI. Every surface that names a chord — the viewport HUD, the coach marks, the dock tooltips, the hotkey palette and the shortcut list — reads the binding rather than repeating it, so a rebind shows up everywhere at once.
+**Rebinding:** Press the **?** button on the toolbar to open the shortcut dialog, select a command and press **Set Key**, then the new chord ([#1733](https://github.com/saworbit/hammerforge/issues/1733)). Every command the palette runs is listed and can take a key, not only those that ship with one; a command with no key shows "none". **Set Second Key** gives a command a second chord, and either one fires it; the surfaces that name a key show the first. A chord another command already uses is said before it is kept, with that command's name, and you swap the keys, take it off the other command, or cancel. A chord the editor or the palette takes ahead of every binding, such as Ctrl+S, can only be cancelled. **Clear** takes a command's keys off, **Reset** puts one back to its default and **Reset All** puts every key back. A change works at once, with no restart, and is written to `user://hammerforge_keymap.json`, the keys you changed and nothing else, so an action you left alone keeps picking up later changes to its default. **Export...** and **Import...** share that file with a team. The file can still be edited by hand: each entry maps an action name to `{"keycode": "F", "ctrl": bool, "shift": bool, "alt": bool}`, with an optional `"second"` chord in the same shape, or `{"none": true}` for no key, for example `{"selection_filter": {"keycode": "G", "alt": true}}`. `keycode` is a key name as Godot spells it (`"F"`, `"Delete"`, `"PageDown"`, `"BracketLeft"`) or Godot's integer keycode; modifiers go in their own fields, not in the name. Restart the plugin after editing the file by hand. Every surface that names a chord — the viewport HUD, the coach marks, the dock tooltips, the hotkey palette and the shortcut list — reads the binding rather than repeating it, so a rebind shows up everywhere at once.
 
 Extrude has two bindings each way. `Extrude Up` is U and `Extrude Up (alt)` is E; `Extrude Down` is J and `Extrude Down (alt)` is Shift+E. They are listed under their own names so you can tell which row you are changing.
 
 An entry that is not a binding, one with no usable `keycode`, or a key that is not a HammerForge action is reported once on load, naming the file and the key, and the default is used for it.
 
-Two actions that can fire in the same mode on the same chord are reported on load as well, naming both, because the input router tests actions one at a time and stops on the first hit -- so one of the two never fires. The shortcut dialog marks such a binding in amber and its tooltip says what else uses it. Sharing a chord across modes is fine and the defaults do it six times: `E` is Extrude, Erase and Edge Mode, `R` is Rotate and Ramp, and `X`, `Y` and `Z` are axis locks and paint mirrors. The paint family only fires while paint mode is on and the vertex family only while vertex mode is on, so those pairs never both answer. Before, a typo in this file turned every keystroke in the viewport into an error that named `hf_keymap.gd` rather than the file you got wrong.
+Two actions that can fire in the same mode on the same chord are reported on load as well, naming both, because the input router tests actions one at a time and stops on the first hit -- so one of the two never fires. The shortcut dialog marks such a binding in amber and its tooltip says what else uses it. Sharing a chord across modes is fine and the defaults do it seven times: `E` is Extrude, Erase and Edge Mode, `R` is Rotate and Ramp, `L` is Draw on Face and Line, `X` and `Z` are axis locks and paint mirrors, `Y` is an axis lock and Raise Painted Walls, and `Ctrl+B` is Snap to Grid and Snap Vertices to Grid. The paint family only fires while paint mode is on and the vertex family only while vertex mode is on, and each is asked before the other actions while its mode is on, so those pairs never both answer. Eight actions answer in every mode, ahead of the paint keys: Toggle Solid / Cut, Toggle Paint Mode, Quick Play, Validate Level, Show Selection Size, Operation Replay Timeline, Context Menu and Radial Menu, so a paint or vertex key on one of their chords is reported. So is any binding on a key HammerForge takes ahead of every binding and you cannot move: the command palette's `Shift+?`, `F1` and `Ctrl+K` (with any other modifier held as well), `Escape`, and the nudge keys, which are the arrows and `PageUp`/`PageDown` with `Shift`, `Alt` or `Ctrl` held or not, except `Alt+PageUp`/`PageDown` alone, which are Grid Up and Grid Down. And so is a binding on a key Godot's editor answers wherever the focus is, which HammerForge hands to Godot: Undo (`Ctrl+Z`), Redo (`Ctrl+Y` and `Ctrl+Shift+Z`), the scene keys `Ctrl+S`, `Ctrl+N` and `Ctrl+O` with their Shift and Alt forms, Close Scene (`Ctrl+Shift+W`), Quit (`Ctrl+Q` and `Ctrl+Shift+Q`) and the run keys `F5` to `F8` ([#1617](https://github.com/saworbit/hammerforge/issues/1617)). Before, a typo in this file turned every keystroke in the viewport into an error that named `hf_keymap.gd` rather than the file you got wrong.
 
-**Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. Press the **?** button on the toolbar to open a searchable shortcut dialog showing all current keybindings grouped by category (Tools, Editing, Selection, Paint, Axis Lock).
+**Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. Press the **?** button on the toolbar to open a searchable shortcut dialog showing all current keybindings grouped by category (Tools, Editing, Selection, Paint, Axis Lock), where a key can be changed as well.
 
 ## User Preferences
 
@@ -1439,13 +2078,17 @@ HammerForge stores cross-session preferences in `user://hammerforge_prefs.json`,
 
 Preferences include:
 - Default grid snap size
-- Autosave interval
 - Recent file list (up to 10)
 - Collapsed section states (which dock sections are expanded/collapsed)
-- Last active tool
-- HUD visibility
+- HUD visibility, Size at cursor, Draw hover preview and Show selection size
+- Power-user overlays
 - Tutorial wizard visibility and progress step
-- Dismissed viewport contextual hints
+- Dismissed viewport contextual hints and coach marks
+- Favorite materials and the Recent row
+- Saved bake profiles
+- The UV Editor's Scale link and UV Snap step
+- The settings each tool, the Build tab and each structure type were last used with (Test → Settings → Reset Tool Settings clears them)
+- Overlay colours (Test → Settings → Colours), each kept as a hex string such as `"#ffd133bf"`; one that is not a colour falls back to its default with a warning
 
 ## Clipboard
 
@@ -1456,6 +2099,10 @@ The clipboard is a prefab without a name. It is the same capture a prefab gets, 
 Brush ids and brush entity ties are minted fresh on every paste, and each authored name gets one of its own with the pasted wiring following it, so pasting twice gives two pieces the level can tell apart. Group and visgroup membership is deliberately not carried, because a visgroup is a list of names registered per level and pasting into a level that has never heard of "West Wing" would otherwise put brushes in a group with no row in the panel.
 
 The buffer is a file in `user://`, not something the level holds, so it survives closing a level and restarting the editor, and a piece copied in one project can be pasted into another.
+
+**Paste at Cursor** (**Ctrl+Alt+V**, or **Paste Here** in the viewport's Space menu) places the copied set with the bottom centre of its box on the snapped point under the cursor, on the surface there or on the grid, so a room copied from another level lands on the floor you are looking at rather than at its old coordinates ([#1722](https://github.com/saworbit/hammerforge/issues/1722)).
+
+Copy also puts the selection on the system clipboard as `.map` text, in the Quake family's units, as Export Map would write it: brushes as plane triples with their texture names and alignment, entities with their keys. Paste it into a message, a file of pieces or another editor. The other way, when the system clipboard holds `.map` text copied after HammerForge's last Copy, such as a snippet from a forum post, **Ctrl+V** and Paste at Cursor read it through the `.map` importer and place it at the cursor. A line the importer cannot read is left out, and the message counts it. When the clipboard still holds HammerForge's own copy, the buffer is used, so paint, sculpts and structures survive a copy within HammerForge.
 
 **Where the keys work.** In the 3D viewport, both. In the Scene tree, Ctrl+C is claimed when the selection is HammerForge's, because Godot's own node copy would put a `DraftBrush` on its clipboard that a later paste would rebuild outside the brush registry with the id it already had. Ctrl+V is deliberately not claimed there: it needs nothing selected, and taking it away from the Scene tree whenever a level is open would mean you could no longer paste an ordinary node. Paste from the command palette or a menu needs nothing selected either, so it places the clipboard with nothing or the LevelRoot selected ([#1261](https://github.com/saworbit/hammerforge/pull/1261)).
 
@@ -1493,7 +2140,12 @@ When you save a prefab with **Save Linked**, all placed instances of that prefab
 
 - **Push to source**: Edit a placed instance, then click **Push** in the context toolbar to update the `.hfprefab` source file with the current state.
 - **Propagate to all**: Click **Pull** on any linked instance to propagate the current source file to all linked instances in the level. Each instance keeps its names, as a variant cycle does.
-- The context toolbar shows a `[linked]` badge on linked prefab instances.
+- The context toolbar shows a `[linked]` badge on linked prefab instances. Hover the badge to see how many copies of that prefab the level holds.
+- **Copies** (Select Linked Copies in the palette) selects every copy of the selected copy's prefab in the level, and nothing else ([#1734](https://github.com/saworbit/hammerforge/issues/1734)).
+- **Unlink** (Unlink Prefab Copy) makes the selected copy ordinary brushes and entities, as one undo step. It keeps its look and names, and no later Pull, Push or variant switch touches it.
+- **Keep on this copy.** A copy can differ where it must: a button wired to another door, a light in a darker room. Select a piece of a linked copy and each property in the Entity panel has a **Keep** box. A kept value stays through a Pull and a variant switch, and Push leaves it out of the prefab file, writing the prefab's own value back in its place. **Keep wiring on this copy** does the same for the piece's outputs, and **Clear Kept** keeps nothing again and takes the prefab's values. What a copy keeps is saved with the level, and each change to it is an undo step.
+- **Changed copies.** A linked copy that differs from its prefab, outside what it keeps, shows `[changed]` in the badge. Hover it for the list of what changed. **Push** writes the changes into the prefab; **Discard** (Discard Prefab Changes) rebuilds the copy from its prefab as one undo step, keeping what it keeps. Names a copy gives its own entities, and wires between them, are not counted as changes.
+- **Duplicate keeps prefab link**, in the Console's Controls and off by default, makes Ctrl+D of a whole linked copy place another linked copy, with what the copy keeps, instead of ordinary geometry. The new copy is made from the prefab, as a Pull would make it.
 
 ### Tags and Search
 - **Adding tags**: Right-click a prefab in the library → **Edit Tags**. Enter comma-separated tags (e.g., `door, architecture, interior`).
@@ -1522,7 +2174,7 @@ Some actions require specific conditions to run:
 - **Face-dependent controls** (Assign to Selected Faces, UV editing) show "Enable Face Select Mode and click a face to edit" when no face is selected.
 - **Extrude** requires a LevelRoot in the scene. In extrude mode, a semi-transparent face highlight (green for up, red for down) previews which face you'll select before clicking.
 - **External tools** can define their own requirements via `can_activate()`. The registry asks before activating and reports `get_poll_fail_reason()` rather than making the tool active with nothing for it to do.
-- **An active tool's own settings** appear in a **Tool Settings** section on the Build tab, built from the tool's `get_settings_schema()`. The section is hidden while the active tool declares none.
+- **An active tool's own settings** appear in a **Tool Settings** section on the Build tab, built from the tool's `get_settings_schema()`. The section is hidden while the active tool declares none. Each tool's settings are kept with your preferences under the tool's name, so the Polygon tool's Auto-close Dist and the height it last extruded to, every Path setting and the Decal's texture, size and fade come back as you left them.
 
 HammerForge managed edits are scoped to the visible selection. With only native Godot nodes selected, a keyboard shortcut passes through to Godot. That includes the keys Godot's 3D editor binds as well, such as E (Rotate), Q, T, U and X/Y/Z, while no HammerForge drag is in progress and you are not in paint or vertex mode. With nothing selected they stay HammerForge's. A key HammerForge does handle is consumed, so Godot does not run its own shortcut on the same press. With only HammerForge brushes/entities selected, HammerForge owns it. If the selection mixes both domains, HammerForge stops managed operations such as duplicate, delete, group, hollow, nudge, clip, carve, merge, texture, prefab, and variant actions and shows **“Edit HammerForge and Godot nodes separately”**. The same rule is enforced by the context toolbar, viewport context menu, hotkey palette, and selection-dependent radial actions; their managed commands are hidden or disabled where possible and checked again when invoked. Deselect one domain before retrying. This prevents generic editor commands or stale UI state from bypassing HammerForge IDs, caches, or undo state.
 
@@ -1538,14 +2190,37 @@ Modifier keys
 - Shift: square base.
 - Shift + Alt: cube.
 - Alt: height-only.
+- Ctrl (held): no grid snap for the corners and the height while Grid (G) is on, grid snap while it is off.
 - X/Y/Z: axis locks (shown in HUD as "[X Locked]" etc.).
 - Right-click: cancel.
+
+Typed sizes
+- During the base drag, type a number for a square base, or width, depth and height with commas between them: `6,4` is 6 wide and 4 deep, and `6,4,3` is 3 high too. **Tab** moves on to the next value as a comma does.
+- **Enter** takes the base and goes on to the height stage. With a height typed as well, Enter places the brush with no height click.
+- Leave a value out and the mouse sets it: `6,` holds the width at 6 while the depth follows the mouse.
+- A minus before a value turns that side the other way from the drag, so `-6,4` goes 6 back along X. A minus before one number turns both sides.
+- A comma always moves on to the next value, so type a decimal with a point: `2.5`.
+- The size beside the cursor shows W, D and H, with the value being typed in brackets: "W 6  D [4]  H 2".
+- In the height stage and in an Extrude, a typed number is one value, and Enter or Tab applies it.
+
+Before you click
+- With Draw idle, and with Polygon or Path before their first point, the face under the cursor is tinted by what a draw there starts on: blue for a face level with the grid, green for a flat face at another height, amber for a face that is not flat (the draw still starts flat, at the height you clicked), and violet for a face Draw on Face will build on. Over empty space no face is tinted.
+- A small cross marks the snapped point the draw starts from, on a face as on the grid, and the two grid lines through it brighten. The tint and the cross come from the same answer the click uses, so the draw starts where they show.
+- The preview goes when you change tool or start a drag. Turn it off with **Draw hover preview** in **Test → Settings** or the Console's Viewport group. It only looks again when the cursor or the view has moved.
+
+Draw on Face (**L**, the **On Face** button beside the Snap row, or the command palette)
+- A draw that starts on a brush face lays its base on the face's plane, whichever way the face points, and the height stage pulls along the face's normal. A Solid grows out of the face and a Cutout into it, so a window is a Cutout dragged on the wall and pulled to the wall's depth.
+- On a face along the world axes the corners snap to the world grid and stay on the face. On a slanted face they snap in grid steps along the face's own axes, counted from where you clicked.
+- The brush is a box turned so its up is the face's normal, and undo and redo keep the turn. A draw on a wall or a slope leaves the drawing grid where it was; one on a floor moves it as an ordinary draw does.
+- Over empty space a draw is the ordinary flat one. The axis locks do not apply while drawing on a face.
 
 General keyboard shortcuts
 - Delete: remove selected brushes and DraftEntities.
 - Ctrl+D: duplicate selected brushes and DraftEntities. A copy of a named entity takes the next free name (`door_1` becomes `door_2`), because the authored name is the address I/O is aimed at and two entities cannot share one. The copy keeps its own outputs, so a duplicated button goes on firing at what the original fired at. Brush entities take a tie of their own as well, so a duplicated door is a second door rather than two more leaves of the first, and the same goes for each copy a Duplicate Array makes.
-- Arrow keys: nudge selected brushes and DraftEntities (XZ plane) one grid step. An unturned brush with a face on a grid line stays on it however many times it is nudged.
-- PageUp/PageDown: nudge selected brushes and DraftEntities (Y axis).
+- Arrow keys: nudge selected brushes and DraftEntities one grid step, along the world axis nearest the arrow's direction in the view you press it in ([#1716](https://github.com/saworbit/hammerforge/issues/1716)). In Top view that is Up for -Z and Right for +X, as it always was. In Front view Up is +Y. In a perspective view Up and Down follow the camera's heading on the ground, snapped to the nearest axis, so facing +X makes Up +X. The shortcut row says where it went, as `+Y 0.25 m`. **Arrows follow the view** in the Console's Controls turns this off and brings back the fixed mapping. An unturned brush with a face on a grid line stays on it however many times it is nudged.
+- PageUp/PageDown: nudge selected brushes and DraftEntities (Y axis), in every view.
+- Shift+Arrow: duplicate the selection and move the copy one step that way, as one undo step. The copy is the selection after, so pressing it again makes the next copy from that one, and a row of columns is a key a column. Shift used to make no difference to an arrow.
+- Alt+Arrow, and Alt+Shift+PageUp/PageDown: nudge by a tenth of the grid step, for fitting the grid cannot reach. A tenth step is not put back on the grid. Alt+Shift+Arrow duplicates and moves a tenth. Alt+PageUp/PageDown alone moves the drawing plane (Grid Up / Grid Down).
 - Escape: clear selection.
 - Ctrl+Scroll: adjust brush size.
 - `[` / `]`: halve / double grid snap size.
@@ -1580,16 +2255,32 @@ Press **V** (keyboard shortcut or the **V** toggle button in the toolbar) to ent
 - **Edge mode** (press **E** to toggle): click edges to select them. Selected edges highlight orange; hovered edges highlight yellow.
 
 ### Dragging Vertices and Edges
-An unlocked drag follows a view-facing plane through the vertex or edge midpoint you grabbed. This makes the point track the cursor predictably in perspective and in front, side, and top orthographic views instead of forcing every drag onto world Y. Grid snap is applied to the resulting world-space movement.
+An unlocked drag follows a view-facing plane through the vertex or edge midpoint you grabbed. This makes the point track the cursor predictably in perspective and in front, side, and top orthographic views instead of forcing every drag onto world Y. Grid snap is applied to the resulting world-space movement while Grid (G) is on; hold **Ctrl** to turn it the other way for the drag. With Vertex (V) on, or **Alt** held, a vertex drag lands on another brush's vertex near the cursor instead (see **Snap Modes**). An edge drag holds a midpoint, so it takes the grid only.
 
 Use **X**, **Y**, or **Z** to constrain the drag to that world axis. HammerForge chooses a camera-facing projection plane that contains the locked axis. If the camera is looking exactly along that axis and the cursor cannot express a stable movement, the update is ignored rather than making the geometry jump. Losing LMB during a focus change cancels the unfinished drag and restores its captured geometry.
 
 ### Edge Operations
 - **Split edge** (Ctrl+E): select exactly one edge, then press Ctrl+E to insert a midpoint vertex. The two faces sharing the edge each gain the new vertex. Convexity is mathematically guaranteed.
-- **Merge vertices** (Ctrl+W): select 2+ vertices, then press Ctrl+W to merge them to their centroid. Merging is rejected if it would break convexity.
+- **Merge vertices** (Ctrl+W): select 2+ vertices, then press Ctrl+W to merge them to their centroid. Merging is rejected if it would break convexity. Every brush with two or more selected vertices merges, as one undo step; a brush that refuses says why and the rest still merge.
+- Merge, Split and Clip to Convex are each one undo step whether you use the key, the vertex toolbar or the command palette.
+
+### Many Corners at Once
+([#1713](https://github.com/saworbit/hammerforge/issues/1713))
+- **Shared corners move together.** With several brushes selected, clicking a corner picks every selected brush's corner at that spot, within a millimetre, so the corner where four floor brushes meet moves as one and leaves no crack. **Alt+Click** picks just the one brush's corner, and **Ctrl+Click** takes a corner and its partners off the selection.
+- **Box select.** Drag from empty space, not over a brush, and every corner of the selected brushes inside the box is selected; in edge mode, every edge with both ends inside. **Shift** adds to the selection and **Ctrl** takes away. A press over a brush that is not on a corner still goes to Godot, which picks that brush to edit.
+- **Delete** removes the selected corners, or in edge mode the ends of the selected edges, and rebuilds each brush as the hull of what is left. A brush that would be left flat is refused with the reason, and nothing changes.
+- **Add a corner.** **Alt+Click** on a face of a selected brush adds a corner one grid step out from that face, so a click on a box's top gives it a pyramid top; with one brush selected, Alt+Click on the grid adds one there. A point inside the brush is refused.
+- **Nudge.** With corners selected, the arrow keys and Page Up and Down move them by the grid step, Alt for a tenth, along the axis nearest the view as brushes move. With none selected they move the brushes, as before.
+- **Turn and scale.** With corners selected, **R** and **Shift+R** turn them by the rotate step, about the picked pivot when there is one and about their middle otherwise, round the locked axis or Y. **Scale Vertices...** in the command palette asks for X, Y and Z factors and scales them the same way. Each is judged as a drag is: bent faces are cut flat and a dent is refused.
+- Each of these is one undo step, and the faces that survive keep their materials and UVs, as Clip to Convex keeps them.
+
+### Snap Vertices to Grid
+Press **Ctrl+B**, or **Snap** in the vertex toolbar, to move each selected vertex to the grid point nearest it in world space. The result is checked as a drag is when you let go: a bent face is cut into flat pieces that fold outward, and a snap that would leave the brush non-convex, or put two of its vertices on one grid point, is refused with the reason and nothing moves. One press is one undo step, and vertices already on the grid add none. Outside vertex mode the same key snaps whole brushes (see Selection Tools).
 
 ### Convexity Enforcement
 All vertex operations validate that the brush remains convex. If a move or merge would create a concave shape, the operation is rejected and the brush reverts to its previous state. A merge is also rejected if it would leave the brush without a closed solid, which is what merging every vertex of a box would do. A move by an offset that is not a number is refused before any face is touched.
+
+A vertex edit on a box or another primitive makes it Custom. Undo gives it back its shape, its size and its resize handles, as well as its faces.
 
 ### Clip to Convex
 If a brush has been deformed into a non-convex shape (e.g., by external editing or import), use the **Convex** button in the vertex edit context toolbar to recompute its convex hull. This:
@@ -1606,22 +2297,34 @@ This is a fallback repair tool, not a modeling operation — it discards any con
 | E | Toggle vertex/edge sub-mode |
 | Ctrl+E | Split selected edge |
 | Ctrl+W | Merge selected vertices |
+| Ctrl+B | Snap selected vertices to the grid |
+
+## Hull Tool
+
+The Hull tool makes one brush around points you click, for a shape that is easier to click than to draw: a rock, an odd corner fill. Start it with **Hull Tool** in the command palette, or give it a key in the Shortcuts dialog.
+
+- Click to drop a point on the face under the cursor, or on the grid where there is none. Points snap as a Draw start does.
+- Double click a face to add all its corners.
+- Hold **Shift** and drag a face to copy its corners out along its normal, held to the grid, so a face becomes a solid in one gesture.
+- A green wireframe shows the hull of the points as they go.
+- **Enter** makes the brush, as one undo step, with the Active Material. **Backspace** or a right click takes back the last click's points, and **Escape** lets them all go.
+- Fewer than four points, or points all in one plane, hold no solid. Enter says so and keeps the points, so you can add another.
 
 ## Polygon Tool
 
-The polygon tool lets you draw arbitrary convex shapes and extrude them into brushes.
+The polygon tool lets you draw any outline that does not cross itself and extrude it into brushes.
 
 ### Workflow
 1. Press **P** to activate the Polygon tool.
-2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
-3. Place more vertices. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline.
-4. Each new vertex is validated for convexity -- concave placements are rejected. A click that lands on a vertex already placed is rejected too, because two vertices in one spot make a side face with no area.
-5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices). A polygon whose points are all on one line encloses nothing, so it is refused with a warning rather than extruded into a brush with no volume.
+2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline. Until you click, the [draw hover preview](#brush-creation-cad-style) tints the face under the cursor and marks where the vertex will land.
+3. Place more vertices. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the edge from the last vertex to X or Z, whichever is nearer its direction; the vertex still snaps along that axis.
+4. A vertex is taken wherever it lands, concave or not. A click that lands on a vertex already placed is rejected, because two vertices in one spot make a side face with no area.
+5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices). A polygon whose points are all on one line encloses nothing, so it is refused with a warning rather than extruded into a brush with no volume. An outline that crosses itself is refused with a toast and keeps its vertices, so you can take one back with Escape or right-click and close it again.
 6. Move the mouse up/down to set the extrusion height, then click to confirm.
-7. The brush is created with full undo/redo support.
+7. A convex outline makes one brush. A concave one (an L shaped room, a T junction, a notch for stairs) is split into convex brushes, all the same height and grouped so one click selects them all. Each cut runs between two inner corners, or carries on the line of a wall from an inner corner, so an outline drawn along the grid comes apart into rectangles. Either way it is one undo step.
 
 ### Preview
-During placement, a cyan outline shows the polygon shape. During height extrusion, green vertical edges and the top face outline appear.
+During placement, a cyan outline shows the polygon shape. Each edge shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed edges in cyan, and the edge to the cursor and the closing edge back to the first vertex in yellow. When the outline is concave, orange lines show where it will be split. During height extrusion, green vertical edges and the top face outline appear, with the split lines across the top as well. The labels go when the brush is built or the polygon cancelled, and none is saved with the scene.
 
 ### Settings
 | Setting | Default | Description |
@@ -1633,6 +2336,7 @@ During placement, a cyan outline shows the polygon shape. During height extrusio
 |-----|--------|
 | P | Activate Polygon tool |
 | Left-click | Place vertex / confirm height |
+| Shift (held) | Lock the edge from the last vertex to X or Z |
 | Enter | Close polygon (3+ verts) / confirm height |
 | Escape / Right-click | Remove last vertex / cancel |
 
@@ -1642,28 +2346,46 @@ The path tool creates corridors by placing waypoints and extruding a rectangular
 
 ### Workflow
 1. Press **;** (semicolon) to activate the Path tool.
-2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
-3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline.
-4. Press **Enter** to finalize the path (requires 2+ waypoints).
-5. For each segment, an oriented-box brush is created. At interior corners, a miter joint brush fills the gap.
+2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline. Until you click, the [draw hover preview](#brush-creation-cad-style) tints the face under the cursor and marks where the waypoint will land.
+3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the segment from the last waypoint to X or Z, whichever is nearer its direction; the waypoint still snaps along that axis.
+4. Press **Enter** to finalize the path (requires 2+ waypoints), or, with 3+ placed, click the first waypoint again to close the loop and build it at once. A click closes it when it lands within snap distance of the first point: half a grid step, or the snap distance when that is larger.
+5. Each segment becomes one brush. With **Miter Joints** on, its ends are cut on the plane that bisects the corner there, so the two brushes at a corner meet on one plane with no overlap and no extra brush; a closed loop gets this corner at its first point too. A corner sharper than about 29 degrees would send its outside tip out more than four widths, so the tip is cut flat there, square to the bisector. With Miter Joints off, every segment is a box with square ends.
 6. All brushes are auto-grouped and created in a single undo action.
 
+A segment too short for the mitres at its two ends, or a path that turns straight back on itself, is refused before anything is built: a toast names the segment (counted from the first point) or the point, and the waypoints stay so you can take one back with **Escape** or right-click, or narrow the path.
+
+### Side
+**Side** in Tool Settings places the cross-section relative to the clicked line, looking the way the path runs: **Centre** straddles it, **Left** and **Right** stand wholly to that side, with one face on the line. To wall a room, trace the floor's edge and pick the side away from the room: clockwise seen from above that is Left, and every wall's inside face then lies on the line you clicked, so the room keeps the size it was drawn.
+
+### Curves
+Set **Curve** to **Smooth** and the path runs through the clicked points as a curve instead of straight from one to the next: a centripetal Catmull-Rom curve, which never loops or doubles back between two points however unevenly they are spaced. An open path sets off from its first point straight at the second, and arrives at its last coming straight from the one before. **Curve Segments** (2 to 64, default 8) is how many straight pieces each span between two clicked points is cut into, so three points at 8 build 16 pieces.
+
+Hold the left button down when you place a point and drag to pull out a tangent handle: the curve passes through that point heading along the handle, and a longer handle holds that heading further. The handle's end snaps as a point does, and **Shift** keeps it on the X or Z line through the point. A plain click, or a drag no further than the snap distance, keeps the Catmull-Rom tangent. A handle changes the curve's direction at its own point only; the curve still bends on the two spans that meet there, and nowhere else.
+
+Each piece is one convex brush, cut at both ends on the plane that bisects the turn there, so neighbouring pieces meet face to face with no wedge and no overlap; Miter Joints does not apply, since a curve has no corner to leave square. A bend tighter than the path is wide can turn (tighter than half its width, for a path centred on the line) would turn a piece's inner edge inside out: the preview outlines every piece of that span in red, and Enter refuses the path with a toast naming the span ("the curve from point 1 to point 2"), building nothing. Stairs, Railings and Trim follow the curve, cut on the same planes.
+
 ### Preview
-During placement, a cyan polyline shows the path with parallel offset lines indicating width and perpendicular ticks at waypoints.
+During placement, a cyan polyline shows the clicked path, or on a smooth path the curve as it will be cut and every pulled-out handle, and the outline of each wall's footprint shows what will be built: to the chosen side, mitred at the corners, and on to the cursor. While the cursor would close the loop it settles on the first point, that point's marker turns green and the closed loop is outlined. When the path as it stands would be refused, what stops it is outlined in red: each segment too short for its mitres, or on a smooth path every piece of a span that bends too tightly. Each segment shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed segments in cyan, the segment to the cursor in yellow. The labels go when the path is built or cancelled, and none is saved with the scene.
 
 ### Settings
 | Setting | Default | Description |
 |---------|---------|-------------|
 | path_width | 4.0 | Width of the corridor cross-section |
 | path_height | 4.0 | Height of the corridor cross-section |
-| miter_joints | true | Fill gaps at path corners with wedge brushes |
+| path_side | Centre | Where the cross-section stands: Centre on the clicked line, or Left or Right of it |
+| miter_joints | true | Cut each segment's ends on its corners' bisector planes; off, every segment is a box with square ends |
+| path_curve | Off | Off runs straight from point to point; Smooth runs a curve through them |
+| curve_segments | 8 | Pieces each span of a smooth path is cut into, 2 to 64 |
 | path_extra | None | Auto-generate extras: None, Stairs, Railing, or Trim |
 | stair_step_height | 0.25 | Step height for auto-stairs (only when path_extra = Stairs) |
 | railing_height | 1.0 | Railing height above path surface |
 | railing_thickness | 0.1 | Thickness of railing rails and posts |
 | railing_post_spacing | 2.0 | Distance between railing posts |
-| trim_width | 0.2 | Width of edge trim strips |
-| trim_height | 0.1 | Height of edge trim strips |
+| trim_width | 0.3 | Width of edge trim strips |
+| trim_height | 0.15 | Height of edge trim strips |
+| trim_profile | Flat | Shape of the trim's section: Flat, Chamfer, Round, Cove, Ogee or Stepped |
+| trim_segments | 4 | Pieces each curve of the profile is cut into, 1 to 16 |
+| trim_flip | false | Turn the profile upside down and hang it from the top of the path, for a cornice |
 | trim_material_idx | 0 | Material index for trim faces |
 
 Every numeric setting is held to the range in the tool's schema wherever the value comes from, not only in the dock's spinbox: a width below the minimum or above the maximum is clamped to it, and a value that is not a number is refused and the previous one kept.
@@ -1675,6 +2397,21 @@ When `path_extra` is set to a value other than None, additional geometry is auto
 - **Railings**: Top rail + posts on both sides of the path. Posts are spaced evenly along each segment. Both rails and posts share the group ID with path segments.
 - **Trim**: Edge strips run alongside both sides of the path. If `trim_material_idx >= 0`, all faces of trim brushes are assigned that material index.
 
+**Add Trim** builds the trim as well as the Stairs or the Railings, from one path, each with its own settings: a corridor with a skirting and a stair, or a balcony with a rail and a cornice ([#1629](https://github.com/saworbit/hammerforge/issues/1629)). With None it builds the trim alone, as Trim does. The treads run across the path and the trim along the outside of its edges; beside railings the trim stands out past the posts, which reach half their thickness over each edge, so nothing overlaps. The HUD says **Auto: Stairs and Trim**.
+
+All three follow Side and run round a closed loop's last segment. Trim is cut on the walls' own corner planes, so it turns each corner with them; a trim strip too short for its mitres refuses the path the same way a wall does. On a straight path, stairs and railings are still square-ended boxes per segment, not mitred. On a smooth path they follow the curve: each rail is swept along it on the walls' planes, posts are spaced evenly along its whole length, and each span that climbs is cut into steps of one rise at equal lengths along the curve, a tread crossing several pieces being one brush on each, cut where it starts and stops.
+
+**Trim Profile** shapes the trim's section, Trim Width out from the path's side by Trim Height up:
+
+- **Flat**: the plain rectangle.
+- **Chamfer**: the top outer edge cut off at 45 degrees, by half the smaller of width and height.
+- **Round**: a bullnose, the top outer edge rounded as far as the strip allows.
+- **Cove**: a quarter ellipse hollowed out of the outer corner, all the way out at the foot and in to the path's side at the top.
+- **Ogee**: an S, hollow in the lower half and rounded in the upper.
+- **Stepped**: three steps, each in from the one below by a third of the width.
+
+A brush has to be convex, so a profile that is not is cut into horizontal bands, each bounded by the path's side, two levels and one piece of the profile, and each band is its own strip. Flat, Chamfer and Round are one strip a side of each segment; Cove is one a piece of its curve; Ogee's rounded half is one, with a piece of its hollow; Stepped is one a step. **Trim Segments** is the most pieces a curve is cut into: a band never comes out thinner than 1 cm, up or out, so a small trim or a fine setting can give fewer. The HUD shows how many strips Enter will build. **Trim Flip** turns the profile upside down and hangs it from the path's top, its top flush with the path's, for a cornice.
+
 Preview lines during placement: green ticks for stairs, yellow for railings, orange for trim.
 
 ### Shortcuts
@@ -1682,6 +2419,9 @@ Preview lines during placement: green ticks for stairs, yellow for railings, ora
 |-----|--------|
 | ; | Activate Path tool |
 | Left-click | Place waypoint |
+| Left-click the first waypoint | Close the loop and build it (3+ waypoints) |
+| Left-drag while placing (Curve Smooth) | Pull out the point's tangent handle |
+| Shift (held) | Lock the segment from the last waypoint to X or Z |
 | Enter | Finalize path (2+ waypoints) |
 | Escape / Right-click | Remove last waypoint / cancel |
 
@@ -1697,8 +2437,71 @@ Notes:
 - A node can belong to multiple visgroups. If ANY visgroup it belongs to is hidden, the node is hidden.
 - Nodes not in any visgroup are always visible.
 - Use **Rem Sel** to remove selected nodes from the visgroup, or **Delete** to remove the visgroup entirely.
+- **Cast Shadows** under the list sets how the highlighted visgroup's brushes cast shadows: Off for a sky shell, say. **Level Default** leaves it to the level. A brush's own Cast Shadows beats its visgroups', and when two of a brush's visgroups disagree, the one higher in the list wins and **Check Bake Issues** names the brush. Hover a visgroup to see its setting. Saved in the `.hflevel` and undone like any other edit ([#1444](https://github.com/saworbit/hammerforge/issues/1444)).
+- **Current** makes the highlighted visgroup the one new work joins: a brush you draw, stamp or drop, an entity you place, a structure, and a prefab you place or paste, from the dock or over the bridge. The row says `(current)`, and the viewport's shortcut row names it while you draw, as `Click + Drag: Draw Base  (into Upper floor)`, so nobody fills the wrong one. Untick it for none. It is a setting of the level, saved in the `.hflevel` and the scene, and not an undo step, so undoing an edit never changes where the next brush goes ([#1732](https://github.com/saworbit/hammerforge/issues/1732)).
+- **Leave out of bake** keeps the highlighted visgroup in the editor only: guide brushes, a scale figure, a reference copy of a room being rebuilt. Its members stay visible and editable, and every bake skips them, the preview, Bake Changed and a full bake alike. A `.map` export leaves them out too, and a `.map` or `.glb` export says how many it left out. The row says `(not baked)` in a muted colour. Saved in the `.hflevel` and the scene, and undone like any other edit.
 - Use **Rename** to change a visgroup's name. Every member moves with it, so you do not have to rebuild the group. A name that is already taken is refused rather than merging the two visgroups, because merging is a different operation and one you should have to ask for by name.
 - Visgroups persist in `.hflevel` saves and undo/redo state.
+
+### Isolate, hide and step back
+
+The row of buttons under the visgroup settings changes what is shown without
+changing the level ([#1697](https://github.com/saworbit/hammerforge/issues/1697)):
+
+- **Isolate** shows only the highlighted visgroup, or with none highlighted the
+  visgroups the selection is in, and hides the rest, including what is in no
+  visgroup. **Isolate Sel** shows only the selection. **End Isolate** puts back
+  exactly what was shown before, a hidden visgroup still hidden.
+- **Hide Sel** (**Alt+H**) hides the selected brushes and entities without making
+  a visgroup, and takes them out of the selection. **Show Hidden**
+  (**Shift+Alt+H**) brings them back, and ends an isolate too. These hides are
+  not saved with the level, and a line under the buttons says how many are
+  hidden while any are, so nothing is lost to a hide you forgot. With **Bake
+  Visible Only** on, the bake leaves them out as it leaves out a hidden
+  visgroup.
+- **Previous** steps back to the visibility before the last show, hide, isolate
+  or end, up to 20 times. It is kept apart from the undo history, so it never
+  undoes an edit, and Ctrl+Z never undoes a visibility change.
+- **Save View** keeps which visgroups are shown now under a name, such as "Upper
+  floor only" or "Lighting pass". **Views** lists them; **Show** puts one back and
+  **Delete** forgets it. Views are saved in the `.hflevel` and the scene, and
+  saving or deleting one is an undo step.
+- The palette has **Isolate Selection**, **Isolate Visgroups**, **End Isolate**
+  and **Previous Visibility** as well.
+- **Locked**, beside **Current** and **Leave out of bake**, protects the
+  highlighted visgroup's finished work. Its brushes are still drawn, faded a
+  little, so new work lines up with them, but nothing selects or changes them:
+  a click, a marquee or the Scene dock leaves them out of the selection, Face
+  Select and Paint skip them, Replace Material passes them by, a Pull leaves a
+  locked prefab copy as it is, and an agent is refused with `locked`. The row
+  says `(locked)`. Godot's own lock, the padlock in the Scene dock, does the
+  same for one brush or entity. Locking and unlocking are view changes, kept
+  with the level and stepped back by **Previous**, not undo steps.
+
+### View Filters
+
+What gets in the way is often a kind of thing rather than a group: the triggers
+over a doorway, the clip brushes along a ledge, a light's gizmo everywhere. The
+**View Filters** section of the Manage tab has a tick for each kind: world
+brushes, cut brushes, clip brushes, triggers, brush entities, point entities,
+structures, prefab copies, decals, I/O wires, cordons and Hidden faces. Below them is a row for
+each brush entity class and each point entity class in the level. Untick a row to
+hide every one of that kind in the editor.
+
+- A filter is a rule, not a list: a trigger placed after Triggers is unticked is
+  hidden as it arrives.
+- Visgroups still decide on top of it. Something shows only when its visgroups
+  and its kind both let it.
+- What a filter hides cannot be clicked or box selected, as a hidden visgroup's
+  brushes cannot.
+- Filters are the editor's view, like the camera. They are not saved with the
+  level, so a teammate never opens it half hidden, and the bake ignores them:
+  **Visible Only** bakes what visgroups show, as before.
+- While any filter is on, the dock's footer says **Filtered: 3 kinds**. Click it,
+  or **Show All** in the section, to show everything again.
+- Each kind's toggle is a command in the palette, **Show or Hide Triggers** and
+  so on, with no key of its own. Give one a key in the Shortcuts dialog to toggle
+  that kind with one press.
 
 ## Grouping
 Groups let you persistently link brushes/entities so they select and move together.
@@ -1721,6 +2524,7 @@ Select a UV projection mode from the dropdown:
 - **Planar X/Y/Z**: projects UVs along the specified axis, from where the face sits in the level. A wall built from several brushes textures as one surface, and Offset X/Y is measured from the world grid rather than from the brush. The axes are the ones Quake family editors use, so a texture stands the right way up on a wall.
 - **Box UV**: automatically picks the best axis per face (default for most workflows).
 - **Cylindrical**: wraps UVs around a cylinder (best for round shapes). This one is measured about the brush's own axis, so the texture does not turn when the brush moves.
+- **Face**: lays the texture in the face's own plane, U level along the face and V down its slope, so a ramp, a roof or a chamfer repeats over the same length a wall does. Box UV takes a slope as the wall or floor it leans towards and stretches the texture along it. A floor or a ceiling reads as Planar Y. It is taken from where the face sits in the level, so coplanar faces on separate brushes line up. A Valve 220 export writes the face's own axes and reads them back as Face; Classic Quake has no axes and writes the world ones.
 
 Click **Re-project UVs** to recompute UVs using the selected projection mode (resets scale/offset/rotation).
 
@@ -1734,6 +2538,46 @@ When a face is selected, adjust its UV parameters with the spinboxes:
 
 Changes are live-previewed and fully undoable. Rapid spinbox changes merge into a single undo step.
 
+A box typed in goes to every face in the face selection, and only that box: typing a scale for twenty faces sets it on all twenty and leaves each one's offset and rotation as they were. With no face selected it goes to the face on show. A box the selected faces disagree on shows **mixed** instead of one face's number; typing in it sets all of them.
+
+**Slide and turn with the keys.** In Face Select, with faces selected, the arrow keys move their texture instead of nudging objects:
+- An arrow slides each selected face's texture one grid step the way the arrow points on screen, worked out from that face's own U and V, so a wall seen from the side and a floor seen from above both follow the arrow. **Alt** makes it a tenth of the step.
+- **Shift** with **Left** or **Right** turns the texture 15 degrees about the middle of each face, **Shift+Alt** 1 degree, and **Shift** with **Up** or **Down** a quarter turn.
+- A face seen edge on, or on the Cylindrical projection, is left as it was, and the HUD says how many.
+- The HUD lists the keys with their steps, and a quick run of presses is one undo step.
+
+These buttons edit every face in the face selection too, as one undo step:
+- **x2** and **/2** beside Scale double or halve U and V. Each axis keeps its sign, so a mirrored face stays mirrored, and the offset stays where it is, so faces that lined up still line up. /2 stops at 0.01 and x2 at 100, the range of the boxes.
+- **Link** between the two Scale boxes: while it is on, typing one box sets the other to the same size, each keeping its sign. It is kept in `user://hammerforge_prefs.json`.
+- **Flip U**, **Flip V** and **Rotate 90** under Rotate mirror the texture or turn it a quarter about the middle of the face, so it does not jump. Two flips, or four quarter turns, put the face back.
+- **Fit U** and **Fit V** in the Justify grid fit one repeat across the face's width or height and scale the other axis by the same amount, so the texture keeps its aspect: Fit V on a wall four times as long as it is high gives one repeat top to bottom and four along.
+- **Align to Face** and **Align to World**, under the Justify grid, put every selected face on the Face projection or on Box UV, keeping its scale, offset and rotation.
+- **Align to Edge** turns each face's texture so U runs along one of the face's edges, with the top of the texture toward the middle of the face and a repeat starting at the edge: brick courses parallel to a roof slope or a clipped diagonal wall, at whatever angle the edge runs. Press it again to step to the next edge round the face. From the face's right-click menu (**UV Operations > Align to Edge**) it takes the edge nearest the cursor.
+- **Repeats** with **Fit** shows exactly that many whole repeats across (the first box) and down (the second), ending at both edges of each face, so a pattern ends cleanly at a wall's corners. A count of 0 keeps the texture's aspect from the other axis. Step the count with the box's arrows and press Fit again.
+- **Strip** _k_ **of** _N_ with **Fit** divides the texture into N equal strips across V, as a trim sheet holds them, and fits strip k to each face, stretched once along U. The strips count down from the top of the texture.
+
+### Wrap
+**Wrap** carries a texture over an edge. Select the face whose texture is placed, press **Wrap**, then click a face that shares an edge with it, on the same brush or a touching one. The clicked face takes the material and the scale, and its offset, rotation and the sign of its scale are worked out so the texture runs on across the edge; it then becomes the face the next click carries from, so clicks walk round a pillar or along a corridor. Each click is one undo step. A face that shares no edge is refused with a toast. On a slope Box UV measures the edge short, so the scale along it is changed to meet the edge and the toast says so. **Esc** or a right click ends it. It has no key; the command palette lists it as Wrap Texture.
+
+### Linked Surfaces
+**Link**, beside **Treat as One**, makes the selected faces one surface: they share one mapping, the projection, scale, rotation and offset, and an edit to any of them is an edit to all. Moving, resizing, turning, clipping, hollowing or vertex editing a brush with a linked face keeps the surface's mapping on it instead of Texture Lock's shift, and a surface last justified with Fit, Fit U, Fit V or Tile is fitted again across all its faces. Justify on any linked face justifies the whole surface. Linking a face to a surface, or duplicating a brush with linked faces, extends the surface with no seam. **Unlink** takes the selected faces out, each showing what it showed, and **Select Group** selects every face linked with the selected one. Links are saved in `.hflevel` and scenes and kept by undo.
+
+### Smoothing Groups
+**Smoothing**, under Rotate, puts every face in the face selection in a smoothing group, as one undo step. A face in group 0 shades flat, with its own normal. Faces in the same group above 0 that meet at a corner shade with the average of their normals there, across brushes and whatever they are painted with, so a ring of flat faces reads as round. Only the shading changes: the corners stay where they are, so collision, Validate and every tool see the same convex brush.
+
+- A new cylinder or cone puts its sides in group 1 and its caps in 0. A new sphere, ellipsoid, capsule or torus is in group 1 all over. Arch and dome structures put the faces on their curve in group 1, so the segments bake as one curve. A brush made before smoothing groups keeps shading flat until its faces are given a group.
+- A face keeps its group through a resize, a sides change, Clip, Carve, Merge and Flip. The face a Clip or a Carve makes is flat, so a cut through a round brush stays a sharp edge. Hollow gives each wall inside the group of the face it lies behind, so a cylinder hollows into a tube that is round inside and out.
+- Two brushes in the same group shade into each other where they meet. Put one in another group to keep the edge between them: a cone roof on a round tower, say.
+- The face bake, the CSG bake a cut switches to, and Bake Selected shade a brush the same way. A textured brush's preview shows its faces shaded as they bake, across a join with another brush in the same group too, so an arch's segments read as one curve before the bake (#1625). Move one away and both sides of the old join go back to a plain edge. An untextured round brush previews as Godot's own round shape.
+- The group is saved with the scene and in `.hflevel`. A `.map` has nowhere to put it, so an exported face shades flat in another editor.
+- A sculpted face (Displacement) shades with its own normals whatever its group, in the preview as in the bake.
+- When a cut moves the bake onto the CSG path, every round brush goes into the cut as its own faces, the segments and the ring it shows, smoothed or not, so a cut does not change a sphere's or a cylinder's shape ([#1596](https://github.com/saworbit/hammerforge/issues/1596)).
+
+### UV Editor canvas
+The canvas shows the face's albedo texture under its UV outline, once per repeat and dimmed, and follows Scale, Offset and Rotate. A face with no texture, or with a shader material, keeps a blank canvas.
+
+**UV Snap**, under the canvas, is on by default: a dragged corner lands on the nearest multiple of the step on each axis, chosen from 1/32, 1/16, 1/8, 1/4, 1/2 and 1 UV unit or typed. Hold **Ctrl** (Cmd on macOS) while dragging to place a corner freely. A corner drag is one undo step. A click, or a drag that ends where it began, records nothing, and a right click or Escape during the drag puts the corner back. While snapping is on, grid lines are drawn at the step, stronger at each whole repeat, and lines closer than 4 pixels apart are left out. The step and the checkbox are kept in `user://hammerforge_prefs.json`.
+
 ### Material Browser Integration
 Right-click a material thumbnail in the Material Browser and choose **Apply + Re-project (Box UV)** to assign the material and reset UV projection in one step.
 
@@ -1745,7 +2589,8 @@ When Texture Lock is enabled, moving or resizing a brush automatically adjusts i
 3. Uncheck to disable (UVs will shift with transforms as before).
 
 Notes:
-- Works with PLANAR_X, PLANAR_Y, PLANAR_Z, and BOX_UV projections.
+- Works with PLANAR_X, PLANAR_Y, PLANAR_Z, BOX_UV and FACE projections.
+- A linked face keeps its surface's mapping instead. See [Linked Surfaces](#linked-surfaces).
 - CYLINDRICAL projection is not compensated (complex; future enhancement).
 - Applies to HammerForge move, nudge, floor/ceiling, resize and rotate actions. Godot's native Node3D transform widget leaves the brush's face UV resources unchanged so native undo/redo remains truthful, which means a brush moved with that widget behaves as though Texture Lock were off.
 - On a rotation, a face is compensated when the turn keeps its projection plane where it is. A face that turns out from under its own projection is left alone, so its texture travels with the brush rather than tipping.
@@ -1776,7 +2621,7 @@ The Extrude tools let you extend an existing brush by clicking one of its faces 
 1. Press **U** (Extrude Up) or **J** (Extrude Down), or click the toolbar buttons.
 2. Move the mouse over brush faces -- a **semi-transparent hover highlight** shows which face you'll select (green for up, red for down).
 3. Click on a brush face -- a semi-transparent preview appears.
-4. Drag the mouse vertically to set the extrude height (grid-snapped). The mode indicator shows "Extruding..." with numeric input if you type.
+4. Drag the mouse vertically to set the extrude height (grid-snapped), or type a depth and press **Enter** or **Tab** to place the brush exactly that deep, off the grid if you like. The mode indicator shows "Extruding..." with the number you type, and the preview holds that depth until you Backspace it away. A depth of 0 or past 256 is refused with a toast and the extrude carries on.
 5. Release the mouse to commit the new brush.
 
 Notes
@@ -1786,6 +2631,8 @@ Notes
 - On a slope or a round side the box is turned to lie on the face, as wide and as long as the face and the height you drag off it ([#1107](https://github.com/saworbit/hammerforge/issues/1107)).
 - Any other face, such as a round cap or a triangle, makes a prism of its own outline, the way Hammer and TrenchBroom extrude ([#1123](https://github.com/saworbit/hammerforge/issues/1123)).
 - Right-click cancels the extrude in progress.
+
+**Move a face instead.** Hold **Shift** as you press on a face and the drag moves that face along its own normal rather than making a brush off it ([#1712](https://github.com/saworbit/hammerforge/issues/1712)). It works on any brush: a box grows or shrinks along that axis and stays a box with its resize handles, and a clipped, carved, vertex edited, merged, Polygon or Path brush is rebuilt with its neighbouring faces lengthened or shortened to meet the moved one, so it stays one convex solid. A sloped face moves along its slope. Dragging up moves the face out and down moves it in, with Extrude Down the other way round. The distance snaps to the grid along the normal, or to where a corner of the face lands on a grid plane, which is what puts a sloped face down cleanly; a typed depth moves it exactly that far. When other brushes are selected along with the one you press on, and a face of theirs lies in the same plane, they move together, so a wall of three brushes gets thicker as one. A drag that would turn a brush inside out, flatten it or squeeze one of its faces out stops at the last distance that holds, and the mode indicator says why. Each face keeps its material and how its texture lies. One undo step puts it all back, and Right-click or Escape cancels.
 
 ## Floor Paint
 
@@ -1823,7 +2670,8 @@ Region streaming keeps large paint grids responsive by loading only nearby regio
 
 Notes
 - Streaming a region out writes it to disk first, so a level that has never been saved has nowhere to put one and nothing can be reclaimed. The eviction pass says so rather than leaving the budget quietly ignored.
-- Region data is saved to `.hfr` files in `<level>.hfregions/`.
+- Region data is saved to `.hfr` files in `<level>.hfregions/`. A save under a new name, or an autosave to a path of its own, copies the files of the regions streamed out at the time into the new folder, so the level it writes opens with all its paint ([#1665](https://github.com/saworbit/hammerforge/issues/1665)).
+- Removing a paint layer leaves its paint in the region files that held it, so undoing the removal, or reading a region streamed out at the time, still finds it. Its id is never given to a new layer, so that paint never turns up on another one. Region files therefore keep growing across layer removals ([#1664](https://github.com/saworbit/hammerforge/issues/1664)).
 - The `.hflevel` stores a region index and layer settings.
 
 ### Heightmap Terrain
@@ -1855,18 +2703,50 @@ Terrain slots:
 3. Browse the visual thumbnail grid — use search, pattern dropdown, or color swatches to filter.
 4. Click a thumbnail to select a material. Hover to preview it on selected faces.
 5. Enable `Face Select Mode`.
-6. Use the Select tool and click faces in the viewport.
+6. Use the Select tool and click faces in the viewport. Each picked face is tinted orange and outlined.
 7. Click `Assign to Selected Faces`, or right-click the thumbnail → "Apply to Selected Faces".
-8. Press **T** to use the **Texture Picker** — click any face to sample its material.
+8. Press **T** to use the **Texture Picker**: click any face to sample its material and its look, then **Shift+T** gives the selection the material and **Alt+T** the whole look.
 
 UV editing:
-- Open the **Paint** tab → **UV Editor** section after selecting a face.
+- Open the **Paint** tab → **Face Tools** → **UV Editor** section after selecting a face.
 - Drag UV points to edit.
 - Use `Reset Projected UVs` to regenerate UVs from projection.
 
 Notes:
 - Face data is stored per DraftBrush face.
 - Materials and UVs persist in `.hflevel` saves.
+
+### Hidden faces
+
+Most faces of a block out are never seen: the underside of a floor, the outside
+of a sealed room, the back of a wall built against another. They still cost
+triangles, draw calls and lightmap. Mark them **Hidden** and the bake leaves
+them out of the mesh, the lightmap and the occluders, while they still bound
+their brush, so a floor stays solid and a wall stays a wall.
+
+- The **Hidden** swatch is the striped square at the end of the Material
+  Browser's colour row, so it is there whatever the view. Click it to make the
+  selected faces Hidden, or drag it onto a face. A Hidden face wears dark and
+  amber stripes in the editor, so it never reads as a material.
+- The face keeps its material under the stripes. Apply a material to show the
+  face again, or run **Make Faces Normal** from the palette to show it in the
+  material it had. **Make Faces Hidden** is in the palette too.
+- **T** on a Hidden face picks Hidden, and **Alt+T** then makes the selected faces
+  Hidden. A resize, a clip, a duplicate and Wrap carry it with the texture. A cut's
+  new face is never Hidden, since it is surface the cut opened.
+- **Hide Faces Against Solids** in the palette finds every face of the selected
+  brushes, or of the selected faces, that lies flat against another solid brush
+  and is wholly covered by it. It picks them to show which, asks, and makes them
+  Hidden as one undo step. A face only partly covered, or one against a cut, a
+  trigger or a door, is left alone.
+- **Validate** adds an Info row for a brush with a Hidden face that has open space
+  right in front of it: a hint that it may be seen, not a fault in the count.
+- After a bake the Console says how many Hidden faces it left out and their area,
+  such as `Bake left out 12 Hidden faces, 48.0 square metres of mesh and lightmap`.
+- **Hidden faces** in View Filters hides the stripes. The faces are still there to
+  click, as faces.
+- Hidden faces are saved in the `.hflevel` and the scene, and a `.map` export
+  names them `skip`.
 
 ## Surface Paint (3D)
 1. Enable Paint Mode.
@@ -1887,20 +2767,20 @@ Notes:
 Displacement surfaces turn a flat quad face into a subdivided terrain grid that you can sculpt interactively, similar to Source Engine displacements.
 
 ### Creating a Displacement
-1. Select a brush and enter **Face Select Mode**.
+1. On the **Paint** tab, turn on **Face Select Mode**.
 2. Click a **quad face** (exactly 4 vertices).
-3. Open the **Brush** tab → **Displacement** section.
+3. On the same tab, open **Face Tools** → **Displacement**.
 4. Set **Power** (2 = 5x5, 3 = 9x9, 4 = 17x17 vertices).
 5. Click **Create**. The face becomes a subdivided grid.
 
 ### Painting (Sculpting)
-1. Enable **Paint Mode** in the dock and ensure the **Displacement** section is expanded.
-2. Select a displaced face.
+1. On the **Paint** tab, open **Face Tools** → **Displacement**.
+2. Turn **Paint** mode on in the toolbar. This closes Face Select; sculpting needs no picked face.
 3. Choose a **Paint Mode**: Raise, Lower, Smooth, Noise, or Alpha.
 4. Set **Radius** and **Strength**.
-5. Click and drag on the face in the viewport to sculpt.
+5. Click and drag on a displaced face in the viewport to sculpt. The stroke sculpts the face it starts on.
 
-Paint uses a circular brush with quadratic falloff. Strokes are continuous — the entire stroke commits as a single undo action when you release the mouse button.
+With Displacement or Face Tools closed, a drag in Paint mode paints the floor or surface instead. Paint uses a circular brush with quadratic falloff. Strokes are continuous — the entire stroke commits as a single undo action when you release the mouse button.
 
 ### Settings
 - **Elevation**: global height scale multiplier for the displacement grid.
@@ -1931,7 +2811,7 @@ Notes:
 Replace a sharp edge with a rounded profile:
 1. Enter **Vertex mode** (V key) and switch to **Edge sub-mode** (E key).
 2. Select one or more edges.
-3. Open the **Brush** tab → **Bevel** section.
+3. Open the **Build** tab → **More build settings** → **Bevel** section.
 4. Set **Segments** (1-16) and **Radius** (distance the bevel cuts into the brush). The radius has to be greater than zero; `0` or below is refused rather than treated as a very small bevel.
 5. Click **Bevel Edge**.
 
@@ -1939,8 +2819,8 @@ The selected edges are replaced with bevel strip faces. Higher segment counts pr
 
 ### Face Inset
 Shrink a face inward and create connecting side faces:
-1. Select a face in **Face Select Mode**.
-2. Open the **Brush** tab → **Bevel** section.
+1. On the **Paint** tab, select a face in **Face Select Mode**.
+2. On the same tab, open **Face Tools** → **Face Inset**.
 3. Set **Inset** (distance to shrink inward) and optional **Height** (extrude along normal). A positive height raises the face into a boss; a negative one pushes it in to make a recessed panel.
 4. Click **Inset Face**.
 
@@ -2002,21 +2882,24 @@ A tool is a `.gd` file that `extends HFEditorTool` and returns a `tool_id()` of 
 
 `res://addons/hammerforge/tools/` is still scanned, but only so an existing install does not lose anything. Do not put new work there.
 
-Override only what you use: `can_activate()` / `get_poll_fail_reason()` to refuse and say why, `activate()` / `deactivate()` to take and give back whatever the tool holds, `handle_input()` / `handle_keyboard()` returning `EditorPlugin.AFTER_GUI_INPUT_STOP` to consume an event, and `get_shortcut_hud_lines()` for the viewport HUD. A tool that changes the level has to go through the `undo_redo` the registry hands it, or the change is not undoable.
+Override only what you use: `can_activate()` / `get_poll_fail_reason()` to refuse and say why, `activate()` / `deactivate()` to take and give back whatever the tool holds, `handle_input()` / `handle_keyboard()` returning `EditorPlugin.AFTER_GUI_INPUT_STOP` to consume an event, and `get_shortcut_hud_lines()` for the viewport HUD. `snap_point(pos)` lands a point where a draw would, through the level's snap settings. A tool that changes the level has to go through the `undo_redo` the registry hands it, or the change is not undoable.
 
 ## Bake Output
 Bake creates `BakedGeometry`:
 - If chunked baking is enabled, it adds `BakedChunk_x_y_z` nodes.
 - Collision shape type depends on **Collision Mode** (Inspector property on LevelRoot):
-  - **Mode 0** (default): Each chunk has a MeshInstance3D and StaticBody3D with a single ConcavePolygonShape3D (trimesh).
-  - **Mode 1**: Each chunk has a StaticBody3D containing one ConvexPolygonShape3D per brush (convex hulls). Better for physics broadphase and navmesh generation.
+  - **Mode 0** (default): Each chunk has a MeshInstance3D and StaticBody3D with one ConcavePolygonShape3D (trimesh) per material surface, and the surface names in its `hf_surface_names` metadata.
+  - **Mode 1**: Each chunk has a StaticBody3D containing one ConvexPolygonShape3D per brush (convex hulls), or per piece of a brush a cut goes through. Better for physics broadphase and navmesh generation.
   - **Mode 2**: Each visgroup gets its own StaticBody3D with convex hulls for all its member brushes. Ungrouped brushes share a default body. Best for room-based physics partitioning and bot navigation.
+- Stairs and Spiral Stairs with **Collision** set to Ramp bake their slope instead of their steps' collision: a `RampCollision` StaticBody3D with one ConvexPolygonShape3D per flight, landing or tread and no mesh, or in Mode 2 the shapes in their visgroup's body ([#1416](https://github.com/saworbit/hammerforge/issues/1416)).
+
+Brushes whose Cast Shadows or Lightmap Scale differ bake into meshes of their own, `BakedMesh_0`, `BakedMesh_1` and on, with one collision body between them as before. On the CSG path each set of brushes is a CSG pass of its own with every cut in it, so a cut carves every one of them; where a brush of one set meets a brush of another, both keep their faces, as on the per-face path ([#1444](https://github.com/saworbit/hammerforge/issues/1444), [#1438](https://github.com/saworbit/hammerforge/issues/1438)).
 
 Generated flat floor paint brushes are included in the CSG bake. Heightmap floor meshes are duplicated directly into the baked output with trimesh collision shapes (they bypass CSG since they are already ArrayMesh). Heightmap collision is appended after visgroup partitioning (mode 2), so heightmap shapes are always preserved.
 
 Use Face Materials (optional):
-- Enables the faster per-face material path when the level has no effective structural cuts.
-- Pending, applied, or frozen subtract brushes automatically use the CSG-safe path instead, preserving the cut in both rendered geometry and collision.
+- Bakes each face with its own material, with no CSG pass, when the level has no effective structural cuts. Which path is faster depends on the level: on separate boxes the CSG path measured faster (593 ms against 848 ms at 3,000 brushes), and on boxes that touch their neighbours the face material path did (648 ms against 899 ms). It hands the editor a frame every 8 brushes, and CSG two frames in all. [Performance](HammerForge_Performance.md#baking) has the tables.
+- Pending, applied, or frozen cut brushes automatically use the CSG-safe path instead, preserving the cut in both rendered geometry and collision.
 - Bakes cooperatively (yields every 8 brushes) so the editor stays responsive on large levels.
 
 ## Save/Load (.hflevel)
@@ -2025,67 +2908,73 @@ Use Face Materials (optional):
 - Load .hflevel restores them. Missing heightmap/material fields default to zero (backward-compatible).
 - A file whose shape cannot be read leaves the open level exactly as it was and reports why, rather than clearing it first. A single brush or entity in an otherwise good file that cannot be read is skipped, the rest loads, and the count of what was skipped is reported.
 - Autosave can write to a configurable path.
+- The timed autosave waits for a pause in editing. When its timer comes round during a drag, a resize, an extrude, a vertex or gizmo drag, a marquee, a paint stroke, or a Polygon, Path or other tool with points placed, it waits until that ends and nothing has changed for 2 seconds. It never waits longer than twice the interval, so a session that never pauses is still saved. A level that has not changed since the last autosave is not saved again ([#1736](https://github.com/saworbit/hammerforge/issues/1736)).
+- The `.hflevel` records the scene it was saved from, a `.tscn` or a `.scn`. Switch a big level to `.scn` with **Scene > Save Scene As...**: with autosave on, the level autosaves at once so the file names the new scene. With autosave off, press **Save Level** once after ([Data Portability](HammerForge_Data_Portability.md#which-file-opens-the-tscn-wins)).
 
-## Capturing Exit-Time Errors
-PowerShell command:
+## When the editor crashes
 
-```powershell
-Start-Process -FilePath "C:\Godot\Godot_v4.7-stable_win64.exe" `
-  -ArgumentList '--editor','--path','C:\hammerforge' `
-  -RedirectStandardOutput "C:\Godot\godot_stdout.log" `
-  -RedirectStandardError "C:\Godot\godot_stderr.log" `
-  -NoNewWindow
-```
+A crash of the Godot editor takes HammerForge with it, and a plugin cannot stop that. What HammerForge does is keep enough to see what happened. The [autosave](#saveload-hflevel) is what keeps your work.
+
+- **A journal for each session.** While the editor runs, HammerForge writes how far start up got, one line for each undo step (its name, the brush count and the level's autosave file) and one for each agent bridge call (the tool, and its error code when it failed) to `user://hammerforge/journal/<process id>.jsonl`. Each line is written to disk as it happens. It keeps the last 200 lines. A clean close deletes the file.
+- **The next start notices.** A journal whose editor is no longer running was left by a session that died. HammerForge turns it into a folder under `user://hammerforge/crashes/`, named for the date and time, and the Console's [Status](#status) tab shows **Did not close cleanly** first, with the last step it saw. The Log tab says where the folder is.
+- **What the folder holds.** `report.json`: the HammerForge and Godot versions, the system, the graphics adapter and renderer, where start up got to, and the last step and bridge call. `journal.jsonl`: the journal. `levels/`: a copy of the newest autosave of each level the journal names. A level copy over 20 MB is left out, and `report.json` names it.
+- **Godot's own output.** The editor keeps no log file; Godot's file logging covers a running game. What the engine prints as it goes down reaches only the terminal the editor was started from. To keep it, start the editor from one with its output sent to a file, such as `godot --editor --path . > editor.log 2>&1`.
+- **The buttons.** **Open Folder** shows the folder. **Copy Report** puts `report.json` and the journal's last 20 lines on the clipboard, ready to paste into an issue. **Dismiss** hides the row and leaves the folder.
+- **Repeats.** A crash whose last five journal lines match an earlier report adds one to that report's count instead of making a new folder.
+- **Limits.** 10 reports, 50 MB in all, none older than 90 days. The oldest go first.
+- **Nothing leaves your machine.** Sending a report is up to you.
+
+In the editor, `user://` is the project's own data folder: on Windows `%APPDATA%\Godot\app_userdata\<project name>`. Two editors open on two projects each keep their own journals, and a journal whose editor is still running is never taken.
+
+To try it, start the editor with the environment variable `HAMMERFORGE_CRASH_TEST` set. The Status tab gains a **Crash test** row whose **End Editor** button stops the editor at once, as a crash would. Start the editor again and the report is there.
 
 ## Troubleshooting
-No brushes appear
-- Ensure HammerForge is enabled.
-- Select LevelRoot.
-- Use **Create Starter** (or Create Floor) so raycasts hit something.
 
-Subtract does nothing
-- Subtract only affects Add brushes and is visible after Bake.
-- Pending cuts appear in bright orange-red; once applied they turn standard red.
+Find what you see in the Symptom column, then the row whose cause fits. One symptom can have more than one row. The [Status](#status) board in the HammerForge Console checks several of these causes for you.
 
-Paint preview looks wrong
-- Regenerate by deleting `LevelRoot/Generated` and paint again.
+### Setup
 
-Dock not showing
-- Restart Godot after enabling the plugin.
+| Symptom | Cause | Fix |
+|---|---|---|
+| No HammerForge dock, and no **HammerForge** in the main-screen switcher | The plugin is not enabled. | Enable **HammerForge** in **Project → Project Settings → Plugins**. See [Install HammerForge](HammerForge_Install_Upgrade.md#install-hammerforge). |
+| The plugin turns itself off as you enable it, with script errors from `addons/hammerforge` in the Output panel | The editor is older than Godot 4.7, which HammerForge needs. | Open the project in Godot 4.7 or newer. See [Requirements](HammerForge_Install_Upgrade.md#requirements). |
+| The same errors, or no dock, just after you copied the plugin in or upgraded it | Godot's editor cache in `.godot/editor` still describes the old files. | Close Godot, delete `.godot/editor`, reopen the project and enable the plugin again. See [Cache Reset](HammerForge_Install_Upgrade.md#cache-reset-recovery). |
+| **HammerForge** is in the switcher, but its dock is not on screen | The dock is a tab in the upper-left dock, beside Scene, and another tab is in front of it. A saved editor layout can also have moved it. | Click the **HammerForge** tab. If there is none, the [Cache Reset](HammerForge_Install_Upgrade.md#cache-reset-recovery) deletes the saved layout too, and the dock comes back in its own place. |
+| A Draw click selects instead of drawing, and a toast says the scene has no HammerForge level | The scene has nodes in it and no `LevelRoot`. A Draw click makes one only in a new, empty 3D scene. | Click **Create Starter** or **Create Empty** in the dock's banner. See [LevelRoot](#levelroot). |
 
-Face selection not working
-- Enable Face Select Mode in the Paint tab → Materials section.
-- Use the Select tool (not Draw).
+### Building
 
-Material fails to load
-- Material `.tres` files must not have a UTF-8 BOM. If Godot reports "Expected '['" on a `.tres` file, re-save it without BOM (or create a fresh one via FileSystem -> New Resource -> StandardMaterial3D).
+| Symptom | Cause | Fix |
+|---|---|---|
+| A brush outline follows the mouse, but no brush is made | Draw takes two clicks. The drag sets the base, then the brush waits for its height. | Move the mouse to set the height and click again. Right-click cancels. See [Brush Creation](#brush-creation-cad-style). |
+| A click on a face selects the whole brush | Face Select Mode is off. | Tick **Face Select Mode** in **Paint → Materials**. See [Face Materials and UVs](#face-materials-and-uvs). |
+| Face Select turns itself off, and the picked faces are gone | Leaving the Paint tab, choosing another tool, entering Vertex mode or selecting a node in the Scene tree closes Face Select. Closing it clears the picked faces. | Go back to **Paint** and tick **Face Select Mode** again. See [Viewport Mouse Controls](#viewport-mouse-controls). |
+| **Bevel Edge** asks for vertex/edge mode, or for an edge | The brush is not in Vertex mode, or no edge is picked. | Select the brush, press **V**, then **E** for edges, and click an edge. See [Edge Bevel](#edge-bevel-chamfer). |
+| **Bevel Edge** says the bevel failed | The edge is not shared by exactly two faces of the brush. | Pick an edge where two faces meet. |
+| The bevel is narrower than the **Radius** you set | A radius wider than half the shorter of the two faces is capped to that, with a warning in the Output panel. Any wider and the bevel would eat through those faces. | Nothing is wrong. For a wider bevel, make the brush larger first. |
+| **Inset Face** says "Select a face first", or **Create** under Displacement says "Select a quad face first" | No face is picked. Face Select is off, or something closed it, which clears the picked faces. | On the **Paint** tab, tick **Face Select Mode**, click the face, then use **Face Tools** on the same tab. See [Face Inset](#face-inset) and [Creating a Displacement](#creating-a-displacement). |
+| **Inset Face** says the inset failed | The **Inset** distance reaches the middle of the face from one of its corners. | Use a smaller **Inset**. See [Face Inset](#face-inset). |
+| **Create** under Displacement says it needs a quad face with no displacement on it | The face does not have exactly four corners. Triangles and faces with more corners cannot take a displacement. | Pick a four-cornered face. See [Creating a Displacement](#creating-a-displacement). |
+| **Create** under Displacement says it needs a quad face with no displacement on it | The face has a displacement already. Create refuses rather than wipe the sculpt on it. | Use **Destroy** first to start over. Destroy can be undone. |
+| Dragging on a displaced face does not sculpt | Paint mode is off. Face Select turns it off. | Turn **Paint** mode on in the toolbar. That closes Face Select, and the stroke sculpts the displaced face it starts on, with no pick needed. |
+| Dragging on a displaced face does not sculpt | The **Displacement** section, or **Face Tools** around it on the **Paint** tab, is collapsed. | Expand both. See [Painting (Sculpting)](#painting-sculpting). |
+| Dragging on a face does not sculpt | The face has no displacement. | Pick it in Face Select and click **Create** under Displacement first. |
 
-Heightmap mesh not appearing
-- Ensure the active layer has a heightmap assigned (use Import or Generate in the Paint tab → Heightmap section).
-- Confirm cells are painted first -- heightmap only displaces filled cells.
+### Paint and materials
 
-Blend shader shows only one slot
-- Paint blend weights using the Blend tool on already-filled cells.
-- Set a Blend Slot (B/C/D) and assign textures to Slot A-D.
+| Symptom | Cause | Fix |
+|---|---|---|
+| Painted cells stay flat, with no heightmap floor | The active layer has no heightmap. | With that layer active, click **Import...** or **Generate Noise** in **Paint → Heightmap**. See [Heightmap Terrain](#heightmap-terrain). |
+| A heightmap is imported or generated, but no floor appears | No cells are painted on the layer. A heightmap shapes painted cells only. | Paint the cells with Brush, Rect, Line or Bucket. |
+| Blend strokes change nothing on the floor | The layer has no heightmap. Blend weights are drawn by a heightmap floor's blend shader, and a layer without a heightmap is built from plain brushes. | Give the layer a heightmap, as above. See [Material Blending](#material-blending). |
+| A heightmap floor shows only Slot A | No blend weights are painted, so its blend map is all zero. The Blend tool skips cells that are not painted. | Paint the cells first, then go over them with the **Blend** tool (**N**) at a **Strength** above 0. |
+| The floor shows plain colours, not textures | No texture is set for the slots, so each slot shows its own colour. | Click **Texture...** beside **Slot A** to **Slot D** in **Paint → Blend & Terrain**. |
+| Faces bake grey after **Load Library**, and the status line says some materials are missing | The library names a material file the project no longer has. Its palette slot loads empty. | Put the file back at the path the library names and load again, or give those faces another material. See [Material Library](#material-library). |
 
-Displacement create fails
-- The face must be a quad (exactly 4 vertices). Triangles and N-gons are not supported.
-- Ensure a face is selected in Face Select Mode.
-- The face must not already have a displacement. Create refuses one rather than
-  wiping the sculpt already on it. Use Destroy first if you want to start over.
+### Bake and test
 
-Displacement paint does nothing
-- Enable Paint Mode in the dock.
-- Expand the Displacement section (it must be visible, not collapsed).
-- Ensure the face has a displacement (click Create first).
-
-Bevel edge fails
-- Enter Vertex mode (V), then Edge sub-mode (E). Select an edge.
-- The edge must be shared by exactly 2 faces.
-- A radius wider than half the shorter of the two adjacent faces is capped to
-  that, with a warning. A bevel wider than that eats through the faces it sits
-  between.
-
-Inset face fails
-- The inset distance is too large relative to the face size. Use a smaller value.
-- Verify the blend_map texture is generated (requires cells with non-zero blend weights).
+| Symptom | Cause | Fix |
+|---|---|---|
+| A cut brush cuts nothing in the viewport | The viewport draws each brush as you drew it. Only a bake makes the cut, and a bake from the dock leaves the brushes on screen over it. | Tick **Cut Preview** in **Test → Settings** to see the cut as you build. **Test Level** bakes and plays with the cut in place. See [Cut Preview](#cut-preview). |
+| A cut brush cuts nothing in Test Level | It does not overlap a solid brush. | Move it into the brush it should cut. **Check Bake Issues** in **Test → Advanced Bake** lists it as a floating subtract, and **Select** on its row picks it. See [Bake Issue Detection](#bake-issue-detection). |
+| A cut brush leaves a heightmap floor whole | The bake adds heightmap floors after the brushes are cut, so no brush cuts them. | Erase the cells under the cut, or shape the floor with the Sculpt buttons in **Paint → Heightmap**. See [Bake Output](#bake-output). |

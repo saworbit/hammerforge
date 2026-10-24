@@ -1,0 +1,3392 @@
+{
+ "hf_add_entity_output": {
+  "properties": {
+   "brush_id": {
+    "anyOf": [
+     {
+      "description": "A brush_id from hf_get_brushes or a change",
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "A brush entity source, instead",
+    "title": "Brush Id"
+   },
+   "delay": {
+    "default": 0.0,
+    "minimum": 0,
+    "title": "Delay",
+    "type": "number"
+   },
+   "entity": {
+    "anyOf": [
+     {
+      "description": "The entity's path, from hf_get_entities",
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "A point entity source's path",
+    "title": "Entity"
+   },
+   "fire_once": {
+    "default": false,
+    "title": "Fire Once",
+    "type": "boolean"
+   },
+   "input_name": {
+    "description": "An input the target declares",
+    "minLength": 1,
+    "title": "Input Name",
+    "type": "string"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   },
+   "output_name": {
+    "description": "An output the source declares",
+    "minLength": 1,
+    "title": "Output Name",
+    "type": "string"
+   },
+   "parameter": {
+    "default": "",
+    "title": "Parameter",
+    "type": "string"
+   },
+   "target_name": {
+    "description": "The name the target was given",
+    "minLength": 1,
+    "title": "Target Name",
+    "type": "string"
+   }
+  },
+  "required": [
+   "output_name",
+   "target_name",
+   "input_name"
+  ],
+  "title": "hf_add_entity_outputArguments",
+  "type": "object"
+ },
+ "hf_assign_material": {
+  "$defs": {
+   "NormalSelector": {
+    "description": "The face whose world normal points most nearly along `normal`.",
+    "properties": {
+     "normal": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Normal",
+      "type": "array"
+     }
+    },
+    "required": [
+     "normal"
+    ],
+    "title": "NormalSelector",
+    "type": "object"
+   }
+  },
+  "properties": {
+   "brush_id": {
+    "description": "A brush_id from hf_get_brushes or a change",
+    "minLength": 1,
+    "title": "Brush Id",
+    "type": "string"
+   },
+   "faces": {
+    "anyOf": [
+     {
+      "items": {
+       "anyOf": [
+        {
+         "minimum": 0,
+         "type": "integer"
+        },
+        {
+         "enum": [
+          "+x",
+          "-x",
+          "+y",
+          "-y",
+          "+z",
+          "-z"
+         ],
+         "type": "string"
+        },
+        {
+         "$ref": "#/$defs/NormalSelector"
+        }
+       ],
+       "description": "A face index, a world side such as '+y', or {normal: [x, y, z]}. Box faces are stored +X, -X, +Y, -Y, +Z, -Z."
+      },
+      "minItems": 1,
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Only these faces; all faces if absent",
+    "title": "Faces"
+   },
+   "material": {
+    "description": "An id or a name from hf_get_materials",
+    "minLength": 1,
+    "title": "Material",
+    "type": "string"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   }
+  },
+  "required": [
+   "brush_id",
+   "material"
+  ],
+  "title": "hf_assign_materialArguments",
+  "type": "object"
+ },
+ "hf_bake": {
+  "properties": {
+   "cordons": {
+    "default": false,
+    "description": "Bake only what the switched-on cordons take",
+    "title": "Cordons",
+    "type": "boolean"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   }
+  },
+  "title": "hf_bakeArguments",
+  "type": "object"
+ },
+ "hf_batch": {
+  "$defs": {
+   "AddEntityOutputOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/AddEntityOutputParams"
+     },
+     "tool": {
+      "const": "hf_add_entity_output",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "AddEntityOutputOp",
+    "type": "object"
+   },
+   "AddEntityOutputParams": {
+    "additionalProperties": false,
+    "properties": {
+     "brush_id": {
+      "anyOf": [
+       {
+        "description": "A brush_id from hf_get_brushes or a change",
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Brush Id"
+     },
+     "delay": {
+      "default": 0.0,
+      "minimum": 0,
+      "title": "Delay",
+      "type": "number"
+     },
+     "entity": {
+      "anyOf": [
+       {
+        "description": "The entity's path, from hf_get_entities",
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Entity"
+     },
+     "fire_once": {
+      "default": false,
+      "title": "Fire Once",
+      "type": "boolean"
+     },
+     "input_name": {
+      "minLength": 1,
+      "title": "Input Name",
+      "type": "string"
+     },
+     "output_name": {
+      "minLength": 1,
+      "title": "Output Name",
+      "type": "string"
+     },
+     "parameter": {
+      "default": "",
+      "title": "Parameter",
+      "type": "string"
+     },
+     "target_name": {
+      "minLength": 1,
+      "title": "Target Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "output_name",
+     "target_name",
+     "input_name"
+    ],
+    "title": "AddEntityOutputParams",
+    "type": "object"
+   },
+   "AssignMaterialOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/AssignMaterialParams"
+     },
+     "tool": {
+      "const": "hf_assign_material",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "AssignMaterialOp",
+    "type": "object"
+   },
+   "AssignMaterialParams": {
+    "additionalProperties": false,
+    "properties": {
+     "brush_id": {
+      "description": "A brush_id from hf_get_brushes or a change",
+      "minLength": 1,
+      "title": "Brush Id",
+      "type": "string"
+     },
+     "faces": {
+      "anyOf": [
+       {
+        "items": {
+         "anyOf": [
+          {
+           "minimum": 0,
+           "type": "integer"
+          },
+          {
+           "enum": [
+            "+x",
+            "-x",
+            "+y",
+            "-y",
+            "+z",
+            "-z"
+           ],
+           "type": "string"
+          },
+          {
+           "$ref": "#/$defs/NormalSelector"
+          }
+         ],
+         "description": "A face index, a world side such as '+y', or {normal: [x, y, z]}. Box faces are stored +X, -X, +Y, -Y, +Z, -Z."
+        },
+        "minItems": 1,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Faces"
+     },
+     "material": {
+      "minLength": 1,
+      "title": "Material",
+      "type": "string"
+     }
+    },
+    "required": [
+     "brush_id",
+     "material"
+    ],
+    "title": "AssignMaterialParams",
+    "type": "object"
+   },
+   "CordonBounds": {
+    "description": "A world-space box for a cordon, its corners either way round.",
+    "properties": {
+     "max": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Max",
+      "type": "array"
+     },
+     "min": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Min",
+      "type": "array"
+     }
+    },
+    "required": [
+     "min",
+     "max"
+    ],
+    "title": "CordonBounds",
+    "type": "object"
+   },
+   "DeleteEntityOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/DeleteEntityParams"
+     },
+     "tool": {
+      "const": "hf_delete_entity",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "DeleteEntityOp",
+    "type": "object"
+   },
+   "DeleteEntityParams": {
+    "additionalProperties": false,
+    "properties": {
+     "entity": {
+      "description": "The entity's path, from hf_get_entities",
+      "minLength": 1,
+      "title": "Entity",
+      "type": "string"
+     }
+    },
+    "required": [
+     "entity"
+    ],
+    "title": "DeleteEntityParams",
+    "type": "object"
+   },
+   "DeleteOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/DeleteParams"
+     },
+     "tool": {
+      "const": "hf_delete_brush",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "DeleteOp",
+    "type": "object"
+   },
+   "DeleteParams": {
+    "additionalProperties": false,
+    "properties": {
+     "brush_id": {
+      "description": "A brush_id from hf_get_brushes or a change",
+      "minLength": 1,
+      "title": "Brush Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "brush_id"
+    ],
+    "title": "DeleteParams",
+    "type": "object"
+   },
+   "ExtrudeOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/ExtrudeParams"
+     },
+     "tool": {
+      "const": "hf_extrude_face",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "ExtrudeOp",
+    "type": "object"
+   },
+   "ExtrudeParams": {
+    "additionalProperties": false,
+    "properties": {
+     "brush_id": {
+      "description": "A brush_id from hf_get_brushes or a change",
+      "minLength": 1,
+      "title": "Brush Id",
+      "type": "string"
+     },
+     "distance": {
+      "exclusiveMinimum": 0,
+      "maximum": 256,
+      "title": "Distance",
+      "type": "number"
+     },
+     "face": {
+      "anyOf": [
+       {
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "enum": [
+         "+x",
+         "-x",
+         "+y",
+         "-y",
+         "+z",
+         "-z"
+        ],
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/NormalSelector"
+       }
+      ],
+      "description": "A face index, a world side such as '+y', or {normal: [x, y, z]}. Box faces are stored +X, -X, +Y, -Y, +Z, -Z.",
+      "title": "Face"
+     },
+     "snap": {
+      "default": true,
+      "title": "Snap",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "brush_id",
+     "face",
+     "distance"
+    ],
+    "title": "ExtrudeParams",
+    "type": "object"
+   },
+   "NormalSelector": {
+    "description": "The face whose world normal points most nearly along `normal`.",
+    "properties": {
+     "normal": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Normal",
+      "type": "array"
+     }
+    },
+    "required": [
+     "normal"
+    ],
+    "title": "NormalSelector",
+    "type": "object"
+   },
+   "PlaceEntityOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/PlaceEntityParams"
+     },
+     "tool": {
+      "const": "hf_place_entity",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "PlaceEntityOp",
+    "type": "object"
+   },
+   "PlaceEntityParams": {
+    "additionalProperties": false,
+    "properties": {
+     "entity_class": {
+      "description": "A point entity class, such as light_point",
+      "minLength": 1,
+      "title": "Entity Class",
+      "type": "string"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Name"
+     },
+     "position": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Position",
+      "type": "array"
+     },
+     "preset": {
+      "anyOf": [
+       {
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Preset"
+     },
+     "properties": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "The class's own properties by name, such as {energy: 2}",
+      "title": "Properties"
+     },
+     "rotation_degrees": {
+      "anyOf": [
+       {
+        "description": "Euler XYZ degrees, absolute",
+        "items": {
+         "type": "number"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Rotation Degrees"
+     }
+    },
+    "required": [
+     "position",
+     "entity_class"
+    ],
+    "title": "PlaceEntityParams",
+    "type": "object"
+   },
+   "PlaceOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/PlaceParams"
+     },
+     "tool": {
+      "const": "hf_place_brush",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "PlaceOp",
+    "type": "object"
+   },
+   "PlaceParams": {
+    "additionalProperties": false,
+    "properties": {
+     "material": {
+      "anyOf": [
+       {
+        "description": "An id or a name from hf_get_materials",
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Material"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "description": "What the Scene dock calls it",
+        "maxLength": 64,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Name"
+     },
+     "operation": {
+      "default": "union",
+      "enum": [
+       "union",
+       "subtract"
+      ],
+      "title": "Operation",
+      "type": "string"
+     },
+     "position": {
+      "description": "The brush centre, [x, y, z]",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Position",
+      "type": "array"
+     },
+     "rotation_degrees": {
+      "anyOf": [
+       {
+        "description": "Euler XYZ degrees, absolute",
+        "items": {
+         "type": "number"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Rotation Degrees"
+     },
+     "shape": {
+      "default": "box",
+      "enum": [
+       "box",
+       "cylinder",
+       "sphere",
+       "cone",
+       "wedge",
+       "pyramid",
+       "prism_tri",
+       "prism_pent",
+       "ellipsoid",
+       "capsule",
+       "torus",
+       "tetrahedron",
+       "octahedron",
+       "dodecahedron",
+       "icosahedron"
+      ],
+      "title": "Shape",
+      "type": "string"
+     },
+     "sides": {
+      "anyOf": [
+       {
+        "description": "Sides of a pyramid or a round shape",
+        "maximum": 64,
+        "minimum": 3,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Sides"
+     },
+     "size": {
+      "description": "[x, y, z] full extents in metres",
+      "items": {
+       "exclusiveMinimum": 0,
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Size",
+      "type": "array"
+     },
+     "snap": {
+      "default": true,
+      "title": "Snap",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "size",
+     "position"
+    ],
+    "title": "PlaceParams",
+    "type": "object"
+   },
+   "RemoveCordonOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/RemoveCordonParams"
+     },
+     "tool": {
+      "const": "hf_remove_cordon",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "RemoveCordonOp",
+    "type": "object"
+   },
+   "RemoveCordonParams": {
+    "additionalProperties": false,
+    "properties": {
+     "index": {
+      "description": "The cordon's place in hf_get_cordons, from 0",
+      "minimum": 0,
+      "title": "Index",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "index"
+    ],
+    "title": "RemoveCordonParams",
+    "type": "object"
+   },
+   "RemoveEntityOutputOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/RemoveEntityOutputParams"
+     },
+     "tool": {
+      "const": "hf_remove_entity_output",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "RemoveEntityOutputOp",
+    "type": "object"
+   },
+   "RemoveEntityOutputParams": {
+    "additionalProperties": false,
+    "properties": {
+     "brush_id": {
+      "anyOf": [
+       {
+        "description": "A brush_id from hf_get_brushes or a change",
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Brush Id"
+     },
+     "entity": {
+      "anyOf": [
+       {
+        "description": "The entity's path, from hf_get_entities",
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Entity"
+     },
+     "index": {
+      "description": "Its place in the source's outputs, from 0",
+      "minimum": 0,
+      "title": "Index",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "index"
+    ],
+    "title": "RemoveEntityOutputParams",
+    "type": "object"
+   },
+   "ResizeOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/ResizeParams"
+     },
+     "tool": {
+      "const": "hf_resize_brush",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "ResizeOp",
+    "type": "object"
+   },
+   "ResizeParams": {
+    "additionalProperties": false,
+    "properties": {
+     "brush_id": {
+      "description": "A brush_id from hf_get_brushes or a change",
+      "minLength": 1,
+      "title": "Brush Id",
+      "type": "string"
+     },
+     "size": {
+      "description": "[x, y, z] full extents in metres",
+      "items": {
+       "exclusiveMinimum": 0,
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Size",
+      "type": "array"
+     },
+     "snap": {
+      "default": true,
+      "title": "Snap",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "brush_id",
+     "size"
+    ],
+    "title": "ResizeParams",
+    "type": "object"
+   },
+   "RunCommandOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/RunCommandParams"
+     },
+     "tool": {
+      "const": "hf_run_command",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "RunCommandOp",
+    "type": "object"
+   },
+   "RunCommandParams": {
+    "additionalProperties": false,
+    "properties": {
+     "brush_ids": {
+      "anyOf": [
+       {
+        "items": {
+         "description": "A brush_id from hf_get_brushes or a change",
+         "minLength": 1,
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "The brushes the command acts on; never the selection",
+      "title": "Brush Ids"
+     },
+     "command": {
+      "description": "A command id from hf_list_commands, such as hollow",
+      "pattern": "^[a-z_0-9]+$",
+      "title": "Command",
+      "type": "string"
+     },
+     "entities": {
+      "anyOf": [
+       {
+        "items": {
+         "description": "The entity's path, from hf_get_entities",
+         "minLength": 1,
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "Entities, for a command that takes them (prefab pieces)",
+      "title": "Entities"
+     },
+     "params": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "The command's params, as hf_list_commands describes them",
+      "title": "Params"
+     }
+    },
+    "required": [
+     "command"
+    ],
+    "title": "RunCommandParams",
+    "type": "object"
+   },
+   "SetBrushEntityOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/SetBrushEntityParams"
+     },
+     "tool": {
+      "const": "hf_set_brush_entity",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "SetBrushEntityOp",
+    "type": "object"
+   },
+   "SetBrushEntityParams": {
+    "additionalProperties": false,
+    "properties": {
+     "brush_ids": {
+      "description": "The brushes, tied as one entity",
+      "items": {
+       "description": "A brush_id from hf_get_brushes or a change",
+       "minLength": 1,
+       "type": "string"
+      },
+      "minItems": 1,
+      "title": "Brush Ids",
+      "type": "array"
+     },
+     "entity_class": {
+      "description": "A brush entity class, such as trigger_once, or none to untie",
+      "minLength": 1,
+      "title": "Entity Class",
+      "type": "string"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Name"
+     }
+    },
+    "required": [
+     "brush_ids",
+     "entity_class"
+    ],
+    "title": "SetBrushEntityParams",
+    "type": "object"
+   },
+   "SetCordonOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/SetCordonParams"
+     },
+     "tool": {
+      "const": "hf_set_cordon",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "SetCordonOp",
+    "type": "object"
+   },
+   "SetCordonParams": {
+    "additionalProperties": false,
+    "properties": {
+     "active": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Active"
+     },
+     "bounds": {
+      "anyOf": [
+       {
+        "$ref": "#/$defs/CordonBounds"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null
+     },
+     "brush_ids": {
+      "anyOf": [
+       {
+        "items": {
+         "description": "A brush_id from hf_get_brushes or a change",
+         "minLength": 1,
+         "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "Brushes to put the cordon round",
+      "title": "Brush Ids"
+     },
+     "enabled": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Enabled"
+     },
+     "index": {
+      "anyOf": [
+       {
+        "description": "The cordon's place in hf_get_cordons, from 0",
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Index"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "What the dock calls it; an empty name goes back to 'Cordon N'",
+      "title": "Name"
+     }
+    },
+    "title": "SetCordonParams",
+    "type": "object"
+   },
+   "SetEntityPropertiesOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/SetEntityPropertiesParams"
+     },
+     "tool": {
+      "const": "hf_set_entity_properties",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "SetEntityPropertiesOp",
+    "type": "object"
+   },
+   "SetEntityPropertiesParams": {
+    "additionalProperties": false,
+    "properties": {
+     "brush_id": {
+      "anyOf": [
+       {
+        "description": "A brush_id from hf_get_brushes or a change",
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Brush Id"
+     },
+     "entity": {
+      "anyOf": [
+       {
+        "description": "The entity's path, from hf_get_entities",
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Entity"
+     },
+     "preset": {
+      "anyOf": [
+       {
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Preset"
+     },
+     "properties": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "The class's own properties by name, such as {energy: 2}",
+      "title": "Properties"
+     }
+    },
+    "title": "SetEntityPropertiesParams",
+    "type": "object"
+   },
+   "SetSpawnOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/SetSpawnParams"
+     },
+     "tool": {
+      "const": "hf_set_spawn",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "SetSpawnOp",
+    "type": "object"
+   },
+   "SetSpawnParams": {
+    "additionalProperties": false,
+    "properties": {
+     "position": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Position",
+      "type": "array"
+     },
+     "yaw_degrees": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Yaw Degrees"
+     }
+    },
+    "required": [
+     "position"
+    ],
+    "title": "SetSpawnParams",
+    "type": "object"
+   },
+   "TransformEntityOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/TransformEntityParams"
+     },
+     "tool": {
+      "const": "hf_transform_entity",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "TransformEntityOp",
+    "type": "object"
+   },
+   "TransformEntityParams": {
+    "additionalProperties": false,
+    "properties": {
+     "entity": {
+      "description": "The entity's path, from hf_get_entities",
+      "minLength": 1,
+      "title": "Entity",
+      "type": "string"
+     },
+     "position": {
+      "anyOf": [
+       {
+        "description": "[x, y, z] in metres",
+        "items": {
+         "type": "number"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Position"
+     },
+     "rotation_degrees": {
+      "anyOf": [
+       {
+        "description": "Euler XYZ degrees, absolute",
+        "items": {
+         "type": "number"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Rotation Degrees"
+     }
+    },
+    "required": [
+     "entity"
+    ],
+    "title": "TransformEntityParams",
+    "type": "object"
+   },
+   "TransformOp": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "$ref": "#/$defs/TransformParams"
+     },
+     "tool": {
+      "const": "hf_transform_brush",
+      "title": "Tool",
+      "type": "string"
+     }
+    },
+    "required": [
+     "tool",
+     "params"
+    ],
+    "title": "TransformOp",
+    "type": "object"
+   },
+   "TransformParams": {
+    "additionalProperties": false,
+    "properties": {
+     "brush_id": {
+      "description": "A brush_id from hf_get_brushes or a change",
+      "minLength": 1,
+      "title": "Brush Id",
+      "type": "string"
+     },
+     "position": {
+      "anyOf": [
+       {
+        "description": "[x, y, z] in metres",
+        "items": {
+         "type": "number"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Position"
+     },
+     "rotation_degrees": {
+      "anyOf": [
+       {
+        "description": "[x, y, z] in metres",
+        "items": {
+         "type": "number"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Rotation Degrees"
+     },
+     "snap": {
+      "default": true,
+      "title": "Snap",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "brush_id"
+    ],
+    "title": "TransformParams",
+    "type": "object"
+   }
+  },
+  "properties": {
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   },
+   "ops": {
+    "items": {
+     "discriminator": {
+      "mapping": {
+       "hf_add_entity_output": "#/$defs/AddEntityOutputOp",
+       "hf_assign_material": "#/$defs/AssignMaterialOp",
+       "hf_delete_brush": "#/$defs/DeleteOp",
+       "hf_delete_entity": "#/$defs/DeleteEntityOp",
+       "hf_extrude_face": "#/$defs/ExtrudeOp",
+       "hf_place_brush": "#/$defs/PlaceOp",
+       "hf_place_entity": "#/$defs/PlaceEntityOp",
+       "hf_remove_cordon": "#/$defs/RemoveCordonOp",
+       "hf_remove_entity_output": "#/$defs/RemoveEntityOutputOp",
+       "hf_resize_brush": "#/$defs/ResizeOp",
+       "hf_run_command": "#/$defs/RunCommandOp",
+       "hf_set_brush_entity": "#/$defs/SetBrushEntityOp",
+       "hf_set_cordon": "#/$defs/SetCordonOp",
+       "hf_set_entity_properties": "#/$defs/SetEntityPropertiesOp",
+       "hf_set_spawn": "#/$defs/SetSpawnOp",
+       "hf_transform_brush": "#/$defs/TransformOp",
+       "hf_transform_entity": "#/$defs/TransformEntityOp"
+      },
+      "propertyName": "tool"
+     },
+     "oneOf": [
+      {
+       "$ref": "#/$defs/PlaceOp"
+      },
+      {
+       "$ref": "#/$defs/TransformOp"
+      },
+      {
+       "$ref": "#/$defs/ResizeOp"
+      },
+      {
+       "$ref": "#/$defs/DeleteOp"
+      },
+      {
+       "$ref": "#/$defs/ExtrudeOp"
+      },
+      {
+       "$ref": "#/$defs/AssignMaterialOp"
+      },
+      {
+       "$ref": "#/$defs/SetSpawnOp"
+      },
+      {
+       "$ref": "#/$defs/PlaceEntityOp"
+      },
+      {
+       "$ref": "#/$defs/TransformEntityOp"
+      },
+      {
+       "$ref": "#/$defs/SetEntityPropertiesOp"
+      },
+      {
+       "$ref": "#/$defs/DeleteEntityOp"
+      },
+      {
+       "$ref": "#/$defs/AddEntityOutputOp"
+      },
+      {
+       "$ref": "#/$defs/RemoveEntityOutputOp"
+      },
+      {
+       "$ref": "#/$defs/SetBrushEntityOp"
+      },
+      {
+       "$ref": "#/$defs/SetCordonOp"
+      },
+      {
+       "$ref": "#/$defs/RemoveCordonOp"
+      },
+      {
+       "$ref": "#/$defs/RunCommandOp"
+      }
+     ]
+    },
+    "maxItems": 100,
+    "minItems": 1,
+    "title": "Ops",
+    "type": "array"
+   }
+  },
+  "required": [
+   "ops"
+  ],
+  "title": "hf_batchArguments",
+  "type": "object"
+ },
+ "hf_create_starter": {
+  "properties": {
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   }
+  },
+  "title": "hf_create_starterArguments",
+  "type": "object"
+ },
+ "hf_delete_brush": {
+  "properties": {
+   "brush_id": {
+    "description": "A brush_id from hf_get_brushes or a change",
+    "minLength": 1,
+    "title": "Brush Id",
+    "type": "string"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   }
+  },
+  "required": [
+   "brush_id"
+  ],
+  "title": "hf_delete_brushArguments",
+  "type": "object"
+ },
+ "hf_delete_entity": {
+  "properties": {
+   "entity": {
+    "description": "The entity's path, from hf_get_entities",
+    "minLength": 1,
+    "title": "Entity",
+    "type": "string"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   }
+  },
+  "required": [
+   "entity"
+  ],
+  "title": "hf_delete_entityArguments",
+  "type": "object"
+ },
+ "hf_extrude_face": {
+  "$defs": {
+   "NormalSelector": {
+    "description": "The face whose world normal points most nearly along `normal`.",
+    "properties": {
+     "normal": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Normal",
+      "type": "array"
+     }
+    },
+    "required": [
+     "normal"
+    ],
+    "title": "NormalSelector",
+    "type": "object"
+   }
+  },
+  "properties": {
+   "brush_id": {
+    "description": "A brush_id from hf_get_brushes or a change",
+    "minLength": 1,
+    "title": "Brush Id",
+    "type": "string"
+   },
+   "distance": {
+    "exclusiveMinimum": 0,
+    "maximum": 256,
+    "title": "Distance",
+    "type": "number"
+   },
+   "face": {
+    "anyOf": [
+     {
+      "minimum": 0,
+      "type": "integer"
+     },
+     {
+      "enum": [
+       "+x",
+       "-x",
+       "+y",
+       "-y",
+       "+z",
+       "-z"
+      ],
+      "type": "string"
+     },
+     {
+      "$ref": "#/$defs/NormalSelector"
+     }
+    ],
+    "description": "A face index, a world side such as '+y', or {normal: [x, y, z]}. Box faces are stored +X, -X, +Y, -Y, +Z, -Z.",
+    "title": "Face"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   },
+   "snap": {
+    "default": true,
+    "title": "Snap",
+    "type": "boolean"
+   }
+  },
+  "required": [
+   "brush_id",
+   "face",
+   "distance"
+  ],
+  "title": "hf_extrude_faceArguments",
+  "type": "object"
+ },
+ "hf_get_brushes": {
+  "$defs": {
+   "Bounds": {
+    "description": "A world-space box: keep what overlaps it, or what is inside it.",
+    "properties": {
+     "max": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Max",
+      "type": "array"
+     },
+     "min": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Min",
+      "type": "array"
+     }
+    },
+    "required": [
+     "min",
+     "max"
+    ],
+    "title": "Bounds",
+    "type": "object"
+   }
+  },
+  "properties": {
+   "bounds": {
+    "anyOf": [
+     {
+      "$ref": "#/$defs/Bounds"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null
+   },
+   "bounds_test": {
+    "default": "touching",
+    "enum": [
+     "touching",
+     "inside"
+    ],
+    "title": "Bounds Test",
+    "type": "string"
+   },
+   "brush_ids": {
+    "anyOf": [
+     {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Brush Ids"
+   },
+   "count_only": {
+    "default": false,
+    "title": "Count Only",
+    "type": "boolean"
+   },
+   "filter": {
+    "anyOf": [
+     {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Tests every brush must pass",
+    "title": "Filter"
+   },
+   "include_faces": {
+    "default": true,
+    "title": "Include Faces",
+    "type": "boolean"
+   },
+   "limit": {
+    "default": 200,
+    "maximum": 2000,
+    "minimum": 1,
+    "title": "Limit",
+    "type": "integer"
+   },
+   "offset": {
+    "default": 0,
+    "minimum": 0,
+    "title": "Offset",
+    "type": "integer"
+   }
+  },
+  "title": "hf_get_brushesArguments",
+  "type": "object"
+ },
+ "hf_get_cordons": {
+  "properties": {},
+  "title": "hf_get_cordonsArguments",
+  "type": "object"
+ },
+ "hf_get_entities": {
+  "$defs": {
+   "Bounds": {
+    "description": "A world-space box: keep what overlaps it, or what is inside it.",
+    "properties": {
+     "max": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Max",
+      "type": "array"
+     },
+     "min": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Min",
+      "type": "array"
+     }
+    },
+    "required": [
+     "min",
+     "max"
+    ],
+    "title": "Bounds",
+    "type": "object"
+   }
+  },
+  "properties": {
+   "bounds": {
+    "anyOf": [
+     {
+      "$ref": "#/$defs/Bounds"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null
+   },
+   "count_by_class": {
+    "default": false,
+    "title": "Count By Class",
+    "type": "boolean"
+   },
+   "count_only": {
+    "default": false,
+    "title": "Count Only",
+    "type": "boolean"
+   },
+   "filter": {
+    "anyOf": [
+     {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Tests every entity must pass",
+    "title": "Filter"
+   },
+   "limit": {
+    "default": 200,
+    "maximum": 2000,
+    "minimum": 1,
+    "title": "Limit",
+    "type": "integer"
+   },
+   "offset": {
+    "default": 0,
+    "minimum": 0,
+    "title": "Offset",
+    "type": "integer"
+   }
+  },
+  "title": "hf_get_entitiesArguments",
+  "type": "object"
+ },
+ "hf_get_materials": {
+  "properties": {},
+  "title": "hf_get_materialsArguments",
+  "type": "object"
+ },
+ "hf_get_status": {
+  "properties": {},
+  "title": "hf_get_statusArguments",
+  "type": "object"
+ },
+ "hf_list_commands": {
+  "properties": {},
+  "title": "hf_list_commandsArguments",
+  "type": "object"
+ },
+ "hf_measure": {
+  "$defs": {
+   "MeasureEntity": {
+    "description": "An entity by its path from hf_get_entities, for hf_measure.",
+    "properties": {
+     "entity": {
+      "minLength": 1,
+      "title": "Entity",
+      "type": "string"
+     }
+    },
+    "required": [
+     "entity"
+    ],
+    "title": "MeasureEntity",
+    "type": "object"
+   },
+   "MeasureFace": {
+    "description": "One face of a brush, for hf_measure.",
+    "properties": {
+     "brush_id": {
+      "description": "A brush_id from hf_get_brushes or a change",
+      "minLength": 1,
+      "title": "Brush Id",
+      "type": "string"
+     },
+     "face": {
+      "anyOf": [
+       {
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "enum": [
+         "+x",
+         "-x",
+         "+y",
+         "-y",
+         "+z",
+         "-z"
+        ],
+        "type": "string"
+       },
+       {
+        "$ref": "#/$defs/NormalSelector"
+       }
+      ],
+      "description": "A face index, a world side such as '+y', or {normal: [x, y, z]}. Box faces are stored +X, -X, +Y, -Y, +Z, -Z.",
+      "title": "Face"
+     }
+    },
+    "required": [
+     "brush_id",
+     "face"
+    ],
+    "title": "MeasureFace",
+    "type": "object"
+   },
+   "NormalSelector": {
+    "description": "The face whose world normal points most nearly along `normal`.",
+    "properties": {
+     "normal": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Normal",
+      "type": "array"
+     }
+    },
+    "required": [
+     "normal"
+    ],
+    "title": "NormalSelector",
+    "type": "object"
+   }
+  },
+  "properties": {
+   "items": {
+    "items": {
+     "anyOf": [
+      {
+       "description": "A brush_id from hf_get_brushes or a change",
+       "minLength": 1,
+       "type": "string"
+      },
+      {
+       "$ref": "#/$defs/MeasureFace"
+      },
+      {
+       "$ref": "#/$defs/MeasureEntity"
+      },
+      {
+       "description": "[x, y, z] in metres",
+       "items": {
+        "type": "number"
+       },
+       "maxItems": 3,
+       "minItems": 3,
+       "type": "array"
+      }
+     ],
+     "description": "A brush_id, {brush_id, face}, {entity} or a point [x, y, z] in metres"
+    },
+    "maxItems": 64,
+    "minItems": 1,
+    "title": "Items",
+    "type": "array"
+   }
+  },
+  "required": [
+   "items"
+  ],
+  "title": "hf_measureArguments",
+  "type": "object"
+ },
+ "hf_place_brush": {
+  "properties": {
+   "material": {
+    "anyOf": [
+     {
+      "description": "An id or a name from hf_get_materials",
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Material"
+   },
+   "name": {
+    "anyOf": [
+     {
+      "description": "What the Scene dock calls it",
+      "maxLength": 64,
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Name"
+   },
+   "operation": {
+    "default": "union",
+    "enum": [
+     "union",
+     "subtract"
+    ],
+    "title": "Operation",
+    "type": "string"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   },
+   "position": {
+    "description": "The brush centre, [x, y, z]",
+    "items": {
+     "type": "number"
+    },
+    "maxItems": 3,
+    "minItems": 3,
+    "title": "Position",
+    "type": "array"
+   },
+   "rotation_degrees": {
+    "anyOf": [
+     {
+      "description": "Euler XYZ degrees, absolute",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Rotation Degrees"
+   },
+   "shape": {
+    "default": "box",
+    "enum": [
+     "box",
+     "cylinder",
+     "sphere",
+     "cone",
+     "wedge",
+     "pyramid",
+     "prism_tri",
+     "prism_pent",
+     "ellipsoid",
+     "capsule",
+     "torus",
+     "tetrahedron",
+     "octahedron",
+     "dodecahedron",
+     "icosahedron"
+    ],
+    "title": "Shape",
+    "type": "string"
+   },
+   "sides": {
+    "anyOf": [
+     {
+      "description": "Sides of a pyramid or a round shape",
+      "maximum": 64,
+      "minimum": 3,
+      "type": "integer"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Sides"
+   },
+   "size": {
+    "description": "[x, y, z] full extents in metres",
+    "items": {
+     "exclusiveMinimum": 0,
+     "type": "number"
+    },
+    "maxItems": 3,
+    "minItems": 3,
+    "title": "Size",
+    "type": "array"
+   },
+   "snap": {
+    "default": true,
+    "title": "Snap",
+    "type": "boolean"
+   }
+  },
+  "required": [
+   "size",
+   "position"
+  ],
+  "title": "hf_place_brushArguments",
+  "type": "object"
+ },
+ "hf_place_entity": {
+  "properties": {
+   "entity_class": {
+    "description": "A point entity class, such as light_point",
+    "minLength": 1,
+    "title": "Entity Class",
+    "type": "string"
+   },
+   "name": {
+    "anyOf": [
+     {
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Name"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   },
+   "position": {
+    "description": "Where it stands, [x, y, z]",
+    "items": {
+     "type": "number"
+    },
+    "maxItems": 3,
+    "minItems": 3,
+    "title": "Position",
+    "type": "array"
+   },
+   "preset": {
+    "anyOf": [
+     {
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Preset"
+   },
+   "properties": {
+    "anyOf": [
+     {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "The class's own properties by name, such as {energy: 2}",
+    "title": "Properties"
+   },
+   "rotation_degrees": {
+    "anyOf": [
+     {
+      "description": "Euler XYZ degrees, absolute",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Rotation Degrees"
+   }
+  },
+  "required": [
+   "position",
+   "entity_class"
+  ],
+  "title": "hf_place_entityArguments",
+  "type": "object"
+ },
+ "hf_plan": {
+  "properties": {
+   "filter": {
+    "anyOf": [
+     {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Brush tests, as hf_get_brushes",
+    "title": "Filter"
+   },
+   "format": {
+    "default": "png",
+    "enum": [
+     "png",
+     "svg"
+    ],
+    "title": "Format",
+    "type": "string"
+   },
+   "labels": {
+    "default": false,
+    "title": "Labels",
+    "type": "boolean"
+   },
+   "size": {
+    "default": 1024,
+    "maximum": 4096,
+    "minimum": 64,
+    "title": "Size",
+    "type": "integer"
+   },
+   "y_max": {
+    "anyOf": [
+     {
+      "type": "number"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Top of the band",
+    "title": "Y Max"
+   },
+   "y_min": {
+    "anyOf": [
+     {
+      "type": "number"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Bottom of the band",
+    "title": "Y Min"
+   }
+  },
+  "title": "hf_planArguments",
+  "type": "object"
+ },
+ "hf_redo": {
+  "properties": {
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   }
+  },
+  "title": "hf_redoArguments",
+  "type": "object"
+ },
+ "hf_remove_cordon": {
+  "properties": {
+   "index": {
+    "description": "The cordon's place in hf_get_cordons, from 0",
+    "minimum": 0,
+    "title": "Index",
+    "type": "integer"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   }
+  },
+  "required": [
+   "index"
+  ],
+  "title": "hf_remove_cordonArguments",
+  "type": "object"
+ },
+ "hf_remove_entity_output": {
+  "properties": {
+   "brush_id": {
+    "anyOf": [
+     {
+      "description": "A brush_id from hf_get_brushes or a change",
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "A brush entity source, instead",
+    "title": "Brush Id"
+   },
+   "entity": {
+    "anyOf": [
+     {
+      "description": "The entity's path, from hf_get_entities",
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "A point entity source's path",
+    "title": "Entity"
+   },
+   "index": {
+    "description": "Its place in the source's outputs, from 0",
+    "minimum": 0,
+    "title": "Index",
+    "type": "integer"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   }
+  },
+  "required": [
+   "index"
+  ],
+  "title": "hf_remove_entity_outputArguments",
+  "type": "object"
+ },
+ "hf_resize_brush": {
+  "properties": {
+   "brush_id": {
+    "description": "A brush_id from hf_get_brushes or a change",
+    "minLength": 1,
+    "title": "Brush Id",
+    "type": "string"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   },
+   "size": {
+    "description": "[x, y, z] full extents in metres",
+    "items": {
+     "exclusiveMinimum": 0,
+     "type": "number"
+    },
+    "maxItems": 3,
+    "minItems": 3,
+    "title": "Size",
+    "type": "array"
+   },
+   "snap": {
+    "default": true,
+    "title": "Snap",
+    "type": "boolean"
+   }
+  },
+  "required": [
+   "brush_id",
+   "size"
+  ],
+  "title": "hf_resize_brushArguments",
+  "type": "object"
+ },
+ "hf_run_command": {
+  "properties": {
+   "brush_ids": {
+    "anyOf": [
+     {
+      "items": {
+       "description": "A brush_id from hf_get_brushes or a change",
+       "minLength": 1,
+       "type": "string"
+      },
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "The brushes the command acts on; never the selection",
+    "title": "Brush Ids"
+   },
+   "command": {
+    "description": "A command id from hf_list_commands, such as hollow",
+    "pattern": "^[a-z_0-9]+$",
+    "title": "Command",
+    "type": "string"
+   },
+   "entities": {
+    "anyOf": [
+     {
+      "items": {
+       "description": "The entity's path, from hf_get_entities",
+       "minLength": 1,
+       "type": "string"
+      },
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Entities, for a command that takes them (prefab pieces)",
+    "title": "Entities"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   },
+   "params": {
+    "anyOf": [
+     {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "The command's params, as hf_list_commands describes them",
+    "title": "Params"
+   }
+  },
+  "required": [
+   "command"
+  ],
+  "title": "hf_run_commandArguments",
+  "type": "object"
+ },
+ "hf_set_brush_entity": {
+  "properties": {
+   "brush_ids": {
+    "description": "The brushes, tied as one entity",
+    "items": {
+     "description": "A brush_id from hf_get_brushes or a change",
+     "minLength": 1,
+     "type": "string"
+    },
+    "minItems": 1,
+    "title": "Brush Ids",
+    "type": "array"
+   },
+   "entity_class": {
+    "description": "A brush entity class, such as trigger_once, or none to untie",
+    "minLength": 1,
+    "title": "Entity Class",
+    "type": "string"
+   },
+   "name": {
+    "anyOf": [
+     {
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "What wiring targets",
+    "title": "Name"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   }
+  },
+  "required": [
+   "brush_ids",
+   "entity_class"
+  ],
+  "title": "hf_set_brush_entityArguments",
+  "type": "object"
+ },
+ "hf_set_cordon": {
+  "$defs": {
+   "CordonBounds": {
+    "description": "A world-space box for a cordon, its corners either way round.",
+    "properties": {
+     "max": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Max",
+      "type": "array"
+     },
+     "min": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Min",
+      "type": "array"
+     }
+    },
+    "required": [
+     "min",
+     "max"
+    ],
+    "title": "CordonBounds",
+    "type": "object"
+   }
+  },
+  "properties": {
+   "active": {
+    "anyOf": [
+     {
+      "type": "boolean"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Active"
+   },
+   "bounds": {
+    "anyOf": [
+     {
+      "$ref": "#/$defs/CordonBounds"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null
+   },
+   "brush_ids": {
+    "anyOf": [
+     {
+      "items": {
+       "description": "A brush_id from hf_get_brushes or a change",
+       "minLength": 1,
+       "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Brushes to put the cordon round",
+    "title": "Brush Ids"
+   },
+   "enabled": {
+    "anyOf": [
+     {
+      "type": "boolean"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Enabled"
+   },
+   "index": {
+    "anyOf": [
+     {
+      "description": "The cordon's place in hf_get_cordons, from 0",
+      "minimum": 0,
+      "type": "integer"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Index"
+   },
+   "name": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "What the dock calls it; an empty name goes back to 'Cordon N'",
+    "title": "Name"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   }
+  },
+  "title": "hf_set_cordonArguments",
+  "type": "object"
+ },
+ "hf_set_entity_properties": {
+  "properties": {
+   "brush_id": {
+    "anyOf": [
+     {
+      "description": "A brush_id from hf_get_brushes or a change",
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "A brush entity, instead",
+    "title": "Brush Id"
+   },
+   "entity": {
+    "anyOf": [
+     {
+      "description": "The entity's path, from hf_get_entities",
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "A point entity's path",
+    "title": "Entity"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   },
+   "preset": {
+    "anyOf": [
+     {
+      "minLength": 1,
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Preset"
+   },
+   "properties": {
+    "anyOf": [
+     {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "The class's own properties by name, such as {energy: 2}",
+    "title": "Properties"
+   }
+  },
+  "title": "hf_set_entity_propertiesArguments",
+  "type": "object"
+ },
+ "hf_set_spawn": {
+  "properties": {
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   },
+   "position": {
+    "description": "The floor point the player's feet stand on",
+    "items": {
+     "type": "number"
+    },
+    "maxItems": 3,
+    "minItems": 3,
+    "title": "Position",
+    "type": "array"
+   },
+   "yaw_degrees": {
+    "anyOf": [
+     {
+      "type": "number"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Yaw Degrees"
+   }
+  },
+  "required": [
+   "position"
+  ],
+  "title": "hf_set_spawnArguments",
+  "type": "object"
+ },
+ "hf_transform_brush": {
+  "properties": {
+   "brush_id": {
+    "description": "A brush_id from hf_get_brushes or a change",
+    "minLength": 1,
+    "title": "Brush Id",
+    "type": "string"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   },
+   "position": {
+    "anyOf": [
+     {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "The new centre",
+    "title": "Position"
+   },
+   "rotation_degrees": {
+    "anyOf": [
+     {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Euler XYZ degrees, absolute",
+    "title": "Rotation Degrees"
+   },
+   "snap": {
+    "default": true,
+    "title": "Snap",
+    "type": "boolean"
+   }
+  },
+  "required": [
+   "brush_id"
+  ],
+  "title": "hf_transform_brushArguments",
+  "type": "object"
+ },
+ "hf_transform_entity": {
+  "properties": {
+   "entity": {
+    "description": "The entity's path, from hf_get_entities",
+    "minLength": 1,
+    "title": "Entity",
+    "type": "string"
+   },
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   },
+   "position": {
+    "anyOf": [
+     {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Where it stands",
+    "title": "Position"
+   },
+   "rotation_degrees": {
+    "anyOf": [
+     {
+      "description": "Euler XYZ degrees, absolute",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Rotation Degrees"
+   }
+  },
+  "required": [
+   "entity"
+  ],
+  "title": "hf_transform_entityArguments",
+  "type": "object"
+ },
+ "hf_undo": {
+  "properties": {
+   "operation_id": {
+    "anyOf": [
+     {
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Your own id for this change. Send the same one again to retry safely.",
+    "title": "Operation Id"
+   }
+  },
+  "title": "hf_undoArguments",
+  "type": "object"
+ },
+ "hf_validate": {
+  "properties": {},
+  "title": "hf_validateArguments",
+  "type": "object"
+ },
+ "hf_viewport_screenshot": {
+  "$defs": {
+   "Bounds": {
+    "description": "A world-space box: keep what overlaps it, or what is inside it.",
+    "properties": {
+     "max": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Max",
+      "type": "array"
+     },
+     "min": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Min",
+      "type": "array"
+     }
+    },
+    "required": [
+     "min",
+     "max"
+    ],
+    "title": "Bounds",
+    "type": "object"
+   },
+   "BoundsFocus": {
+    "description": "Frame this box.",
+    "properties": {
+     "bounds": {
+      "$ref": "#/$defs/Bounds"
+     },
+     "look_from": {
+      "anyOf": [
+       {
+        "anyOf": [
+         {
+          "enum": [
+           "+x",
+           "-x",
+           "+y",
+           "-y",
+           "+z",
+           "-z",
+           "top",
+           "bottom"
+          ],
+          "type": "string"
+         },
+         {
+          "description": "[x, y, z] in metres",
+          "items": {
+           "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+         }
+        ],
+        "description": "Look from this side of the focus, such as '+x' or 'top', or along [x, y, z] from it to the camera. The editor camera's way if absent."
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Look From"
+     }
+    },
+    "required": [
+     "bounds"
+    ],
+    "title": "BoundsFocus",
+    "type": "object"
+   },
+   "BrushFocus": {
+    "description": "Frame these brushes.",
+    "properties": {
+     "brush_ids": {
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1,
+      "title": "Brush Ids",
+      "type": "array"
+     },
+     "look_from": {
+      "anyOf": [
+       {
+        "anyOf": [
+         {
+          "enum": [
+           "+x",
+           "-x",
+           "+y",
+           "-y",
+           "+z",
+           "-z",
+           "top",
+           "bottom"
+          ],
+          "type": "string"
+         },
+         {
+          "description": "[x, y, z] in metres",
+          "items": {
+           "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+         }
+        ],
+        "description": "Look from this side of the focus, such as '+x' or 'top', or along [x, y, z] from it to the camera. The editor camera's way if absent."
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Look From"
+     }
+    },
+    "required": [
+     "brush_ids"
+    ],
+    "title": "BrushFocus",
+    "type": "object"
+   },
+   "ShotCamera": {
+    "description": "A camera of its own for the shot, such as one at the player's eye.",
+    "properties": {
+     "fov": {
+      "anyOf": [
+       {
+        "maximum": 179,
+        "minimum": 1,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Fov"
+     },
+     "look_at": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Look At",
+      "type": "array"
+     },
+     "position": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Position",
+      "type": "array"
+     }
+    },
+    "required": [
+     "position",
+     "look_at"
+    ],
+    "title": "ShotCamera",
+    "type": "object"
+   }
+  },
+  "properties": {
+   "camera": {
+    "anyOf": [
+     {
+      "$ref": "#/$defs/ShotCamera"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null
+   },
+   "focus": {
+    "anyOf": [
+     {
+      "$ref": "#/$defs/BrushFocus"
+     },
+     {
+      "$ref": "#/$defs/BoundsFocus"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Focus"
+   },
+   "height": {
+    "default": 720,
+    "maximum": 1080,
+    "minimum": 64,
+    "title": "Height",
+    "type": "integer"
+   },
+   "hide": {
+    "anyOf": [
+     {
+      "items": {
+       "description": "A brush_id from hf_get_brushes or a change",
+       "minLength": 1,
+       "type": "string"
+      },
+      "maxItems": 1000,
+      "type": "array"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Brushes to leave out of the shot",
+    "title": "Hide"
+   },
+   "hide_cuts": {
+    "default": false,
+    "title": "Hide Cuts",
+    "type": "boolean"
+   },
+   "show": {
+    "default": "brushes",
+    "description": "baked: the last bake's geometry, no brushes",
+    "enum": [
+     "brushes",
+     "baked"
+    ],
+    "title": "Show",
+    "type": "string"
+   },
+   "width": {
+    "default": 1280,
+    "maximum": 1920,
+    "minimum": 64,
+    "title": "Width",
+    "type": "integer"
+   }
+  },
+  "title": "hf_viewport_screenshotArguments",
+  "type": "object"
+ }
+}

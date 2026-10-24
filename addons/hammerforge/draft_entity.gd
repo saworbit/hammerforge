@@ -2,6 +2,12 @@
 extends Node3D
 class_name DraftEntity
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 @export var entity_type: String = "":
 	set = _set_entity_type
 # Compatibility alias for older scenes and callers. It is deliberately not an
@@ -12,7 +18,22 @@ var entity_class: String:
 	set(value):
 		_set_entity_type(value)
 
-var entity_data: Dictionary = {}
+## A note for the people working on the level (#1700). `HFNotes` reads them;
+## the marker and the remembered author live here, where a note is drawn and
+## made.
+const NOTE_CLASS := "note"
+const NOTE_DRAWN := ["title", "body", "kind", "done"]
+const NOTE_KIND_COLORS := {"Note": "#ffd23f", "To Do": "#ff8a3d", "Playtest": "#4fc3f7"}
+
+## The author the last note was signed with. A new note starts with it, so a
+## name is typed once. The plugin keeps it between sessions.
+static var last_note_author := ""
+
+## Every property the entity carries, saved with the scene whole. The `data/`
+## properties are the inspector's and list only what the class's schema names, so
+## when they were what the scene wrote, a key the class did not define, and every
+## key of a class with no definition, was gone after a reopen (#1855).
+@export_storage var entity_data: Dictionary = {}
 var preview_node: Node3D = null
 var _gizmo_update_queued := false
 var _warned_scene_path := ""
@@ -136,6 +157,8 @@ func _update_preview() -> void:
 			box_inst.material_override = box_mat
 			box_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_assign_preview(box_inst)
+		"note":
+			_assign_preview(_note_preview())
 		"capsule":
 			var mesh_inst = MeshInstance3D.new()
 			var capsule = CapsuleMesh.new()
@@ -160,6 +183,87 @@ func _update_preview() -> void:
 			mesh_inst.material_override = mat
 			mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_assign_preview(mesh_inst)
+
+
+## A note's marker: a shape for its kind, its title over it, and its body under
+## the title while the cursor is over it. A done note fades.
+func _note_preview() -> Node3D:
+	var kind := str(entity_data.get("kind", "Note"))
+	var done: bool = entity_data.get("done") is bool and entity_data.get("done")
+	var color := Color(str(NOTE_KIND_COLORS.get(kind, NOTE_KIND_COLORS["Note"])))
+	var holder := Node3D.new()
+	var marker := MeshInstance3D.new()
+	marker.name = "Marker"
+	match kind:
+		"To Do":
+			var box := BoxMesh.new()
+			box.size = Vector3(0.3, 0.3, 0.3)
+			marker.mesh = box
+			marker.rotation_degrees = Vector3(45, 0, 45)
+		"Playtest":
+			var cylinder := CylinderMesh.new()
+			cylinder.top_radius = 0.18
+			cylinder.bottom_radius = 0.18
+			cylinder.height = 0.4
+			marker.mesh = cylinder
+		_:
+			var sphere := SphereMesh.new()
+			sphere.radius = 0.2
+			sphere.height = 0.4
+			marker.mesh = sphere
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = Color(color, 0.3 if done else 0.9)
+	marker.material_override = material
+	marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	holder.add_child(marker)
+	var title := _note_label(
+		str(entity_data.get("title", "Note")), 40, Color(color, 0.5 if done else 1.0)
+	)
+	title.name = "Title"
+	title.position = Vector3(0, 0.45, 0)
+	holder.add_child(title)
+	var body := _note_label(
+		str(entity_data.get("body", "")), 28, Color(1, 1, 1, 0.5 if done else 1.0)
+	)
+	body.name = "Body"
+	body.position = Vector3(0, 0.25, 0)
+	body.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.width = 600.0
+	body.visible = false
+	holder.add_child(body)
+	return holder
+
+
+func _note_label(text: String, size: int, color: Color) -> Label3D:
+	var label := Label3D.new()
+	label.text = text
+	label.font_size = size
+	label.pixel_size = 0.005
+	label.outline_size = 8
+	label.modulate = color
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.fixed_size = false
+	return label
+
+
+## Show a note's body under its title, while the cursor is over the note.
+func show_note_body(shown: bool) -> void:
+	if preview_node == null or not is_instance_valid(preview_node):
+		return
+	var body := preview_node.get_node_or_null("Body") as Label3D
+	if body:
+		body.visible = shown and body.text != ""
+
+
+## Whether a change to `prop_name` changes what the viewport draws.
+func refreshes_preview_on(prop_name: String) -> bool:
+	if prop_name == authored_scene_property():
+		return true
+	return entity_type == NOTE_CLASS and NOTE_DRAWN.has(prop_name)
 
 
 ## The property this entity's class uses to name its own model, or "".
@@ -280,41 +384,22 @@ func _apply_entity_defaults() -> void:
 	if definition.is_empty():
 		return
 	var props: Array = definition.get("properties", [])
+	var filled: Array = []
 	for prop in props:
 		var prop_name = str(prop.get("name", ""))
 		if prop_name == "":
 			continue
 		if entity_data.has(prop_name):
 			continue
-		entity_data[prop_name] = _parse_default_value(
-			prop.get("type", ""), prop.get("default", null)
+		# The coercion the Entity panel and the MCP bridge use, so a property
+		# starts at the same value on every path (#1453).
+		entity_data[prop_name] = HFEntityPropUtils.coerce_default(
+			str(prop.get("type", "")), prop.get("default", null)
 		)
-
-
-func _parse_default_value(type_name: String, value: Variant) -> Variant:
-	match type_name:
-		"float":
-			return float(value)
-		"int":
-			return int(value)
-		"bool":
-			return bool(value)
-		"color":
-			if value is Color:
-				return value
-			if value is String:
-				return Color(value)
-			return Color.WHITE
-		"vector3":
-			if value is Vector3:
-				return value
-			if value is Array and value.size() == 3:
-				return Vector3(value[0], value[1], value[2])
-			return Vector3.ZERO
-		"string":
-			return str(value)
-		_:
-			return value
+		filled.append(prop_name)
+	# A new note is signed with the last author, so a name is typed once.
+	if entity_type == NOTE_CLASS and filled.has("author") and last_note_author != "":
+		entity_data["author"] = last_note_author
 
 
 func _get_property_list() -> Array[Dictionary]:
@@ -328,8 +413,9 @@ func _get_property_list() -> Array[Dictionary]:
 		if p_name == "":
 			continue
 		var prop_type = _type_from_schema(prop.get("type", ""))
+		# Shown, not stored: `entity_data` carries the value into the scene.
 		properties.append(
-			{"name": "data/" + p_name, "type": prop_type, "usage": PROPERTY_USAGE_DEFAULT}
+			{"name": "data/" + p_name, "type": prop_type, "usage": PROPERTY_USAGE_EDITOR}
 		)
 	return properties
 
@@ -370,7 +456,9 @@ func _schema_default_value(key: String) -> Variant:
 	var schema: Array = _get_entity_schema()
 	for prop in schema:
 		if str(prop.get("name", "")) == key:
-			return _parse_default_value(prop.get("type", ""), prop.get("default", null))
+			return HFEntityPropUtils.coerce_default(
+				str(prop.get("type", "")), prop.get("default", null)
+			)
 	return null
 
 

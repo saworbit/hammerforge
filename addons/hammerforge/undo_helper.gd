@@ -10,6 +10,12 @@ const COLLATION_WINDOW_MS := 1000
 ## How many arguments the hand written add_do_method unroll covers.
 const MAX_UNROLLED_ARGS := 5
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFValidation = preload("hf_validation.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 ## Tracks the last collation state so we can merge follow-up commits.
 static var _last_collation_tag := ""
 static var _last_collation_time := 0
@@ -167,6 +173,10 @@ static func capture_scope_or_state(root: Node, scope_brush_ids: Array) -> Dictio
 ## `cordons_before` is `capture_cordons()` from before the work, from a caller
 ## whose work may have moved the cordons. No level state holds them, so when they
 ## moved the step puts them back beside the level (#1300).
+##
+## `property_changes` are properties the work changed on nodes outside the level,
+## each `[object, property, before, after]`, which the step sets and puts back
+## beside the level: Convert to Brushes hides the nodes it converted (#1440).
 static func commit_completed(
 	undo_redo,
 	root: Node,
@@ -174,12 +184,20 @@ static func commit_completed(
 	before: Dictionary,
 	history_cb: Callable = Callable(),
 	scope_brush_ids: Array = [],
-	cordons_before: Dictionary = {}
+	cordons_before: Dictionary = {},
+	property_changes: Array = []
 ) -> void:
 	if undo_redo:
 		var result: Dictionary = _after_state(root, action_name, scope_brush_ids, [], false)
 		_register_completed(
-			undo_redo, root, action_name, before, result, scope_brush_ids, cordons_before
+			undo_redo,
+			root,
+			action_name,
+			before,
+			result,
+			scope_brush_ids,
+			cordons_before,
+			property_changes
 		)
 	_reset_collation()
 	_fire_history_cb(history_cb, action_name, false)
@@ -220,6 +238,58 @@ static func commit_completed_if_changed(
 	return true
 
 
+## Record a change that only added `brush_ids` and `entity_nodes`, done already,
+## as one step that records those alone (#1786): undo takes them out, redo makes
+## them again from their records. Placing a brush recorded the whole level, so
+## each placement over the bridge cost more than the one before. False when a
+## brush is not one a scope can hold, and nothing is recorded.
+static func commit_added(
+	undo_redo,
+	root: Node,
+	action_name: String,
+	brush_ids: Array,
+	entity_nodes: Array,
+	history_cb: Callable = Callable(),
+	id_counter_before: int = -1
+) -> bool:
+	if not root or (brush_ids.is_empty() and entity_nodes.is_empty()):
+		return false
+	var after: Dictionary = (
+		root.capture_brush_scope(brush_ids)
+		if not brush_ids.is_empty()
+		else {"brushes": [], "order": {}, HFValidation.UNDO_SCOPE_KEY: true}
+	)
+	if after.is_empty():
+		return false
+	var paths: Array = []
+	var made: Dictionary = {}
+	for entity in entity_nodes:
+		var path := str(root.get_path_to(entity))
+		paths.append(path)
+		made[path] = root.entity_system.capture_entity_info(entity)
+	after["add_entities"] = made
+	var before := {
+		"brushes": [],
+		"order": {},
+		"remove": brush_ids.duplicate(),
+		"remove_entities": paths,
+		HFValidation.UNDO_SCOPE_KEY: true,
+	}
+	# The brush id counter either side, so an undo of the add leaves the level as
+	# it was, counter and all, as a whole level restore does (#660, #1646).
+	if id_counter_before >= 0:
+		before["id_counter"] = id_counter_before
+		after["id_counter"] = int(root.get("_brush_id_counter"))
+	if undo_redo:
+		undo_redo.create_action(action_name, 0, null, false)
+		undo_redo.add_do_method(root, "restore_brush_scope", after)
+		undo_redo.add_undo_method(root, "restore_brush_scope", before)
+		undo_redo.commit_action(false)
+	_reset_collation()
+	_fire_history_cb(history_cb, action_name, false)
+	return true
+
+
 ## The step `commit_completed()` records, with `result` the `_after_state()` the
 ## work left.
 static func _register_completed(
@@ -229,7 +299,8 @@ static func _register_completed(
 	before: Dictionary,
 	result: Dictionary,
 	scope_brush_ids: Array,
-	cordons_before: Dictionary
+	cordons_before: Dictionary,
+	property_changes: Array = []
 ) -> void:
 	var restore_name := "restore_brush_scope" if not scope_brush_ids.is_empty() else "restore_state"
 	undo_redo.create_action(action_name, 0, null, false)
@@ -240,6 +311,10 @@ static func _register_completed(
 		if cordons_after != cordons_before:
 			undo_redo.add_do_method(root, "restore_cordons", cordons_after)
 			undo_redo.add_undo_method(root, "restore_cordons", cordons_before)
+	for change in property_changes:
+		if change is Array and (change as Array).size() == 4 and is_instance_valid(change[0]):
+			undo_redo.add_do_property(change[0], change[1], change[3])
+			undo_redo.add_undo_property(change[0], change[1], change[2])
 	undo_redo.commit_action(false)
 
 

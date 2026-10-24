@@ -44,6 +44,28 @@ func test_categories_present():
 	assert_true(cats.has("Editing"))
 
 
+## The UV edits and Apply Rotation and Scale have no key and were in no menu, so
+## the palette is where they are found by name (#1620).
+func test_the_commands_with_no_key_are_listed():
+	var listed := {}
+	for entry in palette._entries:
+		listed[entry["action"]] = entry["category"]
+	for action in [
+		"apply_rotation_scale",
+		"justify_fit_u",
+		"justify_fit_v",
+		"uv_align_face",
+		"uv_align_world",
+		"uv_flip_u",
+		"uv_flip_v",
+		"uv_link",
+		"uv_rotate_90",
+		"uv_select_group",
+		"uv_unlink",
+	]:
+		assert_true(listed.has(action), "%s is in the palette" % action)
+
+
 # ===========================================================================
 # Search filtering
 # ===========================================================================
@@ -128,6 +150,48 @@ func test_hollow_enabled_with_brush_selection():
 	assert_false(hollow_entry["button"].disabled)
 
 
+## Apply Picked Look works on faces alone, so a brush selection is not enough.
+func test_apply_picked_look_waits_for_a_face_selection():
+	var state := {
+		"brush_count": 1,
+		"entity_count": 0,
+		"face_count": 0,
+		"paint_mode": false,
+		"vertex_mode": false,
+		"input_mode": 0,
+		"tool": 1,
+	}
+	palette.update_state(state)
+	var entry = _entry_for("apply_picked_look")
+	assert_not_null(entry, "the palette lists it")
+	if entry:
+		assert_true(entry["button"].disabled, "a brush is not a face")
+		state["face_count"] = 2
+		palette.update_state(state)
+		assert_false(entry["button"].disabled, "faces are")
+
+
+## Run Trim Along Faces reads the faces picked in Face Select (#1414).
+func test_run_trim_along_faces_waits_for_a_face_selection():
+	var state := {
+		"brush_count": 1,
+		"entity_count": 0,
+		"face_count": 0,
+		"paint_mode": false,
+		"vertex_mode": false,
+		"input_mode": 0,
+		"tool": 1,
+	}
+	palette.update_state(state)
+	var entry = _entry_for("run_trim_along_faces")
+	assert_not_null(entry, "the palette lists it")
+	if entry:
+		assert_true(entry["button"].disabled, "a brush is not a wall face")
+		state["face_count"] = 4
+		palette.update_state(state)
+		assert_false(entry["button"].disabled, "picked faces are")
+
+
 func test_mixed_selection_disables_managed_actions_but_keeps_tool_switches():
 	(
 		palette
@@ -144,7 +208,14 @@ func test_mixed_selection_disables_managed_actions_but_keeps_tool_switches():
 			}
 		)
 	)
-	for action in ["delete", "hollow", "select_similar", "apply_last_texture", "selection_filter"]:
+	for action in [
+		"delete",
+		"hollow",
+		"select_similar",
+		"apply_last_texture",
+		"apply_picked_look",
+		"selection_filter",
+	]:
 		var entry = _entry_for(action)
 		assert_not_null(entry)
 		if entry:

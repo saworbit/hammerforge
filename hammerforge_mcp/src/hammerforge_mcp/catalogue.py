@@ -72,6 +72,8 @@ COMMAND_EXAMPLES = (
     "clip_to_face",
     "carve",
     "merge",
+    "intersect",
+    "hull",
     "create_arch",
     "update_structure",
     "detach_structure",
@@ -81,10 +83,12 @@ COMMAND_EXAMPLES = (
     "move_to_floor",
     "move_to_ceiling",
     "reset_rotation",
+    "snap_to_grid",
     "paint_ramp",
     "paint_raise",
     "paint_room",
     "paint_confirm_connector",
+    "replace_material",
 )
 
 
@@ -161,9 +165,10 @@ _SPECS = [
         name="hf_get_brushes",
         title="List brushes",
         description=(
-            "The level's brushes, union brushes first, then pending cuts, then "
+            "The level's brushes, solid brushes first, then pending cuts, then "
             "committed cuts (frozen; the change tools refuse them): brush_id, shape, "
-            "union or subtract, whether it is a pending cut, position, "
+            "operation (union for a solid brush, subtract for a cut), whether it is "
+            "a pending cut, position, "
             "rotation_degrees, size, world bounds, material_id, brush_entity "
             "(null, or the entity_class, name, properties and outputs of a brush "
             "made a trigger, door or button by hf_set_brush_entity), structure "
@@ -171,10 +176,18 @@ _SPECS = [
             "structure it is a piece of), prefab (null, or the instance_id, "
             "source file, variant and linked of the placed prefab copy it is a "
             "piece of), and each face's "
-            "index, world normal, centre and material. Filter by brush_ids or by "
-            "bounds ({min, max}, keeps brushes that overlap); include_faces false "
-            "leaves the faces out; limit is 1 to 2000 (200 by default). Ids that "
-            "match nothing are listed in missing. " + CONVENTIONS
+            "index, world normal, centre and material. Find before you read: "
+            "filter is an object of tests, all of which must hold: operation "
+            "(union for solid brushes, subtract for cuts), material (an id or name any "
+            "face wears), shape, "
+            "visgroup, group, structure (a generator_id), prefab (an instance_id), "
+            "brush_entity (a class, or true for any) and name (* matches any run, "
+            "by name or brush_id). Also brush_ids, and bounds ({min, max}) with "
+            "bounds_test touching (the default) or inside. include_faces false "
+            "leaves the faces out. A page at a time: limit is 1 to 2000 (200 by "
+            "default) and offset skips that many; the answer gives count (every "
+            "match), returned and truncated. count_only answers with count alone. "
+            "Ids that match nothing are listed in missing. " + CONVENTIONS
         ),
         mutating=False,
         annotations=_read_only("List brushes"),
@@ -264,6 +277,8 @@ _SPECS = [
             "entity_class is one the level's definitions list as a point entity, such as "
             "light_point, light_spot, light_directional, ambient_sound, prop_static, "
             "info_target, logic_relay or logic_timer; a refusal names them all. "
+            "note leaves text for the people working on the level: title, body, kind "
+            "(Note, To Do or Playtest), author and done; it never bakes or exports. "
             "properties sets the class's own properties by name (a light's energy, "
             "range, color as '#rrggbb' and shadows), preset applies one of its "
             "presets first (a light's 'Warm Ceiling'), and the rest keep their "
@@ -283,6 +298,14 @@ _SPECS = [
             "name, position, rotation_degrees and properties, with colours as "
             "'#rrggbb', outputs, its wiring as hf_add_entity_output takes it, and "
             "prefab, the placed prefab copy it is a piece of or null. "
+            "filter is an object of tests, all of which must hold: class and name "
+            "(* matches any run), visgroup, has_outputs, has_inputs (another "
+            'entity\'s output aims at it) and property, as {"energy": {">": 2}} '
+            'or {"name": value}, with =, !=, >, >=, < or <=. bounds ({min, max}) '
+            "keeps entities standing in it. Paged as hf_get_brushes is: limit, "
+            "offset, count, returned, truncated and count_only. "
+            "count_by_class answers with the whole level's entities counted by "
+            "class, brush entities included, and nothing else. "
             "A brush made an entity by hf_set_brush_entity is not listed here; "
             "hf_get_brushes gives its brush_entity. Changes nothing."
         ),
@@ -518,6 +541,45 @@ _SPECS = [
         timeout=900.0,
     ),
     ToolSpec(
+        name="hf_measure",
+        title="Measure brushes, faces and points",
+        description=(
+            "Sizes, gaps and angles in one small answer, so you need not read "
+            "face lists and do the sums. items is 1 to 64 of: a brush_id; a face, "
+            "{brush_id, face} with a face as hf_extrude_face takes one; an entity, "
+            "{entity} with its path from hf_get_entities; or a point [x, y, z]. "
+            "Each brush gives its bounds (min, max, size, centre), volume and "
+            "face_count; each face its area, centre and normal. Two items give "
+            "pair: gap, the smallest distance between them, 0 where they touch "
+            "and minus the depth where they overlap; centre_distance; and "
+            "axis_gaps, the gap along x, y and z, negative where they overlap on "
+            "that axis. Two faces add angle_degrees and coplanar. More than two "
+            "give together: their bounds and total volume. A bad item is refused "
+            "with items[i] named. " + CONVENTIONS + " Changes nothing."
+        ),
+        mutating=False,
+        annotations=_read_only("Measure"),
+    ),
+    ToolSpec(
+        name="hf_plan",
+        title="Draw a plan of the level",
+        description=(
+            "A top down plan of the level, drawn from its brushes rather than "
+            "rendered, so it answers from a headless editor too. Solid brushes "
+            "filled, cut brushes hatched, brush entities outlined, entities as dots "
+            "by kind (spawn, light, trigger, door), I/O wires, cordons dashed, a "
+            "scale bar and an arrow to -Z, the way a spawn at yaw 0 faces. "
+            "format png (the default) answers an image, size pixels on its long "
+            "side (64 to 4096, 1024 by default); svg answers svg text in metres, x "
+            "world X and y world Z. y_min and y_max pick a height band, one floor "
+            "of a level with several: a brush crossing it is cut at its edges. "
+            "labels names brushes and entities. filter takes hf_get_brushes's "
+            "brush tests. Also answers bounds and counts. Changes nothing."
+        ),
+        mutating=False,
+        annotations=_read_only("Draw a plan"),
+    ),
+    ToolSpec(
         name="hf_validate",
         title="Check the level",
         description=(
@@ -529,8 +591,10 @@ _SPECS = [
             "doorways and ramps the playtest player cannot use, each with type, severity "
             "(info, warning, error), message, the brush_id or entity it is about "
             "(and other_brush_id when it is about two brushes, such as a "
-            "micro_gap), and a fix name where there is one. Counts by severity "
-            "too. Changes nothing."
+            "micro_gap), the check that found it, and a fix name where there is "
+            "one. Counts by severity too. A finding the mapper accepted for this "
+            "level is left out and counted in accepted; one whose objects changed "
+            "since comes back with changed_since_accepted. Changes nothing."
         ),
         mutating=False,
         annotations=_read_only("Check the level"),
@@ -566,17 +630,21 @@ _SPECS = [
         name="hf_list_commands",
         title="List the palette commands",
         description=(
-            "The HammerForge palette commands hf_run_command runs: hollow, clip, "
-            "clip to a face's plane, carve, merge, build a structure (stairs, "
-            "arches, spiral stairs, domes), change or detach one, place a "
-            "prefab from the library, switch or propagate a placed one, paint "
-            "floor (a rectangle of cells on a paint layer, its walls raised, a "
-            "room stamped, a connector between two layers confirmed), and more. "
+            "The HammerForge palette commands hf_run_command runs: "
+            + ", ".join(COMMAND_EXAMPLES)
+            + ". They hollow, clip, clip to a face's plane, carve, merge, "
+            "intersect, wrap brushes in their hull, snap to the grid, build a "
+            "structure (stairs, arches, "
+            "spiral stairs, domes, rings, door frames), change or detach one, "
+            "place a prefab from the library, switch or propagate a placed one, "
+            "and paint floor (a rectangle of cells on a paint layer, its walls "
+            "raised, a room stamped, a connector between two layers confirmed). "
             "Each has its command id, label, what it does, how many brush_ids "
             "(and entities) it takes, its params as JSON Schema, and undo: scope "
             "for one that only moves the brushes it names. create_arch and "
             "update_structure also have settings_by_type, each structure type's "
-            "settings with ranges and defaults, place_prefab has prefabs, the "
+            "settings with ranges and defaults (update_structure's has a Trim "
+            "Run's too), place_prefab has prefabs, the "
             "library's prefabs with their variants, and the paint commands have "
             "paint_layers, the open level's layers by index and name. Changes "
             "nothing, and needs no level open."

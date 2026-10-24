@@ -14,11 +14,19 @@ const HFValidation = preload("../hf_validation.gd")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
+const HFBakeSplit = preload("../hf_bake_split.gd")
+const HFGridSystem = preload("hf_grid_system.gd")
+const HFUVWrap = preload("../hf_uv_wrap.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFOverlayColors = preload("../hf_overlay_colors.gd")
 const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
 const ROLE_PENDING := "pending"
 const ROLE_COMMITTED := "committed"
+## How far a pick grows a brush's world box before asking the ray, so a ray
+## along an edge is not lost to rounding. The exact tests follow, so a looser
+## box costs a test and never a wrong pick.
+const PICK_BOUNDS_SLACK := 0.01
 
 var root: Node3D
 var _brush_cache: Dictionary = {}  # brush_id (String) -> Node
@@ -98,15 +106,21 @@ const MIN_BRUSH_EXTENT := 0.1
 ## landed in the draft container with an id and counted as live.
 ##
 ## The validator did catch them, but only if somebody ran Validate.
-static func _usable_size(raw) -> Vector3:
+##
+## A brush `built_from_faces` keeps a thin side as it is. Its faces are its
+## geometry and its size only describes them, so the floor built nothing: it made
+## the size lie, a Path trim 0.05 tall warned once for every piece, and a nudge
+## with Texture Lock on read the floor as a stretch and halved the texture on the
+## sides of a piece Apply Rotation and Scale had left 0.05 thick (#1592). A zero
+## or negative side is still put right, as no faces have one.
+static func _usable_size(raw, built_from_faces: bool = false) -> Vector3:
 	if not (raw is Vector3):
 		return Vector3(MIN_BRUSH_EXTENT, MIN_BRUSH_EXTENT, MIN_BRUSH_EXTENT)
 	var size: Vector3 = raw
-	var fixed := Vector3(
-		maxf(MIN_BRUSH_EXTENT, absf(size.x)),
-		maxf(MIN_BRUSH_EXTENT, absf(size.y)),
-		maxf(MIN_BRUSH_EXTENT, absf(size.z))
-	)
+	var fixed := size.abs()
+	for axis in 3:
+		if fixed[axis] < MIN_BRUSH_EXTENT and not (built_from_faces and fixed[axis] > 0.0):
+			fixed[axis] = MIN_BRUSH_EXTENT
 	if not fixed.is_equal_approx(size):
 		HFLog.warn(
 			(
@@ -118,6 +132,13 @@ static func _usable_size(raw) -> Vector3:
 			)
 		)
 	return fixed
+
+
+## Whether a brush of `shape` with `faces` is built from those faces rather than
+## from its size, which is when `DraftBrush._update_visuals()` keeps them. A
+## CUSTOM brush with none builds a box from its size.
+static func _built_from_faces(shape: int, faces) -> bool:
+	return shape == DraftBrush.BrushShape.CUSTOM and faces is Array and not faces.is_empty()
 
 
 func create_brush_from_info(info: Dictionary) -> Node:
@@ -132,7 +153,7 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		HFLog.warn("HFBrushSystem: brush size %s is not a size" % str(raw_size))
 		return null
 	var shape = info.get("shape", root.BrushShape.BOX)
-	var size = _usable_size(raw_size)
+	var size = _usable_size(raw_size, _built_from_faces(int(shape), info.get("faces")))
 	var sides = int(info.get("sides", 4))
 	var operation = info.get("operation", CSGShape3D.OPERATION_UNION)
 	var committed = bool(info.get("committed", false))
@@ -147,7 +168,7 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		brush.visible = false
 		brush.operation = CSGShape3D.OPERATION_SUBTRACTION
 		brush.set_meta("committed_cut", true)
-		brush.set_meta("pending_subtract", false)
+		brush.set_pending_cut(false)
 		root._assign_owner(brush)
 	elif operation == CSGShape3D.OPERATION_SUBTRACTION and pending:
 		_add_pending_cut(brush)
@@ -202,18 +223,43 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		for v in info.get("visgroups", []):
 			vgs.append(str(v))
 		brush.set_meta("visgroups", vgs)
+		# A piece of a hidden brush, or one an undo puts back, is hidden from the
+		# start, not once something next refreshes the visgroups (#1710).
+		if not committed and _hidden_by_visgroups(brush):
+			brush.visible = false
 	if info.has("group_id") and str(info["group_id"]) != "":
 		brush.set_meta("group_id", str(info["group_id"]))
 	# Its class, wires, tie, name and properties: a door's speed and a trigger's
 	# target are what a `.map` said the entity is, carried so an export can write
 	# them back (#663).
 	HFBrushEntity.give(brush, info)
+	# How it casts shadows and how fine its lightmap is, when it chose (#1444, #1438).
+	HFBakeSplit.give(brush, info)
+	# A kind the view filters hide is hidden from the start, made now or put back
+	# by an undo (#1720).
+	var visgroups = root.get("visgroup_system")
+	if not committed and visgroups != null and visgroups.view_filter_hides(brush):
+		brush.visible = false
 	root.tag_brush_dirty(str(brush_id))
 	if root.has_method("_emit_or_batch"):
 		root._emit_or_batch("brush_added", [str(brush_id)])
 	elif root.has_signal("brush_added"):
 		root.brush_added.emit(str(brush_id))
 	return brush
+
+
+## Give the info of a brush about to be made from nothing the level's Active
+## Material, as its whole-brush material (#1405). The one rule a Draw, a Polygon,
+## a Path and a dropped preset share, asked before the info goes into the undo
+## step so a redo makes the same brush. A Cutout keeps the cut look, and an info
+## that names a material already, as an Extrude's does, keeps that one.
+func give_active_material(info: Dictionary) -> void:
+	var mat: Variant = root.get("active_material") if is_instance_valid(root) else null
+	if not (mat is Material) or info.has("material"):
+		return
+	if int(info.get("operation", CSGShape3D.OPERATION_UNION)) == CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	info["material"] = mat
 
 
 ## The level's transform system, or a bare one in a running game, where the
@@ -240,11 +286,8 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 		if root.face_selection.has(key):
 			root.face_selection.erase(key)
 			# The dock's surface panel is still pointed at a face that just went
-			# away. Batched deletes coalesce this down to one emission.
-			if root.has_method("_emit_or_batch"):
-				root._emit_or_batch("face_selection_changed", [])
-			elif root.has_signal("face_selection_changed"):
-				root.face_selection_changed.emit()
+			# away.
+			_announce_face_selection_change()
 	_brush_count = max(0, _brush_count - 1)
 	_legacy_manager_remove(brush)
 	if brush.get_parent():
@@ -313,6 +356,25 @@ func _nudged_on_grid(draft: DraftBrush, offset: Vector3) -> Vector3:
 				target[axis] = snappedf(face + offset[axis], step) - side * half[axis]
 				break
 	return target
+
+
+## Snap to Grid: each brush moved the least distance that puts the minimum corner
+## of its world bounds on a grid point. The bounds rather than the position, so a
+## turned brush lands with its corner on the grid too. Size and rotation stay, and
+## the move goes through `set_brush_transform_by_id()` as a nudge's does, so
+## texture lock treats the two alike.
+func snap_brushes_to_grid(brush_ids: Array, step: float) -> void:
+	if not (step > 0.0):
+		return
+	for brush_id in brush_ids:
+		var brush_key := str(brush_id)
+		var brush = _find_brush_by_id(brush_key)
+		if not (brush and brush is DraftBrush):
+			continue
+		var draft := brush as DraftBrush
+		var corner := world_bounds_of(draft).position
+		var offset := HFGridSystem.nearest_grid_point(corner, step) - corner
+		set_brush_transform_by_id(brush_key, draft.size, draft.global_position + offset)
 
 
 func duplicate_brush(brush: Node) -> Node:
@@ -412,18 +474,12 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	var info: Dictionary = {}
 	info["shape"] = draft.shape
 	info["size"] = draft.size
-	var brush_id = str(draft.brush_id)
-	if brush_id == "" and draft.has_meta("brush_id"):
-		brush_id = str(draft.get_meta("brush_id"))
-	if brush_id == "":
-		brush_id = _next_brush_id()
-		draft.brush_id = str(brush_id)
-		draft.set_meta("brush_id", str(brush_id))
-	info["brush_id"] = brush_id
+	info["brush_id"] = ensure_brush_id(draft)
 	if _shape_uses_sides(draft.shape):
 		info["sides"] = draft.sides
 	var pending = (
-		draft.get_parent() == root.pending_node or bool(draft.get_meta("pending_subtract", false))
+		draft.get_parent() == root.pending_node
+		or bool(draft.get_meta(DraftBrush.PENDING_CUT_META, false))
 	)
 	var committed = (
 		draft.get_parent() == root.committed_node or bool(draft.get_meta("committed_cut", false))
@@ -449,6 +505,7 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	if gid != "":
 		info["group_id"] = gid
 	info.merge(HFBrushEntity.fields(draft))
+	info.merge(HFBakeSplit.fields(draft))
 	# The node name. restore_state() clears every brush and rebuilds it from this
 	# info, so anything not captured here does not survive an undo - and a brush
 	# that comes back as @Node3D@27719 has lost what entity I/O outputs target,
@@ -467,6 +524,34 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	if not node_name.begins_with("@"):
 		info["name"] = node_name
 	return info
+
+
+## The id `brush` is filed under: its `brush_id`, else the `brush_id` meta, else
+## one minted now and written back to both. The lookups by id accept either, and
+## the brush record carries this one, so a command and its undo step name the
+## brush alike. Never the instance id: `find_brush_by_id()` does not take one,
+## and a brush rebuilt by undo does not keep it (#1455).
+func ensure_brush_id(brush: DraftBrush) -> String:
+	var brush_id := str(brush.brush_id)
+	if brush_id == "" and brush.has_meta("brush_id"):
+		brush_id = str(brush.get_meta("brush_id"))
+	if brush_id == "":
+		brush_id = _next_brush_id()
+		brush.brush_id = brush_id
+		brush.set_meta("brush_id", brush_id)
+	return brush_id
+
+
+## The ids of the level's brushes among `nodes`, in order, each by
+## `ensure_brush_id()`. Anything else, a freed node included, is left out. Every
+## command that acts on the selected brushes asks here, so they agree on which
+## brushes those are and what they are called (#1455).
+func brush_ids_of(nodes: Array) -> PackedStringArray:
+	var ids := PackedStringArray()
+	for node in nodes:
+		if is_instance_valid(node) and node is DraftBrush and is_brush_node(node):
+			ids.append(ensure_brush_id(node as DraftBrush))
+	return ids
 
 
 func build_duplicate_info(brush: Node, offset: Vector3) -> Dictionary:
@@ -530,7 +615,13 @@ func reconcile_external_structure() -> bool:
 			_advance_id_counter(brush_id)
 			var previous_role := str(child.get_meta(CONTAINER_ROLE_META, ""))
 			if previous_role != role:
-				_reconcile_container_semantics(child as DraftBrush, role, previous_role)
+				_reconcile_container_semantics(child as DraftBrush, role)
+				repaired = true
+			elif role == ROLE_PENDING and not _is_subtract_brush(child):
+				# Saved while the Inspector could still turn a pending cut into a
+				# solid. It drew as one, but its record and Apply made it a cut and
+				# the bake left it out, so it is the cut its container says (#1551).
+				child.operation = CSGShape3D.OPERATION_SUBTRACTION
 				repaired = true
 			if role != ROLE_COMMITTED:
 				cache[brush_id] = child
@@ -540,6 +631,52 @@ func reconcile_external_structure() -> bool:
 	if root.brush_manager:
 		root.brush_manager.brushes = manager_brushes
 	return repaired
+
+
+## Unpick the faces of every brush no longer in the level.
+##
+## HammerForge's own delete unpicks a brush's faces as it removes it. Godot's
+## Delete takes the node out of the scene without asking, and its key stayed in
+## `face_selection`, so the HUD counted faces nothing could show or paint (#1515).
+## The plugin's change tracker calls this after each editor step, once the step
+## is over: a brush that passes out of the tree and back within one (a restore,
+## Apply Cuts) is back by then, a brush Godot dragged out of its container has
+## been put back, and a scene in another tab keeps its brushes as children, so
+## none of them loses its faces. A cutter Commit Cuts put away is still the
+## level's and keeps them, as it did before.
+func drop_faces_of_departed_brushes() -> void:
+	if root.face_selection.is_empty():
+		return
+	var present: Dictionary = {}
+	for container in [
+		root.draft_brushes_node, root.pending_node, root.committed_node, root.entities_node
+	]:
+		if not container:
+			continue
+		for child in container.get_children():
+			if child is DraftBrush:
+				present[face_key(child)] = true
+				# A face picked while its brush had no id is keyed by instance, and
+				# a reconcile may since have given the brush one.
+				present[str(child.get_instance_id())] = true
+	var departed: Array = []
+	for key in root.face_selection:
+		if not present.has(str(key)):
+			departed.append(key)
+	if departed.is_empty():
+		return
+	for key in departed:
+		root.face_selection.erase(key)
+	_announce_face_selection_change()
+
+
+## Tell the dock and the face mark the selection changed. Batched deletes
+## coalesce this down to one emission.
+func _announce_face_selection_change() -> void:
+	if root.has_method("_emit_or_batch"):
+		root._emit_or_batch("face_selection_changed", [])
+	elif root.has_signal("face_selection_changed"):
+		root.face_selection_changed.emit()
 
 
 static func _brush_id_from_node(brush: Node) -> String:
@@ -582,30 +719,31 @@ static func _set_container_role(brush: Node, role: String) -> void:
 		brush.set_meta(CONTAINER_ROLE_META, role)
 
 
-func _reconcile_container_semantics(brush: DraftBrush, role: String, previous_role: String) -> void:
+## Whether a hidden visgroup holds [param brush].
+func _hidden_by_visgroups(brush: Node) -> bool:
+	var visgroups = root.get("visgroup_system")
+	return visgroups != null and visgroups.is_hidden_by_visgroups(brush)
+
+
+## A brush moved into or out of the pending cuts shows as its visgroups say, as a
+## new one does, not until something next refreshes them (#1759).
+func _reconcile_container_semantics(brush: DraftBrush, role: String) -> void:
 	_set_container_role(brush, role)
 	match role:
 		ROLE_PENDING:
-			brush.visible = true
+			brush.visible = not _hidden_by_visgroups(brush)
 			brush.operation = CSGShape3D.OPERATION_SUBTRACTION
-			brush.set_meta("pending_subtract", true)
+			brush.set_pending_cut(true)
 			brush.set_meta("committed_cut", false)
-			if previous_role != "":
-				_apply_brush_material(brush, _make_pending_cut_material())
 		ROLE_COMMITTED:
 			brush.visible = false
 			brush.operation = CSGShape3D.OPERATION_SUBTRACTION
-			brush.set_meta("pending_subtract", false)
+			brush.set_pending_cut(false)
 			brush.set_meta("committed_cut", true)
 		_:
-			brush.visible = true
-			brush.set_meta("pending_subtract", false)
+			brush.visible = not _hidden_by_visgroups(brush)
+			brush.set_pending_cut(false)
 			brush.set_meta("committed_cut", false)
-			if previous_role in [ROLE_PENDING, ROLE_COMMITTED]:
-				_apply_brush_material(
-					brush,
-					_make_brush_material(brush.operation, true, true),
-				)
 
 
 # ---------------------------------------------------------------------------
@@ -795,8 +933,7 @@ func _add_pending_cut(brush: DraftBrush) -> void:
 	if not root.pending_node:
 		return
 	brush.operation = CSGShape3D.OPERATION_SUBTRACTION
-	_apply_brush_material(brush, _make_pending_cut_material())
-	brush.set_meta("pending_subtract", true)
+	brush.set_pending_cut(true)
 	root.pending_node.add_child(brush)
 	_set_container_role(brush, ROLE_PENDING)
 	root._assign_owner(brush)
@@ -820,10 +957,7 @@ func apply_pending_cuts() -> void:
 			root.draft_brushes_node.add_child(child, true)
 			_set_container_role(child, ROLE_DRAFT)
 			child.operation = CSGShape3D.OPERATION_SUBTRACTION
-			_apply_brush_material(
-				child, _make_brush_material(CSGShape3D.OPERATION_SUBTRACTION, true, true)
-			)
-			child.set_meta("pending_subtract", false)
+			child.set_pending_cut(false)
 			root._assign_owner(child)
 	root._log("Applied pending cuts (%s)" % pending_count)
 
@@ -861,7 +995,7 @@ func prepare_commit_cuts() -> bool:
 				commit_targets.append(child)
 				pending_targets.append(child)
 	if commit_targets.is_empty():
-		root.emit_signal("user_message", "No cutouts to commit", 1)
+		root.emit_signal("user_message", "No cut brushes to commit", 1)
 		return false
 	apply_pending_cuts()
 	# Commit must evaluate subtraction. The optional face-material bake path
@@ -903,8 +1037,7 @@ func _restore_pending_after_failed_commit(pending_targets: Array) -> void:
 		root.draft_brushes_node.remove_child(target)
 		root.pending_node.add_child(target, true)
 		_set_container_role(target, ROLE_PENDING)
-		target.set_meta("pending_subtract", true)
-		_apply_brush_material(target, _make_pending_cut_material())
+		target.set_pending_cut(true)
 		root._assign_owner(target)
 
 
@@ -959,9 +1092,6 @@ func restore_committed_cuts() -> void:
 			_set_container_role(child, ROLE_DRAFT)
 			child.visible = true
 			child.operation = CSGShape3D.OPERATION_SUBTRACTION
-			_apply_brush_material(
-				child, _make_brush_material(CSGShape3D.OPERATION_SUBTRACTION, true, true)
-			)
 			child.set_meta("committed_cut", false)
 			root._assign_owner(child)
 			_legacy_manager_add(child)
@@ -1131,35 +1261,30 @@ func _clear_committed_cuts() -> void:
 # ---------------------------------------------------------------------------
 
 
-func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = false) -> Material:
-	var cache_key = "%d_%d_%d" % [operation, int(solid), int(unshaded)]
+## The Draw tool's preview look for a brush of `operation`, in the colours a
+## mapper picked under Test > Settings > Colours, so High Contrast reaches the
+## brush being drawn too (#1680). Kept per palette, so a new pick is a new look.
+func _make_brush_material(operation: int) -> Material:
+	var cache_key = "%d:%d" % [operation, HFOverlayColors.revision()]
 	if _material_cache.has(cache_key):
 		return _material_cache[cache_key]
 	var mat = StandardMaterial3D.new()
 	if operation == CSGShape3D.OPERATION_SUBTRACTION:
-		var alpha = 0.85 if solid else 0.35
-		mat.albedo_color = Color(1.0, 0.2, 0.2, alpha)
-		mat.emission = Color(1.0, 0.2, 0.2)
-		mat.emission_energy = 0.6 if solid else 0.2
-		if unshaded:
-			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.SUBTRACTIVE_BRUSH)
+		mat.emission = HFOverlayColors.with_alpha(mat.albedo_color, 1.0)
+		mat.emission_energy_multiplier = 0.2
 	else:
-		mat.albedo_color = Color(0.3, 0.6, 1.0, 0.35)
+		mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.DRAW_PREVIEW)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.roughness = 0.6
+	# A look for the viewport only, which a bake leaves behind (#1518).
+	mat.set_meta(DraftBrush.EDITOR_LOOK_META, true)
 	_material_cache[cache_key] = mat
 	return mat
 
 
 func _make_pending_cut_material() -> Material:
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.3, 0.1, 0.5)
-	mat.emission = Color(1.0, 0.4, 0.1)
-	mat.emission_energy = 1.0
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.roughness = 0.6
-	return mat
+	return DraftBrush.pending_cut_look()
 
 
 func _apply_brush_material(brush: Node, mat: Material) -> void:
@@ -1220,7 +1345,8 @@ func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector
 		var draft := brush as DraftBrush
 		var old_size := draft.size
 		var old_pos := draft.global_position
-		var normalized_size := DraftBrush.normalized_size_for_shape(draft.shape, _usable_size(size))
+		var usable := _usable_size(size, _built_from_faces(draft.shape, draft.faces))
+		var normalized_size := DraftBrush.normalized_size_for_shape(draft.shape, usable)
 		if old_size.is_equal_approx(normalized_size) and old_pos.is_equal_approx(position):
 			return
 		draft.size = normalized_size
@@ -1228,6 +1354,7 @@ func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector
 		if root.texture_lock and not draft.faces.is_empty():
 			_adjust_face_uvs_for_transform(draft, old_size, draft.size, old_pos, position)
 			draft.rebuild_preview()
+		refit_texture_groups([draft])
 		_tag_brush_node_dirty(draft)
 
 
@@ -1253,7 +1380,9 @@ func _adjust_face_uvs_for_transform(
 		new_size.z / old_size.z if old_size.z > 0.001 else 1.0
 	)
 	for face in draft.faces:
-		if face == null:
+		# A face in a texture group keeps its group's mapping, which reads on from
+		# the rest of the surface wherever it is (#1437).
+		if face == null or face.uv_group != 0:
 			continue
 		var old_uv_scale: Vector2 = face.uv_scale
 		var old_uv_offset: Vector2 = face.uv_offset
@@ -1331,7 +1460,18 @@ func pick_node_past_face(
 		return closest
 	var ray_dir := ray_direction.normalized()
 	var best_t := float(brush_hit.get("distance", INF))
+	var entities_node: Node = root.entities_node
 	for child in root._iter_pick_nodes():
+		# Most of this walk is brushes, and asking `is_entity_node()` of each
+		# cost 4.6 ms a click at 3,000 of them (#1387). A brush outside the
+		# entities container is an entity only by its tag.
+		var brush := child as DraftBrush
+		if (
+			brush
+			and not brush.has_meta(&"is_entity")
+			and not (entities_node and entities_node.is_ancestor_of(brush))
+		):
+			continue
 		if (
 			not (child is Node3D)
 			or not root.is_entity_node(child)
@@ -1415,17 +1555,28 @@ func pick_face_from_ray(ray_origin: Vector3, ray_direction: Vector3) -> Dictiona
 	var preview = root.preview_brush
 	var brushes: Array = []
 	for node in root._iter_pick_nodes():
-		if node == preview:
+		var brush := node as DraftBrush
+		if brush == null:
+			continue
+		var mesh_inst: MeshInstance3D = brush.mesh_instance
+		if mesh_inst == null or not mesh_inst.is_inside_tree():
+			continue
+		# Every move over the viewport picks, and the exact tests below are
+		# several script calls a brush: walking them all cost 16 ms a move at
+		# 3,000 brushes (#1387). The world box first is a few engine calls, and
+		# it holds the turned box `_visual_pick_distance()` tests, so it only
+		# lets more through. Read off the brush each time, so it cannot go stale.
+		var world_box: AABB = mesh_inst.global_transform * mesh_inst.get_aabb()
+		if world_box.grow(PICK_BOUNDS_SLACK).intersects_ray(ray_origin, ray_dir) == null:
 			continue
 		if (
-			node is DraftBrush
-			and is_brush_node(node)
-			and root._is_pick_visible(node)
-			and root._is_pick_visible((node as DraftBrush).mesh_instance)
+			brush != preview
+			and is_brush_node(brush)
+			and root._is_pick_visible(brush)
+			and root._is_pick_visible(mesh_inst)
+			and root._visual_pick_distance(mesh_inst, ray_origin, ray_dir) >= 0.0
 		):
-			var mesh_inst: MeshInstance3D = (node as DraftBrush).mesh_instance
-			if root._visual_pick_distance(mesh_inst, ray_origin, ray_dir) >= 0.0:
-				brushes.append(node)
+			brushes.append(brush)
 	return FaceSelector.intersect_brushes(brushes, ray_origin, ray_dir)
 
 
@@ -1439,6 +1590,9 @@ func select_face_at_screen(
 		return false
 	var brush = hit.get("brush", null)
 	var face_idx = int(hit.get("face_idx", -1))
+	# A locked brush's faces are not picked (#1697).
+	if brush and root.visgroup_system and root.visgroup_system.is_locked(brush):
+		return false
 	if brush and face_idx >= 0:
 		toggle_face_selection(brush, face_idx, additive, toggle)
 		return true
@@ -1484,6 +1638,82 @@ func get_primary_selected_face() -> Dictionary:
 	return {}
 
 
+## The faces that wear palette slot `from_index`, by brush key, each an Array of
+## face indices (#1726). Across the level, or within `scope`: `brush_ids` takes
+## every face of those brushes and `faces` the picked faces, by brush key, as
+## `face_selection` holds them. `visible_only` leaves out a brush that is not
+## shown, a hidden visgroup's or a committed cut.
+func faces_wearing(from_index: int, scope: Dictionary = {}) -> Dictionary:
+	var found: Dictionary = {}
+	var brush_ids: Array = scope.get("brush_ids", [])
+	var picked: Dictionary = scope.get("faces", {})
+	var whole_level := brush_ids.is_empty() and picked.is_empty()
+	var visible_only := bool(scope.get("visible_only", false))
+	for node in root._iter_managed_brush_nodes():
+		var brush := node as DraftBrush
+		if visible_only and not brush.is_visible_in_tree():
+			continue
+		var key := face_key(brush)
+		var candidates: Array = []
+		if whole_level or brush_ids.has(key):
+			candidates = range(brush.faces.size())
+		elif picked.has(key):
+			candidates = picked[key]
+		else:
+			continue
+		var hits: Array = []
+		for idx in candidates:
+			var face_idx := int(idx)
+			if face_idx < 0 or face_idx >= brush.faces.size() or hits.has(face_idx):
+				continue
+			if brush.faces[face_idx].material_idx == from_index:
+				hits.append(face_idx)
+		if not hits.is_empty():
+			found[key] = hits
+	return found
+
+
+## Replace Material: give every face `faces_wearing()` finds the material in slot
+## `to_index`. Each keeps its UV scale, offset and rotation, or with `reset_uv`
+## goes back to none and to its projection. The faces changed become the face
+## selection, by brush key, which is returned.
+func replace_material(
+	from_index: int, to_index: int, scope: Dictionary = {}, reset_uv := false
+) -> Dictionary:
+	if from_index == to_index and not reset_uv:
+		return {}
+	var found := faces_wearing(from_index, scope)
+	var brushes: Dictionary = {}
+	for node in root._iter_managed_brush_nodes():
+		brushes[face_key(node)] = node
+	# A locked brush keeps its material, whatever else wears it (#1697).
+	if root.visgroup_system:
+		for key in found.keys():
+			if brushes.has(key) and root.visgroup_system.is_locked(brushes[key]):
+				found.erase(key)
+	var picked: Dictionary = {}
+	for key in found:
+		var brush: DraftBrush = brushes[key]
+		# A committed cut is hidden, so its faces change but are not picked.
+		if brush.get_parent() != root.committed_node:
+			picked[key] = (found[key] as Array).duplicate()
+		var typed: Array[int] = []
+		for idx in found[key]:
+			typed.append(int(idx))
+			if reset_uv:
+				var face: FaceData = brush.faces[int(idx)]
+				face.custom_uvs = PackedVector2Array()
+				face.uv_scale = Vector2.ONE
+				face.uv_offset = Vector2.ZERO
+				face.uv_rotation = 0.0
+		brush.assign_material_to_faces(to_index, typed)
+		_tag_brush_node_dirty(brush)
+	if not found.is_empty():
+		root.face_selection = picked
+		_announce_face_selection_change()
+	return found
+
+
 func assign_material_to_selected_faces(material_index: int) -> int:
 	var count := 0
 	for key in root.face_selection.keys():
@@ -1499,7 +1729,10 @@ func assign_material_to_selected_faces(material_index: int) -> int:
 			if (
 				face_idx >= 0
 				and face_idx < brush.faces.size()
-				and brush.faces[face_idx].material_idx != material_index
+				and (
+					brush.faces[face_idx].material_idx != material_index
+					or brush.faces[face_idx].is_hidden()
+				)
 			):
 				changed = true
 		brush.assign_material_to_faces(material_index, typed)
@@ -1532,6 +1765,24 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 		if node is DraftBrush and node.get_instance_id() == target_id:
 			return node as DraftBrush
 	return null
+
+
+## How many picked faces are still faces: on a brush that is still there, at an
+## index it still has. The context toolbar, the right-click menu and the dock all
+## count through this, so they show one number (#1685).
+func picked_face_count() -> int:
+	var total := 0
+	var picked = root.get("face_selection")
+	if not (picked is Dictionary):
+		return 0
+	for key in picked.keys():
+		var brush := _find_brush_by_key(str(key))
+		if not brush:
+			continue
+		for idx in picked.get(key, []):
+			if int(idx) >= 0 and int(idx) < brush.faces.size():
+				total += 1
+	return total
 
 
 # ---------------------------------------------------------------------------
@@ -1711,11 +1962,48 @@ func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
 			),
 			"walls": empty
 		}
+	_smooth_inner_walls(walls, shelled["origins"], faces, interior, wall_thickness)
 	return {
 		"result": HFOpResult.success("%d walls" % walls.size()),
 		"walls": walls,
 		"origins": shelled["origins"],
 	}
+
+
+## Give each inside wall of a hollow the smoothing group of the face it lies
+## behind (#1429), so a round brush hollows into a tube round inside as well as
+## out. The inside walls are the faces the cut made, which come out flat, as a
+## cut's faces do; these are the ones that face in, across the wall from a face
+## of the brush.
+static func _smooth_inner_walls(
+	walls: Array, origins: Dictionary, faces: Array, interior: Vector3, wall_thickness: float
+) -> void:
+	var behind: Array = []
+	for face in faces:
+		var data := face as FaceData
+		if data == null or data.smoothing_group <= 0:
+			continue
+		var plane := HFConvexClip.face_plane(data)
+		if plane.normal.length_squared() < 0.5:
+			continue
+		if plane.distance_to(interior) > 0.0:
+			plane = Plane(-plane.normal, -plane.d)
+		behind.append([HFConvexClip.offset_plane(plane, -wall_thickness), data.smoothing_group])
+	if behind.is_empty():
+		return
+	for wall: Array in walls:
+		for face in wall:
+			var data := face as FaceData
+			if data == null or origins.has(data) or data.local_verts.is_empty():
+				continue
+			for entry: Array in behind:
+				var inset: Plane = entry[0]
+				if (
+					data.normal.dot(-inset.normal) > 0.9999
+					and absf(inset.distance_to(data.local_verts[0])) <= HFConvexClip.DEFAULT_EPSILON
+				):
+					data.smoothing_group = entry[1]
+					break
 
 
 ## The largest wall thickness that still leaves an interior: the distance from the
@@ -1840,7 +2128,7 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 		elif draft.operation != first_op:
 			plan["result"] = HFOpResult.fail(
 				"Merge: all brushes must have the same operation type",
-				"Cannot merge additive and subtractive brushes together"
+				"Cannot merge solid brushes and cuts together"
 			)
 			return plan
 	# The merged brush is one brush of one entity or of none. Taking the first
@@ -2070,6 +2358,8 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 		"faces": _serialized(faces),
 	}
 	merged_info.merge(entity)
+	# The first brush's bake settings, as it gives its visgroups and group (#1660).
+	merged_info.merge(HFBakeSplit.fields(first))
 
 	var merged = create_brush_from_info(merged_info)
 	if merged:
@@ -2162,6 +2452,16 @@ func _move_brushes_vertical(brush_ids: Array, direction: float) -> void:
 ## own frame and the split runs there, so both pieces inherit the original
 ## transform untouched and rotation is carried rather than handled.
 func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
+	return clip_brush_keeping(brush_id, plane)
+
+
+## Cut a brush along any plane and keep the pieces `keep` names: 0 both, 1 the one
+## in front of the plane (the side its normal faces), 2 the one behind (#1711). The
+## new faces the cut makes take palette slot `cap_material`, or with -1 the
+## material of the face beside them.
+func clip_brush_keeping(
+	brush_id: String, plane: Plane, keep: int = 0, cap_material: int = -1
+) -> HFOpResult:
 	if brush_id == "":
 		return _op_fail("Clip: no brush ID provided")
 	root.tag_full_reconcile()
@@ -2191,8 +2491,19 @@ func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 	warn_lost_sculpts(
 		"Clip", brush_id, HFConvexClip.carry_surface_detail([front, back], halves["origins"])
 	)
+	if cap_material >= 0:
+		# A cap is a piece of no face, so it is the face `origins` does not name.
+		var origins: Dictionary = halves["origins"]
+		for face in front + back:
+			if not origins.has(face):
+				face.material_idx = cap_material
 
-	var infos: Array = _piece_infos_from_faces(draft, [front, back])
+	var kept: Array = [front, back]
+	if keep == 1:
+		kept = [front]
+	elif keep == 2:
+		kept = [back]
+	var infos: Array = _piece_infos_from_faces(draft, kept)
 	return _replace_brush_with_pieces(brush_id, infos, "Clip")
 
 
@@ -2300,9 +2611,17 @@ func plane_splits_brush(brush_id: String, plane: Plane) -> bool:
 ## One call so the whole batch is a single undo action: a multi-brush cut that
 ## undid a piece at a time would leave the level half cut.
 func clip_brushes_by_plane(brush_ids: Array, plane: Plane) -> int:
+	return clip_brushes_keeping(brush_ids, plane)
+
+
+## `clip_brush_keeping()` on each brush. Returns how many it cut; one the plane
+## misses is left as it was.
+func clip_brushes_keeping(
+	brush_ids: Array, plane: Plane, keep: int = 0, cap_material: int = -1
+) -> int:
 	var cut := 0
 	for brush_id in brush_ids:
-		if clip_brush_by_plane(str(brush_id), plane).ok:
+		if clip_brush_keeping(str(brush_id), plane, keep, cap_material).ok:
 			cut += 1
 	return cut
 
@@ -2407,7 +2726,8 @@ static func _serialized(faces: Array) -> Array:
 ## A piece that is still an axis-aligned box in the placing frame is emitted as a
 ## BOX so it keeps its resize handles, with its faces stored the way the box
 ## builder makes them. Anything else becomes CUSTOM with the faces as its
-## authoritative geometry.
+## authoritative geometry, and so does a box thinner than `MIN_BRUSH_EXTENT`,
+## which a BOX would be widened to when its scene opened (#1598).
 func _face_set_info(faces: Array, placement: Transform3D) -> Dictionary:
 	var described: Dictionary = HFConvexClip.is_axis_aligned_box(faces)
 	var bounds := _local_bounds_of_faces(faces)
@@ -2418,7 +2738,13 @@ func _face_set_info(faces: Array, placement: Transform3D) -> Dictionary:
 		# its faces the builder's way when it does. Stored that way already, the
 		# rebuild changes nothing: a face index still names the same face, and a
 		# hollow's or a structure's record still reads the piece as untouched (#867).
-		stored = DraftBrush.faces_in_box_order(stored, described["size"])
+		var ordered: Array = DraftBrush.faces_in_box_order(stored, described["size"])
+		if is_same(ordered, stored):
+			# The layout did not take it, so as a box it would be squared when its
+			# scene opened. The box test leaves room for this, which the float noise
+			# of a piece far from its origin can still use up.
+			described = {}
+		stored = ordered
 	return {
 		"shape": root.BrushShape.BOX if not described.is_empty() else root.BrushShape.CUSTOM,
 		"size": described["size"] if not described.is_empty() else bounds.size,
@@ -2430,15 +2756,23 @@ func _face_set_info(faces: Array, placement: Transform3D) -> Dictionary:
 
 
 ## Create one brush per generated face set. The entry point every generator uses.
+##
+## `cuts` names the face sets that are cuts, as `{index: pending}`. Each is a
+## Cutout as a drawn one is: pending while it waits for Apply, and never given
+## `material`, so it keeps the cut look.
 func create_brushes_from_face_sets(
-	face_sets: Array, placement: Transform3D, material: Material = null
+	face_sets: Array, placement: Transform3D, material: Material = null, cuts: Dictionary = {}
 ) -> PackedStringArray:
 	var created := PackedStringArray()
-	for faces in face_sets:
-		if (faces as Array).is_empty():
+	for i in face_sets.size():
+		var faces: Array = face_sets[i]
+		if faces.is_empty():
 			continue
 		var info := _face_set_info(faces, placement)
-		if material:
+		if cuts.has(i):
+			info["operation"] = CSGShape3D.OPERATION_SUBTRACTION
+			info["pending"] = bool(cuts[i]) and root.pending_node != null
+		elif material:
 			info["material"] = material
 		if create_brush_from_info(info):
 			created.append(str(info["brush_id"]))
@@ -2463,6 +2797,8 @@ func _piece_infos_from_faces(draft: DraftBrush, face_sets: Array) -> Array:
 		var group_id := str(draft.get_meta("group_id", ""))
 		if group_id != "":
 			info["group_id"] = group_id
+		# How the brush casts shadows and how fine its lightmap is (#1660).
+		info.merge(HFBakeSplit.fields(draft))
 		infos.append(info)
 	return infos
 
@@ -2473,13 +2809,16 @@ func _replace_brush_with_pieces(
 ) -> HFOpResult:
 	delete_brush_by_id(brush_id)
 
-	var created := 0
+	var created: Array = []
 	for info in infos:
-		if create_brush_from_info(info):
-			created += 1
-	if created == 0:
+		var piece = create_brush_from_info(info)
+		if piece:
+			created.append(piece)
+	if created.is_empty():
 		return _op_fail("%s: produced no geometry" % op_name)
-	var message := "%s: %d %s" % [op_name, created, piece_noun]
+	# A piece of a face in a texture group is still that surface (#1437).
+	refit_texture_groups(created)
+	var message := "%s: %d %s" % [op_name, created.size(), piece_noun]
 	root._log(message)
 	return HFOpResult.success(message)
 
@@ -2521,6 +2860,35 @@ func tie_brushes_to_entity(
 		root._log("Tied %d brushes as '%s'" % [brush_ids.size(), entity_class])
 	else:
 		root._log("Tied %d brushes as '%s' named '%s'" % [brush_ids.size(), entity_class, authored])
+
+
+## Give these brushes their own Cast Shadows, or `HFBakeSplit.LEVEL_DEFAULT` to
+## leave it to their visgroups and the level (#1444). The ids of those that
+## changed.
+func set_brushes_cast_shadow(brush_ids: Array, value: int) -> Array:
+	if value != HFBakeSplit.LEVEL_DEFAULT and not HFBakeSplit.is_cast_shadow(value):
+		HFLog.warn("Cast Shadows: %d is not a shadow casting setting. Left alone." % value)
+		return []
+	var changed: Array = []
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if brush is DraftBrush and HFBakeSplit.set_brush_cast_shadow(brush, value):
+			changed.append(str(brush_id))
+	return changed
+
+
+## Give these brushes a Lightmap Scale, held to its range (#1438). The ids of
+## those that changed.
+func set_brushes_lightmap_scale(brush_ids: Array, value: float) -> Array:
+	if not is_finite(value):
+		HFLog.warn("Lightmap Scale: %s is not a scale. Left alone." % str(value))
+		return []
+	var changed: Array = []
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if brush is DraftBrush and HFBakeSplit.set_brush_lightmap_scale(brush, value):
+			changed.append(str(brush_id))
+	return changed
 
 
 func untie_brushes_from_entity(brush_ids: Array) -> void:
@@ -2589,11 +2957,9 @@ func brushes_of_entity(brush: DraftBrush) -> Array:
 # ---------------------------------------------------------------------------
 
 
-func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
-	if root.face_selection.is_empty():
-		return
-
-	# Collect all selected face references
+## Every face in the face selection, with its brush and whether it has a layout
+## of its own, as a corner dragged in the UV editor gives it.
+func _selected_face_refs() -> Array:
 	var face_refs: Array = []
 	for key in root.face_selection.keys():
 		var brush = _find_brush_by_key(str(key))
@@ -2604,58 +2970,227 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 			var face_idx = int(idx)
 			if face_idx >= 0 and face_idx < brush.faces.size():
 				var face_data: FaceData = brush.faces[face_idx]
-				# Recorded before anything calls `ensure_custom_uvs()`, which
-				# fills `custom_uvs` from the projection and would make every
-				# face look hand-edited from that point on.
 				(
 					face_refs
 					. append(
 						{
 							"brush": brush,
 							"face": face_data,
-							"had_layout": not face_data.custom_uvs.is_empty(),
+							"had_layout": face_data.has_uv_layout(),
 						}
 					)
 				)
+	return face_refs
 
+
+# ---------------------------------------------------------------------------
+# Align to Edge, Fit Repeats and Fit Strip (#1727)
+# ---------------------------------------------------------------------------
+
+## The edge each face was last turned to, by face, so a second Align to Edge
+## steps on to the next edge round the face.
+var _aligned_edges: Dictionary = {}
+
+
+## Turn each selected face's texture so its U runs along one of the face's edges,
+## with the texture's top toward the middle of the face and a repeat starting at
+## the edge (#1727). A clipped diagonal wall, a roof slope or a bevel rarely runs
+## at a round angle, so neither Rotate 90 nor the gizmo's snapped turn could put
+## brick courses along it. With `near`, a world point, the edge nearest it;
+## otherwise the edge after the one the face was last turned to. Cylindrical faces
+## are left alone. Returns how many faces turned.
+func align_selected_faces_to_edge(near: Variant = null) -> int:
+	var turned := 0
+	for ref in _selected_face_refs():
+		var face: FaceData = ref["face"]
+		var count := face.local_verts.size()
+		var axes := face.texture_axes()
+		if count < 3 or axes.is_empty():
+			continue
+		var place: Transform3D = face.world_transform
+		var edge := -1
+		if near is Vector3:
+			edge = _nearest_edge(face, place, near)
+		else:
+			edge = (int(_aligned_edges.get(face.get_instance_id(), -1)) + 1) % count
+		var start: Vector3 = place * face.local_verts[edge]
+		var finish: Vector3 = place * face.local_verts[(edge + 1) % count]
+		var middle := Vector3.ZERO
+		for corner in face.local_verts:
+			middle += place * corner
+		middle /= float(count)
+		var along := _raw_uv(finish - start, axes)
+		if along.length() < 0.0001:
+			continue
+		var turn := -along.angle()
+		# The top of the texture, v going down from it, faces the middle.
+		var inward := (_raw_uv(middle - start, axes).rotated(turn) * face.uv_scale).y
+		if inward > 0.0:
+			turn += PI
+		turn = wrapf(turn, -PI, PI)
+		var at_start := _raw_uv(start, axes)
+		var showing := at_start.rotated(face.uv_rotation) * face.uv_scale + face.uv_offset
+		var offset := showing.round() - at_start.rotated(turn) * face.uv_scale
+		_set_uv_on(ref, face.uv_scale, offset, turn)
+		_aligned_edges[face.get_instance_id()] = edge
+		turned += 1
+	return turned
+
+
+## Fit each selected face to show `u` whole repeats across and `v` down, its
+## first repeat starting at the face's edge, as Fit makes one (#1727). A count of
+## 0 takes the other axis's scale, so the texture keeps its aspect. Returns how
+## many faces were fitted.
+func fit_selected_faces_repeats(u: int, v: int) -> int:
+	if u <= 0 and v <= 0:
+		return 0
+	var fitted := 0
+	for ref in _selected_face_refs():
+		var bounds := _shown_uv_bounds(ref["face"])
+		if bounds.is_empty():
+			continue
+		var size: Vector2 = bounds["max"] - bounds["min"]
+		var k := Vector2(
+			float(u) / size.x if u > 0 and size.x > 0.0001 else 0.0,
+			float(v) / size.y if v > 0 and size.y > 0.0001 else 0.0
+		)
+		if is_zero_approx(k.x):
+			k.x = k.y
+		if is_zero_approx(k.y):
+			k.y = k.x
+		if is_zero_approx(k.x) or is_zero_approx(k.y):
+			continue
+		_fit_onto(ref, bounds["min"], k, Vector2.ZERO)
+		fitted += 1
+	return fitted
+
+
+## Fit strip `index` of `count` equal strips across V to each selected face,
+## stretched once along U (#1727). A trim sheet holds several strips in one
+## texture, and one face shows one of them. Returns how many faces were fitted.
+func fit_selected_faces_strip(index: int, count: int) -> int:
+	if count < 1 or index < 1 or index > count:
+		return 0
+	var fitted := 0
+	for ref in _selected_face_refs():
+		var bounds := _shown_uv_bounds(ref["face"])
+		if bounds.is_empty():
+			continue
+		var size: Vector2 = bounds["max"] - bounds["min"]
+		if size.x <= 0.0001 or size.y <= 0.0001:
+			continue
+		var k := Vector2(1.0 / size.x, (1.0 / float(count)) / size.y)
+		_fit_onto(ref, bounds["min"], k, Vector2(0.0, float(index - 1) / float(count)))
+		fitted += 1
+	return fitted
+
+
+## Lay `ref`'s texture so the UV `low` its face shows lands on `shift`, every UV
+## scaled by `k` from there.
+func _fit_onto(ref: Dictionary, low: Vector2, k: Vector2, shift: Vector2) -> void:
+	var face: FaceData = ref["face"]
+	_set_uv_on(ref, face.uv_scale * k, (face.uv_offset - low) * k + shift, face.uv_rotation)
+
+
+## The UV bounds `face` shows, `{"min", "max"}`, or empty for a face with none.
+static func _shown_uv_bounds(face: FaceData) -> Dictionary:
+	var uvs := face.shown_uvs()
+	if uvs.is_empty():
+		return {}
+	var low := Vector2(INF, INF)
+	var high := Vector2(-INF, -INF)
+	for uv in uvs:
+		low = low.min(uv)
+		high = high.max(uv)
+	return {"min": low, "max": high}
+
+
+static func _raw_uv(point: Vector3, axes: Array) -> Vector2:
+	return Vector2(point.dot(axes[0]), point.dot(axes[1]))
+
+
+## The edge of `face`, by its first corner, nearest the world point `near`.
+static func _nearest_edge(face: FaceData, place: Transform3D, near: Vector3) -> int:
+	var best := 0
+	var best_distance := INF
+	var count := face.local_verts.size()
+	for i in count:
+		var a: Vector3 = place * face.local_verts[i]
+		var b: Vector3 = place * face.local_verts[(i + 1) % count]
+		var on_edge := Geometry3D.get_closest_point_to_segment(near, a, b)
+		var distance := on_edge.distance_to(near)
+		if distance < best_distance:
+			best_distance = distance
+			best = i
+	return best
+
+
+## Through `LevelRoot.set_face_uv_params()`, so a layout laid by hand and a
+## texture group follow as they do for a typed value.
+func _set_uv_on(ref: Dictionary, uv_scale: Vector2, offset: Vector2, turn: float) -> void:
+	var brush: DraftBrush = ref["brush"]
+	var index: int = brush.faces.find(ref["face"])
+	if index < 0:
+		return
+	root.set_face_uv_params(str(brush.brush_id), index, uv_scale, offset, turn)
+
+
+func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
+	var face_refs := _selected_face_refs()
 	if face_refs.is_empty():
 		return
-
+	# A face in a texture group is one surface with the rest of its group, so the
+	# whole group is justified as one, selected or not, and keeps the mode for an
+	# edit that reshapes it to fit it again (#1437).
+	var units: Array = []
+	var loose: Array = []
+	var grouped := {}
+	for ref in face_refs:
+		var group_id: int = (ref["face"] as FaceData).uv_group
+		if group_id == 0:
+			loose.append(ref)
+		elif not grouped.has(group_id):
+			grouped[group_id] = true
+			units.append(_texture_group_refs(group_id))
 	if treat_as_one and face_refs.size() > 1:
-		# Compute unified bounds across all faces
-		var all_min := Vector2(INF, INF)
-		var all_max := Vector2(-INF, -INF)
-		for ref in face_refs:
-			var face: FaceData = ref["face"]
-			face.ensure_custom_uvs()
-			for uv in face.custom_uvs:
-				all_min.x = min(all_min.x, uv.x)
-				all_min.y = min(all_min.y, uv.y)
-				all_max.x = max(all_max.x, uv.x)
-				all_max.y = max(all_max.y, uv.y)
-		for ref in face_refs:
-			var face: FaceData = ref["face"]
-			var before := face.to_dict()
-			_justify_face(face, mode, all_min, all_max, bool(ref.get("had_layout", false)))
-			ref["brush"].rebuild_preview()
-			if face.to_dict() != before:
-				_tag_brush_node_dirty(ref["brush"])
+		var whole: Array = loose.duplicate()
+		for unit in units:
+			whole.append_array(unit)
+		units = [whole]
 	else:
-		for ref in face_refs:
-			var face: FaceData = ref["face"]
-			face.ensure_custom_uvs()
-			var before := face.to_dict()
-			var uv_min := Vector2(INF, INF)
-			var uv_max := Vector2(-INF, -INF)
-			for uv in face.custom_uvs:
-				uv_min.x = min(uv_min.x, uv.x)
-				uv_min.y = min(uv_min.y, uv.y)
-				uv_max.x = max(uv_max.x, uv.x)
-				uv_max.y = max(uv_max.y, uv.y)
-			_justify_face(face, mode, uv_min, uv_max, bool(ref.get("had_layout", false)))
-			ref["brush"].rebuild_preview()
-			if face.to_dict() != before:
-				_tag_brush_node_dirty(ref["brush"])
+		for ref in loose:
+			units.append([ref])
+	for unit in units:
+		_justify_unit(unit, mode)
+
+
+## Justify `refs` against the UV bounds of all of them together. A face in a texture
+## group is measured and laid on by its group's mapping, a layout dragged by hand
+## giving way, and keeps `mode`; any other face keeps a hand layout, moved (#654).
+func _justify_unit(refs: Array, mode: String) -> void:
+	var uv_min := Vector2(INF, INF)
+	var uv_max := Vector2(-INF, -INF)
+	for ref in refs:
+		var face: FaceData = ref["face"]
+		var uvs: PackedVector2Array = (
+			face._project_uvs_for_vertices(face.local_verts)
+			if face.uv_group != 0
+			else face.shown_uvs()
+		)
+		for uv in uvs:
+			uv_min = uv_min.min(uv)
+			uv_max = uv_max.max(uv)
+	for ref in refs:
+		var face: FaceData = ref["face"]
+		var before := face.to_dict()
+		var keep_layout: bool = face.uv_group == 0 and bool(ref.get("had_layout", false))
+		_justify_face(face, mode, uv_min, uv_max, keep_layout)
+		if face.uv_group != 0:
+			face.uv_group_justify = mode
+			face.custom_uvs = PackedVector2Array()
+		ref["brush"].rebuild_preview()
+		if face.to_dict() != before:
+			_tag_brush_node_dirty(ref["brush"])
 
 
 ## Move a hand-made UV layout the way the button says, instead of throwing it away.
@@ -2678,11 +3213,10 @@ func _justify_layout(face: FaceData, mode: String, uv_min: Vector2, uv_max: Vect
 				1.0 / uv_size.y if uv_size.y > 0.0001 else 1.0
 			)
 			shift = -uv_min * scale
-		"tile":
-			var min_dim := minf(uv_size.x, uv_size.y)
-			var uniform := 1.0 / min_dim if min_dim > 0.0001 else 1.0
+		"tile", "fit_u", "fit_v":
+			var uniform := _one_repeat_scale(mode, uv_size)
 			scale = Vector2(uniform, uniform)
-			shift = Vector2(0.5, 0.5) - (uv_min + uv_max) * 0.5 * uniform
+			shift = _one_repeat_shift(mode, uv_min * uniform, uv_max * uniform)
 		"center":
 			shift = Vector2(0.5, 0.5) - (uv_min + uv_max) * 0.5
 		"left":
@@ -2750,18 +3284,426 @@ func _justify_face(
 			var shift_y = 1.0 - uv_max.y
 			face.uv_offset.y += shift_y
 			face.custom_uvs = PackedVector2Array()
-		"tile":
-			# Scale UVs uniformly so the shorter axis fills 0..1, preserving aspect ratio
-			# (the longer axis exceeds 1.0 and tiles)
-			var min_dim: float = minf(uv_size.x, uv_size.y)
-			var scale_uniform = 1.0 / min_dim if min_dim > 0.0001 else 1.0
+		"tile", "fit_u", "fit_v":
+			# One factor on both axes, so the texture keeps its aspect and the
+			# other axis repeats as often as it has room for.
+			var scale_uniform := _one_repeat_scale(mode, uv_size)
 			face.uv_scale = face.uv_scale * scale_uniform
-			var new_min = uv_min * scale_uniform
-			var new_max = uv_max * scale_uniform
-			var new_center = (new_min + new_max) * 0.5
-			var shift = Vector2(0.5, 0.5) - new_center
+			var shift := _one_repeat_shift(mode, uv_min * scale_uniform, uv_max * scale_uniform)
 			face.uv_offset = face.uv_offset * scale_uniform + shift
 			face.custom_uvs = PackedVector2Array()
+
+
+## The factor Tile, Fit U and Fit V scale a face by: the one that makes a single
+## repeat span its shorter side, its width or its height.
+static func _one_repeat_scale(mode: String, uv_size: Vector2) -> float:
+	var side := minf(uv_size.x, uv_size.y)
+	if mode == "fit_u":
+		side = uv_size.x
+	elif mode == "fit_v":
+		side = uv_size.y
+	return 1.0 / side if side > 0.0001 else 1.0
+
+
+## Where those three put the face once scaled to `scaled_min`..`scaled_max`. Tile
+## centres it on a repeat. Fit U and Fit V start it on one at its top left corner,
+## as Fit does, so a wall four times as long as it is high takes four whole repeats.
+static func _one_repeat_shift(mode: String, scaled_min: Vector2, scaled_max: Vector2) -> Vector2:
+	if mode == "tile":
+		return Vector2(0.5, 0.5) - (scaled_min + scaled_max) * 0.5
+	return -scaled_min
+
+
+## Lay every face in the face selection on `projection`, keeping its scale,
+## offset and rotation: Align to Face with the Face projection and Align to World
+## with Box UV (#1419). A face already on it is left as it is. A layout dragged
+## by hand would hide the new projection, so a face that changes drops it.
+## Returns how many faces changed.
+func align_selected_faces(projection: int) -> int:
+	var changed := 0
+	var touched: Array = []
+	var laid: Array = []
+	for ref in _selected_face_refs():
+		var face: FaceData = ref["face"]
+		if face.uv_projection == projection:
+			continue
+		face.uv_projection = projection
+		face.custom_uvs = PackedVector2Array()
+		changed += 1
+		laid.append(face)
+		if not touched.has(ref["brush"]):
+			touched.append(ref["brush"])
+	for brush in touched:
+		brush.rebuild_preview()
+		_tag_brush_node_dirty(brush)
+	spread_texture_groups(laid)
+	return changed
+
+
+## Wrap (#1428): give the face at `target_idx` of the brush `target_key` the
+## texture the face at `source_idx` of `source_key` shows, run on over the edge
+## the two share, through `HFUVWrap.solve()`. The target takes the source's
+## texture and the solved projection, scale, rotation and offset; a layout laid
+## by hand on it is replaced. Nothing but its texture and those changes, and
+## nothing at all when it is refused. Returns what `solve()` returns.
+func wrap_face_texture(
+	source_key: String, source_idx: int, target_key: String, target_idx: int
+) -> Dictionary:
+	var source_brush := _find_brush_by_key(source_key)
+	var target_brush := _find_brush_by_key(target_key)
+	if (
+		source_brush == null
+		or target_brush == null
+		or source_idx < 0
+		or source_idx >= source_brush.faces.size()
+		or target_idx < 0
+		or target_idx >= target_brush.faces.size()
+	):
+		return {"ok": false, "reason": "no_shared_edge"}
+	# Read where each brush stands now, as its transform notification would.
+	source_brush.sync_face_world_transform()
+	target_brush.sync_face_world_transform()
+	var source: FaceData = source_brush.faces[source_idx]
+	var target: FaceData = target_brush.faces[target_idx]
+	var result := HFUVWrap.solve(source, target)
+	if not bool(result.get("ok", false)):
+		return result
+	if not root.is_usable_uv_transform(result["scale"], result["offset"], result["rotation"]):
+		return {"ok": false, "reason": "target_flat"}
+	var before := target.to_dict()
+	target.copy_texture_from(source)
+	target.uv_projection = int(result["projection"])
+	target.uv_scale = result["scale"]
+	target.uv_rotation = float(result["rotation"])
+	target.uv_offset = result["offset"]
+	target.custom_uvs = PackedVector2Array()
+	if target.to_dict() != before:
+		target_brush.rebuild_preview()
+		_tag_brush_node_dirty(target_brush)
+		spread_texture_groups([target])
+	return result
+
+
+# ---------------------------------------------------------------------------
+# Texture groups (#1437)
+# ---------------------------------------------------------------------------
+
+## The Justify modes that fit a texture to a surface's bounds. A group last
+## justified with one is fitted again after an edit reshapes it.
+const REFIT_MODES := ["fit", "fit_u", "fit_v", "tile"]
+
+
+## Every face in texture group `group_id`, as `{"brush", "face"}`, in level order.
+func _texture_group_refs(group_id: int) -> Array:
+	var refs: Array = []
+	if group_id == 0 or root.draft_brushes_node == null:
+		return refs
+	for child in root.draft_brushes_node.get_children():
+		var brush := child as DraftBrush
+		if brush == null:
+			continue
+		for face in brush.faces:
+			if face != null and face.uv_group == group_id:
+				refs.append({"brush": brush, "face": face})
+	return refs
+
+
+## The ids of the brushes besides `brush_ids` with a face in a texture group one of
+## `brush_ids` has a face in. A step that changes one face of a group can change
+## the rest, so its undo records these brushes as well.
+func texture_group_mate_ids(brush_ids: Array) -> Array:
+	var out: Array = []
+	var groups := {}
+	var named := {}
+	for raw_id in brush_ids:
+		named[str(raw_id)] = true
+		var brush := _find_brush_by_key(str(raw_id))
+		if brush == null:
+			continue
+		for face in brush.faces:
+			if face != null and face.uv_group != 0:
+				groups[face.uv_group] = true
+	if groups.is_empty() or root.draft_brushes_node == null:
+		return out
+	for child in root.draft_brushes_node.get_children():
+		var brush := child as DraftBrush
+		if brush == null or brush.brush_id == "" or named.has(brush.brush_id):
+			continue
+		for face in brush.faces:
+			if face != null and groups.has(face.uv_group):
+				out.append(brush.brush_id)
+				break
+	return out
+
+
+## A group id no face in the level has. Drawn at random rather than counted, so a
+## face pasted into another level is unlikely to land in a group there, and kept
+## under 2^31 so it reads back exactly from an `.hflevel`, whose numbers are floats.
+func _new_texture_group_id() -> int:
+	var used := {}
+	if root.draft_brushes_node != null:
+		for child in root.draft_brushes_node.get_children():
+			var brush := child as DraftBrush
+			if brush == null:
+				continue
+			for face in brush.faces:
+				if face != null:
+					used[face.uv_group] = true
+	var group_id := 0
+	while group_id == 0 or used.has(group_id):
+		group_id = randi() & 0x7fffffff
+	return group_id
+
+
+## Link: put the selected faces in one texture group, each laid on the group's
+## mapping so they read as one surface. The group is the one the first selected
+## face is in, else the first another selected face is in, else a new one with the
+## first face's mapping. A face leaves any other group, and a layout dragged by
+## hand gives way. Returns how many faces it linked, 0 for fewer than two.
+func link_selected_faces() -> int:
+	var refs := _selected_face_refs()
+	if refs.size() < 2:
+		return 0
+	var model: FaceData = refs[0]["face"]
+	var primary := get_primary_selected_face()
+	if not primary.is_empty():
+		var primary_brush: DraftBrush = primary["brush"]
+		model = primary_brush.faces[int(primary["face_idx"])]
+	if model.uv_group == 0:
+		for ref in refs:
+			if (ref["face"] as FaceData).uv_group != 0:
+				model = ref["face"]
+				break
+	var group_id := model.uv_group if model.uv_group != 0 else _new_texture_group_id()
+	var justify := model.uv_group_justify if model.uv_group != 0 else ""
+	var touched: Array = []
+	for ref in refs:
+		var face: FaceData = ref["face"]
+		var before := face.to_dict()
+		face.uv_group = group_id
+		face.uv_group_justify = justify
+		face.copy_mapping_from(model)
+		face.custom_uvs = PackedVector2Array()
+		if face.to_dict() != before and not touched.has(ref["brush"]):
+			touched.append(ref["brush"])
+	for brush in touched:
+		brush.rebuild_preview()
+		_tag_brush_node_dirty(brush)
+	return refs.size()
+
+
+## Unlink: the selected faces leave their texture groups, each showing what it
+## showed. Returns how many were in one.
+func unlink_selected_faces() -> int:
+	var count := 0
+	var touched: Array = []
+	for ref in _selected_face_refs():
+		var face: FaceData = ref["face"]
+		if face.uv_group == 0:
+			continue
+		face.uv_group = 0
+		face.uv_group_justify = ""
+		count += 1
+		if not touched.has(ref["brush"]):
+			touched.append(ref["brush"])
+	for brush in touched:
+		_tag_brush_node_dirty(brush)
+	return count
+
+
+## Select Group: every face of the first selected face's texture group, in place of
+## the face selection. Returns how many, 0 when that face is in none.
+func select_texture_group() -> int:
+	var primary := get_primary_selected_face()
+	if primary.is_empty():
+		return 0
+	var brush: DraftBrush = primary["brush"]
+	var face: FaceData = brush.faces[int(primary["face_idx"])]
+	if face.uv_group == 0:
+		return 0
+	var refs := _texture_group_refs(face.uv_group)
+	root.face_selection.clear()
+	for ref in refs:
+		var member_brush: DraftBrush = ref["brush"]
+		toggle_face_selection(member_brush, member_brush.faces.find(ref["face"]), true, false)
+	return refs.size()
+
+
+## A texture group holds one mapping. After `faces` had theirs changed, every other
+## face of their groups takes it, a layout dragged by hand on one giving way, and
+## their brushes are rebuilt.
+func spread_texture_groups(faces: Array) -> void:
+	var spread := {}
+	var touched: Array = []
+	for candidate in faces:
+		var source := candidate as FaceData
+		if source == null or source.uv_group == 0 or spread.has(source.uv_group):
+			continue
+		spread[source.uv_group] = true
+		for ref in _texture_group_refs(source.uv_group):
+			var member: FaceData = ref["face"]
+			if member == source:
+				continue
+			var laid := member.copy_mapping_from(source)
+			if member.has_uv_layout():
+				member.custom_uvs = PackedVector2Array()
+				laid = true
+			if laid and not touched.has(ref["brush"]):
+				touched.append(ref["brush"])
+	for brush in touched:
+		brush.rebuild_preview()
+		_tag_brush_node_dirty(brush)
+
+
+## Fit again every texture group with a face on `brushes` whose last Justify was a
+## fit, across all its faces as they now stand: after a move, a resize, a turn, a
+## cut or a vertex edit has reshaped the surface. Returns how many groups.
+func refit_texture_groups(brushes: Array) -> int:
+	var modes := {}
+	for candidate in brushes:
+		var draft := candidate as DraftBrush
+		if draft == null or not is_instance_valid(draft):
+			continue
+		for face in draft.faces:
+			if face != null and face.uv_group != 0 and REFIT_MODES.has(face.uv_group_justify):
+				modes[face.uv_group] = face.uv_group_justify
+	for group_id in modes:
+		var refs := _texture_group_refs(group_id)
+		for ref in refs:
+			(ref["brush"] as DraftBrush).sync_face_world_transform()
+		_justify_unit(refs, modes[group_id])
+	return modes.size()
+
+
+# ---------------------------------------------------------------------------
+# UV edits: scale x2 and /2, flip, rotate a quarter
+# ---------------------------------------------------------------------------
+
+## The smallest and largest size a face's UV scale is given by the Paint tab's
+## Scale boxes, which are built from these. x2 and /2 stop there: /2 never reaches
+## zero, which `is_usable_uv_transform()` refuses, and neither leaves a face with a
+## scale its boxes cannot show.
+const UV_SCALE_STEP := 0.01
+const UV_SCALE_LIMIT := 100.0
+
+## What `edit_selected_face_uvs()` takes.
+const UV_EDITS := ["scale_up", "scale_down", "flip_u", "flip_v", "rotate_90"]
+
+
+## Double or halve the UV scale, flip U or V, or turn the texture a quarter, on
+## every face in the face selection.
+##
+## Each is a change to what the face's Scale and Rotate boxes hold, so it is made
+## there, and the face's layout, when it has one, is moved the same way. Changing
+## only the layout, as Justify does, would leave the boxes showing the old scale,
+## and the next edit in them would reproject the face from it.
+##
+## Scale keeps the offset, as typing a scale does, so a run of faces that line up
+## still line up. Flip and Rotate 90 turn about the middle of each face's UV
+## rectangle, so the texture does not jump off the face.
+func edit_selected_face_uvs(edit: String) -> void:
+	if not UV_EDITS.has(edit):
+		HFLog.warn("HFBrushSystem: '%s' is not a UV edit" % edit)
+		return
+	var groups_done := {}
+	for ref in _selected_face_refs():
+		var face: FaceData = ref["face"]
+		# A texture group is edited once, as one surface, about its whole middle,
+		# and its other faces take the result (#1437).
+		var around := PackedVector2Array()
+		if face.uv_group != 0:
+			if groups_done.has(face.uv_group):
+				continue
+			groups_done[face.uv_group] = true
+			for member in _texture_group_refs(face.uv_group):
+				around.append_array((member["face"] as FaceData).shown_uvs())
+		var before: Array = [face.uv_scale, face.uv_offset, face.uv_rotation, face.custom_uvs]
+		_edit_face_uvs(face, edit, around)
+		if [face.uv_scale, face.uv_offset, face.uv_rotation, face.custom_uvs] != before:
+			ref["brush"].rebuild_preview()
+			_tag_brush_node_dirty(ref["brush"])
+			spread_texture_groups([face])
+
+
+## A face's UV is `rotated(uv_rotation) * uv_scale + uv_offset` of its projection,
+## so every edit here is a map of UV space, `map`, together with the new scale and
+## rotation that make the projection come out as `map` of what it was. The offset
+## is then `map` of the old offset, and a layout is `map` of the old layout.
+func _edit_face_uvs(
+	face: FaceData, edit: String, around: PackedVector2Array = PackedVector2Array()
+) -> void:
+	var scale := face.uv_scale
+	if not scale.is_finite() or is_zero_approx(scale.x) or is_zero_approx(scale.y):
+		# Nothing here can be divided by it. The boxes refuse such a scale, so it
+		# came from somewhere else, and Re-project UVs is the way back.
+		HFLog.warn("HFBrushSystem: a face with UV scale %s was left as it is" % str(scale))
+		return
+	var new_scale := scale
+	var new_rotation := face.uv_rotation
+	var map := Transform2D.IDENTITY
+	var pivot := face.uv_offset
+	match edit:
+		"scale_up", "scale_down":
+			var up := edit == "scale_up"
+			new_scale = Vector2(_stepped_uv_scale(scale.x, up), _stepped_uv_scale(scale.y, up))
+			map = Transform2D(
+				Vector2(new_scale.x / scale.x, 0.0),
+				Vector2(0.0, new_scale.y / scale.y),
+				Vector2.ZERO
+			)
+		"flip_u":
+			new_scale.x = -scale.x
+			map = Transform2D(Vector2(-1.0, 0.0), Vector2(0.0, 1.0), Vector2.ZERO)
+			pivot = _uv_rect_centre(_uvs_turned_about(face, around))
+		"flip_v":
+			new_scale.y = -scale.y
+			map = Transform2D(Vector2(1.0, 0.0), Vector2(0.0, -1.0), Vector2.ZERO)
+			pivot = _uv_rect_centre(_uvs_turned_about(face, around))
+		"rotate_90":
+			# A quarter more in Rotate. The scale is applied after the turn, so in
+			# UV space the turn is seen through it: take the scale off, turn, and
+			# put it back.
+			new_rotation = wrapf(face.uv_rotation + PI * 0.5, -PI, PI)
+			map = Transform2D(
+				Vector2(0.0, scale.y / scale.x), Vector2(-scale.x / scale.y, 0.0), Vector2.ZERO
+			)
+			pivot = _uv_rect_centre(_uvs_turned_about(face, around))
+	map.origin = pivot - map.basis_xform(pivot)
+	face.uv_scale = new_scale
+	face.uv_rotation = new_rotation
+	face.uv_offset = map * face.uv_offset
+	if face.has_uv_layout():
+		face.custom_uvs = map * face.custom_uvs
+
+
+## `value` doubled or halved, keeping its sign, and held to the Scale boxes'
+## range. A value already past the edge is left where it is rather than moved
+## the wrong way.
+static func _stepped_uv_scale(value: float, up: bool) -> float:
+	var size := absf(value)
+	var stepped := (
+		minf(size * 2.0, maxf(size, UV_SCALE_LIMIT))
+		if up
+		else maxf(size * 0.5, minf(size, UV_SCALE_STEP))
+	)
+	return stepped if value >= 0.0 else -stepped
+
+
+## The UVs a flip or a quarter turn goes about the middle of: `around` when given,
+## a texture group's whole surface, else the face's own.
+static func _uvs_turned_about(face: FaceData, around: PackedVector2Array) -> PackedVector2Array:
+	return around if not around.is_empty() else face.shown_uvs()
+
+
+static func _uv_rect_centre(uvs: PackedVector2Array) -> Vector2:
+	if uvs.is_empty():
+		return Vector2.ZERO
+	var low := uvs[0]
+	var high := uvs[0]
+	for uv in uvs:
+		low = low.min(uv)
+		high = high.max(uv)
+	return (low + high) * 0.5
 
 
 # ---------------------------------------------------------------------------

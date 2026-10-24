@@ -75,6 +75,8 @@ const READ_ONLY := [
 	"hf_get_entities",
 	"hf_get_cordons",
 	"hf_validate",
+	"hf_measure",
+	"hf_plan",
 	"hf_viewport_screenshot",
 ]
 
@@ -86,6 +88,8 @@ const READS := {
 	"hf_get_entities": "_read_entities",
 	"hf_get_cordons": "_read_cordons",
 	"hf_validate": "_read_validate",
+	"hf_measure": "_read_measure",
+	"hf_plan": "_read_plan",
 }
 
 ## Tools that change the level through the one wrapper. Each is one undo step, or
@@ -164,6 +168,15 @@ var _validation_cache: Dictionary = {}
 ## operation_id -> {"fingerprint": String, "response": Dictionary}. Dictionaries
 ## keep insertion order, so the first key is the oldest.
 var _operation_cache: Dictionary = {}
+## How long the last change took in each part, in microseconds: `capture` and
+## `commit` are the undo record, `apply` the change and the answer it builds
+## (#1652). `tools/benchmark_bridge_session.gd` reads it.
+var last_timings: Dictionary = {}
+## What the last change from an agent made or touched, for the viewport to show
+## (#1653): `brush_ids` that are new or that it was scoped to, `entities` (nodes)
+## that are new, moved or retuned, and `removed`, how many brushes and entities
+## it took away.
+var last_changed: Dictionary = {}
 
 ## The tools themselves: argument checks, facade calls, and levels as plain data.
 ## Public so a test can put a broken one in.
@@ -171,6 +184,9 @@ var tools: HFMcpTools
 
 ## The palette commands hf_run_command runs, by the forms the registry names.
 var commands: HFMcpCommands
+
+## True while `handle_for_person()` runs a request typed on the Console's line.
+var _for_person := false
 
 
 func _init(editor_host: HFMcpHost) -> void:
@@ -204,6 +220,17 @@ func is_known_method(method: String) -> bool:
 ## agent can see the editor is busy rather than wait to find out.
 func runs_while_busy(method: String) -> bool:
 	return method == "hf_get_status"
+
+
+## Answer a request a person typed on the Console's line (#1696), so it is read
+## and checked as an agent's is. Its undo step is named for the command alone,
+## and the agent does not take it for its own: `hf_undo` refuses it, as any step
+## the agent did not make. A coroutine: callers `await` it.
+func handle_for_person(request: Dictionary) -> Dictionary:
+	_for_person = true
+	var answer: Dictionary = await handle(request)
+	_for_person = false
+	return answer
 
 
 ## Answer one request. A coroutine: callers `await` it.
@@ -420,7 +447,12 @@ func _run_tool(id: String, method: String, params: Dictionary) -> Dictionary:
 	if not checked.get("ok", false):
 		return _error_from(id, checked)
 	return await _run_mutation(
-		id, spec["verb"], checked["scope_ids"], checked["apply"], spec.get("cordons", false)
+		id,
+		spec["verb"],
+		checked["scope_ids"],
+		checked["apply"],
+		spec.get("cordons", false),
+		bool(checked.get("adds", false))
 	)
 
 
@@ -456,8 +488,17 @@ func _run_read(id: String, method: String, params: Dictionary) -> Dictionary:
 ## `apply` changes the level through the facade and returns `{"ok": true,
 ## "result": {...}}` or `{"ok": false, "error": {...}}`. It records no undo of its
 ## own: this is the one place that does.
+##
+## `adds` is a check's word that the change only adds brushes and entities, such
+## as a placement: nothing is captured before it, and its step records what it
+## made (`HFUndoHelper.commit_added()`), not the level (#1786).
 func _run_mutation(
-	id: String, verb: String, scope_ids: Array, apply: Callable, cordons_only := false
+	id: String,
+	verb: String,
+	scope_ids: Array,
+	apply: Callable,
+	cordons_only := false,
+	adds := false
 ) -> Dictionary:
 	var root := _root
 	# What this command ran against. A status request answered while it awaits
@@ -465,8 +506,14 @@ func _run_mutation(
 	# level that changed, or the client would follow the move without being told.
 	var target_id := _target_id
 	var from := _revision
-	var before := _capture(root, scope_ids, cordons_only)
+	var present := _present(root)
+	var started := Time.get_ticks_usec()
+	var before := _capture(root, scope_ids, cordons_only, adds)
+	before["present"] = present
+	var captured := Time.get_ticks_usec()
 	var outcome = apply.call()
+	var applied := Time.get_ticks_usec()
+	last_timings = {"capture": captured - started, "apply": applied - captured, "commit": 0}
 	if not _is_answer(outcome, "ok"):
 		_restore(root, before)
 		return _error(
@@ -486,8 +533,14 @@ func _run_mutation(
 			str(failure.get("message", "The %s failed" % verb)),
 			details
 		)
-	if not _commit(root, HFMcpProtocol.ACTION_PREFIX + verb, before):
+	var step_name := HFMcpProtocol.ACTION_PREFIX + verb
+	if _for_person:
+		step_name = verb.left(1).to_upper() + verb.substr(1)
+	var committed := _commit(root, step_name, before)
+	last_timings["commit"] = Time.get_ticks_usec() - applied
+	if not committed:
 		return _no_change(id, outcome["result"], target_id)
+	last_changed = _changed_since(root, present, scope_ids)
 	# A commit sets off deferred work (the plugin queues a brush reconcile on
 	# version_changed). Let it land before the revision is read, so the number
 	# the agent gets back is the one it will see next.
@@ -496,6 +549,41 @@ func _run_mutation(
 	if cordons_only and _target_id == target_id:
 		_follow_cordon_step(from)
 	return HFMcpProtocol.response_ok(id, outcome["result"], _revision, target_id)
+
+
+## The brushes by id in `root` now, and the entities by node, each with where it
+## stands and its properties, so a move or a retune shows as a change.
+static func _present(root: Node) -> Dictionary:
+	var brushes: Dictionary = {}
+	for brush in root._iter_managed_brush_nodes():
+		brushes[str(brush.brush_id)] = true
+	var entities: Dictionary = {}
+	if root.entities_node:
+		for node in root.entities_node.get_children():
+			var where = node.global_transform if node is Node3D else null
+			entities[node] = [where, var_to_str(node.get("entity_data"))]
+	return {"brushes": brushes, "entities": entities}
+
+
+## What a change made, touched or took away, against `before` from `_present()`.
+static func _changed_since(root: Node, before: Dictionary, scope_ids: Array) -> Dictionary:
+	var now := _present(root)
+	var brush_ids: Array = []
+	for brush_id in now["brushes"]:
+		if not before["brushes"].has(brush_id) or scope_ids.has(brush_id):
+			brush_ids.append(brush_id)
+	var entities: Array = []
+	for node in now["entities"]:
+		if before["entities"].get(node) != now["entities"][node]:
+			entities.append(node)
+	var removed := 0
+	for brush_id in before["brushes"]:
+		if not now["brushes"].has(brush_id):
+			removed += 1
+	for node in before["entities"]:
+		if not now["entities"].has(node):
+			removed += 1
+	return {"brush_ids": brush_ids, "entities": entities, "removed": removed}
 
 
 ## The answer to a change that moved nothing a step would take back: no step, so
@@ -516,7 +604,7 @@ func _no_change(id: String, result: Dictionary, target_id: String) -> Dictionary
 func _settle(expected_target: String) -> void:
 	_refresh_target()
 	_last_agent_revision = null
-	if _target_id == expected_target:
+	if _target_id == expected_target and not _for_person:
 		_last_agent_revision = _revision
 
 
@@ -542,19 +630,30 @@ static func _is_answer(value, key: String) -> bool:
 ## What a change is taken back to: the brushes it names or the whole level, and
 ## the cordons, which no level state holds (#1300). A change to the cordons alone
 ## captures nothing else. `{state, scope_ids, cordons, cordons_only}`.
-static func _capture(root: Node, scope_ids: Array, cordons_only: bool) -> Dictionary:
+static func _capture(root: Node, scope_ids: Array, cordons_only: bool, adds := false) -> Dictionary:
 	var before := {"state": {}, "scope_ids": []}
-	if not cordons_only:
+	if not cordons_only and not adds:
 		before = HFUndoHelper.capture_scope_or_state(root, scope_ids)
 	before["cordons"] = root.capture_cordons()
 	before["cordons_only"] = cordons_only
+	before["adds"] = adds
+	# What a refused placement puts back, as a whole level restore did.
+	before["id_counter"] = int(root.get("_brush_id_counter"))
 	return before
 
 
 func _restore(root: Node, before: Dictionary) -> void:
 	if not is_instance_valid(root):
 		return
-	if not before["cordons_only"]:
+	if before.get("adds", false):
+		# Nothing was captured: take out what the change made, and only that.
+		var made := _changed_since(root, before["present"], [])
+		var paths: Array = (made["entities"] as Array).map(
+			func(entity): return str(root.get_path_to(entity))
+		)
+		root.restore_brush_scope({"remove": made["brush_ids"], "remove_entities": paths})
+		root.set("_brush_id_counter", before["id_counter"])
+	elif not before["cordons_only"]:
 		if not (before["scope_ids"] as Array).is_empty():
 			root.restore_brush_scope(before["state"])
 		else:
@@ -571,6 +670,17 @@ func _commit(root: Node, action_name: String, before: Dictionary) -> bool:
 	if before["cordons_only"]:
 		return HFUndoHelper.commit_cordons_if_changed(
 			host.undo_manager(), root, action_name, before["cordons"], history
+		)
+	if before.get("adds", false):
+		var made := _changed_since(root, before["present"], [])
+		return HFUndoHelper.commit_added(
+			host.undo_manager(),
+			root,
+			action_name,
+			made["brush_ids"],
+			made["entities"],
+			history,
+			int(before["id_counter"])
 		)
 	return HFUndoHelper.commit_completed_if_changed(
 		host.undo_manager(),
@@ -944,7 +1054,12 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 	var target_id := _target_id
 	# The whole level and the cordons, whichever tools the ops name: an op's own
 	# step would hold only the cordons, but the batch is one step for all of them.
+	# The paint ops' streamed regions are loaded first so the capture holds their
+	# paint; the ops' checks pin them again as they run.
+	var pinned := commands.load_batch_paint_regions(root, ops)
 	var before := _capture(root, [], false)
+	if pinned:
+		root.paint_system.release_paint_region_pins()
 	var results: Array = []
 	# Set as soon as an apply runs, not when one succeeds: an apply can change the
 	# level and then fail, and that op's own change needs taking back too.

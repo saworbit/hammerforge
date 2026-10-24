@@ -2,18 +2,27 @@
 class_name HFCarveSystem
 extends RefCounted
 
-## Performs boolean subtraction (carve) of one brush against all overlapping brushes.
+## Performs boolean subtraction (carve) of one brush against all overlapping
+## brushes, and boolean intersection (intersect) of a selection of brushes.
 ##
 ## The carver's volume is cut out of every intersecting brush by progressive
 ## remainder over the carver's own face planes, so the carver and its targets can
-## be rotated, non-box, or both. See `HFConvexClip` for the split itself.
+## be rotated, non-box, or both. Intersect runs the same loop and keeps the
+## remainder Carve throws away. See `HFConvexClip` for the split itself.
 
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
+const FaceData = preload("../face_data.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFHullType = preload("../hf_hull.gd")
+
+## How far a corner may stand off another brush's face plane and still count as
+## lying on it, when a face of an intersection looks for the face it was cut by.
+const ON_PLANE := 0.01
 
 var root: Node3D
 
@@ -38,6 +47,7 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 	root.tag_full_reconcile()
 	var cuts: Array = plan["cuts"]
 	var total_pieces := 0
+	var hidden := hidden_overlaps(brush_id)
 
 	for cut in cuts:
 		var target_draft: DraftBrush = cut["target"]
@@ -60,6 +70,8 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 	root.brush_system.delete_brush_by_id(brush_id)
 
 	var msg := "Carve: carved %d brush(es), created %d pieces" % [cuts.size(), total_pieces]
+	if hidden > 0:
+		msg += ", left %d hidden brush(es) alone" % hidden
 	root._log(msg)
 	return HFOpResult.success(msg)
 
@@ -114,11 +126,14 @@ func _plan_carve(brush_id: String, first_cut_only: bool = false) -> Dictionary:
 	var carver_aabb: AABB = root.brush_system.world_bounds_of(carver_draft)
 
 	# Find all overlapping brushes (excluding the carver itself)
-	var targets: Array = _find_overlapping_brushes(brush_id, carver_aabb)
+	var overlapping := _overlapping_brushes(brush_id, carver_aabb)
+	var targets: Array = overlapping["shown"]
 	if targets.is_empty():
-		return _refusal(
-			"Carve: no overlapping brushes found", "Move the carver so it overlaps other brushes"
-		)
+		var hidden: int = (overlapping["hidden"] as Array).size()
+		var hint := "Move the carver so it overlaps other brushes"
+		if hidden > 0:
+			hint = "It overlaps %d hidden brush(es). Show them to carve them" % hidden
+		return _refusal("Carve: no overlapping brushes found", hint)
 
 	var cuts: Array = []
 	for target in targets:
@@ -212,7 +227,7 @@ static func _brush_id_of(brush: Node) -> String:
 	return bid
 
 
-## Find all DraftBrush nodes whose world bounds overlap the given AABB,
+## Find all shown DraftBrush nodes whose world bounds overlap the given AABB,
 ## excluding the brush with the given ID.
 ##
 ## The bounds come from `world_bounds_of()` rather than from `position` and
@@ -220,8 +235,27 @@ static func _brush_id_of(brush: Node) -> String:
 ## brush reaches outside that box, and a rejection that reads the wrong box is
 ## not a cheap rejection, it is a wrong answer: the carve reported no overlapping
 ## brushes and did nothing.
+##
+## A hidden brush is left alone. A mapper hides the outer walls to work inside a
+## room, and a doorway carved through an inner wall must not cut the wall they
+## cannot see (#1710).
 func _find_overlapping_brushes(exclude_id: String, aabb: AABB) -> Array:
-	var result: Array = []
+	return _overlapping_brushes(exclude_id, aabb)["shown"]
+
+
+## How many hidden brushes the carver `brush_id` overlaps and leaves alone.
+func hidden_overlaps(brush_id: String) -> int:
+	var carver = root.brush_system.find_brush_by_id(brush_id)
+	if not carver or not (carver is DraftBrush):
+		return 0
+	var aabb: AABB = root.brush_system.world_bounds_of(carver)
+	return (_overlapping_brushes(brush_id, aabb)["hidden"] as Array).size()
+
+
+## `{"shown": Array, "hidden": Array}`: the brushes whose bounds overlap `aabb`.
+func _overlapping_brushes(exclude_id: String, aabb: AABB) -> Dictionary:
+	var shown: Array = []
+	var hidden: Array = []
 	for node in root._iter_pick_nodes():
 		if not (node is DraftBrush):
 			continue
@@ -229,8 +263,420 @@ func _find_overlapping_brushes(exclude_id: String, aabb: AABB) -> Array:
 		if _brush_id_of(draft) == exclude_id:
 			continue
 		if aabb.intersects(root.brush_system.world_bounds_of(draft)):
-			result.append(draft)
-	return result
+			(hidden if _is_hidden(draft) else shown).append(draft)
+	return {"shown": shown, "hidden": hidden}
+
+
+func _is_hidden(draft: DraftBrush) -> bool:
+	if not draft.visible:
+		return true
+	var visgroups = root.get("visgroup_system")
+	return visgroups != null and visgroups.is_hidden_by_visgroups(draft)
+
+
+# ---------------------------------------------------------------------------
+# Intersect
+# ---------------------------------------------------------------------------
+
+
+## Keep only the volume every one of `brush_ids` shares, as one brush (#1426).
+##
+## The first is the target. It is cut down by the planes of each of the others in
+## turn, and what is left of it replaces them all, in one step. Two convex solids
+## overlap in a convex solid, so what is left is always one brush. It is a piece
+## of the target, so it has the target's operation, material, visgroups, group and
+## brush entity, as a piece of a carve does.
+func intersect_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	# The rules live in the plan and hold here as well as at the press that asked
+	# first: the undo entry stores this method and these ids.
+	var plan := _plan_intersect(brush_ids)
+	var check: HFOpResult = plan["result"]
+	if not check.ok:
+		return _op_fail(check.message, check.fix_hint)
+
+	var drafts: Array = plan["drafts"]
+	var target: DraftBrush = drafts[0]
+	var faces: Array = plan["faces"]
+	var origins: Dictionary = plan["origins"]
+	HFBrushSystem.warn_lost_sculpts(
+		"Intersect", _brush_id_of(target), HFConvexClip.carry_surface_detail([faces], origins)
+	)
+	var owner_of := _dress_from_other_brushes(faces, origins, drafts)
+	var as_slots := _overrides_as_slots(faces, owner_of, target)
+
+	# Made before anything is deleted: the info reads the target, and a brush that
+	# could not be made leaves every source where it was.
+	var info: Dictionary = root.brush_system._piece_infos_from_faces(target, [faces])[0]
+	# The one entity they all are, with every wire any of them held, as Merge keeps.
+	info.merge(HFBrushEntity.carried_by_all(drafts), true)
+	if as_slots:
+		info.erase("material")
+	root.tag_full_reconcile()
+	if root.brush_system.create_brush_from_info(info) == null:
+		return _op_fail("Intersect: produced no geometry")
+	for draft in drafts:
+		root.brush_system.delete_brush(draft)
+
+	var msg := "Intersect: kept the volume %d brushes share" % drafts.size()
+	root._log(msg)
+	return HFOpResult.success(msg)
+
+
+## Whether these brushes can be intersected, and if not, the reason the intersect
+## gives. Asked before the confirmation opens, as Carve asks its own.
+func can_intersect_brushes(brush_ids: Array) -> HFOpResult:
+	return _plan_intersect(brush_ids)["result"]
+
+
+## What intersecting `brush_ids` would keep, worked out without changing anything.
+##
+## Returns `{"result": HFOpResult, "drafts": Array, "faces": Array, "origins":
+## Dictionary}`: the brushes, the target first, the faces of what is kept in the
+## target's own space, and for each of them that is a piece of one of the target's
+## faces, that face. A face that is not lies on another brush's plane. Side effect
+## free, so the check, the preview and the intersect cannot disagree.
+func _plan_intersect(brush_ids: Array) -> Dictionary:
+	var drafts: Array = []
+	for brush_id in brush_ids:
+		var brush = root.brush_system.find_brush_by_id(str(brush_id))
+		if not brush or not (brush is DraftBrush):
+			return _intersect_refusal("Intersect: brush '%s' not found" % str(brush_id))
+		# Named twice is one brush, not a second one to trim to.
+		if not drafts.has(brush):
+			drafts.append(brush)
+	if drafts.size() < 2:
+		return _intersect_refusal(
+			"Intersect: select at least 2 brushes",
+			"Select the brush to keep first, then the brushes to trim it to"
+		)
+	var target := drafts[0] as DraftBrush
+	for draft in drafts:
+		if (draft as DraftBrush).operation != target.operation:
+			return _intersect_refusal(
+				"Intersect: all brushes must have the same operation type",
+				"Cannot intersect solid brushes with cuts"
+			)
+	# One brush is kept, of one entity or of none, as Merge keeps one (#1194).
+	if not HFBrushEntity.are_one_entity(drafts):
+		return _intersect_refusal(
+			"Intersect: the selected brushes are not all one entity",
+			"Intersect the brushes of one door or trigger, or plain brushes. Tie or untie them first"
+		)
+	var common := AABB()
+	for i in drafts.size():
+		var draft := drafts[i] as DraftBrush
+		var brush_id := _brush_id_of(draft)
+		root.brush_system._ensure_faces(draft)
+		var faces: Array = draft.get_faces()
+		if faces.size() < 4:
+			return _intersect_refusal(
+				"Intersect: brush '%s' has no usable geometry" % brush_id,
+				"Rebuild or redraw it and try again"
+			)
+		var interior: Vector3 = HFConvexClip.interior_point(faces)
+		# The target is what is cut; every other brush cuts with its planes.
+		if i > 0:
+			var budget: Dictionary = HFConvexClip.boolean_plane_budget(faces, interior)
+			if not budget["ok"]:
+				return _intersect_refusal(
+					(
+						"Intersect: brush '%s' has %d distinct faces, too many to cut with"
+						% [brush_id, budget["planes"]]
+					),
+					(
+						"Intersect works with brushes of up to %d faces."
+						% HFConvexClip.MAX_BOOLEAN_PLANES
+					)
+				)
+		if not HFConvexClip.is_convex_solid(faces, interior):
+			return _intersect_refusal(
+				"Intersect: brush '%s' is not convex, so it would be cut to its hull" % brush_id,
+				"Intersect convex brushes. A torus is not one"
+			)
+		var bounds: AABB = root.brush_system.world_bounds_of(draft)
+		common = bounds if i == 0 else common.intersection(bounds)
+
+	# Cheap rejection before any splitting: bounds that only touch are no volume.
+	var no_volume := _intersect_refusal(
+		"Intersect: the brushes share no volume",
+		"Move them so one volume lies inside every one of them"
+	)
+	if (
+		common.size.x <= min_thickness
+		or common.size.y <= min_thickness
+		or common.size.z <= min_thickness
+	):
+		return no_volume
+
+	var into_target: Transform3D = target.global_transform.affine_inverse()
+	var kept: Array = target.get_faces()
+	var origins := {}
+	for i in range(1, drafts.size()):
+		var other := drafts[i] as DraftBrush
+		var planes: Array = HFConvexClip.face_planes_in_space(
+			other.get_faces(), into_target * other.global_transform
+		)
+		var cut: Dictionary = HFConvexClip.progressive_remainder(kept, planes)
+		if not cut["separated"]:
+			return no_volume
+		# Each cut names the face of what it was handed, so chain back to the
+		# target's own faces. A cap is a piece of nothing at every step.
+		var cut_from: Dictionary = cut["origins"]
+		var chained := {}
+		for face in cut["remainder"]:
+			var source = cut_from.get(face)
+			if i > 1:
+				source = origins.get(source)
+			if source != null:
+				chained[face] = source
+		kept = cut["remainder"]
+		origins = chained
+	if kept.is_empty() or not _is_thick_enough(kept):
+		return no_volume
+	return {"result": HFOpResult.success(), "drafts": drafts, "faces": kept, "origins": origins}
+
+
+static func _intersect_refusal(msg: String, hint: String = "") -> Dictionary:
+	return {"result": HFOpResult.fail(msg, hint), "drafts": [], "faces": [], "origins": {}}
+
+
+## Give each face of an intersection that lies on another brush's plane the look of
+## that brush's face there, and say which brush each face takes its look from.
+##
+## A piece of one of the target's own faces kept its look through the split. A cap
+## was given the look of the target face it most resembles, which is right for a
+## carve's cut surface and wrong here: it is a piece of the other brush's face. The
+## first brush selected with a face on that plane gives it, the target first of all.
+## Custom and Cylindrical UVs are read off that face at the cap's corners, as a
+## merge reads them off a face that grew; Planar and Box UVs are taken in world
+## space and carry on by themselves. Its paint and its sculpt stay where they were.
+func _dress_from_other_brushes(faces: Array, origins: Dictionary, drafts: Array) -> Dictionary:
+	var target := drafts[0] as DraftBrush
+	var owner_of := {}
+	for face in faces:
+		owner_of[face] = target
+	for i in range(1, drafts.size()):
+		var other := drafts[i] as DraftBrush
+		var into_other: Transform3D = (
+			other.global_transform.affine_inverse() * target.global_transform
+		)
+		for face in faces:
+			if origins.has(face) or owner_of[face] != target:
+				continue
+			var built := face as FaceData
+			# The face where the other brush's faces are, to read them there.
+			var probe := FaceData.new()
+			var corners := PackedVector3Array()
+			for corner in built.local_verts:
+				corners.append(into_other * corner)
+			probe.local_verts = corners
+			var source: FaceData = HFConvexClip._largest_on_face(other.get_faces(), probe, ON_PLANE)
+			if source == null:
+				continue
+			built.copy_appearance_from(source)
+			if (
+				source.custom_uvs.size() == source.local_verts.size()
+				or source.uv_projection == FaceData.UVProjection.CYLINDRICAL
+			):
+				built.custom_uvs = source.shown_uvs_at(corners)
+			else:
+				built.custom_uvs = PackedVector2Array()
+			owner_of[face] = other
+	return owner_of
+
+
+## Keep the material each face showed when the brushes did not share one.
+##
+## A face with no palette slot shows its brush's material override, and the kept
+## brush has the target's override at most. So when a face from another brush
+## showed an override other than the target's, every face that showed an override
+## takes it as a palette slot instead, as a merged face does, and the kept brush
+## has none. True when that was done.
+func _overrides_as_slots(faces: Array, owner_of: Dictionary, target: DraftBrush) -> bool:
+	var differs := false
+	for face in faces:
+		var draft := owner_of[face] as DraftBrush
+		if (
+			(face as FaceData).material_idx < 0
+			and draft.material_override != target.material_override
+		):
+			differs = true
+			break
+	if not differs or not root.has_method("add_material_to_palette"):
+		return false
+	var slot_of := {}  # Material -> int
+	for face in faces:
+		var built := face as FaceData
+		var draft := owner_of[face] as DraftBrush
+		if built.material_idx >= 0 or draft.material_override == null:
+			continue
+		if not slot_of.has(draft.material_override):
+			slot_of[draft.material_override] = root.add_material_to_palette(draft.material_override)
+		built.material_idx = int(slot_of[draft.material_override])
+	return true
+
+
+# ---------------------------------------------------------------------------
+# Hull of Selection
+# ---------------------------------------------------------------------------
+
+
+## Replace `brush_ids` with one brush, the convex hull of all their corners,
+## whether they touch or not (#1715).
+##
+## Merge makes the exact union and refuses brushes that do not touch or whose
+## union is an L, so a ramp from one ledge down to another, or a column tapering
+## from a small top block to a wide base, was built by vertex editing a box. This
+## is a command of its own, so nobody asking for a union gets a hull. The brush is
+## the first one's: its operation, visgroups, group and bake settings, with the
+## one entity they all are and every wire any of them held, as Merge keeps.
+func hull_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	# The rules live in the plan and hold here as well as at the press that asked
+	# first: the undo entry stores this method and these ids.
+	var plan := _plan_hull(brush_ids)
+	var check: HFOpResult = plan["result"]
+	if not check.ok:
+		return _op_fail(check.message, check.fix_hint)
+	var drafts: Array = plan["drafts"]
+	var target: DraftBrush = drafts[0]
+	var faces: Array = plan["faces"]
+	var origins: Dictionary = plan["origins"]
+	# A face that grew cannot hold its sculpt. The confirmation named them, so the
+	# message says how many went rather than a warning in the output.
+	var lost := HFConvexClip.carry_onto_union(faces, origins)
+	_give_active_material(plan["new_faces"], target)
+	var as_slots := _overrides_as_slots(faces, plan["owner_of"], target)
+	# Made before anything is deleted, so a brush that could not be made leaves
+	# every source where it was.
+	var info: Dictionary = root.brush_system._piece_infos_from_faces(target, [faces])[0]
+	info.merge(HFBrushEntity.carried_by_all(drafts), true)
+	if as_slots:
+		info.erase("material")
+	root.tag_full_reconcile()
+	if root.brush_system.create_brush_from_info(info) == null:
+		return _op_fail("Hull: produced no geometry")
+	for draft in drafts:
+		root.brush_system.delete_brush(draft)
+	var msg := "Hull: wrapped %d brushes in one" % drafts.size()
+	if lost > 0:
+		msg += ", and %d sculpt%s could not follow" % [lost, "" if lost == 1 else "s"]
+	root._log(msg)
+	return HFOpResult.success(msg)
+
+
+## Whether these brushes can be wrapped in one, and if not, why. Asked before the
+## confirmation opens, as Intersect asks its own.
+func can_hull_brushes(brush_ids: Array) -> HFOpResult:
+	return _plan_hull(brush_ids)["result"]
+
+
+## What wrapping `brush_ids` would make, worked out without changing the level.
+##
+## Returns `{"result", "drafts", "faces", "origins", "owner_of", "new_faces"}`:
+## the brushes, the first one first, the hull's faces in its space, for each face
+## on an old face's plane that face, the largest there, the brush each face takes
+## its look from, and the faces on no old plane. A new face looks like the old
+## face it most nearly faces as, until the hull is made and it takes the Active
+## Material. Side effect free, so the check, the preview and the hull agree.
+func _plan_hull(brush_ids: Array) -> Dictionary:
+	var drafts: Array = []
+	for brush_id in brush_ids:
+		var brush = root.brush_system.find_brush_by_id(str(brush_id))
+		if not brush or not (brush is DraftBrush):
+			return _hull_refusal("Hull: brush '%s' not found" % str(brush_id))
+		if not drafts.has(brush):
+			drafts.append(brush)
+	if drafts.size() < 2:
+		return _hull_refusal(
+			"Hull: select at least 2 brushes", "Clip to Convex in Vertex mode wraps one brush"
+		)
+	var target := drafts[0] as DraftBrush
+	for draft in drafts:
+		if (draft as DraftBrush).operation != target.operation:
+			return _hull_refusal(
+				"Hull: all brushes must have the same operation type",
+				"Cannot wrap solid brushes and cuts in one"
+			)
+	if not HFBrushEntity.are_one_entity(drafts):
+		return _hull_refusal(
+			"Hull: the selected brushes are not all one entity",
+			"Wrap the brushes of one door or trigger, or plain brushes. Tie or untie them first"
+		)
+	var into_target: Transform3D = target.global_transform.affine_inverse()
+	var sources: Array = []
+	var source_owner := {}
+	var points := PackedVector3Array()
+	for draft in drafts:
+		root.brush_system._ensure_faces(draft)
+		var carried: Array = HFBrushSystem._faces_carried(
+			draft, into_target * (draft as DraftBrush).global_transform
+		)
+		if carried.size() < 4:
+			return _hull_refusal(
+				"Hull: brush '%s' has no usable geometry" % _brush_id_of(draft),
+				"Rebuild or redraw it and try again"
+			)
+		for face in carried:
+			sources.append(face)
+			source_owner[face] = draft
+			points.append_array((face as FaceData).local_verts)
+	var hull: Dictionary = HFHullType.of(points)
+	if not hull["ok"]:
+		return _hull_refusal("Hull: the brushes hold no solid", hull["reason"])
+	var faces: Array = hull["faces"]
+	var origins := {}
+	var owner_of := {}
+	var new_faces: Array = []
+	for face in faces:
+		var built := face as FaceData
+		var source: FaceData = HFConvexClip._largest_on_face(sources, built, ON_PLANE)
+		if source == null:
+			source = HFConvexClip._nearest_face(sources, built.normal)
+			new_faces.append(built)
+		else:
+			origins[built] = source
+		if source != null:
+			built.copy_appearance_from(source)
+		owner_of[built] = source_owner.get(source, target)
+	return {
+		"result": HFOpResult.success(),
+		"drafts": drafts,
+		"faces": faces,
+		"origins": origins,
+		"owner_of": owner_of,
+		"new_faces": new_faces,
+	}
+
+
+static func _hull_refusal(msg: String, hint: String = "") -> Dictionary:
+	return {
+		"result": HFOpResult.fail(msg, hint),
+		"drafts": [],
+		"faces": [],
+		"origins": {},
+		"owner_of": {},
+		"new_faces": [],
+	}
+
+
+## Lay the level's Active Material on the hull's new faces, as a palette slot,
+## with its texture laid afresh. A cut keeps the cut look, as a drawn one does.
+func _give_active_material(new_faces: Array, target: DraftBrush) -> void:
+	var material: Variant = root.get("active_material")
+	if new_faces.is_empty() or not (material is Material):
+		return
+	if target.operation == CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	var slot := -1
+	var manager = root.get("material_manager")
+	if manager != null:
+		slot = (manager.materials as Array).find(material)
+	if slot < 0 and root.has_method("add_material_to_palette"):
+		slot = root.add_material_to_palette(material)
+	for face in new_faces:
+		var built := face as FaceData
+		built.material_idx = slot
+		built.custom_uvs = PackedVector2Array()
 
 
 func _op_fail(msg: String, hint: String = "") -> HFOpResult:

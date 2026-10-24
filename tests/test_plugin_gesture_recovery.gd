@@ -111,6 +111,7 @@ class FakePlugin:
 	var floor_undo_commits := 0
 	var selection_cancels := 0
 	var reconcile_queues := 0
+	var full_reconcile_queues := 0
 	var hud_updates := 0
 	var transitions: Array = []
 	var block_rmb := false
@@ -129,8 +130,9 @@ class FakePlugin:
 		selection_cancels += 1
 		return false
 
-	func _queue_managed_brush_reconcile() -> void:
+	func _queue_managed_brush_reconcile(full := false) -> void:
 		reconcile_queues += 1
+		full_reconcile_queues += 1 if full else 0
 
 	func _update_hud_context() -> void:
 		hud_updates += 1
@@ -216,6 +218,7 @@ func test_focus_loss_drops_the_camera_session_and_pointer_capture():
 	assert_eq(plugin._tool_registry.capture_cancels, 1)
 	assert_eq(plugin.selection_cancels, 1)
 	assert_eq(plugin.reconcile_queues, 1)
+	assert_eq(plugin.full_reconcile_queues, 1, "a check of every brush: no step says what changed")
 
 
 func test_focus_loss_settles_quietly_and_leaves_the_native_gizmo_alone():

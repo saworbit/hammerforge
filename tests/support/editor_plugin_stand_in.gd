@@ -15,6 +15,11 @@ const CONTAINER_SPATIAL_EDITOR_MENU := 1
 
 const HFUserPrefsScript = preload("res://addons/hammerforge/hf_user_prefs.gd")
 
+## `EditorPlugin`'s own, which the editor emits when another scene tab comes to
+## the front. A test emits it after pointing `stand_in_editor.scene_root` there.
+@warning_ignore("unused_signal")
+signal scene_changed(scene_root: Node)
+
 var stand_in_editor := FakeEditorInterface.new()
 ## What `get_undo_redo()` hands the plugin. Set it before the plugin enters the
 ## tree, as `PluginStandIn.build()` does, since `_enter_tree` reads it once.

@@ -8,6 +8,8 @@ const HFUIFactoryType = preload("hf_ui_factory.gd")
 const MapIOType = preload("../map_io.gd")
 const HFBakeProfilesType = preload("../hf_bake_profiles.gd")
 const HFMcpPanelType = preload("hf_mcp_panel.gd")
+const HFOverlayColorsPanelType = preload("hf_overlay_colors_panel.gd")
+const HFStatusBoardType = preload("../hf_status_board.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -116,6 +118,18 @@ func build(parent: Control) -> void:
 	dock.bake_lightmap_texel_row.add_child(dock.bake_lightmap_texel)
 	adv.add_child(dock.bake_lightmap_texel_row)
 
+	# How every baked mesh casts shadows. A brush or a visgroup can say otherwise.
+	dock.bake_cast_shadows_opt = HFUIFactoryType.make_cast_shadow_option(false)
+	dock.bake_cast_shadows_opt.name = "BakeCastShadows"
+	dock.bake_cast_shadows_opt.tooltip_text = (
+		"How baked meshes cast shadows. A brush in Selection Tools, or a visgroup, can "
+		+ "choose its own; Shadows Only casts shadows without being seen"
+	)
+	HFUIFactoryType.select_cast_shadow(
+		dock.bake_cast_shadows_opt, GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	)
+	adv.add_child(dock._make_label_row("Cast Shadows", dock.bake_cast_shadows_opt))
+
 	dock.bake_navmesh = dock._make_check("Bake Navmesh")
 	adv.add_child(dock.bake_navmesh)
 
@@ -170,12 +184,29 @@ func build(parent: Control) -> void:
 	adv.add_child(dock.bake_changed_btn)
 
 	dock.bake_check_issues_btn = dock._make_button("Check Bake Issues")
-	dock.bake_check_issues_btn.tooltip_text = ("Scan for bake problems: degenerate brushes, floating subtracts, overlapping cuts")
+	dock.bake_check_issues_btn.tooltip_text = ("Scan for bake problems: degenerate brushes, floating cuts, overlapping cuts")
 	adv.add_child(dock.bake_check_issues_btn)
 	dock.bake_issue_list = VBoxContainer.new()
 	dock.bake_issue_list.name = "BakeIssueList"
 	dock.bake_issue_list.visible = false
 	adv.add_child(dock.bake_issue_list)
+	# Show the findings set aside as fine, and choose which checks run (#1731).
+	dock.findings_tools_row = HBoxContainer.new()
+	dock.findings_tools_row.name = "FindingsTools"
+	dock.show_accepted_findings = CheckBox.new()
+	dock.show_accepted_findings.text = "Show accepted (0)"
+	dock.show_accepted_findings.tooltip_text = ("List the findings accepted for this level, with Un-accept")
+	dock.findings_tools_row.add_child(dock.show_accepted_findings)
+	dock.validate_checks_btn = MenuButton.new()
+	dock.validate_checks_btn.text = "Checks"
+	dock.validate_checks_btn.flat = false
+	dock.validate_checks_btn.tooltip_text = (
+		"Which kinds of check Validate runs. Kept for the whole project in "
+		+ "hammerforge_presets/validation_checks.json"
+	)
+	dock.validate_checks_btn.get_popup().hide_on_checkable_item_selection = false
+	dock.findings_tools_row.add_child(dock.validate_checks_btn)
+	adv.add_child(dock.findings_tools_row)
 
 	# -- Preview mode --
 	var preview_row = HBoxContainer.new()
@@ -414,6 +445,9 @@ func build(parent: Control) -> void:
 	dock.load_hflevel_btn = dock._make_button("Load .hflevel")
 	flc.add_child(dock.load_hflevel_btn)
 
+	dock.compare_hflevel_btn = dock._make_button("Compare With...")
+	flc.add_child(dock.compare_hflevel_btn)
+
 	dock.import_map_btn = dock._make_button("Import .map")
 	flc.add_child(dock.import_map_btn)
 
@@ -436,6 +470,9 @@ func build(parent: Control) -> void:
 
 	dock.export_glb_btn = dock._make_button("Export .glb")
 	flc.add_child(dock.export_glb_btn)
+
+	dock.export_plan_btn = dock._make_button("Export Plan...")
+	flc.add_child(dock.export_plan_btn)
 
 	# --- Presets section ---
 	var preset_sec = hf_collapsible_section.create("Presets", false)
@@ -501,6 +538,15 @@ func build(parent: Control) -> void:
 	dock.power_user_overlays = dock._make_check("Power-user overlays", false)
 	stc.add_child(dock.power_user_overlays)
 
+	dock.size_at_cursor = dock._make_check("Size at cursor", true)
+	stc.add_child(dock.size_at_cursor)
+
+	dock.draw_hover_preview = dock._make_check("Draw hover preview", true)
+	stc.add_child(dock.draw_hover_preview)
+
+	dock.show_selection_size = dock._make_check("Show selection size", false)
+	stc.add_child(dock.show_selection_size)
+
 	dock.show_grid = dock._make_check("Show Grid", false)
 	stc.add_child(dock.show_grid)
 
@@ -512,8 +558,18 @@ func build(parent: Control) -> void:
 
 	dock._show_io_lines = dock._make_check("Show I/O Lines", false)
 	stc.add_child(dock._show_io_lines)
+	# Which wires, while they are shown (#1730).
+	dock.io_wire_mode_opt = OptionButton.new()
+	dock.io_wire_mode_opt.add_item("All wires", 0)
+	dock.io_wire_mode_opt.add_item("Chain from selection", 1)
+	dock.io_wire_mode_opt.add_item("Selection only", 2)
+	dock.io_wire_mode_opt.tooltip_text = (
+		"Every wire; every wire reachable from the selected entities, outputs to their "
+		+ "targets and inputs back to their sources, faded by hop; or only the selection's own"
+	)
+	stc.add_child(HFUIFactoryType.make_label_row("Wires:", dock.io_wire_mode_opt))
 
-	dock._show_subtract_preview = dock._make_check("Subtract Preview", false)
+	dock._show_subtract_preview = dock._make_check("Cut Preview", false)
 	stc.add_child(dock._show_subtract_preview)
 
 	dock.autosave_enabled = dock._make_check("Enable Autosave", true)
@@ -533,6 +589,12 @@ func build(parent: Control) -> void:
 
 	dock.import_settings_btn = dock._make_button("Import Settings")
 	stc.add_child(dock.import_settings_btn)
+
+	dock.reset_tool_settings_btn = dock._make_button("Reset Tool Settings")
+	stc.add_child(dock.reset_tool_settings_btn)
+	stc.add_child(HFUIFactoryType.make_separator())
+	dock.overlay_colors_panel = HFOverlayColorsPanelType.new()
+	stc.add_child(dock.overlay_colors_panel)
 
 	# --- Agent Bridge section (collapsed by default) ---
 	# Opt-in, so it starts closed. The plugin connects the panel in HFPluginMcp.
@@ -566,11 +628,17 @@ func build(parent: Control) -> void:
 	# Brush count progress bar
 	dock.perf_brush_bar = ProgressBar.new()
 	dock.perf_brush_bar.min_value = 0
-	dock.perf_brush_bar.max_value = 200
+	dock.perf_brush_bar.max_value = HFStatusBoardType.GEOMETRY_PROBLEM
 	dock.perf_brush_bar.value = 0
 	dock.perf_brush_bar.show_percentage = false
 	dock.perf_brush_bar.custom_minimum_size = Vector2(0, 14)
-	dock.perf_brush_bar.tooltip_text = "Brush count relative to recommended max (200)"
+	dock.perf_brush_bar.tooltip_text = (
+		(
+			"Brushes against the %d past which every edit pauses the editor.\n"
+			% HFStatusBoardType.GEOMETRY_PROBLEM
+		)
+		+ "Measured in docs/HammerForge_Performance.md."
+	)
 	pfc.add_child(dock.perf_brush_bar)
 
 	var perf_grid = GridContainer.new()
@@ -634,18 +702,24 @@ func connect_signals() -> void:
 		dock.save_hflevel_btn.pressed.connect(dock._on_save_hflevel)
 	if dock.load_hflevel_btn:
 		dock.load_hflevel_btn.pressed.connect(dock._on_load_hflevel)
+	if dock.compare_hflevel_btn:
+		dock.compare_hflevel_btn.pressed.connect(dock.open_compare_dialog)
 	if dock.import_map_btn:
 		dock.import_map_btn.pressed.connect(dock._on_import_map)
 	if dock.export_map_btn:
 		dock.export_map_btn.pressed.connect(dock._on_export_map)
 	if dock.export_glb_btn:
 		dock.export_glb_btn.pressed.connect(dock._on_export_glb)
+	if dock.export_plan_btn:
+		dock.export_plan_btn.pressed.connect(dock._on_export_plan)
 	if dock.autosave_path_btn:
 		dock.autosave_path_btn.pressed.connect(dock._on_set_autosave_path)
 	if dock.export_settings_btn:
 		dock.export_settings_btn.pressed.connect(dock._on_export_settings)
 	if dock.import_settings_btn:
 		dock.import_settings_btn.pressed.connect(dock._on_import_settings)
+	if dock.reset_tool_settings_btn:
+		dock.reset_tool_settings_btn.pressed.connect(dock._on_reset_tool_settings)
 	if dock.new_level_btn:
 		dock.new_level_btn.pressed.connect(dock._on_new_level)
 	if dock.floor_btn:
@@ -670,6 +744,14 @@ func connect_signals() -> void:
 		dock.show_hud.toggled.connect(dock._on_show_hud_toggled)
 	if dock.power_user_overlays:
 		dock.power_user_overlays.toggled.connect(dock._on_power_user_overlays_toggled)
+	if dock.size_at_cursor:
+		dock.size_at_cursor.toggled.connect(dock._on_size_at_cursor_toggled)
+	if dock.draw_hover_preview:
+		dock.draw_hover_preview.toggled.connect(dock._on_draw_hover_preview_toggled)
+	if dock.show_selection_size:
+		dock.show_selection_size.toggled.connect(dock._on_show_selection_size_toggled)
+	if dock.overlay_colors_panel:
+		dock.overlay_colors_panel.colors_changed.connect(dock._on_overlay_colors_changed)
 	if dock.show_grid:
 		dock.show_grid.toggled.connect(dock._on_show_grid_toggled)
 	if dock.follow_grid:
@@ -678,6 +760,8 @@ func connect_signals() -> void:
 		dock.debug_logs.toggled.connect(dock._on_debug_logs_toggled)
 	if dock._show_io_lines:
 		dock._show_io_lines.toggled.connect(dock._on_show_io_lines_toggled)
+	if dock.io_wire_mode_opt:
+		dock.io_wire_mode_opt.item_selected.connect(dock._on_io_wire_mode_selected)
 	if dock._show_subtract_preview:
 		dock._show_subtract_preview.toggled.connect(dock._on_show_subtract_preview_toggled)
 	if dock._prefab_library and dock._prefab_library.has_signal("save_requested"):
@@ -702,6 +786,12 @@ func connect_signals() -> void:
 		dock.bake_changed_btn.pressed.connect(dock._on_bake_changed)
 	if dock.bake_check_issues_btn:
 		dock.bake_check_issues_btn.pressed.connect(dock._on_bake_check_issues)
+	if dock.show_accepted_findings:
+		dock.show_accepted_findings.toggled.connect(dock._on_show_accepted_toggled)
+	if dock.validate_checks_btn:
+		var checks_popup: PopupMenu = dock.validate_checks_btn.get_popup()
+		dock.validate_checks_btn.about_to_popup.connect(dock._on_validate_checks_about_to_popup)
+		checks_popup.index_pressed.connect(dock._on_validate_check_toggled)
 	if dock.quick_play_camera_btn:
 		dock.quick_play_camera_btn.pressed.connect(dock._on_quick_play_from_camera)
 	if dock.quick_play_area_btn:

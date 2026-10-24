@@ -8,12 +8,22 @@ const HFPluginShortcutsType = preload("plugin_shortcuts.gd")
 const LevelRootType = preload("level_root.gd")
 const HFKeymapType = preload("hf_keymap.gd")
 const HFCommandRegistryType = preload("hf_command_registry.gd")
+const HFPluginEditActionsType = preload("plugin_edit_actions.gd")
+const HFPluginViewCommandsType = preload("plugin_view_commands.gd")
+const HFPluginTransformToolsType = preload("plugin_transform_tools.gd")
+const HFPluginMaterialCommandsType = preload("plugin_material_commands.gd")
+const HFPluginSelectionCommandsType = preload("plugin_selection_commands.gd")
+const HFMaterialBrowserType = preload("ui/hf_material_browser.gd")
+const HFPluginSnapFeedbackType = preload("plugin_snap_feedback.gd")
+const HFPluginTextureKeysType = preload("plugin_texture_keys.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
 const SHORTCUT_APPLY := -3
 # plugin.SelectionScope.NATIVE_ONLY
 const SCOPE_NATIVE_ONLY := 1
+## How much of a grid step an Alt nudge moves (#1431).
+const FINE_NUDGE := 0.1
 
 
 ## A key HammerForge handles is consumed, so Godot never sees it (#927). Where
@@ -57,6 +67,19 @@ static func handle_keyboard(
 ) -> int:
 	if plugin == null or event == null or root == null:
 		return PASS
+	var answer := _handle_keyboard(plugin, event, root, tool_id, paint_mode)
+	# For Repeat Last Command and the palette's recent list (#1694).
+	if answer == STOP:
+		var mode := (
+			"vertex" if plugin.get("_vertex_mode") else ("paint" if paint_mode else "general")
+		)
+		HFPluginCommands.note_key_command(plugin, event, mode)
+	return answer
+
+
+static func _handle_keyboard(
+	plugin: Object, event: InputEventKey, root: Node, tool_id: int, paint_mode: bool
+) -> int:
 	var dock = plugin.get("dock")
 	var keymap = plugin.get("_keymap")
 
@@ -69,23 +92,28 @@ static func handle_keyboard(
 		if nr != PASS:
 			return nr
 
+	# The palette's chords, Escape and the nudge keys are taken ahead of every
+	# binding, so the keymap reports a binding on one as taken (#1614).
+	var fixed := HFKeymapType.fixed_key(event)
 	# Hotkey palette toggle (? = Shift+/ or F1 or Ctrl+K)
 	if plugin._hotkey_palette:
-		if plugin._hotkey_palette.visible and event.keycode == KEY_ESCAPE:
+		if plugin._hotkey_palette.visible and fixed == "cancel":
 			plugin._hotkey_palette.visible = false
 			return STOP
-		if (event.keycode == KEY_SLASH and event.shift_pressed) or event.keycode == KEY_F1:
+		if fixed == "command_palette":
 			plugin._on_toggle_hotkey_palette()
 			return STOP
-		if event.keycode == KEY_K and event.ctrl_pressed:
-			plugin._on_toggle_hotkey_palette()
-			return STOP
-	if event.keycode == KEY_ESCAPE:
+	if fixed == "cancel":
 		return STOP if plugin._cancel_escape_step(root) else PASS
+	# Undo, Redo, Save and Run are Godot's whatever a binding says (#1617).
+	if HFKeymapType.godot_editor_uses(event):
+		return PASS
 	if yields_to_godot(plugin, event, root, paint_mode):
 		return PASS
 	# High-level workflow shortcuts stay together so they remain predictable
-	# regardless of the currently active draw/select/paint tool.
+	# regardless of the currently active draw/select/paint tool. They and the two
+	# menus below answer ahead of the paint keys, and `HFKeymap.EVERY_MODE` lists
+	# them so a paint key on one of their chords is reported.
 	if keymap.matches("toggle_operation", event):
 		plugin._on_context_toggle_operation()
 		return STOP
@@ -100,12 +128,19 @@ static func handle_keyboard(
 		if dock:
 			dock._on_validate_level()
 		return STOP
-	# Operation replay toggle (Ctrl+Shift+T)
-	if event.keycode == KEY_T and event.ctrl_pressed and event.shift_pressed:
-		if plugin._operation_replay and is_instance_valid(plugin._operation_replay):
-			plugin._operation_replay.toggle_visible()
-		else:
-			plugin._toast_power_user_overlay_hint()
+	# A view switch, so it answers in every tool and mode.
+	if keymap.matches("toggle_selection_size", event):
+		if dock:
+			dock.toggle_show_selection_size()
+		return STOP
+	# The Operation Replay timeline, also in every tool and mode. A binding, so it
+	# can be moved and a clash with it is reported (#1608).
+	if keymap.matches("toggle_operation_replay", event):
+		HFPluginCommands.execute(plugin, "toggle_operation_replay")
+		return STOP
+	# The command line over the viewport, in every tool and mode (#1696).
+	if keymap.matches("command_line", event):
+		HFPluginCommands.execute(plugin, "command_line")
 		return STOP
 
 	# External tool keyboard dispatch first — external tools can override keys
@@ -113,6 +148,11 @@ static func handle_keyboard(
 		var ext_result = plugin._tool_registry.dispatch_keyboard(event)
 		if ext_result == STOP:
 			return ext_result
+	# Tab steps the snap the viewport shows to the next kind in reach (#1691). A
+	# typed number's Tab is asked above, and a tool's own Tab, such as the Clip
+	# tool's side, just before; with no snap showing Tab goes on as before.
+	if HFPluginSnapFeedbackType.step(plugin, event):
+		return STOP
 
 	# Viewport context menu — only when idle (no active operation, no active external tool)
 	if keymap.matches("context_menu", event):
@@ -153,6 +193,43 @@ static func handle_keyboard(
 		plugin._last_tap_keycode = event.keycode
 		plugin._last_tap_time = tap_now
 
+	# Paint tool shortcuts, ahead of every general action below: paint mode owns
+	# its keys while it is on, as vertex mode does, so a general action sharing a
+	# chord with one waits for paint mode to end rather than leaving the paint key
+	# dead (#1614).
+	if paint_mode:
+		if keymap.matches("paint_raise", event):
+			plugin._begin_floor_paint_raise(root)
+			return STOP
+		if keymap.matches("paint_mirror_x", event):
+			dock.toggle_paint_mirror_x()
+			return STOP
+		if keymap.matches("paint_mirror_z", event):
+			dock.toggle_paint_mirror_z()
+			return STOP
+		if keymap.matches("paint_room", event):
+			plugin._stamp_floor_paint_room(root)
+			return STOP
+		if keymap.matches("paint_confirm_connector", event):
+			plugin._confirm_floor_paint_connector(root)
+			return STOP
+		var paint_key := -1
+		if keymap.matches("paint_bucket", event):
+			paint_key = 0
+		elif keymap.matches("paint_erase", event):
+			paint_key = 1
+		elif keymap.matches("paint_ramp", event):
+			paint_key = 2
+		elif keymap.matches("paint_line", event):
+			paint_key = 3
+		elif keymap.matches("paint_fill", event):
+			paint_key = 4
+		elif keymap.matches("paint_blend", event):
+			paint_key = 5
+		if paint_key >= 0:
+			dock.set_paint_tool(paint_key)
+			return STOP
+
 	if keymap.matches("delete", event):
 		var delete_guard = _registry_guard(plugin, root, "delete")
 		if delete_guard != SHORTCUT_APPLY:
@@ -170,6 +247,12 @@ static func handle_keyboard(
 		if copy_guard != SHORTCUT_APPLY:
 			return copy_guard
 		plugin._copy_selection(root)
+		return STOP
+	if keymap.matches("paste_at_cursor", event):
+		var at_cursor_guard = _registry_guard(plugin, root, "paste_at_cursor")
+		if at_cursor_guard != SHORTCUT_APPLY:
+			return at_cursor_guard
+		HFPluginEditActionsType.paste_at_cursor(plugin, root)
 		return STOP
 	if keymap.matches("paste", event):
 		# Nothing has to be selected to paste, so the guard asks for none. It is
@@ -198,6 +281,18 @@ static func handle_keyboard(
 			return hollow_guard
 		plugin._hollow_selected(root)
 		return STOP
+	if keymap.matches("hide_selection", event):
+		var hide_guard = _registry_guard(plugin, root, "hide_selection")
+		if hide_guard != SHORTCUT_APPLY:
+			return hide_guard
+		HFPluginViewCommandsType.hide_selection(plugin, root)
+		return STOP
+	# Nothing has to be selected to bring hidden things back.
+	if keymap.matches("show_hidden", event):
+		if root == null:
+			return PASS
+		HFPluginViewCommandsType.show_hidden(plugin, root)
+		return STOP
 	if keymap.matches("move_to_floor", event):
 		var floor_guard = _registry_guard(plugin, root, "move_to_floor")
 		if floor_guard != SHORTCUT_APPLY:
@@ -209,6 +304,14 @@ static func handle_keyboard(
 		if ceiling_guard != SHORTCUT_APPLY:
 			return ceiling_guard
 		plugin._move_selected_to_ceiling(root)
+		return STOP
+	# Whole brushes only outside vertex mode. In it the chord is Snap Vertices to
+	# Grid's, which the vertex input answers before this router is asked.
+	if keymap.matches("snap_to_grid", event) and not plugin._vertex_mode:
+		var snap_guard = _registry_guard(plugin, root, "snap_to_grid")
+		if snap_guard != SHORTCUT_APPLY:
+			return snap_guard
+		HFPluginEditActionsType.snap_selected_to_grid(plugin, root)
 		return STOP
 	if keymap.matches("clip", event):
 		var clip_guard = _registry_guard(plugin, root, "clip")
@@ -224,6 +327,12 @@ static func handle_keyboard(
 			return PASS
 		plugin._clip_to_face_plane_selected(root)
 		return STOP
+	# The same for a Trim Run: it reads the faces picked in Face Select (#1414).
+	if keymap.matches("run_trim_along_faces", event):
+		if root == null:
+			return PASS
+		HFPluginEditActionsType.run_trim_along_faces(plugin, root)
+		return STOP
 	if keymap.matches("carve", event):
 		var carve_guard = _registry_guard(plugin, root, "carve")
 		if carve_guard != SHORTCUT_APPLY:
@@ -236,6 +345,12 @@ static func handle_keyboard(
 			return merge_guard
 		plugin._merge_selected(root)
 		return STOP
+	if keymap.matches("intersect", event):
+		var intersect_guard = _registry_guard(plugin, root, "intersect")
+		if intersect_guard != SHORTCUT_APPLY:
+			return intersect_guard
+		plugin._intersect_selected(root)
+		return STOP
 	# Create Structure needs a level and the dock that holds the settings, but no
 	# selection: with nothing selected it builds at the world origin.
 	if keymap.matches("create_arch", event):
@@ -247,13 +362,45 @@ static func handle_keyboard(
 		if keymap.matches(action, event):
 			HFPluginCommands.execute(plugin, action)
 			return STOP
-	# Nudge keys
-	var nudge = plugin._get_nudge_direction(event.keycode)
-	if nudge != Vector3.ZERO and not event.ctrl_pressed and not event.alt_pressed:
+	# Nudge keys. Alt makes the step a tenth of the grid's, for the fitting the
+	# grid cannot reach, and a tenth is never put back on the grid (#1431). Alt
+	# with PgUp/PgDn alone moves the drawing plane, above, so a vertical tenth
+	# takes Shift as well. Ctrl+Arrow is the shortcut stage's.
+	# Shift with an arrow duplicates the selection and moves the copy one step
+	# that way, and Alt makes the step a tenth (#1716). It was a plain nudge with
+	# Shift ignored. Shift with Page Up or Down stays a nudge, for the vertical
+	# tenth Alt+Shift gives.
+	# In Face Select with faces picked, the arrows slide and turn their textures
+	# (#1728). Face Select puts the object selection aside, so a nudge had nothing
+	# to move there.
+	if (
+		fixed == "nudge"
+		and not event.ctrl_pressed
+		and HFPluginTextureKeysType.handle(plugin, root, event)
+	):
+		return STOP
+	if fixed == "nudge" and event.shift_pressed and not event.ctrl_pressed:
+		if event.keycode in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT]:
+			var copy_guard = plugin._guard_hammerforge_shortcut(
+				root, false, 1, "Duplicate and Move"
+			)
+			if copy_guard != SHORTCUT_APPLY:
+				return copy_guard
+			HFPluginEditActionsType.duplicate_and_move(
+				plugin,
+				root,
+				(
+					plugin._get_nudge_direction(event.keycode)
+					* (FINE_NUDGE if event.alt_pressed else 1.0)
+				)
+			)
+			return STOP
+	if fixed == "nudge" and not event.ctrl_pressed:
+		var nudge = plugin._get_nudge_direction(event.keycode)
 		var nudge_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Nudge")
 		if nudge_guard != SHORTCUT_APPLY:
 			return nudge_guard
-		plugin._nudge_selected(root, nudge)
+		plugin._nudge_selected(root, nudge * (FINE_NUDGE if event.alt_pressed else 1.0))
 		return STOP
 	# Grid snap size shortcuts ([ = halve, ] = double)
 	if keymap.matches("grid_decrease", event):
@@ -261,6 +408,10 @@ static func handle_keyboard(
 		return STOP
 	if keymap.matches("grid_increase", event):
 		plugin._adjust_grid_snap(root, 2.0)
+		return STOP
+	# Repeat Last Brush: a stamp of the brush the last Draw made (#1407).
+	if keymap.matches("repeat_brush", event):
+		HFPluginCommands.execute(plugin, "repeat_brush")
 		return STOP
 	# Tool switch shortcuts
 	if keymap.matches("tool_draw", event):
@@ -326,6 +477,25 @@ static func handle_keyboard(
 				return texture_guard
 		plugin._apply_last_texture(root)
 		return STOP
+	# Apply Picked Look — Alt+T gives the selected faces the whole look T read.
+	# It works on faces alone, so the dock judges the selection and says what it
+	# wants, a pick or faces, where the brush guard could only ask for brushes.
+	if keymap.matches("apply_picked_look", event):
+		if dock:
+			dock._on_apply_picked_look()
+		return STOP
+	# Apply Favorite N — Alt+1 to Alt+9 give the selection the context toolbar's
+	# favourite N. Never reached mid-draw: the numeric entry above keeps the digit.
+	for slot in range(1, HFMaterialBrowserType.FAVORITE_SLOTS + 1):
+		var favorite_action := "apply_favorite_%d" % slot
+		if not keymap.matches(favorite_action, event):
+			continue
+		if not (root.face_selection is Dictionary and not root.face_selection.is_empty()):
+			var favorite_guard = _registry_guard(plugin, root, favorite_action)
+			if favorite_guard != SHORTCUT_APPLY:
+				return favorite_guard
+		HFPluginMaterialCommandsType.apply_favorite(plugin, slot)
+		return STOP
 	# Select Similar — Shift+S selects matching faces/brushes
 	if keymap.matches("select_similar", event):
 		var has_similar_face_source: bool = (
@@ -336,6 +506,24 @@ static func handle_keyboard(
 			if similar_guard != SHORTCUT_APPLY:
 				return similar_guard
 		plugin._select_similar(root)
+		return STOP
+	# Grow / Shrink Selection — Ctrl+] and Ctrl+[, on the faces when any are
+	# picked, which Face Select leaves with no object selection to guard.
+	for grow_action in ["grow_selection", "shrink_selection"]:
+		if not keymap.matches(grow_action, event):
+			continue
+		if not (root.face_selection is Dictionary and not root.face_selection.is_empty()):
+			var grow_guard = _registry_guard(plugin, root, grow_action)
+			if grow_guard != SHORTCUT_APPLY:
+				return grow_guard
+		if grow_action == "grow_selection":
+			HFPluginSelectionCommandsType.grow_selection(plugin, root)
+		else:
+			HFPluginSelectionCommandsType.shrink_selection(plugin, root)
+		return STOP
+	# Face X-ray — Alt+X flips the checkbox beside Face Select Mode
+	if keymap.matches("toggle_face_xray", event):
+		HFPluginSelectionCommandsType.toggle_face_xray(plugin)
 		return STOP
 	# Selection Filter popup — Alt+F opens the filter popover
 	if keymap.matches("selection_filter", event):
@@ -370,43 +558,14 @@ static func handle_keyboard(
 			return variant_guard
 		plugin._cycle_prefab_variant(root)
 		return STOP
-	# Paint tool shortcuts
-	if paint_mode:
-		if keymap.matches("paint_raise", event):
-			plugin._begin_floor_paint_raise(root)
-			return STOP
-		if keymap.matches("paint_mirror_x", event):
-			dock.toggle_paint_mirror_x()
-			return STOP
-		if keymap.matches("paint_mirror_z", event):
-			dock.toggle_paint_mirror_z()
-			return STOP
-		if keymap.matches("paint_room", event):
-			plugin._stamp_floor_paint_room(root)
-			return STOP
-		if keymap.matches("paint_confirm_connector", event):
-			plugin._confirm_floor_paint_connector(root)
-			return STOP
-		var paint_key := -1
-		if keymap.matches("paint_bucket", event):
-			paint_key = 0
-		elif keymap.matches("paint_erase", event):
-			paint_key = 1
-		elif keymap.matches("paint_ramp", event):
-			paint_key = 2
-		elif keymap.matches("paint_line", event):
-			paint_key = 3
-		elif keymap.matches("paint_fill", event):
-			paint_key = 4
-		elif keymap.matches("paint_blend", event):
-			paint_key = 5
-		if paint_key >= 0:
-			dock.set_paint_tool(paint_key)
-			return STOP
+	# Draw on Face. Below the paint shortcuts, where L is the Line tool.
+	if not paint_mode and keymap.matches("toggle_draw_on_face", event):
+		HFPluginCommands.execute(plugin, "toggle_draw_on_face")
+		return STOP
 	# Free transform. The whole block sits below the paint shortcuts and is gated
 	# on paint mode being off, because R is bound to both `rotate_ccw` and
 	# `paint_ramp`. Gating the group rather than just R keeps the family
-	# consistent: in paint mode none of the four fire.
+	# consistent: in paint mode none of them fire.
 	if not paint_mode:
 		if keymap.matches("rotate_ccw", event):
 			var rotate_ccw_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Rotate")
@@ -426,11 +585,36 @@ static func handle_keyboard(
 				return flip_guard
 			plugin._flip_selected(root)
 			return STOP
+		if keymap.matches("mirror_copy", event):
+			var mirror_guard = _registry_guard(plugin, root, "mirror_copy")
+			if mirror_guard != SHORTCUT_APPLY:
+				return mirror_guard
+			HFPluginEditActionsType.mirror_copy_selected(plugin, root)
+			return STOP
 		if keymap.matches("reset_rotation", event):
 			var reset_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Reset Rotation")
 			if reset_guard != SHORTCUT_APPLY:
 				return reset_guard
 			plugin._reset_rotation_selected(root)
+			return STOP
+		# Faces picked in Face Select are what Offset moves then, with no object
+		# selected, so the guard is asked only without them, as Select Similar's is.
+		# Mid-draw it does nothing: the typed numbers are the draw's.
+		if keymap.matches("offset_selection", event):
+			var has_offset_faces: bool = (
+				root.face_selection is Dictionary and not root.face_selection.is_empty()
+			)
+			if not has_offset_faces:
+				var offset_guard = _registry_guard(plugin, root, "offset_selection")
+				if offset_guard != SHORTCUT_APPLY:
+					return offset_guard
+			HFPluginTransformToolsType.open_offset(plugin, root)
+			return STOP
+		if keymap.matches("pick_pivot", event):
+			HFPluginTransformToolsType.arm_pivot_pick(plugin, root)
+			return STOP
+		if keymap.matches("clear_pivot", event):
+			HFPluginTransformToolsType.clear_pivot(plugin, root)
 			return STOP
 	# Axis lock for construction tools and Select's vertex-edit operation.
 	if plugin.axis_lock_shortcuts_available(tool_id, plugin._vertex_mode):
@@ -462,10 +646,20 @@ static func handle_keyboard(
 		return STOP
 	# External tool shortcuts
 	if plugin._tool_registry:
-		var ext_id = plugin._tool_registry.check_shortcut(event)
+		var ext_id = plugin._tool_registry.check_shortcut(event, keymap)
 		if ext_id >= 0 and plugin.active_root:
 			plugin._activate_external_tool(ext_id, plugin.active_root)
 			plugin._show_coach_mark_for_tool_id(ext_id)
 			plugin._update_hud_context()
 			return STOP
+	# A command with no key of its own, given one in the shortcut dialog, runs as
+	# the palette runs it, past the same selection guard (#1733).
+	var bound: String = keymap.user_bound_command(event) if keymap else ""
+	if bound != "":
+		if not HFCommandRegistryType.selection(bound).is_empty():
+			var bound_guard = _registry_guard(plugin, root, bound)
+			if bound_guard != SHORTCUT_APPLY:
+				return bound_guard
+		HFPluginCommands.execute(plugin, bound)
+		return STOP
 	return PASS

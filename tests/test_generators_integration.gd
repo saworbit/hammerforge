@@ -318,6 +318,28 @@ func test_an_arch_segment_can_be_carved():
 		assert_almost_eq(_outward_ratio(piece), 1.0, 0.0001)
 
 
+func test_a_179_degree_one_segment_arch_is_built_as_its_wedge():
+	# Its faces lie near enough to the axes, with every corner on its bounds, that
+	# the box test took it for a box, though none faces along X, and it was built
+	# as a slab of its bounds (#1607). The thick wall keeps it clear of a sliver,
+	# which the Arch refuses (#1605).
+	var overrides := {"segments": 1, "arc_degrees": 179.0, "radius": 12.0, "wall_thickness": 11.0}
+	_create_arch(overrides)
+	assert_eq(_pieces().size(), 1)
+	var piece: DraftBrush = _pieces()[0]
+	assert_eq(piece.shape, DraftBrush.BrushShape.CUSTOM, "a wedge is not a box")
+	var settings: Dictionary = HFArchBuilderScript.default_settings()
+	settings.merge(overrides, true)
+	var built: Array = []
+	for face in piece.faces:
+		for vertex in face.local_verts:
+			built.append(piece.global_transform * vertex)
+	for face in HFArchBuilderScript.build(settings)[0]:
+		for corner: Vector3 in face.local_verts:
+			var near := func(at: Vector3) -> bool: return at.distance_to(corner) < 0.0001
+			assert_true(built.any(near), "the piece has the segment's corner %s" % corner)
+
+
 func test_an_invalid_arch_creates_nothing():
 	var created := _create_arch({"segments": 0})
 	assert_eq(created.size(), 0)

@@ -57,6 +57,17 @@ func update_grid_material() -> void:
 	)
 
 
+## Brighten the two grid lines through `point`, where a draw would start
+## (#1400). The point is in the world, and the shader finds it on the grid
+## wherever the grid has moved to since, so a grid that follows the cursor
+## keeps the lines on it.
+func set_cursor(point: Vector3, shown: bool) -> void:
+	if not root.grid_material:
+		return
+	root.grid_material.set_shader_parameter("cursor_point", point)
+	root.grid_material.set_shader_parameter("cursor_visible", shown)
+
+
 func update_grid_transform(axis: int, origin: Vector3) -> void:
 	root.grid_plane_origin = origin
 	if not root.grid_mesh or not root.grid_mesh.is_inside_tree():
@@ -127,6 +138,25 @@ func run_command(action: String, nodes: Array = []) -> void:
 			_align_to_selection(nodes)
 
 
+## The grid point nearest `point`: a whole number of `step`s from the world
+## origin on each axis, the points a draw snaps to (`LevelRoot._snap_point()`).
+## A held drawing plane changes where a draw starts, not where the points are:
+## `_hold_plane()` and `follow_cursor()` keep its origin on them across the
+## plane, and only its height may sit between two.
+static func nearest_grid_point(point: Vector3, step: float) -> Vector3:
+	if not (step > 0.0):
+		return point
+	return point.snapped(Vector3.ONE * step)
+
+
+## Whether Snap to Grid has a grid to snap to. A grid snap of 0 turns snapping
+## off, and then there are no grid points to move anything onto.
+func can_snap_to_grid() -> HFOpResult:
+	if root.grid_snap > 0.0:
+		return HFOpResult.success()
+	return HFOpResult.fail("Snap to Grid: grid snap is off", "Set a grid size first")
+
+
 func _hold_plane(point: Vector3, axis: int) -> void:
 	_position_held = true
 	root.grid_axis_preference = axis
@@ -176,10 +206,15 @@ func _align_to_selection(nodes: Array) -> void:
 		run_command("grid_reset")
 
 
-## Snap the other axes without rounding an explicitly aligned plane away.
-func snap_draw_hit(hit: Dictionary) -> Vector3:
-	var point: Vector3 = root._snap_point(hit["position"])
-	if _position_held and not hit.has("brush"):
+## Snap the other axes without rounding an explicitly aligned plane away. Only a
+## hit on the plane itself keeps the plane's height: a draw that starts on a
+## draft face or a physics surface starts on that surface. A `drag` snaps with
+## the grid the drag's held keys ask for (#1431).
+func snap_draw_hit(hit: Dictionary, drag := false) -> Vector3:
+	var point: Vector3 = (
+		root._snap_drag_point(hit["position"]) if drag else root._snap_point(hit["position"])
+	)
+	if _position_held and hit.get(root.CONSTRUCTION_PLANE_HIT, false):
 		var index := effective_grid_axis() - 1
 		point[index] = root.grid_plane_origin[index]
 	return point
