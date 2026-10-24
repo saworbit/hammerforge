@@ -1,0 +1,1 @@
+- Hidden faces: mark faces nobody sees and the bake leaves them out of the mesh and lightmap but keeps their collision; Hide Faces Against Solids finds them. (issue [#1719](https://github.com/saworbit/hammerforge/issues/1719))

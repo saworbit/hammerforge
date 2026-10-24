@@ -156,6 +156,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Linked surfaces** -- Link, Unlink and Select Group; linked faces share one mapping that a move, resize, cut or vertex edit keeps, and a fitted surface is fitted again
 - **Texture Gizmo** (UV Editor, or Giz on the context toolbar) -- drag in the viewport to slide, stretch and turn the texture on the faces picked in Face Select, one undo step a drag
 - **Drop a material file** -- drag a `.tres` or `.material` from Godot's FileSystem dock onto a brush face to paint it, or every picked face; a file new to the palette is added in the same undo step
+- **Hidden faces** -- mark a face nobody will see, such as the underside of a floor or the back of a wall against another, with the striped Hidden swatch, Alt+T or Hide Faces Against Solids; the bake leaves it out of the mesh, the lightmap and the occluders and keeps its collision, says how many faces and how much area it left out, and a `.map` writes it as `skip`
 - **Smoothing groups** -- round brushes and the curved faces of arches and domes shade smooth, the same on every bake path and through cuts; the UV Editor's Smoothing box sets a face's group
 - **Material library persistence** -- Save Library and Load Library in the Paint tab write and read the palette as JSON resource paths, reporting the slots they could not record or resolve
 

@@ -2424,7 +2424,7 @@ What gets in the way is often a kind of thing rather than a group: the triggers
 over a doorway, the clip brushes along a ledge, a light's gizmo everywhere. The
 **View Filters** section of the Manage tab has a tick for each kind: world
 brushes, cut brushes, clip brushes, triggers, brush entities, point entities,
-structures, prefab copies, decals, I/O wires and cordons. Below them is a row for
+structures, prefab copies, decals, I/O wires, cordons and Hidden faces. Below them is a row for
 each brush entity class and each point entity class in the level. Untick a row to
 hide every one of that kind in the editor.
 
@@ -2655,6 +2655,38 @@ UV editing:
 Notes:
 - Face data is stored per DraftBrush face.
 - Materials and UVs persist in `.hflevel` saves.
+
+### Hidden faces
+
+Most faces of a block out are never seen: the underside of a floor, the outside
+of a sealed room, the back of a wall built against another. They still cost
+triangles, draw calls and lightmap. Mark them **Hidden** and the bake leaves
+them out of the mesh, the lightmap and the occluders, while they still bound
+their brush, so a floor stays solid and a wall stays a wall.
+
+- The **Hidden** swatch is the striped square at the end of the Material
+  Browser's colour row, so it is there whatever the view. Click it to make the
+  selected faces Hidden, or drag it onto a face. A Hidden face wears dark and
+  amber stripes in the editor, so it never reads as a material.
+- The face keeps its material under the stripes. Apply a material to show the
+  face again, or run **Make Faces Normal** from the palette to show it in the
+  material it had. **Make Faces Hidden** is in the palette too.
+- **T** on a Hidden face picks Hidden, and **Alt+T** then makes the selected faces
+  Hidden. A resize, a clip, a duplicate and Wrap carry it with the texture. A cut's
+  new face is never Hidden, since it is surface the cut opened.
+- **Hide Faces Against Solids** in the palette finds every face of the selected
+  brushes, or of the selected faces, that lies flat against another solid brush
+  and is wholly covered by it. It picks them to show which, asks, and makes them
+  Hidden as one undo step. A face only partly covered, or one against a cut, a
+  trigger or a door, is left alone.
+- **Validate** adds an Info row for a brush with a Hidden face that has open space
+  right in front of it: a hint that it may be seen, not a fault in the count.
+- After a bake the Console says how many Hidden faces it left out and their area,
+  such as `Bake left out 12 Hidden faces, 48.0 square metres of mesh and lightmap`.
+- **Hidden faces** in View Filters hides the stripes. The faces are still there to
+  click, as faces.
+- Hidden faces are saved in the `.hflevel` and the scene, and a `.map` export
+  names them `skip`.
 
 ## Surface Paint (3D)
 1. Enable Paint Mode.

@@ -7,8 +7,13 @@ class_name MaterialManager
 @warning_ignore_start("shadowed_global_identifier")
 const HFSettingsFile = preload("hf_settings_file.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFHiddenFaces = preload("hf_hidden_faces.gd")
 
 @export var materials: Array[Material] = []
+
+## The look this level's Hidden faces wear (#1719), made when one first asks. Not
+## a palette slot: a Hidden face keeps its slot under it.
+var _hidden_face_material: ShaderMaterial = null
 
 ## Path to the last saved/loaded material library (for auto-reload).
 var _library_path := ""
@@ -24,6 +29,12 @@ func get_material(index: int) -> Material:
 	if index >= 0 and index < materials.size():
 		return materials[index]
 	return null
+
+
+func hidden_face_material() -> Material:
+	if _hidden_face_material == null:
+		_hidden_face_material = HFHiddenFaces.make_material()
+	return _hidden_face_material
 
 
 func add_material(material: Material) -> int:

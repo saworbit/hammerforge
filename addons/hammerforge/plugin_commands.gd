@@ -429,6 +429,14 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"apply_picked_look":
 			if dock:
 				dock._on_apply_picked_look()
+		"make_faces_hidden":
+			if dock:
+				dock.make_selected_faces_hidden(true)
+		"make_faces_normal":
+			if dock:
+				dock.make_selected_faces_hidden(false)
+		"hide_faces_against_solids":
+			HFPluginEditActions.hide_faces_against_solids(plugin, root)
 		"replace_material":
 			if dock:
 				dock.open_replace_material()
@@ -526,7 +534,7 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			HFPluginViewCommands.previous_visibility(plugin, root)
 		"selection_filter":
 			plugin._show_selection_filter()
-		"view_filter_world", "view_filter_cut", "view_filter_clip", "view_filter_trigger", "view_filter_brush_entity", "view_filter_entity", "view_filter_structure", "view_filter_prefab", "view_filter_decal", "view_filter_wires", "view_filter_cordons":
+		"view_filter_world", "view_filter_cut", "view_filter_clip", "view_filter_trigger", "view_filter_brush_entity", "view_filter_entity", "view_filter_structure", "view_filter_prefab", "view_filter_decal", "view_filter_wires", "view_filter_cordons", "view_filter_hidden_faces":
 			if root:
 				var kind := action.trim_prefix("view_filter_")
 				var hide: bool = not root.is_view_filtered(kind)

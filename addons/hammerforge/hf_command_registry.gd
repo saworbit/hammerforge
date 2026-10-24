@@ -1082,6 +1082,39 @@ const COMMANDS := [
 		"repeat": true
 	},
 	{
+		"id": "make_faces_hidden",
+		"label": "Make Faces Hidden",
+		"help":
+		"Mark the selected faces Hidden: they keep their collision, and the bake leaves them out of the mesh and the lightmap.",
+		"category": "Paint",
+		"aliases": ["nodraw", "skip"],
+		"needs_level": true,
+		"selection": {},
+		"palette": true,
+		"repeat": true
+	},
+	{
+		"id": "make_faces_normal",
+		"label": "Make Faces Normal",
+		"help": "Show the selected Hidden faces again, in the material they had.",
+		"category": "Paint",
+		"needs_level": true,
+		"selection": {},
+		"palette": true,
+		"repeat": true
+	},
+	{
+		"id": "hide_faces_against_solids",
+		"label": "Hide Faces Against Solids",
+		"help":
+		"Make Hidden every face of the selection that lies flat against another solid brush, after showing which.",
+		"category": "Paint",
+		"needs_level": true,
+		"selection": {},
+		"palette": true,
+		"repeat": true
+	},
+	{
 		"id": "replace_material",
 		"label": "Replace Material...",
 		"help": "Swap one material for another on every face that wears it.",
@@ -1631,6 +1664,16 @@ const COMMANDS := [
 		"label": "Show or Hide Cordons",
 		"help":
 		"Hide the cordon boxes in the editor, or show them again. The level and the bake are not changed.",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "view_filter_hidden_faces",
+		"label": "Show or Hide Hidden Faces",
+		"help":
+		"Hide the striped Hidden faces in the editor, or show them again. The level and the bake are not changed.",
 		"category": "Selection",
 		"needs_level": true,
 		"selection": {},

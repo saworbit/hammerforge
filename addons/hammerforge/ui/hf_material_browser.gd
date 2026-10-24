@@ -10,6 +10,8 @@ signal material_drag_started(index: int, at_position: Vector2)
 signal material_context_menu(index: int, global_pos: Vector2)
 signal material_hovered(index: int)
 signal material_hover_ended
+## The Hidden swatch was pressed: make the selected faces Hidden (#1719).
+signal hidden_swatch_applied
 ## How many materials the grid shows, for the dock to put in the section header
 ## rather than on a row of its own.
 signal status_changed(text: String)
@@ -18,6 +20,7 @@ signal status_changed(text: String)
 signal material_add_requested(path: String)
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
+const HFHiddenFaces = preload("../hf_hidden_faces.gd")
 
 const THUMB_SIZE := 64
 ## The thumbnail sizes the size slider goes between, in pixels (#1725).
@@ -102,6 +105,9 @@ var _thumb_cache: Dictionary = {}
 var use_provider: Callable = Callable()
 var _use_counts: Dictionary = {}
 var _size_slider: HSlider
+## The Hidden swatch (#1719), beside the colour filters rather than in the grid, so
+## it is there whatever the view and the search, and every cell of the grid is a slot.
+var hidden_swatch: Button
 ## The thumbnail size, kept in the preferences as `material_thumb_size`.
 var _thumb_size: int = THUMB_SIZE
 
@@ -161,6 +167,34 @@ func _ready() -> void:
 	_color_filter_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(_color_filter_row)
 	_build_color_swatches()
+
+	# Not a material: a face made Hidden keeps its slot, wears these stripes in
+	# the editor and is left out of the bake's mesh and lightmap (#1719). At the
+	# end of the colour row, which has room, so the browser is no taller for it.
+	hidden_swatch = Button.new()
+	hidden_swatch.name = "HiddenSwatch"
+	# Narrow and stretched like the colour swatches, so it does not set how narrow
+	# the dock can be. The stripes are its face.
+	hidden_swatch.custom_minimum_size = Vector2(14, 20)
+	hidden_swatch.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var stripes := StyleBoxTexture.new()
+	stripes.texture = HFHiddenFaces.swatch_texture(20)
+	hidden_swatch.add_theme_stylebox_override("normal", stripes)
+	var lit := stripes.duplicate() as StyleBoxTexture
+	lit.modulate_color = Color(1.3, 1.3, 1.3)
+	hidden_swatch.add_theme_stylebox_override("hover", lit)
+	hidden_swatch.add_theme_stylebox_override("pressed", lit)
+	hidden_swatch.tooltip_text = (
+		"Hidden: for a face nobody will see, such as the underside of a floor or the"
+		+ " back of a wall against another. It keeps its collision, and the bake leaves"
+		+ " it out of the mesh and the lightmap."
+		+ "\n\nClick: make the selected faces Hidden"
+		+ "\nDrag onto a face: make it Hidden"
+		+ "\nA material applied to a Hidden face shows it again"
+	)
+	hidden_swatch.pressed.connect(func(): hidden_swatch_applied.emit())
+	hidden_swatch.set_drag_forwarding(_hidden_drag_data, Callable(), Callable())
+	_color_filter_row.add_child(hidden_swatch)
 
 	# --- Recent materials, newest first, hidden while there are none ---
 	_recent_row = HBoxContainer.new()
@@ -544,6 +578,12 @@ func _make_badge(text: String) -> Label:
 	badge.add_theme_color_override("font_outline_color", Color.BLACK)
 	badge.add_theme_constant_override("outline_size", 4)
 	return badge
+
+
+## What dragging the Hidden swatch carries: the viewport's drop makes the face it
+## lands on Hidden.
+func _hidden_drag_data(_at_position: Vector2) -> Variant:
+	return {"type": "hammerforge_material", "index": -1, "hidden": true}
 
 
 ## A cell with no material to pick, a "!" with `label` under it. It takes no

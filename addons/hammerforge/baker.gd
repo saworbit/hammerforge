@@ -14,6 +14,7 @@ const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
 const HFBakeSplit = preload("hf_bake_split.gd")
 const HFSmoothing = preload("hf_smoothing.gd")
+const HFHiddenFaces = preload("hf_hidden_faces.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFMaterialAtlasScript = preload("hf_material_atlas.gd")
 
@@ -90,22 +91,28 @@ func bake_from_csg(
 		hull_verts = _placed_like_csg_mesh(options.get("per_brush_verts", []), entries)
 
 	if merge_meshes:
-		var merged = _merge_entries(entries, use_thread_pool)
-		if merged:
-			merged = _postprocess_mesh(
-				merged, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
-			)
-			if merged:
-				var mesh_inst = MeshInstance3D.new()
-				mesh_inst.name = "BakedMesh_0"
-				mesh_inst.mesh = merged
-				HFBakeSplit.apply(mesh_inst, options)
-				if material_override:
-					mesh_inst.material_override = material_override
-				result.add_child(mesh_inst)
+		var raw = _merge_entries(entries, use_thread_pool)
+		if raw:
+			# Hidden faces draw nothing and hold what they held (#1719).
+			var shown := HFHiddenFaces.without_hidden(raw)
+			var merged: Mesh = null
+			if shown:
+				merged = _postprocess_mesh(
+					shown, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
+				)
+			var solid: Mesh = raw if shown != raw else merged
+			if solid:
+				if merged:
+					var mesh_inst = MeshInstance3D.new()
+					mesh_inst.name = "BakedMesh_0"
+					mesh_inst.mesh = merged
+					HFBakeSplit.apply(mesh_inst, options)
+					if material_override:
+						mesh_inst.material_override = material_override
+					result.add_child(mesh_inst)
 				_add_collision(
 					static_body,
-					merged,
+					solid,
 					Transform3D.IDENTITY,
 					hull_verts,
 					collision_mode,
@@ -117,6 +124,7 @@ func bake_from_csg(
 	var mesh_count := 0
 	var hulled := false
 	var empty_only := false
+	var held := false
 	for pair in _csg_mesh_pairs(entries):
 		var mesh: Mesh = pair["mesh"]
 		var mesh_xform: Transform3D = pair["transform"]
@@ -127,37 +135,44 @@ func bake_from_csg(
 			empty_only = true
 			continue
 
-		var processed = _postprocess_mesh(
-			mesh, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
-		)
-		if not processed:
+		# Hidden faces draw nothing, so they are not in the mesh and get no
+		# lightmap, and the collision is still taken from all of it (#1719).
+		var shown := HFHiddenFaces.without_hidden(mesh)
+		var processed: Mesh = null
+		if shown:
+			processed = _postprocess_mesh(
+				shown, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
+			)
+		var solid: Mesh = mesh if shown != mesh else processed
+		if not solid:
 			continue
 
-		var mesh_inst = MeshInstance3D.new()
-		mesh_inst.name = "BakedMesh_%d" % mesh_count
-		mesh_inst.mesh = processed
-		HFBakeSplit.apply(mesh_inst, options)
-		mesh_inst.transform = mesh_xform
-		if material_override:
-			mesh_inst.material_override = material_override
-		result.add_child(mesh_inst)
+		if processed:
+			var mesh_inst = MeshInstance3D.new()
+			mesh_inst.name = "BakedMesh_%d" % mesh_count
+			mesh_inst.mesh = processed
+			HFBakeSplit.apply(mesh_inst, options)
+			mesh_inst.transform = mesh_xform
+			if material_override:
+				mesh_inst.material_override = material_override
+			result.add_child(mesh_inst)
+			mesh_count += 1
 
 		# The hulls are the whole level's, so once they are on, a later mesh
 		# needs nothing more.
 		if not hulled:
 			hulled = _add_collision(
 				static_body,
-				processed,
+				solid,
 				mesh_xform,
 				hull_verts,
 				collision_mode,
 				convex_clean,
 				convex_simplify
 			)
+		held = true
 
-		mesh_count += 1
-
-	if mesh_count == 0:
+	if mesh_count == 0 and not held:
 		if not empty_only:
 			result.free()
 			return null
@@ -398,6 +413,16 @@ func build_mesh_from_groups(
 ) -> Node3D:
 	if groups.is_empty():
 		return null
+	# Hidden faces go into the collision and nothing else (#1719): not the mesh,
+	# so not the lightmap, and not the atlas.
+	var hidden_groups: Array = []
+	var shown_groups: Dictionary = {}
+	for key in groups:
+		if HFHiddenFaces.is_hidden_material(groups[key].get("material")):
+			hidden_groups.append(groups[key])
+		else:
+			shown_groups[key] = groups[key]
+	groups = shown_groups
 	var result = Node3D.new()
 	result.name = "BakedGeometry"
 
@@ -465,7 +490,8 @@ func build_mesh_from_groups(
 		for group in groups.values():
 			_add_group_surface(combined_mesh, surface_materials, group)
 
-	if combined_mesh.get_surface_count() == 0:
+	if combined_mesh.get_surface_count() == 0 and hidden_groups.is_empty():
+		result.free()
 		return null
 
 	for i in range(surface_materials.size()):
@@ -475,23 +501,24 @@ func build_mesh_from_groups(
 	# The same finishing pass the CSG path runs. `bake_use_face_materials` is the
 	# default since #491, so without this every default bake silently dropped the
 	# LODs and the lightmap UV2 the Bake Options asked for.
-	combined_mesh = _postprocess_mesh(
-		combined_mesh,
-		bool(options.get("generate_lods", false)),
-		bool(options.get("unwrap_uv2", false)),
-		float(options.get("uv2_texel_size", DEFAULT_UV2_TEXEL_SIZE)),
-		bool(options.get("unwrap_uv0", false))
-	)
-	if combined_mesh == null:
-		return null
-
-	var mesh_inst = MeshInstance3D.new()
-	mesh_inst.name = "BakedMesh_0"
-	mesh_inst.mesh = combined_mesh
-	# How it casts shadows and how fine its lightmap is: the level's, or the
-	# settings of the part of the bake these groups were collected for.
-	HFBakeSplit.apply(mesh_inst, options)
-	result.add_child(mesh_inst)
+	if combined_mesh.get_surface_count() > 0:
+		combined_mesh = _postprocess_mesh(
+			combined_mesh,
+			bool(options.get("generate_lods", false)),
+			bool(options.get("unwrap_uv2", false)),
+			float(options.get("uv2_texel_size", DEFAULT_UV2_TEXEL_SIZE)),
+			bool(options.get("unwrap_uv0", false))
+		)
+		if combined_mesh == null:
+			result.free()
+			return null
+		var mesh_inst = MeshInstance3D.new()
+		mesh_inst.name = "BakedMesh_0"
+		mesh_inst.mesh = combined_mesh
+		# How it casts shadows and how fine its lightmap is: the level's, or the
+		# settings of the part of the bake these groups were collected for.
+		HFBakeSplit.apply(mesh_inst, options)
+		result.add_child(mesh_inst)
 
 	var collision_mode: int = int(options.get("collision_mode", 0))
 	var per_brush_verts: Array = options.get("per_brush_verts", [])
@@ -500,7 +527,7 @@ func build_mesh_from_groups(
 
 	_add_collision(
 		static_body,
-		combined_mesh,
+		_with_groups(combined_mesh, hidden_groups),
 		Transform3D.IDENTITY,
 		per_brush_verts,
 		collision_mode,
@@ -509,6 +536,24 @@ func build_mesh_from_groups(
 	)
 
 	return result
+
+
+## `mesh` with a surface more for each of `groups`, for a collision that holds
+## the Hidden faces the mesh leaves out (#1719). `mesh` itself when there are none.
+func _with_groups(mesh: ArrayMesh, groups: Array) -> ArrayMesh:
+	if groups.is_empty():
+		return mesh
+	var out := ArrayMesh.new()
+	var materials: Array[Material] = []
+	for i in mesh.get_surface_count():
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(i))
+		materials.append(mesh.surface_get_material(i))
+	for group in groups:
+		_add_group_surface(out, materials, group)
+	for i in materials.size():
+		if materials[i]:
+			out.surface_set_material(i, materials[i])
+	return out
 
 
 ## One baked node from the nodes the parts of one bake made, each a
