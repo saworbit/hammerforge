@@ -176,6 +176,7 @@ const EVERY_MODE := [
 	"validate_level",
 	"toggle_selection_size",
 	"toggle_operation_replay",
+	"command_line",
 	"context_menu",
 	"radial_menu",
 ]
@@ -343,6 +344,8 @@ static func _default_bindings() -> Dictionary:
 		"copy": {"keycode": KEY_C, "ctrl": true},
 		"paste": {"keycode": KEY_V, "ctrl": true},
 		"paste_at_cursor": {"keycode": KEY_V, "ctrl": true, "alt": true},
+		# A colon, as a terminal's command line has it (#1696).
+		"command_line": {"keycode": KEY_SEMICOLON, "shift": true},
 		"group": {"keycode": KEY_G, "ctrl": true},
 		"ungroup": {"keycode": KEY_U, "ctrl": true},
 		"hollow": {"keycode": KEY_H, "ctrl": true},

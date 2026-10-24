@@ -239,6 +239,25 @@ const COMMANDS := [
 		"palette": true
 	},
 	{
+		"id": "command_line",
+		"label": "Command Line",
+		"help": "Type a command and its values, such as hollow 0.125, on a line over the viewport.",
+		"aliases": ["type a command", "console line", "command prompt"],
+		"category": "Workflow",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
+		"id": "run_command_script",
+		"label": "Run Command Script",
+		"help": "Run a text file of commands, one a line, each its own undo step.",
+		"aliases": ["script", "run script", "batch commands"],
+		"category": "Workflow",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "convert_entity_definitions",
 		"label": "Convert Entity Definitions to JSON",
 		"help":

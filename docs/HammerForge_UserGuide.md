@@ -49,7 +49,7 @@ for a new level moved.
 
 Open it from **HammerForge** in the main-screen switcher. The overall lamp also sits in the 3D viewport toolbar while you build; clicking it opens the Console.
 
-Three tabs.
+Five tabs, and a command line under them.
 
 ### Status
 
@@ -124,6 +124,20 @@ In the viewport a note is a marker with its title over it: a sphere for a Note, 
 The Console's **Notes** tab lists every note under its kind, with how many are open, and clicking one selects it, so **F** frames it. The Status board counts open notes in a grey **Notes** row, which never colours the headline. Turn on **Validate warns about open To Do notes** under Safety net in the Console's Controls and Validate lists each open To Do note as `Open To Do note: <title>`, with Select on its row; Note and Playtest notes never warn. The setting is kept in the level and the scene, off by default, so everyone's check of a level agrees ([#1818](https://github.com/saworbit/hammerforge/issues/1818)).
 
 Notes save with the level, the scene and a prefab like any entity, and never reach a bake, a playtest, a running game, a `.glb` or a `.map` export; either export says how many it left out. An agent can place, change and list notes over the bridge with `hf_place_entity`, `hf_set_entity_properties` and `hf_get_entities`.
+
+### Command Line
+
+A line at the bottom of the Console takes a command and its values as you would say them: `hollow 0.125` hollows the selected brush with walls 0.125 m thick, in one undo step ([#1696](https://github.com/saworbit/hammerforge/issues/1696)). **Shift+;** (a colon) opens the same line over the 3D viewport, so you can type without leaving the level, and Escape on an empty line closes it.
+
+- **The command** is its id, its name or an alias: `move_to_floor`, `move to floor` and `Move to Floor` are the same command, as in the palette.
+- **Values** go in by place, in the order the command takes them, or by name: `hollow 0.125` and `hollow thickness=0.125` are the same. A vector is three numbers with commas, `position=1,2,3`; a floor cell two, `at=4,-2`; yes and no are `yes`, `no`, `on`, `off`, `true` or `false`; a structure's settings are JSON, `{"steps": 8}`. Quote a value with spaces in it: `place_prefab "corner desk" position=0,0,4`.
+- **What it asks.** A command typed with no values asks for each one, with the default in angle brackets, `Thickness <0.25>:`; Enter takes the default and Escape cancels. A command given some values asks only for what it cannot do without.
+- **Help while typing.** Up to eight commands are offered under the line as you type, the one you typed exactly first, and Tab takes the top one. Once the command is named, a hint lists what it takes and in what range.
+- **Refusals** name the value, as the Agent Bridge does: `hollow 500` says the thickness is past 128.
+- **History.** Up and Down step through the lines run this session, on either line, and Enter on an empty line runs the last one again. Each line run goes into the **Log** as `> hollow 0.125`, with what it did, so it can be copied into a report.
+- **Scripts.** **Run Script...** beside the line, or **Run Command Script** in the palette, runs a text file of such lines, one command a line, each its own undo step. A line starting with `#` is a comment. It stops at the first line that does not read or is refused, and says which line and why.
+
+The commands the Agent Bridge runs (`hf_list_commands`) are read and checked by the bridge's own code, on the selection, so a line and an agent's request mean the same thing. Any other command, such as **Toggle Paint Mode**, takes no values and runs as the palette runs it. A step typed on the line is yours, not the agent's: the bridge's **hf_undo** will not take it back.
 
 ## Viewport Mouse Controls
 
@@ -1948,6 +1962,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Copy | Ctrl+C | Put the selection on the clipboard |
 | Paste | Ctrl+V | Place what is on the clipboard, where it was copied from |
 | Paste at Cursor | Ctrl+Alt+V | Place what is on the clipboard standing on the point under the cursor |
+| Command Line | Shift+; | Type a command and its values on a line over the viewport |
 | Group | Ctrl+G | Group selected brushes |
 | Ungroup | Ctrl+U | Ungroup selection |
 | Hollow | Ctrl+H | Convert brush to hollow room |

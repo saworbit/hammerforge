@@ -21,6 +21,8 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Quick Play (`quick_play`) | Ctrl+Enter | a level | yes | Bake the level and run it to test. |
 | Validate Level (`validate_level`) | Ctrl+Shift+Enter | a level | yes | Check the level for problems and list them. |
 | Repeat Last Command (`repeat_last_command`) | none | a level | yes | Run the last command again on the current selection, with the same settings. |
+| Command Line (`command_line`) | Shift+; | - | yes | Type a command and its values, such as hollow 0.125, on a line over the viewport. |
+| Run Command Script (`run_command_script`) | none | a level | yes | Run a text file of commands, one a line, each its own undo step. |
 | Convert Entity Definitions to JSON (`convert_entity_definitions`) | none | a level | yes | Write the entity classes the level reads from an FGD as an entities.json beside it, to edit them in that form. |
 | Cycle I/O Wires (`cycle_io_wires`) | none | - | yes | Step the I/O wires through none, all, the selection's chain and its own. |
 

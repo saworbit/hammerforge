@@ -40,6 +40,8 @@ const VIEWPORT_OVERLAY_ANCHORS := {
 	"_hotkey_palette": ["center", 0.0],
 	"_coach_marks": ["bottom_center", 12.0],
 	"_operation_replay": ["bottom_left", 12.0],
+	# Above the coach marks, which share the bottom edge (#1696).
+	"_command_line_overlay": ["bottom_center", 56.0],
 }
 
 

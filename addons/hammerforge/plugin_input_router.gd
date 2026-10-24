@@ -138,6 +138,10 @@ static func _handle_keyboard(
 	if keymap.matches("toggle_operation_replay", event):
 		HFPluginCommands.execute(plugin, "toggle_operation_replay")
 		return STOP
+	# The command line over the viewport, in every tool and mode (#1696).
+	if keymap.matches("command_line", event):
+		HFPluginCommands.execute(plugin, "command_line")
+		return STOP
 
 	# External tool keyboard dispatch first — external tools can override keys
 	if plugin._tool_registry and plugin._tool_registry.has_active_external_tool():

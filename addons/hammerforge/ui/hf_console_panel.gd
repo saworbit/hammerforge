@@ -22,6 +22,7 @@ const HFStatusRowType = preload("hf_status_row.gd")
 const HFConsoleControlsType = preload("hf_console_controls.gd")
 const HFConsoleLogViewType = preload("hf_console_log_view.gd")
 const HFEntityCensusType = preload("../hf_entity_census.gd")
+const HFCommandLineViewType = preload("hf_command_line_view.gd")
 
 const LOCKUP_DARK := "res://addons/hammerforge/branding/hf_lockup_dark.svg"
 const LOCKUP_LIGHT := "res://addons/hammerforge/branding/hf_lockup_light.svg"
@@ -55,6 +56,7 @@ var _legend: HBoxContainer = null
 var _attention_only: CheckButton = null
 var _controls: HFConsoleControls = null
 var _log_view: HFConsoleLogView = null
+var _command_line = null  # The line under the tabs, where a command is typed (#1696)
 var _poll: Timer = null
 var _census_scope: OptionButton = null  # Entities tab: the whole level, the cordons, a visgroup
 var _census_tree: Tree = null  # Entities tab: one row per class, with its count (#1709)
@@ -111,6 +113,9 @@ func _build() -> void:
 	_build_log_tab()
 	_build_entities_tab()
 	_build_notes_tab()
+
+	_command_line = HFCommandLineViewType.new()
+	add_child(_inset(_command_line))
 
 	_poll = Timer.new()
 	_poll.wait_time = POLL_SECONDS
@@ -432,6 +437,11 @@ func _build_controls_tab() -> void:
 	_controls = HFConsoleControlsType.new()
 	_controls.setting_changed.connect(_on_setting_changed)
 	page.add_child(_controls)
+
+
+## The command line under the tabs, which the plugin wires up.
+func command_line():
+	return _command_line
 
 
 func _build_log_tab() -> void:
