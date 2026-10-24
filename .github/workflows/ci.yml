@@ -152,6 +152,23 @@ jobs:
       - name: Check the changelog fragments
         run: python3 tools/changelog_fragments.py --check
 
+      # docs/parity.md is written from docs/data/classic-editor-tools.txt and the
+      # command registry, so a command id the catalog maps cannot go without the
+      # page saying so, and the page cannot drift from the catalog (#1707).
+      - name: Check the parity guard still detects
+        run: python3 tools/gen_parity.py --selftest
+
+      - name: Check the parity page is current
+        run: python3 tools/gen_parity.py --check
+
+      # mkdocs checks the links under docs/. The pages at the root are read on
+      # GitHub, and ROADMAP.md pointed at a file the repository never had (#1707).
+      - name: Check the link guard still detects
+        run: python3 tools/check_doc_links.py --selftest
+
+      - name: Check the top-level pages' links
+        run: python3 tools/check_doc_links.py
+
       # A pull request that changed the addon and forgot its fragment passed,
       # and the change was missing from the changelog until someone noticed;
       # the template's checkbox was the only reminder (#1297). HEAD is the

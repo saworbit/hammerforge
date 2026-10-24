@@ -1,8 +1,38 @@
 # Roadmap
 
-Last updated: October 22, 2026
+Last reviewed: October 25, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
+
+## Where it stands
+
+HammerForge is a working brush editor inside Godot: block out with brushes,
+cut, clip and shape them, texture and paint their faces, place and wire
+entities, and bake the level to geometry a game plays, with an agent bridge
+beside it. Release 0.4.0 is a prerelease.
+
+Measured against the tools and menu actions of Hammer and TrenchBroom, it covers
+**132 of 137, 96%** of what their manuals name ([Parity](docs/parity.md),
+written from `docs/data/classic-editor-tools.txt` by `tools/gen_parity.py`).
+That counts a tool covered when something does its job, a Godot gizmo or a
+panel included; it says nothing of how deep each one goes.
+
+## Next
+
+In order:
+
+1. One table of what each file format keeps and loses ([#1706](https://github.com/saworbit/hammerforge/issues/1706))
+2. Repeat the whole run of commands since the selection last changed ([#1735](https://github.com/saworbit/hammerforge/issues/1735))
+3. A command line in the Console: type a command and its values ([#1696](https://github.com/saworbit/hammerforge/issues/1696))
+4. Sweep selected faces into a run of brushes along a bend ([#1714](https://github.com/saworbit/hammerforge/issues/1714))
+5. Alignment guides from points you rest on, and points built from two others ([#1692](https://github.com/saworbit/hammerforge/issues/1692))
+6. Dimensions that stay in the level and follow the brushes they measure ([#1699](https://github.com/saworbit/hammerforge/issues/1699))
+7. Groups you can name, nest, list and open ([#1723](https://github.com/saworbit/hammerforge/issues/1723))
+8. Compare two versions of a level ([#1701](https://github.com/saworbit/hammerforge/issues/1701))
+9. Follow the system's motion and contrast settings, and name every control ([#1703](https://github.com/saworbit/hammerforge/issues/1703))
+10. Every brush and face action on a set of levels, against a recorded baseline ([#1648](https://github.com/saworbit/hammerforge/issues/1648))
+
+What is done is below, newest first.
 
 ## Done (Agent Bridge, MCP -- October 2026)
 
