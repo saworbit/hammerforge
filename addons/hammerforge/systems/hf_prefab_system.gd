@@ -17,6 +17,7 @@ const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
 const HFFileNames = preload("res://addons/hammerforge/hf_file_names.gd")
 const HFRebuildCarry = preload("res://addons/hammerforge/hf_rebuild_carry.gd")
+const HFFormatCensus = preload("res://addons/hammerforge/hf_format_census.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D  # LevelRoot — untyped to avoid circular preload
@@ -1241,6 +1242,10 @@ func quick_save_prefab(
 		# feedback as one who typed a name with a slash in it (#667).
 		_report("Prefab '%s' could not be written to %s (error %d)" % [prefab_name, path, err], 2)
 		return ""
+	# Before the pieces are tagged as a copy of this one.
+	var dropped := HFFormatCensus.left_out(root, ".hfprefab", brush_nodes + entity_nodes)
+	if dropped != "" and root.has_signal("user_message"):
+		root.user_message.emit("Prefab '%s' %s" % [prefab_name, dropped], 0)
 
 	# Register as a linked instance if requested
 	if linked:
