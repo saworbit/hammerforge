@@ -138,6 +138,11 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Redo (`redo`) | none | - | no | Put back the last change undone. |
 | Set Grid Snap (`set_grid_snap`) | none | - | no | Set the grid step to a value. |
 | Measure (`measure`) | none | - | no | Start the Measure tool, which draws rulers between points. |
+| Next Pick: Vertex Only (`snap_next_vertex`) | none | a level | yes | The next click snaps only to a vertex, whatever snaps are on, then they all return. |
+| Next Pick: Midpoint Only (`snap_next_midpoint`) | none | a level | yes | The next click snaps only to the middle of an edge, then every snap that was on returns. |
+| Next Pick: Centre Only (`snap_next_centre`) | none | a level | yes | The next click snaps only to a brush's centre, then every snap that was on returns. |
+| Next Pick: Perpendicular Only (`snap_next_perpendicular`) | none | a level | yes | The next click snaps only to the foot of a perpendicular on an edge, then every snap returns. |
+| Next Pick: Grid Only (`snap_next_grid`) | none | a level | yes | The next click snaps only to the grid, even with Grid off, then every snap that was on returns. |
 | Cancel Drag (`cancel_drag`) | none | - | no | Stop the drag in progress and clear any typed number. |
 | Apply Pending Cuts (`apply_pending_cuts`) | none | - | no | Apply the cuts waiting in Pending Cuts to the brushes they overlap. |
 | Commit Cuts (`commit_cuts`) | none | - | no | Apply the pending cuts and bake. |

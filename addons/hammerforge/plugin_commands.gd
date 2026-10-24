@@ -32,6 +32,7 @@ const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
 const HFPluginBrushStamp = preload("plugin_brush_stamp.gd")
+const HFPluginSnapFeedbackType = preload("plugin_snap_feedback.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -608,6 +609,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"measure":
 			if plugin._tool_registry and plugin.active_root:
 				plugin._activate_external_tool(100, plugin.active_root)
+		"snap_next_vertex", "snap_next_midpoint", "snap_next_centre", "snap_next_perpendicular", "snap_next_grid":
+			HFPluginSnapFeedbackType.limit(plugin, action)
 		"cancel_drag":
 			if root:
 				root.cancel_drag()

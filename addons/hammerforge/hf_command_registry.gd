@@ -1937,6 +1937,61 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "snap_next_vertex",
+		"label": "Next Pick: Vertex Only",
+		"help":
+		"The next click snaps only to a vertex, whatever snaps are on, then they all return.",
+		"aliases": ["vertex only"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
+		"selection": {}
+	},
+	{
+		"id": "snap_next_midpoint",
+		"label": "Next Pick: Midpoint Only",
+		"help":
+		"The next click snaps only to the middle of an edge, then every snap that was on returns.",
+		"aliases": ["midpoint only", "edge middle"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
+		"selection": {}
+	},
+	{
+		"id": "snap_next_centre",
+		"label": "Next Pick: Centre Only",
+		"help":
+		"The next click snaps only to a brush's centre, then every snap that was on returns.",
+		"aliases": ["centre only", "center only"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
+		"selection": {}
+	},
+	{
+		"id": "snap_next_perpendicular",
+		"label": "Next Pick: Perpendicular Only",
+		"help":
+		"The next click snaps only to the foot of a perpendicular on an edge, then every snap returns.",
+		"aliases": ["perpendicular only"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
+		"selection": {}
+	},
+	{
+		"id": "snap_next_grid",
+		"label": "Next Pick: Grid Only",
+		"help":
+		"The next click snaps only to the grid, even with Grid off, then every snap that was on returns.",
+		"aliases": ["grid only"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
+		"selection": {}
+	},
+	{
 		"id": "cancel_drag",
 		"label": "Cancel Drag",
 		"help": "Stop the drag in progress and clear any typed number.",

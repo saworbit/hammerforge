@@ -88,7 +88,7 @@ Every HammerForge switch on one screen, grouped by what it affects:
 
 ![The Console Controls tab, with the Viewport, Bake and Safety net groups and a caption under each switch](images/ui_console_controls.png)
 
-- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, draw hover preview, show selection size, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
+- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, draw hover preview, name the snap, show selection size, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
 - **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh (cell size and height, agent height, radius, climb and slope), visible only, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
 - **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), check for a newer HammerForge (once a day, from the Asset Library, see [Upgrade](HammerForge_Install_Upgrade.md#upgrade)), debug logging
 
@@ -1730,6 +1730,12 @@ Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row i
 **Snapping while you drag.** Grid (G) decides the grid for a draw's corners and height, a resize handle and a vertex or edge drag alike: with it off, none of them snap to the grid. Hold **Ctrl** during any of those drags to turn the grid the other way for as long as it is held: off while G is on, on while G is off. It is read on every mouse motion, so it can be pressed or let go mid drag, and the viewport HUD shows **Snap off** or **Snap on** while it is held. Vertex, Center, Edge and Perpendicular snaps still apply to the draw's corners.
 
 With **Vertex (V)** on, a vertex drag lands the vertex you grabbed on another brush's vertex within 10 pixels of the cursor, and the rest of the selection moves by the same amount; a resize handle moves its face level with that vertex along the handle's axis. Hold **Alt** during either drag for the same thing while V is off. The brush you are editing is never a target, and a cyan marker sits on the target while the snap holds. With an axis lock the vertex goes level with the target along the locked axis. The usual checks still apply: a move that would leave the brush non-convex is refused and the brush put back, and one undo reverts a snapped drag. Both keys are rebindable (`snap_invert_hold`, `snap_vertex_hold`).
+
+**What the snap found.** Wherever a pointer tool snaps, a marker on the snapped point says what it is on, by its shape: a square for a vertex, a triangle for an edge's midpoint, a circle for a brush's centre, a right angle for a perpendicular, a diamond for the Measure tool's snap line and a plain cross for the grid. The marker is the same size at every zoom, and a word beside it names the kind; untick **Name the snap** under Viewport in the Console's Controls to keep the shapes alone. Draw, Polygon, Path, Measure and Clip show it, and a vertex drag shows it on the vertex it lands on ([#1691](https://github.com/saworbit/hammerforge/issues/1691)).
+
+**Tab to the next snap.** When candidates of more than one kind are in reach, the nearest wins, and **Tab** steps to the next kind, then the next, and back round. The marker follows, and the click takes the one shown. Moving the cursor away, or taking the pick, goes back to the nearest. A typed number's Tab still applies the number, the Clip tool's Tab still steps its side, and with no marker showing Tab does what it always did.
+
+**One pick of one kind.** **Next Pick: Vertex Only**, **Midpoint Only**, **Centre Only**, **Perpendicular Only** and **Grid Only** limit the next pick to that kind, whatever snaps are on, and every snap that was on returns after it. They are in the command palette and ship with no key; give one a key in the shortcut dialog.
 
 **Tip:** Use Vertex for corner alignment, Center for centered placement, Edge for exact midpoints, and Perpendicular for a right-angle projection onto an edge.
 

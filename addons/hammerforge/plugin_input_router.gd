@@ -14,6 +14,7 @@ const HFPluginTransformToolsType = preload("plugin_transform_tools.gd")
 const HFPluginMaterialCommandsType = preload("plugin_material_commands.gd")
 const HFPluginSelectionCommandsType = preload("plugin_selection_commands.gd")
 const HFMaterialBrowserType = preload("ui/hf_material_browser.gd")
+const HFPluginSnapFeedbackType = preload("plugin_snap_feedback.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
@@ -142,6 +143,11 @@ static func _handle_keyboard(
 		var ext_result = plugin._tool_registry.dispatch_keyboard(event)
 		if ext_result == STOP:
 			return ext_result
+	# Tab steps the snap the viewport shows to the next kind in reach (#1691). A
+	# typed number's Tab is asked above, and a tool's own Tab, such as the Clip
+	# tool's side, just before; with no snap showing Tab goes on as before.
+	if HFPluginSnapFeedbackType.step(plugin, event):
+		return STOP
 
 	# Viewport context menu — only when idle (no active operation, no active external tool)
 	if keymap.matches("context_menu", event):

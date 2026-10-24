@@ -13,6 +13,7 @@ const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
 const HFGridSystem = preload("hf_grid_system.gd")
 const HFVertexWeld = preload("../hf_vertex_weld.gd")
+const HFSnapSystemType = preload("../hf_snap_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## How near two corners are to count as one, for `_vertex_key()`.
@@ -1041,6 +1042,15 @@ func drag_to(
 	var moved := update_drag_absolute(delta)
 	if snap:
 		snap.set_drag_marker(target if moved else null)
+		# The viewport names what the vertex landed on (#1691).
+		var landed: Variant = _drag_start_pos + delta
+		var step: float = root.drag_grid_step() if root else 0.0
+		if target != null and moved:
+			snap.show_drag_pick(target, HFSnapSystemType.KIND_VERTEX)
+		elif step > 0.0 and sub_mode == VertexSubMode.VERTEX:
+			snap.show_drag_pick(landed, HFSnapSystemType.KIND_GRID)
+		else:
+			snap.show_drag_pick(null, "")
 	return moved
 
 
