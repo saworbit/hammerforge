@@ -1,0 +1,10 @@
+{
+	"what": "Each face's smoothing group.",
+	"older_builds": "Every face shades flat again.",
+	"keys": [
+		"state.brushes[].faces[].smoothing_group",
+		"state.pending[].faces[].smoothing_group",
+		"state.committed[].faces[].smoothing_group",
+		"state.hollows[].source.faces[].smoothing_group"
+	]
+}

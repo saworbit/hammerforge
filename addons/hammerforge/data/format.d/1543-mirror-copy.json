@@ -1,0 +1,8 @@
+{
+	"what": "Mirror Copy's axes and whether it mirrors about the selection's edge.",
+	"older_builds": "Mirror Copy goes back to its default axes and mirrors about the middle.",
+	"keys": [
+		"settings.mirror_copy_at_edge",
+		"settings.mirror_copy_axes"
+	]
+}

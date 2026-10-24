@@ -1,0 +1,7 @@
+{
+	"what": "The wall faces a Trim Run follows.",
+	"older_builds": "A Trim Run can no longer be updated; its pieces stay.",
+	"keys": [
+		"state.generators[].run"
+	]
+}

@@ -1,0 +1,14 @@
+{
+	"what": "The level's Cast Shadows default, each brush's Cast Shadows and Lightmap Scale, and each visgroup's Cast Shadows.",
+	"older_builds": "Every brush casts shadows the default way and bakes at the level's lightmap scale.",
+	"keys": [
+		"settings.bake_cast_shadows",
+		"state.brushes[].bake_cast_shadow",
+		"state.brushes[].bake_lightmap_scale",
+		"state.pending[].bake_cast_shadow",
+		"state.pending[].bake_lightmap_scale",
+		"state.committed[].bake_cast_shadow",
+		"state.committed[].bake_lightmap_scale",
+		"state.visgroups{}.cast_shadow"
+	]
+}

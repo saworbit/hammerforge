@@ -1,0 +1,1 @@
+- Every change to what a level saves raises the `.hflevel` format number, so an older build refuses a newer level instead of saving it back without what it lacks. (issue [#1638](https://github.com/saworbit/hammerforge/issues/1638))

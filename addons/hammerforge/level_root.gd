@@ -14,6 +14,7 @@ const DraftEntity = preload("draft_entity.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const PlaytestFPS = preload("playtest_fps.gd")
 const HFLevelIO = preload("hflevel_io.gd")
+const HFFormatRecord = preload("hf_format_record.gd")
 const MapIO = preload("map_io.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
@@ -520,6 +521,12 @@ var _grid_visible: bool = false
 ## Validate lists each open To Do note (#1818). Kept in the level, so everyone's
 ## ship check of it agrees. Off by default: a note is a reminder, not a fault.
 @export var validate_warns_open_todos: bool = false
+## The format number, and the waiting format fragments, of the build that last
+## saved this scene (#1638). A build older than the stamp shows the level read
+## only and refuses Save Level and autosave, because both would write the level
+## without what the newer build added.
+@export_storage var format_stamp: int = 0
+@export_storage var format_stamp_pending: PackedStringArray = PackedStringArray()
 var _grid_plane_size: float = 500.0
 @export var grid_plane_size: float = 500.0:
 	set(value):
@@ -1268,8 +1275,19 @@ func _notification(what: int) -> void:
 		bake_system.on_level_freeing()
 	elif what == NOTIFICATION_EDITOR_PRE_SAVE and file_system:
 		file_system.scene_save_starting()
+		# A level a newer build saved keeps its stamp, so that build still knows it.
+		if format_refusal() == "":
+			format_stamp = HFLevelIO.FORMAT_VERSION
+			format_stamp_pending = HFFormatRecord.pending_names()
 	elif what == NOTIFICATION_EDITOR_POST_SAVE and file_system:
 		file_system.scene_save_finished()
+
+
+## Why this build must not write this level, or "": its scene was saved by a
+## newer build, or by a development build with format changes this one lacks
+## (#1638). The dock shows the level read only while this is said.
+func format_refusal() -> String:
+	return HFFormatRecord.refusal(format_stamp, format_stamp_pending, HFLevelIO.FORMAT_VERSION)
 
 
 func _process(_delta: float) -> void:
