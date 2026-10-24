@@ -60,6 +60,9 @@ const CLIPBOARD_PATH := "user://hammerforge_clipboard.hfprefab"
 ## `prefab_dir` when they are built, so a change after that moves only a save.
 static var prefab_dir: String = PREFAB_DIR
 static var clipboard_path: String = CLIPBOARD_PATH
+## The system clipboard as a test sees it: null for the real one, or text that
+## stands in for it, so a run never touches the clipboard a person is using.
+static var system_clipboard_stand_in: Variant = null
 
 ## The meta a node carries as a piece of a placed copy: the copy's id, the prefab
 ## file, the variant it shows, and on an entity the stable id the copy finds it
@@ -1282,7 +1285,58 @@ func copy_to_clipboard(brush_nodes: Array, entity_nodes: Array) -> bool:
 		# before and the mapper is looking at the wrong geometry.
 		_report("Copy failed: the clipboard buffer could not be written (error %d)" % err, 2)
 		return false
+	# And as `.map` text on the system clipboard, to paste into a message, another
+	# editor or a file of pieces (#1722). Kept beside the buffer as well, so a paste
+	# can tell whether the system clipboard still holds this copy or something
+	# newer.
+	var text: String = root.file_system.map_text_of(brush_nodes + entity_nodes)
+	set_system_clipboard(text)
+	_write_text(map_text_path(), text)
 	return true
+
+
+## What Copy put on the system clipboard, kept beside the buffer.
+static func map_text_path() -> String:
+	return clipboard_path.get_basename() + ".map"
+
+
+## The system clipboard's text. A display server with no clipboard, a headless
+## run's, has none to read and errors when asked, so it is not asked.
+static func system_clipboard() -> String:
+	if system_clipboard_stand_in != null:
+		return str(system_clipboard_stand_in)
+	if not DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		return ""
+	return DisplayServer.clipboard_get()
+
+
+static func set_system_clipboard(text: String) -> void:
+	if system_clipboard_stand_in != null:
+		system_clipboard_stand_in = text
+		return
+	if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		DisplayServer.clipboard_set(text)
+
+
+## `.map` text on the system clipboard that is newer than the buffer, or "": text
+## that reads as `.map` and is not what the last Copy put there (#1722).
+func newer_map_text() -> String:
+	var text := system_clipboard()
+	if text.strip_edges() == "":
+		return ""
+	if (
+		FileAccess.file_exists(map_text_path())
+		and FileAccess.get_file_as_string(map_text_path()) == text
+	):
+		return ""
+	return text if root.file_system.is_map_text(text) else ""
+
+
+static func _write_text(path: String, text: String) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file:
+		file.store_string(text)
+		file.close()
 
 
 ## What is on the clipboard, or null when it is empty or unreadable.

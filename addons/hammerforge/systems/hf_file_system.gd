@@ -456,14 +456,102 @@ func import_map(
 	var worldspawn = map_data.get("worldspawn", {})
 	if worldspawn is Dictionary and "map_worldspawn_properties" in root:
 		root.map_worldspawn_properties = (worldspawn as Dictionary).duplicate()
+	_build_from_map(map_data, palette)
+	return OK
+
+
+## The brushes and entities `map_data` holds, made in the level as it is, their
+## faces named and pointed at palette slots. `{"brushes": [nodes], "entities":
+## [nodes]}`.
+func _build_from_map(map_data: Dictionary, palette: Dictionary) -> Dictionary:
+	var made := {"brushes": [], "entities": []}
 	for info in map_data.get("brushes", []):
 		if info is Dictionary:
 			var brush = root.create_brush_from_info(info)
 			_apply_map_textures(brush, info, palette)
+			if is_instance_valid(brush):
+				made["brushes"].append(brush)
 	for entity_info in map_data.get("entities", []):
 		if entity_info is Dictionary:
-			root._create_entity_from_map(entity_info)
-	return OK
+			var entity = root._create_entity_from_map(entity_info)
+			if is_instance_valid(entity):
+				made["entities"].append(entity)
+	return made
+
+
+## `.map` text as Copy writes it and as a snippet is shared (#1722): the selection
+## in the Quake family's units, the right way up for them, with nothing of the
+## level's own worldspawn. "" when nothing of `nodes` goes into a `.map`.
+func map_text_of(nodes: Array) -> String:
+	if nodes.is_empty():
+		return ""
+	var text := MapIO.export_map_from_level(
+		root, HFMapQuakeType.new(), MapIO.QUAKE_UNITS_PER_METRE, true, nodes
+	)
+	var parsed := MapIO.parse_map_text(text, MapIO.QUAKE_UNITS_PER_METRE, true)
+	if (
+		(parsed.get("brushes", []) as Array).is_empty()
+		and (parsed.get("entities", []) as Array).is_empty()
+	):
+		return ""
+	return text
+
+
+## Whether `text` reads as `.map` text: at least one brush or entity, as a pasted
+## snippet holds, and not just any text on the clipboard.
+static func is_map_text(text: String) -> bool:
+	if not text.contains("{"):
+		return false
+	var parsed := MapIO.parse_map_text(text, MapIO.QUAKE_UNITS_PER_METRE, true)
+	return not (
+		(parsed.get("brushes", []) as Array).is_empty()
+		and (parsed.get("entities", []) as Array).is_empty()
+	)
+
+
+## Paste `.map` text into the level as it is, through the importer, with the
+## bottom centre of what it makes at `at` (#1722). A line it cannot read is left
+## out and counted, as a hand written snippet may have one, rather than refusing
+## all of it. `{"brushes": [nodes], "entities": [nodes], "dropped": int,
+## "first_dropped": String}`; no brushes and no entities when nothing could be
+## read.
+func paste_map_text(text: String, at: Vector3) -> Dictionary:
+	var palette := _palette_by_texture_token()
+	var map_data := MapIO.parse_map_text(
+		text, MapIO.QUAKE_UNITS_PER_METRE, true, _texture_sizes_by_token(palette)
+	)
+	var errors: Array = map_data.get("errors", [])
+	var made := _build_from_map(map_data, palette)
+	made["dropped"] = errors.size()
+	made["first_dropped"] = str(errors[0]) if not errors.is_empty() else ""
+	var bounds := _bounds_of(made)
+	if not ((made["brushes"] as Array).is_empty() and (made["entities"] as Array).is_empty()):
+		var bottom := Vector3(bounds.get_center().x, bounds.position.y, bounds.get_center().z)
+		var shift := at - bottom
+		for node in made["brushes"] + made["entities"]:
+			(node as Node3D).global_position += shift
+	return made
+
+
+## The box round what `made` holds in the level: brushes by their corners,
+## entities by where they stand.
+static func _bounds_of(made: Dictionary) -> AABB:
+	var bounds := AABB()
+	var first := true
+	for brush in made["brushes"]:
+		var place: Transform3D = (brush as Node3D).global_transform
+		for face in brush.faces:
+			if face == null:
+				continue
+			for corner in face.local_verts:
+				var point: Vector3 = place * corner
+				bounds = AABB(point, Vector3.ZERO) if first else bounds.expand(point)
+				first = false
+	for entity in made["entities"]:
+		var point: Vector3 = (entity as Node3D).global_position
+		bounds = AABB(point, Vector3.ZERO) if first else bounds.expand(point)
+		first = false
+	return bounds
 
 
 ## The palette, keyed the way a texture name is written on a face line, so a name

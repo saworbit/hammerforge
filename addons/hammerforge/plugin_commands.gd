@@ -317,6 +317,10 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._copy_selection(root)
 		"paste":
 			plugin._paste_clipboard(root)
+		"paste_at_cursor":
+			HFPluginEditActions.paste_at_cursor(
+				plugin, root, args[0] if not args.is_empty() else null
+			)
 		"delete":
 			plugin._delete_selected(root)
 		"place_entity_here":

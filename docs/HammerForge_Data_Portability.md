@@ -4,7 +4,7 @@ description: "Moving level data in and out of HammerForge safely: the .hflevel s
 
 # HammerForge Data Portability
 
-Last updated: October 22, 2026
+Last updated: October 25, 2026
 
 This document describes how to move data in and out of HammerForge safely.
 
@@ -104,6 +104,8 @@ Each setting's scene size and open time, as `.tscn` and as `.scn`, from 100 to 3
 
 Whichever setting is on, the scene also carries the records that describe the brushes without being brushes: visgroups and their visibility, groups, arrays, hollows, structures and prefab instances. They are not nodes, so they ride in a `live_registries` property on the `LevelRoot` rather than as children. Before September 2026 they did not ride anywhere, and a level reopened from its scene came back as loose geometry the structure panels could no longer edit. A scene saved back then is repaired on open as far as it can be: a visgroup is put back from the members that still name it, and comes back visible.
 
+Floor paint rides there too since October 2026: each paint layer's cells, heightmap, terrain slots and wall heights, and the layer in use (#1854). Before that the scene kept the layer nodes and none of their paint, so a level reopened from its scene had empty layers under floors nothing could edit. A streamed level carries the index of its region files, and its cells stay in those files. A scene saved before the change opens with what it has; **Load .hflevel** brings the paint back from a file saved after it was painted.
+
 A brush's faces go into the scene with everything on them: material, UV settings, custom UVs, paint layers and, since October 2026, the sculpt (#854). Before that the scene dropped every sculpt and only the `.hflevel` kept it; **Load .hflevel** brings one back from a file saved after the sculpt was made. A build from before the change still reads a sculpt from a newer scene, but drops it again the next time it saves.
 
 A sphere, ellipsoid, torus or capsule is rebuilt from its shape when the scene opens, and since October 2026 it has the same faces at every size (#852, #858). An older build let rounding split some of its flat quads in two at some sizes: a sphere at 1,000 units had 2,340 faces rather than 2,240, and a stretched ellipsoid or torus usually had a few extra. Such a brush opens with those quads whole, and each face takes the material and UV settings of the old face that faced its way (#851), so it looks the same. Since #1057 these shapes are built from 16 segments by 8 bands, 128 faces, rather than Godot's 64 by 32; an older one opens rebuilt that way, each face again taking the look of the old face that faced its way. Since #1085 a brush's `sides` sets its segments, as it does a cylinder's, so one that carries 5 or more opens with that many, and the `.hflevel` carries `sides` for every round shape.
@@ -150,6 +152,7 @@ What *is* a defect is one level holding two brushes with the same id. The brush 
 - Axis-aligned boxes use the optimized primitive path; tilted, clipped, and other non-axis-aligned convex brushes import and export as CUSTOM face geometry. An axis-aligned brush thinner than 0.1 on a side imports as CUSTOM at its real thickness, since a box that thin would be widened to 0.1 ([#1635](https://github.com/saworbit/hammerforge/issues/1635)).
 - Import works the face polygons out rather than reading them off the file. A `.map` face line names three points on an infinite plane, not the corners of a face, and the solid is the intersection of the half spaces behind its planes. A set of planes that closes nothing still imports, on the old reading of the points as corners, so an ill-formed brush arrives wrong rather than not at all.
 - Key/value properties round-trip through the supported Classic Quake and Valve 220 adapters, on all three kinds of block: point entities, brush entities, and `worldspawn`. A `func_door` keeps its `speed`, `wait` and `angle`, a trigger keeps the `target` it points at, and the map keeps its `wad` list, its `message` and its `mapversion`. `worldspawn`'s keys live on `LevelRoot.map_worldspawn_properties` and travel in the `.hflevel`.
+- A point entity keeps every key on it, including those its class does not name, and since October 2026 the scene saves them all (#1855). Before that a Ctrl+S kept only the keys the class names, so an imported key was gone after a reopen.
   - `target`/`targetname` is kept as an ordinary property rather than translated into HammerForge's own I/O. The reverse mapping is not one-to-one, so the pair survives a round trip without the editor guessing what it means.
 - Per-face material names round-trip. Each face line names the material its `material_idx` points at, and an import maps that name back to a palette slot by name.
   - The texture field is positional and whitespace delimited, so a palette name with a space in it is written with underscores (`Red Brick` becomes `Red_Brick`). Import matches on the same token.

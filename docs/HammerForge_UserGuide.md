@@ -1947,6 +1947,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Duplicate | Ctrl+D | Duplicate selected brushes and DraftEntities |
 | Copy | Ctrl+C | Put the selection on the clipboard |
 | Paste | Ctrl+V | Place what is on the clipboard, where it was copied from |
+| Paste at Cursor | Ctrl+Alt+V | Place what is on the clipboard standing on the point under the cursor |
 | Group | Ctrl+G | Group selected brushes |
 | Ungroup | Ctrl+U | Ungroup selection |
 | Hollow | Ctrl+H | Convert brush to hollow room |
@@ -2069,6 +2070,10 @@ The clipboard is a prefab without a name. It is the same capture a prefab gets, 
 Brush ids and brush entity ties are minted fresh on every paste, and each authored name gets one of its own with the pasted wiring following it, so pasting twice gives two pieces the level can tell apart. Group and visgroup membership is deliberately not carried, because a visgroup is a list of names registered per level and pasting into a level that has never heard of "West Wing" would otherwise put brushes in a group with no row in the panel.
 
 The buffer is a file in `user://`, not something the level holds, so it survives closing a level and restarting the editor, and a piece copied in one project can be pasted into another.
+
+**Paste at Cursor** (**Ctrl+Alt+V**, or **Paste Here** in the viewport's Space menu) places the copied set with the bottom centre of its box on the snapped point under the cursor, on the surface there or on the grid, so a room copied from another level lands on the floor you are looking at rather than at its old coordinates ([#1722](https://github.com/saworbit/hammerforge/issues/1722)).
+
+Copy also puts the selection on the system clipboard as `.map` text, in the Quake family's units, as Export Map would write it: brushes as plane triples with their texture names and alignment, entities with their keys. Paste it into a message, a file of pieces or another editor. The other way, when the system clipboard holds `.map` text copied after HammerForge's last Copy, such as a snippet from a forum post, **Ctrl+V** and Paste at Cursor read it through the `.map` importer and place it at the cursor. A line the importer cannot read is left out, and the message counts it. When the clipboard still holds HammerForge's own copy, the buffer is used, so paint, sculpts and structures survive a copy within HammerForge.
 
 **Where the keys work.** In the 3D viewport, both. In the Scene tree, Ctrl+C is claimed when the selection is HammerForge's, because Godot's own node copy would put a `DraftBrush` on its clipboard that a later paste would rebuild outside the brush registry with the id it already had. Ctrl+V is deliberately not claimed there: it needs nothing selected, and taking it away from the Scene tree whenever a level is open would mean you could no longer paste an ordinary node. Paste from the command palette or a menu needs nothing selected either, so it places the clipboard with nothing or the LevelRoot selected ([#1261](https://github.com/saworbit/hammerforge/pull/1261)).
 

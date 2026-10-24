@@ -668,10 +668,21 @@ const COMMANDS := [
 	{
 		"id": "paste",
 		"label": "Paste",
-		"help": "Place what is on the clipboard where it was copied from.",
+		"help":
+		"Place what is on the clipboard where it was copied from, or .map text copied since at the cursor.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": false, "minimum": 0, "label": "Paste"},
+		"repeat": true
+	},
+	{
+		"id": "paste_at_cursor",
+		"label": "Paste at Cursor",
+		"help": "Place what is on the clipboard standing on the point under the cursor.",
+		"aliases": ["paste here"],
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 0, "label": "Paste at Cursor"},
 		"repeat": true
 	},
 	{

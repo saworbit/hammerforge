@@ -29,7 +29,11 @@ const NOTE_KIND_COLORS := {"Note": "#ffd23f", "To Do": "#ff8a3d", "Playtest": "#
 ## name is typed once. The plugin keeps it between sessions.
 static var last_note_author := ""
 
-var entity_data: Dictionary = {}
+## Every property the entity carries, saved with the scene whole. The `data/`
+## properties are the inspector's and list only what the class's schema names, so
+## when they were what the scene wrote, a key the class did not define, and every
+## key of a class with no definition, was gone after a reopen (#1855).
+@export_storage var entity_data: Dictionary = {}
 var preview_node: Node3D = null
 var _gizmo_update_queued := false
 var _warned_scene_path := ""
@@ -409,8 +413,9 @@ func _get_property_list() -> Array[Dictionary]:
 		if p_name == "":
 			continue
 		var prop_type = _type_from_schema(prop.get("type", ""))
+		# Shown, not stored: `entity_data` carries the value into the scene.
 		properties.append(
-			{"name": "data/" + p_name, "type": prop_type, "usage": PROPERTY_USAGE_DEFAULT}
+			{"name": "data/" + p_name, "type": prop_type, "usage": PROPERTY_USAGE_EDITOR}
 		)
 	return properties
 
