@@ -141,6 +141,15 @@ func get_settings_schema() -> Array:
 			"default": 0,
 			"options": ["None", "Stairs", "Railings", "Trim"],
 		},
+		# Trim as well as the stairs or the railings (#1629): a corridor with a
+		# skirting and a stair, or a balcony with a rail and a cornice, from one
+		# path. Each keeps its own settings below.
+		{
+			"name": "path_add_trim",
+			"type": "bool",
+			"label": "Add Trim",
+			"default": false,
+		},
 		{
 			"name": "stair_step_height",
 			"type": "float",
@@ -351,8 +360,10 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 		lines.append("Curve: Smooth, %d pieces a span" % int(get_setting("curve_segments")))
 	var extra_mode: int = get_setting("path_extra")
 	var extra_names := ["None", "Stairs", "Railings", "Trim"]
-	if extra_mode == PathExtra.TRIM:
+	if extra_mode == PathExtra.TRIM or (extra_mode == PathExtra.NONE and _adds_trim()):
 		lines.append("Auto: Trim (%s)" % _trim_count_text())
+	elif extra_mode > 0 and extra_mode < extra_names.size() and _adds_trim():
+		lines.append("Auto: %s and Trim (%s)" % [extra_names[extra_mode], _trim_count_text()])
 	elif extra_mode > 0 and extra_mode < extra_names.size():
 		lines.append("Auto: %s" % extra_names[extra_mode])
 	lines.append(";: Exit tool")
@@ -527,22 +538,7 @@ func _build_path() -> bool:
 	# pieces sharing a plane rather than two overlapping boxes and a wedge.
 	var brush_infos: Array = _band_pieces(_band_for(path_width), path_height, path_width, group_id)
 
-	# Auto-generate extras (stairs, railings, trim). On a curve they follow its
-	# pieces, cut on the same planes as the walls (#1436).
-	var extra_mode: int = get_setting("path_extra")
-	if extra_mode == PathExtra.STAIRS and _smooth():
-		brush_infos.append_array(_build_curved_stairs(path_width, group_id, custom_shape))
-	elif extra_mode == PathExtra.STAIRS:
-		var stair_infos := _build_stairs(path_width, path_height, group_id, custom_shape)
-		brush_infos.append_array(stair_infos)
-	elif extra_mode == PathExtra.RAILING and _smooth():
-		brush_infos.append_array(_build_curved_railings(path_width, group_id, custom_shape))
-	elif extra_mode == PathExtra.RAILING:
-		var railing_infos := _build_railings(path_width, group_id, custom_shape)
-		brush_infos.append_array(railing_infos)
-	elif extra_mode == PathExtra.TRIM:
-		var trim_infos := _build_trim(path_width, group_id, custom_shape)
-		brush_infos.append_array(trim_infos)
+	brush_infos.append_array(_extras(path_width, path_height, group_id, custom_shape))
 
 	# Create all brushes
 	if (
@@ -670,19 +666,18 @@ func _fault_of(route: Dictionary, closed: bool, path_width: float) -> Dictionary
 			route, walls, cuts, _band_for(path_width), "its mitred corners", what
 		)
 	var extra_mode: int = get_setting("path_extra")
-	var extra_bands: Array = []
-	var extra_name := ""
-	if extra_mode == PathExtra.TRIM:
-		extra_bands = _trim_bands(path_width)
-		extra_name = "the trim"
-	elif extra_mode == PathExtra.RAILING and _smooth():
-		extra_bands = _rail_bands(path_width)
-		extra_name = "the railings"
-	for extra_band: Vector2 in extra_bands:
-		var extra := PathSweep.footprints(points, cuts, extra_band.x, extra_band.y)
-		if extra["fault"] != "":
-			var what := extra_name + "'s mitred corners"
-			return _too_short_fault(route, extra, cuts, extra_band, what, extra_name)
+	var checks: Array = []
+	if extra_mode == PathExtra.TRIM or _adds_trim():
+		checks.append([_trim_bands(path_width), "the trim"])
+	if extra_mode == PathExtra.RAILING and _smooth():
+		checks.append([_rail_bands(path_width), "the railings"])
+	for check: Array in checks:
+		var extra_name: String = check[1]
+		for extra_band: Vector2 in check[0]:
+			var extra := PathSweep.footprints(points, cuts, extra_band.x, extra_band.y)
+			if extra["fault"] != "":
+				var what := extra_name + "'s mitred corners"
+				return _too_short_fault(route, extra, cuts, extra_band, what, extra_name)
 	return {"message": "", "segments": PackedInt32Array()}
 
 
@@ -902,6 +897,33 @@ func _build_segment_brush(
 # ---------------------------------------------------------------------------
 # Auto-generation: Stairs
 # ---------------------------------------------------------------------------
+
+
+## The extras Enter builds beside the path's own pieces: the stairs, the railings
+## or the trim Auto-Generate picks, and with Add Trim the trim as well (#1629). On
+## a curve they follow its pieces, cut on the same planes as the walls (#1436).
+## The trim runs along the outside of each edge, the treads across the inside and
+## the rails on the edges above the path, so none of them overlaps another.
+func _extras(path_width: float, path_height: float, group_id: String, custom_shape: int) -> Array:
+	var out: Array = []
+	var extra_mode: int = get_setting("path_extra")
+	if extra_mode == PathExtra.STAIRS and _smooth():
+		out.append_array(_build_curved_stairs(path_width, group_id, custom_shape))
+	elif extra_mode == PathExtra.STAIRS:
+		out.append_array(_build_stairs(path_width, path_height, group_id, custom_shape))
+	elif extra_mode == PathExtra.RAILING and _smooth():
+		out.append_array(_build_curved_railings(path_width, group_id, custom_shape))
+	elif extra_mode == PathExtra.RAILING:
+		out.append_array(_build_railings(path_width, group_id, custom_shape))
+	if extra_mode == PathExtra.TRIM or _adds_trim():
+		out.append_array(_build_trim(path_width, group_id, custom_shape))
+	return out
+
+
+## Whether Add Trim puts the trim beside the stairs or the railings, or on its
+## own beside None. With Trim picked the trim is built once.
+func _adds_trim() -> bool:
+	return bool(get_setting("path_add_trim")) and int(get_setting("path_extra")) != PathExtra.TRIM
 
 
 func _build_stairs(
@@ -1206,7 +1228,7 @@ func _section_info(
 ## running away from the path on each side.
 func _trim_sides(path_width: float) -> Array:
 	var trim_w: float = get_setting("trim_width")
-	var band := _band_for(path_width)
+	var band := _trim_base_band(path_width)
 	var profile_bands := _trim_profile_bands()
 	var sides: Array = []
 	for side: Vector2 in [Vector2(band.x, -1.0), Vector2(band.y, 1.0)]:
@@ -1221,6 +1243,17 @@ func _trim_sides(path_width: float) -> Array:
 			{"band": Vector2(minf(side.x, reach), maxf(side.x, reach)), "sections": sections}
 		)
 	return sides
+
+
+## The band the trim runs along the outside of: the path's own, or past the rails
+## when railings stand on its edges as well, since a post reaches half its
+## thickness over each edge (#1629).
+func _trim_base_band(path_width: float) -> Vector2:
+	var band := _band_for(path_width)
+	if _adds_trim() and int(get_setting("path_extra")) == PathExtra.RAILING:
+		var half: float = float(get_setting("railing_thickness")) * 0.5
+		return Vector2(band.x - half, band.y + half)
+	return band
 
 
 ## The trim's profile, as the bands `TrimProfile.bands()` cuts it into.
@@ -1246,7 +1279,7 @@ func _trim_lift() -> float:
 ## cross-section `path_width` wide.
 func _trim_bands(path_width: float) -> Array:
 	var trim_w: float = get_setting("trim_width")
-	var band := _band_for(path_width)
+	var band := _trim_base_band(path_width)
 	return [Vector2(band.x - trim_w, band.x), Vector2(band.y, band.y + trim_w)]
 
 
@@ -1318,9 +1351,11 @@ func _update_preview() -> void:
 	if extra_mode == PathExtra.RAILING and n >= 2:
 		_draw_railing_preview(band)
 	elif extra_mode == PathExtra.TRIM and n >= 2:
-		_draw_trim_preview(band)
+		_draw_trim_preview(_trim_base_band(pw))
 	elif extra_mode == PathExtra.STAIRS and n >= 2:
 		_draw_stairs_preview(band)
+	if _adds_trim() and n >= 2:
+		_draw_trim_preview(_trim_base_band(pw))
 
 	_immediate_mesh.surface_end()
 	_update_length_labels()
