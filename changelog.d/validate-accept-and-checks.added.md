@@ -1,0 +1,1 @@
+- Validate can accept a finding that is fine for the level, with a note, choose which kinds of check run for the project, and keeps its list current after an edit. (issue [#1731](https://github.com/saworbit/hammerforge/issues/1731))

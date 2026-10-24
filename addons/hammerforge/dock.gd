@@ -55,6 +55,7 @@ const HFSelectionInfo = preload("ui/hf_selection_info.gd")
 const HFToast = preload("ui/hf_toast.gd")
 const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
+const HFValidationChecks = preload("hf_validation_checks.gd")
 const HFFileNames = preload("hf_file_names.gd")
 const HFPrefabType = preload("hf_prefab.gd")
 const HFEntityCensus = preload("hf_entity_census.gd")
@@ -279,6 +280,17 @@ var export_game_scene_btn: Button = null
 var export_profile_opt: OptionButton = null
 ## The rows Check Bake Issues fills, with Select and Fix buttons (#992).
 var bake_issue_list: VBoxContainer = null
+## Below the rows: Show accepted, and the Checks menu of which kinds of check
+## Validate runs for the project (#1731).
+var findings_tools_row: HBoxContainer = null
+var show_accepted_findings: CheckBox = null
+var validate_checks_btn: MenuButton = null
+## What the rows show, `{open, accepted, source}`, and what changed in the level
+## since, waiting for a second without edits to be checked again (#1731).
+var _shown_findings: Dictionary = {}
+var _findings_changed_ids: Dictionary = {}
+var _findings_entities_changed := false
+var _findings_settle: Timer = null
 var export_level_environment_check: CheckBox = null
 # -- Editor toggles (built programmatically in _build_manage_tab) --
 var commit_freeze: CheckBox = null
@@ -1706,6 +1718,53 @@ func _on_keep_first(later: Array) -> void:
 
 func _on_bake_issue_fix(fix: String, node: Variant) -> void:
 	HFDockManageHandler.on_bake_issue_fix(self, fix, node)
+
+
+func _on_finding_accept(finding: Dictionary) -> void:
+	HFDockManageHandler.open_accept_dialog(self, finding)
+
+
+func _on_finding_unaccept(key: String) -> void:
+	HFDockManageHandler.unaccept_finding(self, key)
+
+
+func _on_show_accepted_toggled(_pressed: bool) -> void:
+	HFDockManageHandler.render_findings(self)
+
+
+func _on_validate_check_toggled(index: int) -> void:
+	if validate_checks_btn == null:
+		return
+	var popup := validate_checks_btn.get_popup()
+	var on := not popup.is_item_checked(index)
+	popup.set_item_checked(index, on)
+	HFDockManageHandler.set_check_runs(self, str(popup.get_item_metadata(index)), on)
+
+
+## Fill the Checks menu with each kind of check, ticked when the project runs it.
+func _on_validate_checks_about_to_popup() -> void:
+	if validate_checks_btn == null:
+		return
+	var popup := validate_checks_btn.get_popup()
+	popup.clear()
+	for kind in HFValidationChecks.KINDS:
+		popup.add_check_item(str(HFValidationChecks.KINDS[kind]))
+		var index := popup.item_count - 1
+		popup.set_item_metadata(index, kind)
+		popup.set_item_checked(index, HFValidationChecks.runs(kind))
+
+
+## An edit to the level, for the findings list to check again once it settles.
+func _on_root_brush_findings_changed(brush_id: String) -> void:
+	HFDockManageHandler.note_findings_change(self, brush_id, false)
+
+
+func _on_root_entity_findings_changed(_node: Node) -> void:
+	HFDockManageHandler.note_findings_change(self, "", true)
+
+
+func _on_findings_settled() -> void:
+	HFDockManageHandler.settle_findings(self)
 
 
 ## Record a spawn the dock created or moved, as one undo step each.
