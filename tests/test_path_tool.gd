@@ -91,7 +91,8 @@ func test_tool_name():
 
 func test_shortcut_key():
 	var tool = HFPathTool.new()
-	assert_eq(tool.tool_shortcut_key(), KEY_SEMICOLON)
+	assert_eq(tool.keymap_action(), "tool_path", "it starts on a keymap action (#1820)")
+	assert_true(HFKeymap.load_or_default().matches("tool_path", _semicolon()))
 
 
 func test_settings_schema():
@@ -1276,3 +1277,10 @@ func test_a_path_is_one_history_entry_and_ends_a_run_of_nudges():
 
 
 const HFUndoHelperForPaths = preload("res://addons/hammerforge/undo_helper.gd")
+
+
+static func _semicolon() -> InputEventKey:
+	var event := InputEventKey.new()
+	event.keycode = KEY_SEMICOLON
+	event.pressed = true
+	return event

@@ -443,7 +443,7 @@ Key design choices:
 
 [Commands](commands.md) lists every command with its default key, what it needs selected and what it does.
 
-Shortcuts marked with **\*** are rebindable in the shortcut dialog (**?** on the toolbar), which can also give a key, or a second key, to any command that ships without one; the changes are kept in `user://hammerforge_keymap.json`. Tool-specific keys (C, M, N, P, ;, A in Measure mode and Tab in Clip mode) are defined by their respective tools and are not yet keymap-backed. The command palette's keys, Escape and the nudge keys are fixed as well: the keymap reports a binding on one of them as a clash.
+Shortcuts marked with **\*** are rebindable in the shortcut dialog (**?** on the toolbar), which can also give a key, or a second key, to any command that ships without one; the changes are kept in `user://hammerforge_keymap.json`. The keys that start Clip, Measure, Decal, Polygon and Path are keymap actions like the rest (#1820). Keys a tool takes only while it is active (A in Measure mode and Tab in Clip mode) are the tool's own and are not keymap-backed. The command palette's keys, Escape and the nudge keys are fixed as well: the keymap reports a binding on one of them as a clash.
 
 | Key | Action |
 |-----|--------|
@@ -539,12 +539,12 @@ Shortcuts marked with **\*** are rebindable in the shortcut dialog (**?** on the
 | Ctrl * | Invert Grid Snap (hold) |
 | Alt * | Snap to Vertices (hold) |
 | Alt+Arrow / Alt+Shift+PgUp/PgDn | Nudge a tenth of the grid step |
-| C | Clip tool |
+| C * | Clip Tool |
 | Tab | Keep side in Clip |
-| M | Measure tool |
-| N | Decal tool |
-| P | Polygon tool |
-| ; | Path tool |
+| M * | Measure |
+| N * | Decal Tool |
+| P * | Polygon Tool |
+| ; * | Path Tool |
 | A | Align mode in Measure |
 | Shift+? / F1 / Ctrl+K | Command palette |
 

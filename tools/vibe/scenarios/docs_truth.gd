@@ -140,8 +140,10 @@ func _shortcuts_the_guide_names() -> void:
 
 
 ## The keys each tool takes itself, upper case, to the tool's name: the bare key
-## that starts it (`HFToolRegistry.check_shortcut()`), and each key its HUD lists
-## while it is active, such as the Clip tool's Tab.
+## that starts a tool the keymap does not hold (`HFToolRegistry.check_shortcut()`),
+## and each key its HUD lists while it is active, such as the Clip tool's Tab.
+## HammerForge's own tools start on keymap actions since #1820, which the keymap
+## check above already reads.
 func _tool_keys() -> Dictionary:
 	var out := {}
 	for script in TOOLS:

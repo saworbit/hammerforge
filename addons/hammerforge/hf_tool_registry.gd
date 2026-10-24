@@ -294,11 +294,30 @@ func cancel_active_pointer_capture() -> bool:
 ## Shift+M in paint mode, where `flip_selection` is gated off and the event fell
 ## through to here. Activating a tool is not a quiet no-op: it takes the
 ## viewport's left click off whatever the mapper was building with.
-func check_shortcut(event: InputEventKey) -> int:
-	if event.ctrl_pressed or event.shift_pressed or event.alt_pressed or event.meta_pressed:
-		return -1
+##
+## A tool that names a `keymap_action()` starts on whatever `keymap` binds to that
+## action, chord and all, so a key the Shortcuts dialog moves moves here too, and
+## with no binding it starts on no key (#1820).
+func check_shortcut(event: InputEventKey, keymap: HFKeymap = null) -> int:
+	var bare := not (
+		event.ctrl_pressed or event.shift_pressed or event.alt_pressed or event.meta_pressed
+	)
 	for t in _tools:
-		if t.tool_id() >= 100 and t.tool_shortcut_key() == event.keycode:
+		if t.tool_id() < 100:
+			continue
+		var action: String = t.keymap_action()
+		if action != "":
+			if keymap and keymap.matches(action, event):
+				return t.tool_id()
+		elif bare and t.tool_shortcut_key() != 0 and t.tool_shortcut_key() == event.keycode:
+			return t.tool_id()
+	return -1
+
+
+## The external tool whose `keymap_action()` is `action`, or -1.
+func tool_id_for_action(action: String) -> int:
+	for t in _tools:
+		if t.tool_id() >= 100 and action != "" and t.keymap_action() == action:
 			return t.tool_id()
 	return -1
 
