@@ -1,0 +1,1 @@
+- Validate names a brush with faces pointing into it, and Validate + Fix turns them back on a convex brush. (issue [#1869](https://github.com/saworbit/hammerforge/issues/1869))

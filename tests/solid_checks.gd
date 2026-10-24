@@ -45,54 +45,15 @@ static func open_edge_count(faces: Array) -> int:
 
 ## The fraction of faces whose clockwise-from-outside normal actually points away
 ## from the solid's own middle. One means every face; anything less bakes wrong.
+## Validate asks the same question of every brush (#1869).
 static func outward_ratio(faces: Array) -> float:
-	if faces.is_empty():
-		return -1.0
-	var centre := centroid(faces)
-	var outward := 0
-	var counted := 0
-	for face in faces:
-		var verts: PackedVector3Array = face.local_verts
-		if verts.size() < 3:
-			continue
-		var a: Vector3 = verts[0]
-		var normal: Vector3 = (verts[2] - a).cross(verts[1] - a)
-		if normal.length() < 0.000001:
-			continue
-		var face_centre := Vector3.ZERO
-		for v in verts:
-			face_centre += v
-		face_centre /= float(verts.size())
-		var to_face: Vector3 = face_centre - centre
-		if to_face.length() < 0.000001:
-			continue
-		counted += 1
-		if normal.normalized().dot(to_face.normalized()) > 0.0:
-			outward += 1
-	return float(outward) / float(counted) if counted > 0 else -1.0
+	return HFSolidMeasure.outward_ratio(faces)
 
 
 ## Every vertex of the solid lies on or behind every one of its face planes.
 ## A solid that fails this is not convex, and every brush here has to be.
 static func is_convex(faces: Array, tolerance := 0.01) -> bool:
-	var centre := centroid(faces)
-	for face in faces:
-		var verts: PackedVector3Array = face.local_verts
-		if verts.size() < 3:
-			continue
-		var a: Vector3 = verts[0]
-		var normal: Vector3 = (verts[2] - a).cross(verts[1] - a)
-		if normal.length() < 0.000001:
-			continue
-		normal = normal.normalized()
-		if normal.dot(centre - a) > 0.0:
-			normal = -normal
-		var d := normal.dot(a)
-		for other in faces:
-			for v in other.local_verts:
-				if normal.dot(v) - d > tolerance:
-					return false
-	return true
+	return HFSolidMeasure.is_convex(faces, tolerance)
 
 
 static func bounds(faces: Array) -> AABB:
