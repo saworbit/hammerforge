@@ -170,7 +170,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 |---|---|
 | `hf_get_status` | Which editor, scene and level the bridge is on, the revision, counts, grid and camera |
 | `hf_create_starter` | Make a level in the open scene: floor, sun and spawn |
-| `hf_place_brush` | Place a brush: shape, size, position, union or subtract, and a name if you want one |
+| `hf_place_brush` | Place a brush: shape, size, position, a solid brush (`union`) or a cut brush (`subtract`), and a name if you want one |
 | `hf_transform_brush` | Move a brush to a position, turn it to an angle, or both |
 | `hf_resize_brush` | Give a brush a new size about its centre |
 | `hf_delete_brush` | Delete a brush |
@@ -262,8 +262,8 @@ ask that, not read everything and filter it in its own context
 ([#1704](https://github.com/saworbit/hammerforge/issues/1704)):
 
 - `hf_get_brushes` takes a `filter` of tests, all of which must hold:
-  `operation` (`union` or `subtract`), `material` (an id or a name any face
-  wears), `shape`, `visgroup`, `group`, `structure` (a generator id, for its
+  `operation` (`union` for a solid brush or `subtract` for a cut brush), `material` (an id or a name any face
+  wears), `shape`, `visgroup`, `group`, `structure` (a structure's id, for its
   pieces), `prefab` (a placed copy's instance id), `brush_entity` (a class, or
   `true` for any) and `name` (`*` matches any run, by name or brush id). Its
   `bounds` takes `bounds_test`: `touching`, as before, or `inside`.
@@ -382,7 +382,7 @@ across `hf_set_cordon` and `hf_remove_cordon`, and their undo and redo, since it
 set the cordons aside; a bake cut to the cordons goes stale on any step, and so
 does a whole bake on a batch that holds a cordon op among others.
 
-A bake applies the level's pending subtract cuts, and records that first as a
+A bake applies the level's pending cuts, and records that first as a
 step of the agent's own, `MCP: apply pending cuts`, so `hf_undo` puts the cuts
 back to pending and `hf_redo` applies them again. The bake itself is still no
 step. The editor's own history holds the same step.

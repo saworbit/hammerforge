@@ -101,7 +101,7 @@ func test_settings_keep_power_user_overlays_opt_in() -> void:
 	assert_eq(dock.power_user_overlays.text, "Power-user overlays")
 	assert_false(dock.power_user_overlays.button_pressed)
 	assert_true(_is_descendant_of(dock.power_user_overlays, settings))
-	assert_eq(dock._show_subtract_preview.text, "Subtract Preview")
+	assert_eq(dock._show_subtract_preview.text, "Cut Preview")
 
 
 func test_actions_and_file_are_collapsed_by_default() -> void:

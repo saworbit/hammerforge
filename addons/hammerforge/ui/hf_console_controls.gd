@@ -104,8 +104,8 @@ const GROUPS := [
 			{
 				"key": "show_subtract_preview",
 				"dock": "_show_subtract_preview",
-				"label": "Subtract preview",
-				"help": "Shows what a subtract brush will remove before you commit the cut."
+				"label": "Cut preview",
+				"help": "Shows what a cut brush will remove before you commit the cut."
 			},
 			{
 				"dock": "_show_spawn_debug",

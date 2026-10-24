@@ -83,7 +83,7 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | Tool | What it does |
 |---|---|
 | `hf_get_status` | Which editor, scene and level the bridge is on, the revision, counts, grid and camera |
-| `hf_place_brush` | Place a brush: shape, size, position, union or subtract, and optionally a material, a rotation, sides and a name, snapped to the grid unless told not to |
+| `hf_place_brush` | Place a brush: shape, size, position, a solid brush (`union`) or a cut brush (`subtract`), and optionally a material, a rotation, sides and a name, snapped to the grid unless told not to |
 | `hf_get_brushes` | List brushes with their faces and the structure each is a piece of, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |

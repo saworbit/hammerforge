@@ -98,7 +98,7 @@ func test_the_list_shows_what_bake_check_raises_on_the_object_it_names():
 	_spawn_at(Vector3(2, 1.1, 2))
 	_check()
 	assert_true(dock.bake_issue_list.visible, "there is something to list")
-	var row := _row("doesn't intersect any additive brush")
+	var row := _row("does not overlap any solid brush")
 	assert_not_null(row, "the floating cutter is a row")
 	if row == null:
 		return

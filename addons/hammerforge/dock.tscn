@@ -117,7 +117,7 @@ toggle_mode = true
 
 [node name="ModeSubtract" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/OperationRow"]
 size_flags_horizontal = 3
-text = "Cutout"
+text = "Cut"
 tooltip_text = "Draw a volume that cuts through solid geometry"
 toggle_mode = true
 

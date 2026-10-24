@@ -78,6 +78,7 @@ nav:
       - Agent Bridge (MCP): HammerForge_Agent_Bridge.md
   - Reference:
       - Commands: commands.md
+      - Glossary: glossary.md
       - Design Constraints: HammerForge_Design_Constraints.md
       - Performance and Limits: HammerForge_Performance.md
       - Editor Smoke Checklist: HammerForge_Editor_Smoke_Checklist.md

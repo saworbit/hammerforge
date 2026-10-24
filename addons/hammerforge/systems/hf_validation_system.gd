@@ -1450,7 +1450,7 @@ func _check_floating_subtract(brush: DraftBrush, grounded: Dictionary, issues: A
 		{
 			"type": "floating_subtract",
 			"severity": 1,
-			"message": "Subtraction '%s' doesn't intersect any additive brush" % brush.name,
+			"message": "Cut brush '%s' does not overlap any solid brush" % brush.name,
 			"node": brush
 		}
 	)
@@ -1474,7 +1474,7 @@ func _report_overlapping_subtracts(records: Array, pairs: Array, issues: Array) 
 			{
 				"type": "overlapping_subtract",
 				"severity": 1,
-				"message": "Overlapping subtractions: '%s' and '%s'" % [a.name, b.name],
+				"message": "Overlapping cut brushes: '%s' and '%s'" % [a.name, b.name],
 				"node": a
 			}
 		)

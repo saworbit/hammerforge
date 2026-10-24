@@ -153,7 +153,7 @@ static func validate(type: String, settings: Dictionary) -> HFOpResult:
 	var builder = builder_for(type)
 	if builder == null:
 		return HFOpResult.fail(
-			"Generator: '%s' is not a generator type" % type,
+			"Structure: '%s' is not a structure type" % type,
 			"Known types: %s" % ", ".join(known_types())
 		)
 	# Before the builder, because the builder cannot catch either of these: a
@@ -168,7 +168,7 @@ static func validate(type: String, settings: Dictionary) -> HFOpResult:
 	# result every caller then reads `.ok` off.
 	if result == null:
 		return HFOpResult.fail(
-			"Generator: '%s' could not check those settings" % type,
+			"Structure: '%s' could not check those settings" % type,
 			"Check the settings for a value of the wrong type"
 		)
 	return result
@@ -275,7 +275,7 @@ func create(
 		return check
 	var face_sets := build_faces(type, settings, run)
 	if face_sets.is_empty():
-		return HFOpResult.fail("Generator: '%s' produced no geometry" % type)
+		return HFOpResult.fail("Structure: '%s' produced no geometry" % type)
 
 	var record := HFGenerator.new()
 	record.type = type
@@ -286,7 +286,7 @@ func create(
 	var cuts := _cuts_of(type, settings, true)
 	record.brush_ids = _spawn(face_sets, placement, record.generator_id, null, material, cuts)
 	if record.brush_ids.is_empty():
-		return HFOpResult.fail("Generator: '%s' produced no geometry" % type)
+		return HFOpResult.fail("Structure: '%s' produced no geometry" % type)
 	_record_signatures(record)
 
 	generators[record.generator_id] = record
@@ -310,7 +310,7 @@ func create(
 ## rebuild that puts back the same pieces still gives each a new id.
 func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	if not generators.has(generator_id):
-		return HFOpResult.fail("Generator: no structure with id '%s'" % generator_id)
+		return HFOpResult.fail("Structure: no structure with id '%s'" % generator_id)
 	var record: HFGenerator = generators[generator_id]
 	return _rebuild(record, settings, record.run, null)
 
@@ -320,7 +320,7 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 ## and nothing is deleted unless the new run builds.
 func repick(generator_id: String, run: Dictionary, placement: Transform3D) -> HFOpResult:
 	if not generators.has(generator_id):
-		return HFOpResult.fail("Generator: no structure with id '%s'" % generator_id)
+		return HFOpResult.fail("Structure: no structure with id '%s'" % generator_id)
 	var record: HFGenerator = generators[generator_id]
 	if not follows_run(record.type):
 		return HFOpResult.fail(
@@ -335,7 +335,7 @@ func repick(generator_id: String, run: Dictionary, placement: Transform3D) -> HF
 func can_rebuild(generator_id: String, settings: Dictionary) -> HFOpResult:
 	var record: HFGenerator = generators.get(generator_id, null)
 	if record == null:
-		return HFOpResult.fail("Generator: no structure with id '%s'" % generator_id)
+		return HFOpResult.fail("Structure: no structure with id '%s'" % generator_id)
 	return can_build(record.type, settings, record.run)
 
 
@@ -370,7 +370,7 @@ func _rebuild(
 		return check
 	var face_sets := build_faces(record.type, settings, run)
 	if face_sets.is_empty():
-		return HFOpResult.fail("Generator: those settings produce no geometry")
+		return HFOpResult.fail("Structure: those settings produce no geometry")
 
 	# What each piece has that the settings do not say (`CARRIED`), read off in
 	# order and put back by index. When the piece count changes there is no
@@ -395,7 +395,7 @@ func _rebuild(
 	record.brush_ids = _spawn(face_sets, record.placement, generator_id, carry, null, cuts)
 	if record.brush_ids.is_empty():
 		generators.erase(generator_id)
-		return HFOpResult.fail("Generator: those settings produce no geometry")
+		return HFOpResult.fail("Structure: those settings produce no geometry")
 	_record_signatures(record)
 	var message := "%s: rebuilt as %d pieces" % [record.type.capitalize(), record.brush_ids.size()]
 	if root and root.has_method("_log"):

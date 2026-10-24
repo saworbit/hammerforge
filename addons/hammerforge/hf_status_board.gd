@@ -400,7 +400,7 @@ static func _check_bake(ctx: Dictionary) -> Dictionary:
 static func _check_validation(ctx: Dictionary) -> Dictionary:
 	var help := (
 		"Scans for the faults that survive into a bake: zero-size and non-planar\n"
-		+ "brushes, missing materials and shaders, subtracts that cut nothing.\n"
+		+ "brushes, missing materials and shaders, cut brushes that cut nothing.\n"
 		+ "Amber for any issue, red at %d or more." % VALIDATION_PROBLEM
 	)
 	if not ctx.get("has_root", false):

@@ -126,7 +126,7 @@ func build(parent: Control) -> void:
 	# Convert selection to heightmap
 	dock.heightmap_convert_btn = Button.new()
 	dock.heightmap_convert_btn.text = "Convert Selection → Heightmap"
-	dock.heightmap_convert_btn.tooltip_text = "Convert selected additive brushes into a sculptable heightmap layer\nUses mesh bounds (including displacements). Subtract brushes are skipped."
+	dock.heightmap_convert_btn.tooltip_text = "Convert selected solid brushes into a sculptable heightmap layer\nUses mesh bounds (including displacements). Cut brushes are skipped."
 	HFUIFactoryType.wrap_text(dock.heightmap_convert_btn)
 	hmc.add_child(dock.heightmap_convert_btn)
 
