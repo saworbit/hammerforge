@@ -72,7 +72,9 @@ def compile_fragments() -> int:
     record["released"] = int(record["released"]) + 1
     record["keys"] = sorted(keys)
     record["maps"] = sorted(maps)
-    RECORD.write_text(json.dumps(record, indent="\t") + "\n", encoding="utf-8", newline="\n")
+    RECORD.write_text(
+        json.dumps(record, indent="\t") + "\n", encoding="utf-8", newline="\n"
+    )
     for path, _body in waiting:
         path.unlink()
     return int(record["released"])
@@ -95,7 +97,9 @@ def main() -> int:
     found = problems()
     for line in found:
         print(line)
-    print(f"format.d/: {len(fragments())} fragments, {'all good' if not found else 'see above'}.")
+    print(
+        f"format.d/: {len(fragments())} fragments, {'all good' if not found else 'see above'}."
+    )
     return 1 if found else 0
 
 
