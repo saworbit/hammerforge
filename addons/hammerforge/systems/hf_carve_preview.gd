@@ -22,6 +22,8 @@ var _material: StandardMaterial3D
 var _carver_id: String = ""
 ## Currently previewing an intersection of these brush IDs, the target first.
 var _intersect_ids: Array = []
+## Currently previewing the hull of these brush IDs (#1715).
+var _hull_ids: Array = []
 ## How many sculpts the pieces on show would drop, for the confirmation to name.
 var sculpts_dropped: int = 0
 
@@ -45,7 +47,17 @@ func show_preview(carver_id: String) -> void:
 ## Show the brush intersecting `brush_ids` would keep.
 func show_intersect_preview(brush_ids: Array) -> void:
 	_carver_id = ""
+	_hull_ids = []
 	_intersect_ids = brush_ids.duplicate()
+	set_enabled(true)
+	_rebuild()
+
+
+## Show the one brush Hull of Selection would wrap `brush_ids` in (#1715).
+func show_hull_preview(brush_ids: Array) -> void:
+	_carver_id = ""
+	_intersect_ids = []
+	_hull_ids = brush_ids.duplicate()
 	set_enabled(true)
 	_rebuild()
 
@@ -54,6 +66,7 @@ func show_intersect_preview(brush_ids: Array) -> void:
 func clear() -> void:
 	_carver_id = ""
 	_intersect_ids = []
+	_hull_ids = []
 	_active_count = 0
 	sculpts_dropped = 0
 	super()
@@ -69,6 +82,9 @@ func destroy() -> void:
 func _rebuild() -> void:
 	if root and not _intersect_ids.is_empty():
 		_rebuild_intersection()
+		return
+	if root and not _hull_ids.is_empty():
+		_rebuild_hull()
 		return
 	if not root or _carver_id == "":
 		clear()
@@ -122,6 +138,17 @@ func _rebuild() -> void:
 ## The one brush the intersection keeps, from the plan the intersect itself makes.
 func _rebuild_intersection() -> void:
 	var plan: Dictionary = root.carve_system._plan_intersect(_intersect_ids)
+	if not (plan["result"] as HFOpResult).ok:
+		clear()
+		return
+	var target: DraftBrush = plan["drafts"][0]
+	sculpts_dropped = HFConvexClip.sculpts_a_cut_would_drop([plan["faces"]], plan["origins"])
+	_show_previews([{"faces": plan["faces"], "transform": target.global_transform}])
+
+
+## The one brush the hull makes, from the plan the hull itself makes.
+func _rebuild_hull() -> void:
+	var plan: Dictionary = root.carve_system._plan_hull(_hull_ids)
 	if not (plan["result"] as HFOpResult).ok:
 		clear()
 		return

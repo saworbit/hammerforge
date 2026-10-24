@@ -590,6 +590,24 @@ func test_an_intersect_of_brushes_that_share_nothing_says_what_the_palette_says(
 	assert_checked_refusal(await run("intersect", ["a"]), "invalid_argument", before, "one brush")
 
 
+func test_hull_wraps_brushes_apart_in_one_step_that_undo_takes_back():
+	var level := make_level()
+	box(level, "a", Vector3(0, 2, 0))
+	box(level, "b", Vector3(20, 2, 0))
+	var before := ids_of(level)
+	var r := await run("hull", ["a", "b"])
+	assert_true(r.get("ok", false), str(r))
+	assert_eq(top_step(), "MCP: hull of selection")
+	assert_eq(r["result"]["removed"], ["a", "b"])
+	var made: Dictionary = r["result"]["brush"]
+	for axis in 3:
+		assert_almost_eq(float(made["bounds"]["min"][axis]), [-2.0, 0.0, -2.0][axis], 0.001)
+		assert_almost_eq(float(made["bounds"]["max"][axis]), [22.0, 4.0, 2.0][axis], 0.001)
+	await call_tool("hf_undo")
+	assert_eq(ids_of(level), before, "undo puts both boxes back under their ids")
+	assert_checked_refusal(await run("hull", ["a"]), "invalid_argument", snapshot(level), "one")
+
+
 # ===========================================================================
 # Create Structure
 # ===========================================================================
