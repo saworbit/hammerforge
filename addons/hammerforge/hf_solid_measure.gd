@@ -89,10 +89,10 @@ static func face_directions(faces: Array) -> PackedInt32Array:
 		var normal: Vector3 = (points[2] - a).cross(points[1] - a)
 		if normal.length() < 0.000001:
 			continue
-		var face_centre := Vector3.ZERO
+		var corner_sum := Vector3.ZERO
 		for point in points:
-			face_centre += point
-		var to_face: Vector3 = face_centre / float(points.size()) - centre
+			corner_sum += point
+		var to_face: Vector3 = corner_sum / float(points.size()) - centre
 		if to_face.length() < 0.000001:
 			continue
 		out[index] = 1 if normal.normalized().dot(to_face.normalized()) > 0.0 else -1
