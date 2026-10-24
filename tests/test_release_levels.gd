@@ -9,13 +9,19 @@ extends GutTest
 ## each release saved, with what that build counted in it in `expected.json`
 ## (see the folder's README). This loads each one, counts it with the same
 ## census, and compares. It also saves each one again and checks that copy loads
-## at this build's format number with the same counts.
+## at this build's format number with the same counts, and edits each one: a
+## nudge undone and redone, a whole level step undone with every brush kept, and
+## a compare with its own file that finds nothing (#1870).
 ##
 ## A folder needs no code here: a new release's level is a new folder.
 
 const Census = preload("res://tests/levels/level_census.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
+const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+const UndoHelper = preload("res://addons/hammerforge/undo_helper.gd")
+const HFLevelCompare = preload("res://addons/hammerforge/hf_level_compare.gd")
+const UndoStandIn = preload("res://tests/test_undo_collation.gd").FakeUndoRedo
 
 const LEVELS := "res://tests/levels"
 const RESAVED := "user://hf_release_level_resaved.hflevel"
@@ -113,6 +119,146 @@ func test_each_release_scene_opens(folder = use_parameters(_folders())):
 		if not e.is_push_warning():
 			raised.append("%s:%d %s" % [str(e.file).get_file(), e.line, str(e.code)])
 	assert_eq(raised, [], "%s: the scene opens with no error" % folder)
+
+
+## Nudge one brush of an old level, undo, and redo (#1870). Every test that edits
+## starts from a level this build made, and an old file reaches this build
+## through its loader: winding repaired, new keys filled in. The first undo step
+## captures the level as this build sees it, so a brush that captures other than
+## it loaded changes on the first Ctrl+Z.
+func test_each_release_level_nudged_undoes_and_redoes(folder = use_parameters(_folders())):
+	var level: LevelRoot = await _loaded(folder)
+	var loaded := Census.of(level)
+	var records := _records(level)
+	var brush: Node3D = _first_draft_brush(level)
+	assert_not_null(brush, "%s: a brush to nudge" % folder)
+	if brush == null:
+		return
+	var brush_id := str(brush.brush_id)
+	var home := brush.global_position
+	var undo := UndoStandIn.new()
+	UndoHelper.commit(
+		undo,
+		level,
+		"Nudge HammerForge Objects",
+		"nudge_managed_nodes",
+		[[brush_id], [], Vector3.RIGHT],
+		false,
+		Callable(),
+		"",
+		true,
+		[brush_id],
+		[]
+	)
+	await get_tree().process_frame
+	var nudged := Census.of(level)
+	var moved: Node3D = level.find_brush_by_id(brush_id)
+	assert_almost_eq(moved.global_position, home + Vector3.RIGHT, Vector3.ONE * 0.001)
+	undo.undo()
+	await get_tree().process_frame
+	_compare_census(folder, Census.of(level), loaded, "after a nudge and its undo")
+	_compare_records(folder, _records(level), records, "after a nudge and its undo")
+	undo.redo()
+	await get_tree().process_frame
+	_compare_census(folder, Census.of(level), nudged, "after the nudge's redo")
+
+
+## Place a brush on an old level and undo it, a step that records the whole
+## level. The census comes back, and every brush from the file is the node it
+## was: the undo kept it rather than rebuilding it (#600). A brush that captures
+## other than it loaded matches no record and is rebuilt on every undo.
+## Saved after the undo, the level loads as it was loaded.
+func test_each_release_level_keeps_its_brushes_through_a_whole_level_undo(
+	folder = use_parameters(_folders())
+):
+	var level: LevelRoot = await _loaded(folder)
+	var loaded := Census.of(level)
+	var records := _records(level)
+	var nodes := {}
+	for brush_id in records:
+		nodes[brush_id] = level.find_brush_by_id(brush_id).get_instance_id()
+	var undo := UndoStandIn.new()
+	var info := {
+		"shape": LevelRootType.BrushShape.BOX,
+		"size": Vector3.ONE,
+		"center": Vector3(0.0, 500.0, 0.0),
+	}
+	UndoHelper.commit(undo, level, "Place Brush", "create_brush_from_info", [info])
+	await get_tree().process_frame
+	assert_eq(level.get_live_brush_count(), int(loaded["brushes"]) + 1, "%s: placed" % folder)
+	undo.undo()
+	await get_tree().process_frame
+	_compare_census(folder, Census.of(level), loaded, "after a placement and its undo")
+	_compare_records(folder, _records(level), records, "after a placement and its undo")
+	var rebuilt: Array = []
+	for brush_id in nodes:
+		var now: Node = level.find_brush_by_id(brush_id)
+		if now == null or now.get_instance_id() != nodes[brush_id]:
+			rebuilt.append(brush_id)
+	assert_eq(rebuilt, [], "%s: brushes the undo rebuilt instead of keeping" % folder)
+	assert_eq(HFLevelIO.save_to_path(RESAVED, level.state_system.capture_hflevel_state()), OK)
+	var again := _new_level()
+	assert_true(again.load_hflevel(RESAVED), "%s: saved after the undo, it loads" % folder)
+	await get_tree().process_frame
+	_compare_census(folder, Census.of(again), loaded, "saved after the undo")
+
+
+## Compare with File between an old level and its own file finds nothing: the
+## loader's repairs are not changes the mapper made (#1701).
+func test_each_release_level_compared_with_its_own_file_has_no_changes(
+	folder = use_parameters(_folders())
+):
+	var level: LevelRoot = await _loaded(folder)
+	var read: Dictionary = level.file_system.read_hflevel(_level_file(folder))
+	assert_true(bool(read.get("ok", false)), "%s: the file reads" % folder)
+	if not bool(read.get("ok", false)):
+		return
+	var result := HFLevelCompare.compare(
+		read["bundle"], level.state_system.capture_hflevel_payload()
+	)
+	var changed: Array = []
+	for kind in result["counts"]:
+		if int(result["counts"][kind]) != 0:
+			changed.append(kind)
+	assert_eq(changed, [], "%s: %s" % [folder, "; ".join(result["lines"])])
+
+
+func _loaded(folder: String) -> LevelRoot:
+	var level := _new_level()
+	assert_true(level.load_hflevel(_level_file(folder)), "%s loads" % folder)
+	await get_tree().process_frame
+	return level
+
+
+## Each brush's record, by id, as an undo step captures it.
+func _records(level: LevelRoot) -> Dictionary:
+	var out := {}
+	var state: Dictionary = level.capture_state(false)
+	for key in ["brushes", "pending", "committed"]:
+		for info in state.get(key, []):
+			out[str(info.get("brush_id", ""))] = info
+	return out
+
+
+func _first_draft_brush(level: LevelRoot) -> Node3D:
+	for child in level.draft_brushes_node.get_children():
+		if child is DraftBrush:
+			return child
+	return null
+
+
+## Every brush whose record is not the one it had, named.
+func _compare_records(folder: String, got: Dictionary, want: Dictionary, how: String) -> void:
+	var differ: Array = []
+	for brush_id in want:
+		if not got.has(brush_id):
+			differ.append("%s gone" % brush_id)
+		elif not (got[brush_id] as Dictionary).recursive_equal(want[brush_id], 32):
+			differ.append(brush_id)
+	for brush_id in got:
+		if not want.has(brush_id):
+			differ.append("%s new" % brush_id)
+	assert_eq(differ, [], "%s: brushes whose record changed %s" % [folder, how])
 
 
 ## Each key the census took, the same now. A number may drift by a millimetre.
