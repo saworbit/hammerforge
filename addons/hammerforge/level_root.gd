@@ -9,6 +9,7 @@ const BrushManager = preload("brush_manager.gd")
 const Baker = preload("baker.gd")
 const PrefabFactory = preload("prefab_factory.gd")
 const HFNotes = preload("hf_notes.gd")
+const HFMaterialUse = preload("hf_material_use.gd")
 const DraftEntity = preload("draft_entity.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const PlaytestFPS = preload("playtest_fps.gd")
@@ -762,6 +763,9 @@ var draw_hover
 # ---------------------------------------------------------------------------
 
 var _dirty_brush_ids: Dictionary = {}  # brush_id -> true
+## How many faces use each palette slot, for the material browser (#1725). View
+## state, never saved: `HFMaterialUse` fills it and every face change empties it.
+var material_use_cache: Dictionary = {}
 var _dirty_paint_chunks: Array[Vector2i] = []
 var _full_reconcile_needed := false
 
@@ -774,6 +778,7 @@ func tag_brush_dirty(brush_id: String) -> void:
 	# every tag rather than only the first: the dirty set is not cleared until
 	# a bake, and a listener watching a drag needs each step, not just the one
 	# that happened to arrive first.
+	HFMaterialUse.invalidate(self)
 	brush_changed.emit(brush_id)
 
 

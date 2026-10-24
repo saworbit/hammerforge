@@ -56,6 +56,15 @@ var height_stage_start_height: float = 2.0
 ## very next `update_drag()`, so the number appeared on screen and the brush
 ## under it ignored it until the gesture was committed.
 var numeric_override: float = -1.0
+## Which sides of a draw's base the typed numbers hold, X for the width and Z for
+## the depth (#1693). `6` and `6,4` hold both; `6,` holds the width and leaves
+## the depth to the mouse.
+var typed_lock_x := true
+var typed_lock_z := true
+## Which way the drag headed on X and Z when each side was first typed, 1 or -1,
+## or 0 before then. Kept while the entry stands, so a side typed with a minus is
+## not turned back by the next key.
+var typed_heading := Vector3.ZERO
 
 
 ## True while a typed dimension is standing and the mouse must not overwrite it.
@@ -65,6 +74,9 @@ func has_numeric_override() -> bool:
 
 func clear_numeric_override() -> void:
 	numeric_override = -1.0
+	typed_lock_x = true
+	typed_lock_z = true
+	typed_heading = Vector3.ZERO
 
 
 func is_idle() -> bool:
@@ -101,7 +113,7 @@ func begin_drag(
 		push_warning("HFInputState: begin_drag called while in %s — forcing reset" % _mode_name())
 		_force_reset()
 	mode = Mode.DRAG_BASE
-	numeric_override = -1.0
+	clear_numeric_override()
 	drag_on_face = face_frame is Transform3D
 	drag_frame = face_frame if drag_on_face else Transform3D.IDENTITY
 	drag_origin = origin
@@ -126,7 +138,7 @@ func advance_to_height(mouse_pos: Vector2) -> void:
 		)
 		return
 	mode = Mode.DRAG_HEIGHT
-	numeric_override = -1.0
+	clear_numeric_override()
 	height_stage_start_mouse = mouse_pos
 	height_stage_start_height = drag_height
 
@@ -134,14 +146,14 @@ func advance_to_height(mouse_pos: Vector2) -> void:
 func end_drag() -> void:
 	mode = Mode.IDLE
 	lock_axis_active = 0
-	numeric_override = -1.0
+	clear_numeric_override()
 	_leave_face()
 
 
 func cancel() -> void:
 	mode = Mode.IDLE
 	lock_axis_active = 0
-	numeric_override = -1.0
+	clear_numeric_override()
 	_leave_face()
 
 
@@ -170,14 +182,14 @@ func begin_extrude() -> void:
 		)
 		_force_reset()
 	mode = Mode.EXTRUDE
-	numeric_override = -1.0
+	clear_numeric_override()
 
 
 ## A typed depth goes with the extrusion it was typed for, as a drag's typed
 ## size does, or it would hold the next extrusion's depth off the mouse.
 func end_extrude() -> void:
 	mode = Mode.IDLE
-	numeric_override = -1.0
+	clear_numeric_override()
 
 
 func is_extruding() -> bool:
@@ -246,7 +258,7 @@ func _force_reset() -> void:
 	# Ensure mode is IDLE even if the callback forgot to call cancel()
 	mode = Mode.IDLE
 	lock_axis_active = 0
-	numeric_override = -1.0
+	clear_numeric_override()
 	_leave_face()
 
 
