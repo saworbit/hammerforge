@@ -1,0 +1,1 @@
+- DEVELOPMENT.md's codebase map names every addon script again, and CI fails a pull request that adds a script without a line there. (issue [#1865](https://github.com/saworbit/hammerforge/issues/1865))

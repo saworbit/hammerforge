@@ -198,6 +198,16 @@ CHECKS: tuple[Check, ...] = (
     ),
     Check("Check the top-level pages' links", _py("tools/check_doc_links.py"), ""),
     Check(
+        "Check the codebase map guard still detects",
+        _py("tools/check_codebase_map.py", "--selftest"),
+        "",
+    ),
+    Check(
+        "Check the codebase map names every script",
+        _py("tools/check_codebase_map.py"),
+        "",
+    ),
+    Check(
         "Check the release tree still ships the right files",
         _py("tools/build_release_tree.py", "--selftest"),
         "",

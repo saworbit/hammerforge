@@ -272,6 +272,8 @@ The flag is per-clone and cannot be committed, so this is a thing you do once on
 
 ## Codebase Structure
 
+Every script under `addons/hammerforge/`, outside `mcp/`, has a line here. A new script needs one, and `tools/check_codebase_map.py` fails CI on a script without one or a line for a script that is gone.
+
 ```
 addons/hammerforge/
   plugin.gd              EditorPlugin entry point and sticky LevelRoot coordinator
@@ -296,6 +298,8 @@ addons/hammerforge/
   hf_selection_grow.gd   Grow/Shrink Selection: faces sharing an edge, brushes whose solids touch
   hf_similar.gd          What Select Similar matches on, from the boxes ticked in its popover
   hf_quick_select.gd     Quick Select: a typed rule such as `class is light_point and energy > 2`
+  hf_object_filter.gd    Which brushes and entities a rule picks, for Quick Select and the bridge
+  hf_select_by_volume.gd Select Inside, Partly Inside, Touching and Column: what a throwaway brush picks
   plugin_material_commands.gd   Material apply, pick, and palette commands
   plugin_prefab_commands.gd     Prefab place, save, and library commands
   plugin_undo_events.gd  Undo/redo signal handling and post-action reconciliation
@@ -306,6 +310,12 @@ addons/hammerforge/
   plugin_texture_keys.gd The nudge keys sliding and turning the texture on the picked faces in Face Select
   plugin_command_line.gd Runs what is typed on the command line, and command scripts read from a file
   plugin_compare.gd      Compare With: reads the other `.hflevel`, draws the outlines and fills the Console's Compare tab
+  plugin_crash_journal.gd  The crash journal in the editor: started first, fed by every undo step and bridge call, read on the next start
+  plugin_mcp.gd          The MCP bridge in the editor: the session's dispatcher, and the listener the Test tab turns on and off
+  plugin_problem_report.gd  Report a Problem in the Console: a short form and the facts the editor knows, opened as the bug form in the browser
+  plugin_update_check.gd The once a day check for a newer HammerForge, and the Status board line that answers it
+  plugin_uv_wrap.gd      Wrap mode: each click carries the picked face's texture over the edge it shares with the next face
+  plugin_view_commands.gd  Hide Selection, Show Hidden, Isolate Selection, Isolate Visgroups, End Isolate and Previous Visibility
   level_root.gd          Public level facade and coordinator
   input_state.gd         Drag/paint/extrude/vertex state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
@@ -324,6 +334,12 @@ addons/hammerforge/
   plugin_console.gd      Console main screen, dock tab icon, viewport lamp, and status-row action routing
   hf_console_log.gd      HFConsoleLog: capped session log with levels, repeat collapsing, and a thread-safe append
   hf_status_board.gd     HFStatusBoard: pure red/amber/green evaluation of eight level checks
+  hf_crash_journal.gd    HFCrashJournal: a short record on disk of what the session did, so a crash leaves something behind
+  hf_problem_report.gd   A bug report as the repository's bug form takes it, and the link that opens the form filled in
+  hf_update_check.gd     HFUpdateCheck: whether a newer HammerForge is out, and whether to ask at all
+  hf_entity_census.gd    Every entity in a level, counted by class and written out as a table
+  hf_level_plan.gd       A top down plan of a level, drawn from its brushes so it draws headless and in CI
+  hf_notes.gd            Notes left in the level: the editor only `note` entity, its kinds, author and done flag
   hf_command_line.gd     Reads a typed command line (`hollow 0.125`, `hollow thickness=0.125`) into a command and its values
   hf_level_compare.gd    What changed between two level bundles: brushes face by face, entities, wires, visgroups, cordons and paint
   hf_compare_overlay.gd  A compare in the viewport: added outlined solid, changed twice, removed dashed, never saved
@@ -344,6 +360,9 @@ addons/hammerforge/
   hf_face_selection_overlay.gd  The viewport mark on each face picked in Face Select
   hf_pivot_marker.gd     The cross at the picked pivot while the level's Pivot is Pick
   hf_texture_gizmo.gd    Texture Gizmo: slide, stretch and turn the picked faces' texture by dragging in the viewport
+  hf_uv_wrap.gd          Wrap a texture onto the next face: one face's texture carried over the edge it shares with another
+  hf_agent_highlight.gd  What an agent just changed, outlined in the viewport for a moment
+  hf_view_axes.gd        Which world axis an arrow key moves along, for the view it is pressed in
   hf_uv_multi.gd         Texture settings typed once for every picked face, mixed where they disagree
   hf_overlay_mesh.gd     The see-through ImmediateMesh the drawing tools and the snap target marker draw on
   hf_overlay_colors.gd   The overlay colour palette every selection, hover, brush look, cordon and extrude overlay reads (prefs keys, defaults, High Contrast)
@@ -353,6 +372,9 @@ addons/hammerforge/
   hf_number_format.gd    Lengths printed to the grid step's precision, for every size readout
   playtest_fps.gd        Test Level: the throwaway first-person controller
   hf_player_metrics.gd   The playtest player's size, step, eye height, jump and slope, read from its own defaults
+  hf_playtest_request.gd How the editor asks a run for a playtest player
+  hf_surface.gd          What the player is standing on: the material names the bake writes on each collision shape
+  hf_door_runtime.gd     What makes a baked `func_door` open and close, its mesh and collision together
   baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes, convex collision shapes)
   hf_bake_split.gd       HFBakeSplit: splits a bake by the settings a mesh holds once (Cast Shadows, Lightmap Scale, no collision under a ramp)
   hf_smoothing.gd        HFSmoothing: smoothing groups, the corner normals every bake path and the preview shade with
@@ -388,6 +410,8 @@ addons/hammerforge/
   hf_editor_tool.gd      Plugin API: base class for custom editor tools (+ poll, declarative settings)
   hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
   hf_measure_tool.gd     Multi-ruler measurement tool (persistent rulers, angles, snap reference)
+  hf_clip_tool.gd        Clip tool: cut the selected brushes along a plane placed with two or three points
+  hf_solid_measure.gd    Sizes, gaps and angles of convex solids, measured from their faces
   hf_hull_tool.gd        Hull tool: click points on faces or the grid, and make one brush from their hull
   hf_shear_tool.gd       Shear tool: lean the selection from a handle on a side of its box, or by a typed amount
   hf_decal_tool.gd       Decal placement tool (raycast + surface-normal aligned Decal nodes)
@@ -399,6 +423,8 @@ addons/hammerforge/
   hf_trim_profile.gd     A trim's section (Flat, Chamfer, Round, Cove, Ogee, Stepped) cut into convex horizontal bands
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching; labels and categories come from hf_command_registry.gd)
   hf_command_registry.gd Every palette command in one table: label, category, needs a level, selection requirement, and the bridge's parameter form
+  hf_command_aliases.gd  Other words for commands, so the palette finds Hollow by "shell" and Clip by "slice"
+  hf_name_match.gd       How close a typed name is to a real one: the palette's fuzzy search and the bridge's "did you mean"
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
   hf_bake_profiles.gd    Bake profiles: built-in Editing/Shipping, saved profiles, matching
   hf_settings_file.gd    HFSettingsFile: one reader and one atomic writer for shared settings files (presets, profiles)
@@ -415,6 +441,7 @@ addons/hammerforge/
   map_io.gd              .map import/export with parse validation (adapter pattern for multi-format support)
   prefab_factory.gd      Advanced shape generation
   hf_validation.gd       HFValidation: static guards for LevelRoot containers (has_draft_containers, has_node, has_nodes, require_nodes)
+  hf_level_factory.gd    Builds HammerForge level roots from code
   hf_accepted_findings.gd  Validate findings accepted for this level, with a note; one comes back once what it names changes
   hf_validation_checks.gd  Which kinds of check Validate runs, for the whole project
   plugin_dialogs.gd      HFDialogManager: tracks ConfirmationDialogs for cleanup on plugin teardown
@@ -458,6 +485,10 @@ addons/hammerforge/
     hf_undo_nav.gd         HFUndoNav: per-scene EditorUndoRedoManager navigation (history_id, scene_undo_redo, navigate_to_version)
     hf_entity_prop_utils.gd HFEntityPropUtils: collapses DraftEntity.entity_data vs Node3D meta dual-write pattern
     hf_tooltip_text.gd     HFTooltipText: static catalog of dock tooltip strings (apply_all walks the catalog)
+    hf_entity_multi_edit.gd  The Entity panel's view of several entities at once, and of class defaults
+    hf_mcp_panel.gd        HFMcpPanel: the Test tab's Agent Bridge section, its switch, lamp and last agent action
+    hf_replace_material_dialog.gd  Replace Material: every face wearing one material takes another, as one undo step
+    hf_shape_icons.gd      HFShapeIcons: HammerForge's own brush shape icons
 
   systems/               Subsystem classes (RefCounted)
     hf_system.gd           HFSystem: base lifecycle class (_init/destroy/clear/set_enabled/_has_nodes). Preview systems extend this.
@@ -486,6 +517,12 @@ addons/hammerforge/
     hf_prefab_system.gd    Prefab instance registry, variant cycling, live-linked propagation, overrides
     hf_displacement_system.gd  Displacement surface create/destroy/paint/sew/elevation/power
     hf_bevel_system.gd     Edge bevel (chamfer) and face inset
+    hf_transform_system.gd HFTransformSystem: rotate, flip and reset rotation of a selection
+    hf_generator_system.gd HFGeneratorSystem: keeps generated structures editable after they exist
+    hf_autosave_scheduler.gd  When the timed `.hflevel` autosave runs, waiting for a pause in editing
+    hf_preview_system.gd   HFPreviewSystem: what the overlays that show geometry before it exists share
+    hf_array_preview.gd    A wireframe of the copies an array would make, before it makes them
+    hf_structure_preview.gd  A wireframe of the structure the Structure section would build, before it builds it
 
   hf_log.gd               HFLog: test-aware warning wrapper (capture/suppress expected warnings in tests)
   hf_io_runtime.gd        Runtime I/O-to-Signal dispatcher (auto-wires entity_io_outputs to Godot signals on bake/export)
@@ -495,6 +532,9 @@ addons/hammerforge/
   paint/                 Floor paint subsystem
     hf_paint_grid.gd       Grid storage
     hf_paint_layer.gd      Layer data (bitset + material_ids + blend_weights + heightmap)
+    hf_face_paint_layer.gd HFFacePaintLayer: one surface paint layer on one face, a texture and a weight mask
+    hf_region_manager.gd   HFTerrainRegionManager: which paint regions stream in around the camera
+    hf_hash.gd             HFHash: stable ids for generated floors and walls, and the layer and chunk an id names
     hf_paint_layer_manager.gd  Layer management
     hf_paint_tool.gd       Paint tool input handling (routes to heightmap synth when layer has heightmap)
     hf_inference_engine.gd Stroke intent classification; cleanup pass unimplemented and not wired in
@@ -506,7 +546,6 @@ addons/hammerforge/
     hf_stroke.gd           Stroke types (brush/erase/rect/line/bucket/blend/sculpt_raise/lower/smooth/flatten)
     hf_connector_tool.gd   Ramp/stair mesh generation between layers (manual connector defs)
     hf_auto_connector.gd   Auto-detect height boundaries + generate connectors during bake
-    hf_foliage_populator.gd MultiMeshInstance3D procedural scatter (height/slope filtering)
     hf_brush_to_heightmap.gd Convert selected brushes to heightmap paint layer (rasterize top faces)
     hf_scatter_brush.gd    Interactive scatter/foliage brush (circle/spline, density preview, commit)
     hf_blend.gdshader      Two-material blend shader (UV2 blend map, default colors, cell grid overlay)

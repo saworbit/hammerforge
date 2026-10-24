@@ -168,6 +168,14 @@ jobs:
       - name: Check the top-level pages' links
         run: python3 tools/check_doc_links.py
 
+      # DEVELOPMENT.md gives each addon script a line in its codebase map, and
+      # nothing checked it: 58 scripts had none by 25 Oct (#1865).
+      - name: Check the codebase map guard still detects
+        run: python3 tools/check_codebase_map.py --selftest
+
+      - name: Check the codebase map names every script
+        run: python3 tools/check_codebase_map.py
+
       # The script that decides what reaches the Asset Library ran in exactly
       # one place, release.yml, on the tag. Nothing on a pull request ran it, so
       # a change that broke what ships was found at the release or not at all.
