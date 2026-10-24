@@ -1834,7 +1834,7 @@ The contexts and what their full lists cover:
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
 | Floor Paint | LMB paint, Alt erase, Shift axis lock, Ctrl/Cmd pick, X/Z mirror, Y raise, H room, Enter connector, Esc cancel; live cells/metres and ghosts |
 | Surface Paint | Click+Drag paint, Alt+Drag erase, radius/strength info |
-| Vertex Edit | Click vertex to select, drag to move, E: edge mode, Ctrl+W: merge, Ctrl+E: split |
+| Vertex Edit | Click vertex to select, drag to move, drag on empty space to box select, E: edge mode, Ctrl+W: merge, Ctrl+E: split, Del: delete corners, Alt+Click: add a corner, arrows: nudge corners, R: turn corners |
 | Polygon Tool | Click to place verts, Shift: lock to axis, Enter: close, Escape: remove last |
 | Path Tool | Click to place waypoints, Shift: lock to axis, Enter: finalize, Escape: remove last |
 
@@ -2145,6 +2145,16 @@ Use **X**, **Y**, or **Z** to constrain the drag to that world axis. HammerForge
 - **Split edge** (Ctrl+E): select exactly one edge, then press Ctrl+E to insert a midpoint vertex. The two faces sharing the edge each gain the new vertex. Convexity is mathematically guaranteed.
 - **Merge vertices** (Ctrl+W): select 2+ vertices, then press Ctrl+W to merge them to their centroid. Merging is rejected if it would break convexity. Every brush with two or more selected vertices merges, as one undo step; a brush that refuses says why and the rest still merge.
 - Merge, Split and Clip to Convex are each one undo step whether you use the key, the vertex toolbar or the command palette.
+
+### Many Corners at Once
+([#1713](https://github.com/saworbit/hammerforge/issues/1713))
+- **Shared corners move together.** With several brushes selected, clicking a corner picks every selected brush's corner at that spot, within a millimetre, so the corner where four floor brushes meet moves as one and leaves no crack. **Alt+Click** picks just the one brush's corner, and **Ctrl+Click** takes a corner and its partners off the selection.
+- **Box select.** Drag from empty space, not over a brush, and every corner of the selected brushes inside the box is selected; in edge mode, every edge with both ends inside. **Shift** adds to the selection and **Ctrl** takes away. A press over a brush that is not on a corner still goes to Godot, which picks that brush to edit.
+- **Delete** removes the selected corners, or in edge mode the ends of the selected edges, and rebuilds each brush as the hull of what is left. A brush that would be left flat is refused with the reason, and nothing changes.
+- **Add a corner.** **Alt+Click** on a face of a selected brush adds a corner one grid step out from that face, so a click on a box's top gives it a pyramid top; with one brush selected, Alt+Click on the grid adds one there. A point inside the brush is refused.
+- **Nudge.** With corners selected, the arrow keys and Page Up and Down move them by the grid step, Alt for a tenth, along the axis nearest the view as brushes move. With none selected they move the brushes, as before.
+- **Turn and scale.** With corners selected, **R** and **Shift+R** turn them by the rotate step, about the picked pivot when there is one and about their middle otherwise, round the locked axis or Y. **Scale Vertices...** in the command palette asks for X, Y and Z factors and scales them the same way. Each is judged as a drag is: bent faces are cut flat and a dent is refused.
+- Each of these is one undo step, and the faces that survive keep their materials and UVs, as Clip to Convex keeps them.
 
 ### Snap Vertices to Grid
 Press **Ctrl+B**, or **Snap** in the vertex toolbar, to move each selected vertex to the grid point nearest it in world space. The result is checked as a drag is when you let go: a bent face is cut into flat pieces that fold outward, and a snap that would leave the brush non-convex, or put two of its vertices on one grid point, is refused with the reason and nothing moves. One press is one undo step, and vertices already on the grid add none. Outside vertex mode the same key snaps whole brushes (see Selection Tools).

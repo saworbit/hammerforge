@@ -65,6 +65,7 @@ Precision vertex-level editing for fine-tuning brush geometry:
 - **Vertex merging** (Ctrl+W) -- merge selected vertices to their centroid
 - **Wireframe overlay** -- color-coded edge display (gray default, orange selected, yellow hovered)
 - **Clip to Convex** -- repair non-convex brushes by recomputing the convex hull with UV inheritance
+- **Many corners at once** -- a corner several selected brushes share moves as one, a drag on empty space box selects corners, Delete removes them and Alt+Click adds one, and the arrows, R and Scale Vertices move, turn and scale the selected corners (#1713)
 
 ### Polygon Tool
 

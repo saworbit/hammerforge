@@ -1281,6 +1281,17 @@ const COMMANDS := [
 		"repeat": true
 	},
 	{
+		"id": "vertex_scale",
+		"label": "Scale Vertices...",
+		"help":
+		"Scale the selected vertices by typed factors, about their middle or the picked pivot.",
+		"aliases": ["taper", "scale corners"],
+		"category": "Tools",
+		"needs_level": true,
+		"palette": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Scale Vertices"}
+	},
+	{
 		"id": "vertex_exit",
 		"label": "Vertex Exit",
 		"help": "Leave Vertex mode.",

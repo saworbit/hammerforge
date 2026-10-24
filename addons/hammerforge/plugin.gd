@@ -126,6 +126,12 @@ var _overlay_colors_drawn: Dictionary = {}
 var _vertex_mode := false
 var _vertex_drag_active := false
 var _vertex_drag_start := Vector2.ZERO
+## A box over the corners in vertex mode, and how it selects: 0 replaces, 1 adds,
+## 2 takes away (#1713). How many brushes the last corner picked is shared by.
+var _vertex_marquee_active := false
+var _vertex_marquee_start := Vector2.ZERO
+var _vertex_marquee_mode := 0
+var _vertex_shared_count := 0
 var _vertex_overlay_mesh: MeshInstance3D = null
 var _vertex_overlay_imesh: ImmediateMesh = null
 var _texture_picker_active := false

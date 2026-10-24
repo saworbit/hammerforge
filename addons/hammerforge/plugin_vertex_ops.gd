@@ -56,12 +56,136 @@ static func toggle_mode(plugin: Object, root: Node) -> void:
 # Commands
 # ---------------------------------------------------------------------------
 
-
 ## Merge Vertices, from its key and from the palette and toolbar alike: in each
 ## brush with two or more vertices selected, those vertices go to their centroid,
 ## every brush in one undo step. A brush the merge would break is left as it was
 ## and the vertex system says why. The selection is cleared after, as a merge
 ## renumbers the brush's vertices. True when any brush changed.
+# ---------------------------------------------------------------------------
+# Many corners at once (#1713)
+# ---------------------------------------------------------------------------
+
+
+## Each of these edits the selected corners as one undo step and says why when
+## it is refused, through the vertex system's own message.
+static func delete_selected(plugin: Object, root: Node) -> bool:
+	var vs = root.vertex_system if root else null
+	if vs == null or not vs.has_selection():
+		return false
+	return _committed(plugin, root, vs.delete_selected(), "Delete Vertices")
+
+
+## Add a corner to `brush_id` at `world_point`.
+static func add_corner(plugin: Object, root: Node, brush_id: String, world_point: Vector3) -> bool:
+	var vs = root.vertex_system if root else null
+	if vs == null:
+		return false
+	return _committed(plugin, root, vs.add_corner(brush_id, world_point), "Add Vertex")
+
+
+## Move the selected corners by `world_delta`, as the arrow keys do.
+static func nudge_selected(plugin: Object, root: Node, world_delta: Vector3) -> bool:
+	var vs = root.vertex_system if root else null
+	if vs == null or not vs.has_selection():
+		return false
+	return _committed(plugin, root, vs.offset_selected(world_delta), "Nudge Vertices")
+
+
+## Turn the selected corners by the rotate step, about the picked pivot when one
+## is picked and about their middle otherwise, round the locked axis or Y.
+static func turn_selected(plugin: Object, root: Node, direction: int) -> bool:
+	var vs = root.vertex_system if root else null
+	if vs == null or not vs.has_selection():
+		return false
+	var step := absf(float(root.rotate_snap_degrees))
+	if is_zero_approx(step):
+		step = 15.0
+	var axis: Vector3 = [Vector3.RIGHT, Vector3.UP, Vector3.BACK][root.transform_axis_index(1)]
+	var turn := Basis(axis, deg_to_rad(step if direction >= 0 else -step))
+	return _committed(
+		plugin,
+		root,
+		vs.transform_selected(_about(root, vs, turn), "Turn rejected"),
+		"Turn Vertices"
+	)
+
+
+## Scale the selected corners by `factors`, about the picked pivot or their middle.
+static func scale_selected(plugin: Object, root: Node, factors: Vector3) -> bool:
+	var vs = root.vertex_system if root else null
+	if vs == null or not vs.has_selection():
+		return false
+	if not factors.is_finite() or factors.x <= 0.0 or factors.y <= 0.0 or factors.z <= 0.0:
+		root.emit_signal("user_message", "Scale rejected: each factor has to be more than 0", 1)
+		return false
+	var scale := Basis.from_scale(factors)
+	return _committed(
+		plugin,
+		root,
+		vs.transform_selected(_about(root, vs, scale), "Scale rejected"),
+		"Scale Vertices"
+	)
+
+
+## Ask for three factors, then scale the selected corners by them.
+static func open_scale_dialog(plugin: Object, root: Node) -> ConfirmationDialog:
+	var vs = root.vertex_system if root else null
+	if vs == null or not vs.has_selection():
+		if root:
+			root.emit_signal("user_message", "Scale Vertices: select vertices first", 1)
+		return null
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Scale Vertices"
+	var row := HBoxContainer.new()
+	var spins: Array = []
+	for axis_name in ["X", "Y", "Z"]:
+		var label := Label.new()
+		label.text = axis_name
+		row.add_child(label)
+		var spin := SpinBox.new()
+		spin.name = axis_name
+		spin.min_value = 0.01
+		spin.max_value = 100.0
+		spin.step = 0.01
+		spin.value = 1.0
+		row.add_child(spin)
+		spins.append(spin)
+	dialog.add_child(row)
+	dialog.confirmed.connect(
+		func():
+			scale_selected(plugin, root, Vector3(spins[0].value, spins[1].value, spins[2].value))
+			dialog.queue_free()
+	)
+	dialog.canceled.connect(dialog.queue_free)
+	plugin._add_confirmable_dialog(dialog)
+	dialog.popup_centered()
+	return dialog
+
+
+## `basis` applied about the picked pivot, or the middle of the selected corners.
+static func _about(root: Node, vs: Object, basis: Basis) -> Transform3D:
+	var pivot: Vector3 = (
+		root.transform_pivot_point if int(root.transform_pivot_mode) == 3 else vs.selected_centre()
+	)
+	return (
+		Transform3D(Basis.IDENTITY, pivot)
+		* Transform3D(basis)
+		* Transform3D(Basis.IDENTITY, -pivot)
+	)
+
+
+static func _committed(
+	plugin: Object, root: Node, snapshots: Dictionary, action_name: String
+) -> bool:
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	if snapshots.is_empty():
+		return false
+	commit_op(plugin, root, snapshots, action_name)
+	plugin._update_hud_context()
+	return true
+
+
 static func merge_selected(plugin: Object, root: Node) -> bool:
 	var vs = root.vertex_system if root else null
 	if not vs:
