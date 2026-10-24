@@ -2394,7 +2394,15 @@ When a face is selected, adjust its UV parameters with the spinboxes:
 
 Changes are live-previewed and fully undoable. Rapid spinbox changes merge into a single undo step.
 
-The boxes edit the face on show. These buttons edit every face in the face selection, as one undo step:
+A box typed in goes to every face in the face selection, and only that box: typing a scale for twenty faces sets it on all twenty and leaves each one's offset and rotation as they were. With no face selected it goes to the face on show. A box the selected faces disagree on shows **mixed** instead of one face's number; typing in it sets all of them.
+
+**Slide and turn with the keys.** In Face Select, with faces selected, the arrow keys move their texture instead of nudging objects:
+- An arrow slides each selected face's texture one grid step the way the arrow points on screen, worked out from that face's own U and V, so a wall seen from the side and a floor seen from above both follow the arrow. **Alt** makes it a tenth of the step.
+- **Shift** with **Left** or **Right** turns the texture 15 degrees about the middle of each face, **Shift+Alt** 1 degree, and **Shift** with **Up** or **Down** a quarter turn.
+- A face seen edge on, or on the Cylindrical projection, is left as it was, and the HUD says how many.
+- The HUD lists the keys with their steps, and a quick run of presses is one undo step.
+
+These buttons edit every face in the face selection too, as one undo step:
 - **x2** and **/2** beside Scale double or halve U and V. Each axis keeps its sign, so a mirrored face stays mirrored, and the offset stays where it is, so faces that lined up still line up. /2 stops at 0.01 and x2 at 100, the range of the boxes.
 - **Link** between the two Scale boxes: while it is on, typing one box sets the other to the same size, each keeping its sign. It is kept in `user://hammerforge_prefs.json`.
 - **Flip U**, **Flip V** and **Rotate 90** under Rotate mirror the texture or turn it a quarter about the middle of the face, so it does not jump. Two flips, or four quarter turns, put the face back.

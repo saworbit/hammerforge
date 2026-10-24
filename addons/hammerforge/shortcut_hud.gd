@@ -357,7 +357,12 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 		return text + _vertex_edit_shortcuts()
 
 	if tool_id == 1:
-		return text + _select_mode_shortcuts(bool(ctx.get("face_xray", false)))
+		return (
+			text
+			+ _select_mode_shortcuts(
+				bool(ctx.get("face_xray", false)), ctx.get("texture_keys", PackedStringArray())
+			)
+		)
 
 	if tool_id == 2 or tool_id == 3:
 		var dir_label := "Up" if tool_id == 2 else "Down"
@@ -423,11 +428,15 @@ func _draw_height_shortcuts() -> String:
 	return "\n".join(lines)
 
 
-func _select_mode_shortcuts(face_xray := false) -> String:
+func _select_mode_shortcuts(
+	face_xray := false, texture_keys: PackedStringArray = PackedStringArray()
+) -> String:
 	var lines := PackedStringArray()
 	# First, so the row shows it: a box now takes faces nobody can see.
 	if face_xray:
 		lines.append(_chords("X-ray ({toggle_face_xray}): Box takes covered and back faces"))
+	# The arrows move the picked faces' textures, not objects (#1728).
+	lines.append_array(texture_keys)
 	lines.append("Click: Select | Shift: Add")
 	lines.append("Ctrl+Click: Toggle Selection")
 	lines.append("Drag Empty Space: Box Select")
@@ -437,8 +446,9 @@ func _select_mode_shortcuts(face_xray := false) -> String:
 	)
 	lines.append("Escape: Clear Selection")
 	lines.append(_chords("{delete}: Remove | {duplicate}: Duplicate"))
-	lines.append("Arrows: Nudge | PgUp/Dn: Y-Nudge")
-	lines.append("Alt: Tenth-step Nudge (Alt+Shift with PgUp/Dn)")
+	if texture_keys.is_empty():
+		lines.append("Arrows: Nudge | PgUp/Dn: Y-Nudge")
+		lines.append("Alt: Tenth-step Nudge (Alt+Shift with PgUp/Dn)")
 	lines.append(_chords("{hollow}: Hollow | {clip}: Clip"))
 	lines.append(_chords("{move_to_floor} / {move_to_ceiling}: Floor / Ceiling"))
 	return "\n".join(lines)
