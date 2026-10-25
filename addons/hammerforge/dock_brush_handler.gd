@@ -1102,9 +1102,11 @@ static func structure_type(dock: Object) -> String:
 static func rebuild_structure_fields(dock: Object) -> void:
 	if dock == null or dock.structure_fields_box == null:
 		return
+	# Freed at once: no signal of a field's leads here, and queued they counted as
+	# GUT orphans until the frame ended, 220 at a time (#1901).
 	for child in dock.structure_fields_box.get_children():
 		dock.structure_fields_box.remove_child(child)
-		child.queue_free()
+		child.free()
 	dock.structure_fields.clear()
 
 	var type := structure_type(dock)
