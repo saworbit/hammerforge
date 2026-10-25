@@ -800,12 +800,8 @@ static func _note_array(
 ) -> void:
 	if not dock.has_signal("command_ran"):
 		return
-	dock.emit_signal(
-		"command_ran",
-		id,
-		settings,
-		{"action": action, "method": method, "args": args, "absolute_redo": false}
-	)
+	var recipe := {"action": action, "method": method, "args": args, "absolute_redo": false}
+	dock.command_ran.emit(id, settings, recipe)
 
 
 ## Draw a ghost of the copies the button would make, before it makes them.

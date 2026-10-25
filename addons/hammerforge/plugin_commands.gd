@@ -221,6 +221,20 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 	return state
 
 
+## Which way Extrude goes with `settings`: 1 up, -1 down (#1867).
+static func extrude_way(settings: Dictionary) -> int:
+	return -1 if int(settings.get("direction", 0)) == 1 else 1
+
+
+## The settings `action` runs with from its key: those the command it stands for
+## is given, under the keymap entry's `args`.
+static func key_settings(action: String, keymap: Object) -> Dictionary:
+	var settings := (HFCommandRegistry.runs(action).get("settings", {}) as Dictionary).duplicate()
+	if keymap != null and keymap.has_method("args_for"):
+		settings.merge(keymap.args_for(action), true)
+	return settings
+
+
 ## Run `action` from any surface. `settings` are values for its `params`, as a
 ## keymap entry's `args` or Adjust Last give them; a setting left out is what the
 ## dock says, as before (#1867). An id kept for a keymap runs the command it
@@ -274,7 +288,7 @@ static func execute(
 		"tool_extrude":
 			plugin._deactivate_external_tool()
 			if dock:
-				dock.set_extrude_tool(-1 if int(settings.get("direction", 0)) == 1 else 1)
+				dock.set_extrude_tool(extrude_way(settings))
 				plugin._update_hud_context()
 		"adjust_last":
 			HFPluginAdjustLast.show(plugin)

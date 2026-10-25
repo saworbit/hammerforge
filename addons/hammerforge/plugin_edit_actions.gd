@@ -405,6 +405,13 @@ static func collation_tag(
 	return "|".join(parts)
 
 
+## Tell the plugin what a command ran with, for Adjust Last (#1867). A stand-in
+## plugin without Adjust Last is told nothing.
+static func _note_run(plugin: Object, id: String, settings: Dictionary, recipe: Dictionary) -> void:
+	if plugin.has_method("_note_last_run"):
+		plugin.call("_note_last_run", id, settings, recipe)
+
+
 static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bool:
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
 	var targets := collect_managed_targets(plugin, root)
@@ -432,7 +439,7 @@ static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bo
 	recipe["args"] = again
 	recipe["scope_ids"] = brush_ids
 	recipe["scope_paths"] = entity_paths
-	plugin.call("_note_last_run", "nudge", {"offset": offset}, recipe)
+	_note_run(plugin, "nudge", {"offset": offset}, recipe)
 	return true
 
 
@@ -525,7 +532,7 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 			)
 			var again := func(s: Dictionary) -> Array: return [brush_id, float(s["thickness"])]
 			var recipe := {"action": "Hollow", "method": "hollow_brush_by_id", "args": again}
-			plugin.call("_note_last_run", "hollow", {"thickness": thickness}, recipe)
+			_note_run(plugin, "hollow", {"thickness": thickness}, recipe)
 			dlg.queue_free()
 	)
 	dlg.canceled.connect(
@@ -925,7 +932,7 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 			var again := func(s: Dictionary) -> Array:
 				return [brush_id, AXES.find(str(s["axis"])), float(s["position"])]
 			var recipe := {"action": "Clip Brush", "method": "clip_brush_by_id", "args": again}
-			plugin.call("_note_last_run", "clip", {"axis": "y", "position": split_pos}, recipe)
+			_note_run(plugin, "clip", {"axis": "y", "position": split_pos}, recipe)
 			dlg.queue_free()
 	)
 	dlg.canceled.connect(
@@ -1269,7 +1276,7 @@ static func rotate_selected(plugin: Object, root: Node, direction: int) -> bool:
 	recipe["scope_ids"] = brush_ids
 	recipe["scope_paths"] = entity_paths
 	var id := "rotate_ccw" if direction >= 0 else "rotate_cw"
-	plugin.call("_note_last_run", id, {"angle": angle_degrees, "axis": AXES[axis_index]}, recipe)
+	_note_run(plugin, id, {"angle": angle_degrees, "axis": AXES[axis_index]}, recipe)
 	return true
 
 

@@ -62,6 +62,15 @@ static func _registry_guard(plugin: Object, root: Node, action: String) -> int:
 	)
 
 
+## Extrude from a key, the way its settings say.
+static func _extrude(plugin: Object, root: Node, dock: Object, settings: Dictionary) -> void:
+	plugin._prepare_tool_transition(root)
+	dock.highlight_tab("Brush")
+	plugin._deactivate_external_tool()
+	dock.set_extrude_tool(HFPluginCommands.extrude_way(settings))
+	plugin._update_hud_context()
+
+
 static func handle_keyboard(
 	plugin: Object, event: InputEventKey, root: Node, tool_id: int, paint_mode: bool
 ) -> int:
@@ -434,13 +443,13 @@ static func _handle_keyboard(
 	# a keymap entry's `args` set it too (#1867).
 	for extrude_id in ["tool_extrude_up", "tool_extrude_down"]:
 		if keymap.matches(extrude_id, event):
-			HFPluginCommands.execute(plugin, extrude_id, [], keymap.args_for(extrude_id))
+			_extrude(plugin, root, dock, HFPluginCommands.key_settings(extrude_id, keymap))
 			return STOP
 	# E / Shift+E for extrude (Blender convention) — skip in paint and vertex modes
 	if not paint_mode and not plugin._vertex_mode:
 		for extrude_id in ["tool_extrude", "tool_extrude_down_alt"]:
 			if keymap.matches(extrude_id, event):
-				HFPluginCommands.execute(plugin, extrude_id, [], keymap.args_for(extrude_id))
+				_extrude(plugin, root, dock, HFPluginCommands.key_settings(extrude_id, keymap))
 				return STOP
 	# Texture picker (eyedropper) — T key activates click-to-sample mode
 	if keymap.matches("texture_picker", event):
