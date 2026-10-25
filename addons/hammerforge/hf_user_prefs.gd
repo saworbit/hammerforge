@@ -98,6 +98,8 @@ const SCHEMA := {
 	"draw_hover_preview": {"type": TYPE_BOOL},
 	"material_thumb_size": {"type": TYPE_INT, "min": 48, "max": 192},
 	"snap_labels": {"type": TYPE_BOOL},
+	"snap_tracking": {"type": TYPE_BOOL},
+	"snap_tracking_shift": {"type": TYPE_BOOL},
 	"similar_brush_keys": {"type": TYPE_ARRAY},
 	"similar_face_keys": {"type": TYPE_ARRAY},
 	"similar_entity_keys": {"type": TYPE_ARRAY},
@@ -237,6 +239,8 @@ static func _defaults() -> Dictionary:
 		"draw_hover_preview": true,
 		"material_thumb_size": 64,
 		"snap_labels": true,
+		"snap_tracking": true,
+		"snap_tracking_shift": false,
 		# What Select Similar matches on, as `HFSimilar.DEFAULTS` has it (#1698).
 		"similar_brush_keys": ["size"],
 		"similar_face_keys": ["material", "normal"],

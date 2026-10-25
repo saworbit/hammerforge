@@ -2489,6 +2489,38 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "track_snap_point",
+		"label": "Track Point for Guides",
+		"help":
+		"Run guides from the snap point under the pointer, or stop. Resting the pointer there does the same.",
+		"aliases": ["guide from here", "track point"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
+		"selection": {}
+	},
+	{
+		"id": "take_xz_for_next_pick",
+		"label": "Point Filter: X and Z from Here",
+		"help":
+		"The next pick takes X and Z from the snap point under the pointer, and its height from where it lands.",
+		"aliases": ["need y", "point filter", "x and z from here"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
+		"selection": {}
+	},
+	{
+		"id": "clear_guides",
+		"label": "Clear Guides",
+		"help": "Stop every guide from tracked points.",
+		"aliases": ["forget guides"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
+		"selection": {}
+	},
+	{
 		"id": "snap_next_vertex",
 		"label": "Next Pick: Vertex Only",
 		"help":

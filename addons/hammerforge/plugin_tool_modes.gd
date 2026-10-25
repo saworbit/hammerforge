@@ -41,6 +41,10 @@ static func prepare_transition(
 	var stamp = plugin.get("_brush_stamp") if notify_user else null
 	if stamp != null:
 		stamp.disarm()
+	# Guides run from points the mapper rested on with the tool being left (#1692).
+	var snap = root.get("snap_system") if notify_user and root else null
+	if snap != null:
+		snap.clear_tracked()
 	# An armed pick is a click waiting for the old owner, so it goes with it. Said
 	# when the user asked for the switch; quietly when focus left the editor.
 	HFPluginTransformTools.cancel_pivot_pick(plugin, "Pick Pivot cancelled" if notify_user else "")
