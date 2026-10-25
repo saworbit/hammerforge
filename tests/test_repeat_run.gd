@@ -311,8 +311,51 @@ func test_what_the_run_can_hold():
 		"carve",
 		"merge",
 		"move_to_floor",
-		"snap_to_grid"
+		"snap_to_grid",
+		"duplicate_array",
+		"radial_array",
+		"grid_array",
 	]:
 		assert_true(HFPluginRun.playable(id), id)
-	for id in ["flip_selection", "delete", "paste", "justify_fit", "duplicate_array"]:
+	for id in ["flip_selection", "delete", "paste", "justify_fit"]:
 		assert_false(HFPluginRun.playable(id), id)
+
+
+## Radial Array of 5 round one brush, then another selected and Repeat Run makes
+## the same array round it, as one undo step (#1896). An array used to end the
+## run, so nothing was played.
+func test_a_radial_array_plays_round_the_next_brush():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await _level()
+	var a = rig.box(level, "a", Vector3(0, 1, 0))
+	var b = rig.box(level, "b", Vector3(20, 1, 0))
+	var dock = rig.plugin.dock
+	dock.dup_mode_opt.selected = 1
+	dock.dup_count_spin.value = 5
+	dock.dup_step_spin.value = 60.0
+	dock.dup_rise_spin.value = 1.0
+	if dock.dup_fill_check:
+		dock.dup_fill_check.button_pressed = false
+	await _select([a])
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_eq(_brushes(level).size(), 7, "a, b and five copies of a")
+	assert_eq(_text(), "Radial Array x5", "the run holds the array")
+	var before: Array = _brushes(level)
+	await _select([b])
+	var steps: int = rig.undo().step_count()
+	_run("repeat_run")
+	await rig.frame()
+	var made: Array = []
+	for brush in _brushes(level):
+		if not before.has(brush):
+			made.append(brush)
+	assert_eq(made.size(), 5, "five copies of b")
+	for brush in made:
+		assert_almost_eq(brush.global_position.x, 20.0, 0.01, "round b")
+	assert_eq(rig.undo().step_count(), steps + 1, "one undo step")
+	assert_eq(rig.undo().scene_history.get_current_action_name(), "Repeat Run")
+	dock.dup_mode_opt.selected = 0
+	await rig.leave_level(level)

@@ -6,6 +6,7 @@ extends GutTest
 
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const HFPluginCommandsScript = preload("res://addons/hammerforge/plugin_commands.gd")
+const HFPluginAdjustLast = preload("res://addons/hammerforge/plugin_adjust_last.gd")
 
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 
@@ -76,6 +77,37 @@ func test_hollow_then_repeat_hollows_the_next_brush_as_thick():
 	assert_almost_eq(_thinnest_new(level, before), 0.5, 0.001, "with the same walls")
 	assert_eq(rig.undo().step_count(), steps + 1, "one undo step")
 	assert_eq(rig.undo().scene_history.get_current_action_name(), "Hollow", "named after Hollow")
+	rig.plugin.dock.hollow_thickness.value = thickness
+	await rig.leave_level(level)
+
+
+## Repeat Last Command runs with the dock's settings, and Adjust Last puts what it
+## changed there, so the two agree with Repeat Run (#1896): after a Hollow and a
+## change to 0.5 m in the Adjust panel, the next Hollow and the repeat are 0.5 m.
+func test_repeat_after_adjust_last_hollows_at_the_adjusted_thickness():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await rig.make_level()
+	rig.undo().clear()
+	var a = rig.box(level, "a", Vector3(0, 2, 0))
+	var b = rig.box(level, "b", Vector3(10, 2, 0))
+	var thickness: float = rig.plugin.dock.hollow_thickness.value
+	rig.plugin.dock.hollow_thickness.value = 0.25
+	rig.select([a])
+	_run("hollow")
+	assert_eq(await rig.accept_dialogs(), 1, "Hollow asks")
+	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "thickness", 0.5), "adjusted")
+	await rig.frame()
+	assert_almost_eq(
+		float(rig.plugin.dock.hollow_thickness.value), 0.5, 0.001, "the dock takes it too"
+	)
+	var before: Array = level._iter_managed_brush_nodes()
+	rig.select([b])
+	_run("repeat_last_command")
+	assert_eq(await rig.accept_dialogs(), 1, "the same question as Hollow")
+	assert_almost_eq(_thinnest_new(level, before), 0.5, 0.001, "hollowed at 0.5 m")
+	HFPluginAdjustLast.close(rig.plugin)
 	rig.plugin.dock.hollow_thickness.value = thickness
 	await rig.leave_level(level)
 

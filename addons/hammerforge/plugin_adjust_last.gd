@@ -193,6 +193,11 @@ static func _run_again(
 		recipe.get("scope_ids", []),
 		recipe.get("scope_paths", [])
 	)
+	# The dock's own controls take the settings too, so the next press of the
+	# command and Repeat Last Command run what is in the level (#1896).
+	var to_dock: Variant = recipe.get("dock")
+	if to_dock is Callable and (to_dock as Callable).is_valid():
+		(to_dock as Callable).call(settings)
 	run["settings"] = settings
 	run["version"] = history.get_version()
 	plugin.set("last_run", run)

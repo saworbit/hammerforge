@@ -31,11 +31,23 @@ const HFUndoNavType = preload("ui/hf_undo_nav.gd")
 const REPEAT := "repeat_run"
 const CLEAR := "clear_run"
 ## The commands the run plays itself. Any other it holds, the Agent Bridge runs.
-const PLAYS_ITSELF := ["duplicate", "nudge", "rotate_ccw", "rotate_cw"]
+## The arrays have no bridge form, so the run makes them as their button does.
+const PLAYS_ITSELF := [
+	"duplicate", "nudge", "rotate_ccw", "rotate_cw", "duplicate_array", "radial_array", "grid_array"
+]
 ## The commands with settings the run holds. Their call sites say what they ran
 ## with once the step has landed (`note()`), which is when the run takes them:
 ## Hollow asks first, and a Hollow turned down is not in the run.
-const PLAYS_WITH_SETTINGS := ["nudge", "rotate_ccw", "rotate_cw", "hollow", "clip"]
+const PLAYS_WITH_SETTINGS := [
+	"nudge",
+	"rotate_ccw",
+	"rotate_cw",
+	"hollow",
+	"clip",
+	"duplicate_array",
+	"radial_array",
+	"grid_array",
+]
 const AXES := ["x", "y", "z"]
 ## How near a turn of the gizmo has to be to a world axis to be kept as a turn
 ## about it, as the cosine of the angle between them.
@@ -367,7 +379,49 @@ static func _play_step(plugin: Object, root: Node, step: Dictionary, targets: Ar
 			var axis := maxi(0, AXES.find(str(settings.get("axis", "y"))))
 			root.rotate_managed_nodes(ids, paths, axis, float(settings.get("angle", 0.0)), pivot)
 			return {"ok": true, "targets": targets}
+		"duplicate_array", "radial_array", "grid_array":
+			return _play_array(root, id, settings, ids, targets)
 	return _play_on_bridge(plugin, root, id, settings, refs)
+
+
+## An array round the brushes `ids`, with the settings it was made with, as its
+## button makes it (#1896): a radial array turns about the pivot the brushes give
+## now, as the button takes it from the selection. What stays selected is what it
+## was made from, as after the button.
+static func _play_array(
+	root: Node, id: String, settings: Dictionary, ids: Array, targets: Array
+) -> Dictionary:
+	if ids.is_empty():
+		return {"ok": false, "message": "there is no brush to make it from", "touched": false}
+	var brush_ids := PackedStringArray(ids)
+	var made: Variant = null
+	match id:
+		"duplicate_array":
+			made = root.create_duplicate_array(
+				brush_ids, int(settings.get("count", 3)), settings.get("offset", Vector3.ZERO)
+			)
+		"radial_array":
+			made = root.create_radial_array(
+				brush_ids,
+				int(settings.get("count", 7)),
+				maxi(0, AXES.find(str(settings.get("axis", "y")))),
+				float(settings.get("step", 45.0)),
+				root.resolve_transform_pivot(ids, []),
+				float(settings.get("rise", 0.0))
+			)
+		"grid_array":
+			made = root.create_grid_array(
+				brush_ids,
+				Vector3i(
+					int(settings.get("count_x", 2)),
+					int(settings.get("count_y", 1)),
+					int(settings.get("count_z", 2))
+				),
+				settings.get("spacing", Vector3.ZERO)
+			)
+	if made == null:
+		return {"ok": false, "message": "the array made nothing", "touched": false}
+	return {"ok": true, "targets": targets}
 
 
 ## A step the Agent Bridge runs, with its checks and its refusals: on each brush
@@ -447,6 +501,18 @@ static func step_text(step: Dictionary) -> String:
 			return (
 				"Hollow (%s m)"
 				% HFNumberFormat.number(float(settings.get("thickness", 0.0)), 0.001)
+			)
+		"duplicate_array", "radial_array":
+			return "%s x%d" % [HFCommandRegistry.label(id), int(settings.get("count", 0))]
+		"grid_array":
+			return (
+				"%s %dx%dx%d"
+				% [
+					HFCommandRegistry.label(id),
+					int(settings.get("count_x", 1)),
+					int(settings.get("count_y", 1)),
+					int(settings.get("count_z", 1))
+				]
 			)
 		"clip":
 			if settings.has("position"):
