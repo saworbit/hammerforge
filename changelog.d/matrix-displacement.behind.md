@@ -1,0 +1,1 @@
+- The action matrix tries every brush and face action on a displaced box and a neighbour sewn to it. (issue [#1900](https://github.com/saworbit/hammerforge/issues/1900))

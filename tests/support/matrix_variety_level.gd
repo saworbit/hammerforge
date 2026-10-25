@@ -2,8 +2,9 @@ extends RefCounted
 ## The level the action matrix builds for itself (#1648), with the kinds of brush
 ## the levels in `tests/levels/` do not hold: every brush there is a box square to
 ## the world. Turned and tilted boxes, a wedge, a pyramid, two prisms, cylinders
-## and a cone, a box cut on a slant, a brush entity, a spiral stair's pieces, and
-## neighbours for Merge, Carve and Clip to Face. Built the same way every time,
+## and a cone, a box cut on a slant, a brush entity, a spiral stair's pieces,
+## neighbours for Merge, Carve and Clip to Face, and two displaced tops sewn
+## together. Built the same way every time,
 ## so the matrix names its items the same way every time.
 
 ## What the matrix calls it beside the folders in tests/levels.
@@ -51,7 +52,30 @@ static func fill(level: Node, tree: SceneTree) -> void:
 			level.generator_system.default_settings("spiral_stairs"),
 			Transform3D(Basis.IDENTITY, Vector3(60, 0, 0))
 		)
+	# A displaced top, and a neighbour sewn to it along the edge they share, since
+	# a displaced face takes its own path through triangulation, the bake and the
+	# save (#1900).
+	var hill = _brush(level, shapes.BOX, Vector3(4, 1, 4), Vector3(70, 0.5, 0))
+	var sewn = _brush(level, shapes.BOX, Vector3(4, 1, 4), Vector3(74, 0.5, 0))
+	_displace_top(level, hill, [[2, 2, 0.5], [1, 3, 0.25], [3, 1, -0.2]])
+	_displace_top(level, sewn, [[2, 2, -0.3], [2, 0, 0.4]])
+	level.sew_all_displacements()
 	await tree.process_frame
+
+
+## Give `brush`'s top a power 2 displacement, in sew group 1, raised at each
+## `[row, col, distance]` of `heights`.
+static func _displace_top(level: Node, brush: Node, heights: Array) -> void:
+	var brush_id := str(brush.brush_id)
+	for index in brush.faces.size():
+		if brush.faces[index].normal.y < 0.9:
+			continue
+		level.create_displacement(brush_id, index, 2)
+		var data = brush.faces[index].displacement
+		for height in heights:
+			data.set_distance(int(height[0]), int(height[1]), float(height[2]))
+		level.set_displacement_sew_group(brush_id, index, 1)
+		return
 
 
 static func _brush(
