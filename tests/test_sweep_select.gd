@@ -174,4 +174,20 @@ func test_the_sweep_key_is_a_hold_in_the_keymap_and_clashes_with_nothing():
 	var keymap = rig.plugin._keymap
 	assert_false(keymap.get_actions().has("sweep_select_hold"), "a hold runs no command")
 	assert_eq(Array(keymap.conflicts_for("sweep_select_hold")), [], "and clashes with nothing")
-	assert_eq(keymap.get_display_string("sweep_select_hold"), "A")
+	assert_eq(keymap.get_display_string("sweep_select_hold"), "I")
+	var sweep_key := int(keymap.get_all_bindings()["sweep_select_hold"]["keycode"])
+	for action in keymap.get_actions():
+		var binding: Dictionary = keymap.get_all_bindings().get(action, {})
+		var bare: bool = not (
+			binding.get("ctrl", false) or binding.get("shift", false) or binding.get("alt", false)
+		)
+		assert_false(
+			bare and int(binding.get("keycode", 0)) == sweep_key,
+			"no command is on the key: %s" % action
+		)
+	assert_true(
+		rig.plugin.hud._build_shortcuts_text({"tool": 1, "mode": 0}).contains(
+			"Hold I + Drag: Sweep Select"
+		),
+		"the HUD names it"
+	)

@@ -451,8 +451,8 @@ static func _default_bindings() -> Dictionary:
 		"snap_invert_hold": {"keycode": KEY_CTRL},
 		"snap_vertex_hold": {"keycode": KEY_ALT},
 		# Held at a Select tool press to sweep select (#1886). Ctrl and Alt are the
-		# holds above, and A is no command of HammerForge's or of Godot's 3D view.
-		"sweep_select_hold": {"keycode": KEY_A},
+		# holds above, and I is no command, double tap or key of Godot's 3D view.
+		"sweep_select_hold": {"keycode": KEY_I},
 	}
 
 

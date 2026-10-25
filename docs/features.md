@@ -565,6 +565,7 @@ Shortcuts marked with **\*** are rebindable in the shortcut dialog (**?** on the
 | Ctrl+Shift+T * | Operation Replay Timeline |
 | Ctrl * | Invert Grid Snap (hold) |
 | Alt * | Snap to Vertices (hold) |
+| I * | Sweep Select (hold) |
 | Alt+Arrow / Alt+Shift+PgUp/PgDn | Nudge a tenth of the grid step |
 | C * | Clip Tool |
 | Tab | Keep side in Clip |

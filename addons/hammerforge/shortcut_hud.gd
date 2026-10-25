@@ -457,6 +457,7 @@ func _select_mode_shortcuts(
 	lines.append("Click: Select | Shift: Add")
 	lines.append("Ctrl+Click: Toggle Selection")
 	lines.append("Drag Empty Space: Box Select")
+	lines.append(_chords("Hold {sweep_select_hold} + Drag: Sweep Select"))
 	lines.append("Drag Brush Widgets: Resize/Move")
 	lines.append(
 		_chords("Hold {snap_invert_hold}: Grid Snap Off/On | {snap_vertex_hold}: Vertices")
