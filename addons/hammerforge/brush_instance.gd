@@ -2216,11 +2216,11 @@ func forget_faces_record() -> void:
 ## The faces record and each face's dictionary made read-only: what a careless
 ## caller would write through. The values inside are left as they are, since a
 ## walk into each one cost twice what taking the record did.
-static func _read_only(faces_record: Array) -> void:
-	for face in faces_record:
+static func _read_only(record_faces: Array) -> void:
+	for face in record_faces:
 		if face is Dictionary:
 			(face as Dictionary).make_read_only()
-	faces_record.make_read_only()
+	record_faces.make_read_only()
 
 
 ## Shapes whose builders wound every face inside out before #313. Their saved
