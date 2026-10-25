@@ -114,6 +114,7 @@ const SCHEMA := {
 	"update_later_until": {"type": TYPE_FLOAT, "min": 0.0},
 	"note_author": {"type": TYPE_STRING},
 	"hints_dismissed": {"type": TYPE_DICTIONARY},
+	"command_presets": {"type": TYPE_DICTIONARY},
 	"favorite_materials": {"type": TYPE_ARRAY},
 	"recent_materials": {"type": TYPE_ARRAY},
 	"bake_profiles": {"type": TYPE_DICTIONARY},
@@ -253,6 +254,8 @@ static func _defaults() -> Dictionary:
 		"update_later_until": 0.0,
 		"note_author": "",
 		"hints_dismissed": {},
+		# Settings saved by name in Adjust Last, by command id (#1867).
+		"command_presets": {},
 		"favorite_materials": [],
 		"recent_materials": [],
 		"bake_profiles": {},

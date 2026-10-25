@@ -18,6 +18,8 @@ const ENTRY_KEYS := [
 	"needs_level",
 	"selection",
 	"guard_only",
+	"runs",
+	"params",
 	"bridge",
 	"palette",
 	"repeat",
@@ -143,6 +145,18 @@ func test_the_keymap_reads_its_labels_and_categories_here():
 		assert_eq(HFKeymap.get_category(id), HFCommandRegistry.category(id), "%s category" % id)
 	assert_eq(HFKeymap.get_action_label("some_new_action"), "Some New Action")
 	assert_eq(HFKeymap.get_category("some_new_action"), "Editing")
+
+
+## A command's settings are on its entry, where the bridge, the command line and
+## Adjust Last read them, and a bridge block holds none of its own (#1867).
+func test_settings_are_on_the_command_not_its_bridge():
+	for id in HFCommandRegistry.ids():
+		var raw: Dictionary = HFCommandRegistry.find(id)
+		assert_false(
+			(raw.get("bridge", {}) as Dictionary).has("params"), "%s: bridge has no params" % id
+		)
+		if raw.has("bridge"):
+			assert_eq(HFCommandRegistry.bridge(id)["params"], HFCommandRegistry.params(id), id)
 
 
 func test_every_bridge_entry_is_well_formed():

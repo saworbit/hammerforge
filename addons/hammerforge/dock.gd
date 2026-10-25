@@ -37,6 +37,9 @@ signal selection_vertex_typed(place: Vector3, local: bool)
 signal selection_narrow_requested(kind: String)
 ## An overlay colour, or all of them, changed under Settings > Colours (#1446).
 signal overlay_colors_changed
+## A command the dock ran with settings, for Adjust Last (#1867): its id, its
+## settings, and how to make its step again (`HFPluginAdjustLast.note()`).
+signal command_ran(id: String, settings: Dictionary, recipe: Dictionary)
 @warning_ignore_restore("unused_signal")
 
 const LevelRootType = preload("level_root.gd")

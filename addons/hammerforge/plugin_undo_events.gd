@@ -7,6 +7,7 @@ extends RefCounted
 const HFInputStateType = preload("input_state.gd")
 const HFBakePreview = preload("plugin_bake_preview.gd")
 const HFPluginCompare = preload("plugin_compare.gd")
+const HFPluginAdjustLast = preload("plugin_adjust_last.gd")
 
 
 ## Reconcile everything that an undo or redo can leave stale.
@@ -35,6 +36,7 @@ static func on_version_changed(plugin: Object) -> void:
 		root.subtract_preview.request_update()
 	HFBakePreview.sync_after_undo(plugin, root)
 	HFPluginCompare.refresh(plugin)
+	HFPluginAdjustLast.on_version_changed(plugin)
 
 
 ## Walk the undo history to the version a replay timeline entry was recorded at.

@@ -676,6 +676,14 @@ static func on_create_duplicate_array(dock: Object) -> void:
 				"create_duplicate_array",
 				[brush_ids, int(params["count"]), params["offset"]]
 			)
+			_note_array(
+				dock,
+				"duplicate_array",
+				{"count": int(params["count"]), "offset": params["offset"]},
+				"Create Duplicate Array",
+				"create_duplicate_array",
+				func(s: Dictionary) -> Array: return [brush_ids, int(s["count"]), s["offset"]]
+			)
 			dock._set_status("Created %d copies" % int(params["count"]))
 	# The selection is still the brushes the array was made from, so the section
 	# is now an editor for the array that has just appeared. Saying so here is
@@ -717,10 +725,27 @@ static func _create_radial_array(
 	var cnt := int(params["count"])
 	var step := float(params["step_degrees"])
 	var rise := float(params["rise"])
+	var pivot: Vector3 = params["pivot"]
 	dock._commit_state_action(
 		"Create Radial Array",
 		"create_radial_array",
-		[brush_ids, cnt, int(params["axis_index"]), step, params["pivot"], rise]
+		[brush_ids, cnt, int(params["axis_index"]), step, pivot, rise]
+	)
+	_note_array(
+		dock,
+		"radial_array",
+		{"count": cnt, "axis": AXES[int(params["axis_index"])], "step": step, "rise": rise},
+		"Create Radial Array",
+		"create_radial_array",
+		func(s: Dictionary) -> Array:
+			return [
+				brush_ids,
+				int(s["count"]),
+				maxi(0, AXES.find(str(s["axis"]))),
+				float(s["step"]),
+				pivot,
+				float(s["rise"])
+			]
 	)
 	if is_zero_approx(rise):
 		dock._set_status("Created %d copies %.1f° apart" % [cnt, step])
@@ -744,7 +769,39 @@ static func _create_grid_array(
 	dock._commit_state_action(
 		"Create Grid Array", "create_grid_array", [brush_ids, counts, params["spacing"]]
 	)
+	_note_array(
+		dock,
+		"grid_array",
+		{
+			"count_x": counts.x,
+			"count_y": counts.y,
+			"count_z": counts.z,
+			"spacing": params["spacing"]
+		},
+		"Create Grid Array",
+		"create_grid_array",
+		func(s: Dictionary) -> Array:
+			return [
+				brush_ids,
+				Vector3i(int(s["count_x"]), int(s["count_y"]), int(s["count_z"])),
+				s["spacing"]
+			]
+	)
 	dock._set_status("Created %d copies" % total)
+
+
+## The axes by index, as the settings Adjust Last shows name them.
+const AXES := ["x", "y", "z"]
+
+
+## Say the array just made, for Adjust Last (#1867).
+static func _note_array(
+	dock: Object, id: String, settings: Dictionary, action: String, method: String, args: Callable
+) -> void:
+	if not dock.has_signal("command_ran"):
+		return
+	var recipe := {"action": action, "method": method, "args": args, "absolute_redo": false}
+	dock.command_ran.emit(id, settings, recipe)
 
 
 ## Draw a ghost of the copies the button would make, before it makes them.
