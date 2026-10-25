@@ -681,6 +681,10 @@ msgstr ""
 msgid "Close the open group, one level, and select it."
 msgstr ""
 
+#: addons/hammerforge/plugin_groups.gd
+msgid "Closed {group}"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_overlay_colors_panel.gd
 msgid "Colours"
 msgstr ""
@@ -791,6 +795,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Cordon 1"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Cordon {number}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -1329,6 +1337,12 @@ msgstr ""
 msgid "Filter text..."
 msgstr ""
 
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Filtered: {count} kind"
+msgid_plural "Filtered: {count} kinds"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Filters by name and by description, so \"navmesh\" and \"pathfinding\" both find the same switch."
 msgstr ""
@@ -1597,6 +1611,10 @@ msgstr ""
 msgid "Group the selection under a name, so a click picks it all. Whole groups go in as groups."
 msgstr ""
 
+#: addons/hammerforge/plugin_groups.gd
+msgid "Grouped as {group}"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Groups"
 msgstr ""
@@ -1635,6 +1653,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_material_browser.gd
 msgid "Hidden: for a face nobody will see, such as the underside of a floor or the back of a wall against another. It keeps its collision, and the bake leaves it out of the mesh and the lightmap.\n\nClick: make the selected faces Hidden\nDrag onto a face: make it Hidden\nA material applied to a Hidden face shows it again"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Hidden: {count}, not saved with the level"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_edit_actions.gd
@@ -1855,6 +1877,14 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Isolate Visgroups"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Isolated {names}"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Isolated, {count} hidden"
 msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
@@ -2499,6 +2529,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Open the structure builder: stairs, arches, domes and the rest."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd addons/hammerforge/plugin_groups.gd
+msgid "Open: {group}. Its members pick one at a time. Escape closes it"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -4557,6 +4591,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "x2"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "{action}: select a visgroup first"
 msgstr ""
 
 #: addons/hammerforge/plugin_face_sweep.gd
