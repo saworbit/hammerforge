@@ -2496,6 +2496,15 @@ func trim_run_from_faces(picked_faces: Dictionary) -> Dictionary:
 	return generator_system.trim_run_from_faces(picked_faces)
 
 
+## The run a structure of `type` that follows one would take along the picked
+## faces: a Trim Run's or a Sweep's (#1885). `{"run", "placement"}` or
+## `{"refused", "hint"}`.
+func run_from_faces(type: String, picked_faces: Dictionary) -> Dictionary:
+	if not generator_system:
+		return {"refused": "Structure: system unavailable", "hint": ""}
+	return generator_system.run_from_faces(type, picked_faces)
+
+
 ## Whether a Re-pick along `run` would put back what is there, so it records
 ## nothing (#1368).
 func generator_repick_changes_nothing(
