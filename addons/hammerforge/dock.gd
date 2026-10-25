@@ -58,6 +58,7 @@ const HFUIFactory = preload("ui/hf_ui_factory.gd")
 const HFEditorTheme = preload("ui/hf_editor_theme.gd")
 const HFShapeIcons = preload("ui/hf_shape_icons.gd")
 const HFUndoNav = preload("ui/hf_undo_nav.gd")
+const HFAccessibility = preload("hf_accessibility.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const HFTooltipText = preload("ui/hf_tooltip_text.gd")
 const HFSelectionInfo = preload("ui/hf_selection_info.gd")
@@ -312,6 +313,8 @@ var export_level_environment_check: CheckBox = null
 # -- Editor toggles (built programmatically in _build_manage_tab) --
 var commit_freeze: CheckBox = null
 var show_hud: CheckBox = null
+## How the interface moves, `HFAccessibility.Motion` (#1703).
+var ui_motion: OptionButton = null
 var power_user_overlays: CheckBox = null
 var size_at_cursor: CheckBox = null
 var show_selection_size: CheckBox = null
@@ -944,6 +947,8 @@ func _apply_user_prefs() -> void:
 	var hud_vis = _user_prefs.get_pref("show_hud", true)
 	if show_hud:
 		show_hud.button_pressed = bool(hud_vis)
+	if ui_motion:
+		ui_motion.selected = clampi(int(_user_prefs.get_pref(HFAccessibility.MOTION_PREF, 0)), 0, 2)
 	if power_user_overlays:
 		power_user_overlays.set_pressed_no_signal(
 			bool(_user_prefs.get_pref("power_user_overlays", false))
@@ -2675,6 +2680,11 @@ func _ready():
 	_setup_clear_selection_button()
 	_setup_view_filter_chip()
 	_setup_context_hints()
+	# Every button in reach of Tab and every control named for a screen reader
+	# (#1703).
+	if preset_rename_line:
+		preset_rename_line.accessibility_name = "Preset name"
+	HFAccessibility.attach(self)
 	set_process(true)
 
 
@@ -3597,6 +3607,11 @@ func _sync_snap_buttons(value: float) -> void:
 			if button:
 				button.button_pressed = false
 	syncing_snap = false
+
+
+func _on_ui_motion_selected(index: int) -> void:
+	HFAccessibility.motion = index as HFAccessibility.Motion
+	_save_user_pref(HFAccessibility.MOTION_PREF, index)
 
 
 func _on_show_hud_toggled(pressed: bool) -> void:

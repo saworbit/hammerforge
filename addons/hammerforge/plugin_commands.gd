@@ -40,6 +40,7 @@ const HFPluginCompare = preload("plugin_compare.gd")
 const HFPluginAdjustLast = preload("plugin_adjust_last.gd")
 const HFPluginCommandLine = preload("plugin_command_line.gd")
 const HFPluginGroups = preload("plugin_groups.gd")
+const HFPluginRun = preload("plugin_run.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -102,6 +103,9 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 	var last := last_command(plugin)
 	state["repeat_command"] = last
 	state["repeat_text"] = repeat_text(plugin, last) if last != "" else ""
+	# What Repeat Run would play (#1735).
+	state["run_text"] = HFPluginRun.run_text(plugin)
+	state["run_steps"] = HFPluginRun.steps_of(plugin).size()
 	var recent = plugin.get("recent_commands")
 	state["recent_commands"] = (recent as Array).duplicate() if recent is Array else []
 
@@ -302,6 +306,12 @@ static func execute(
 			plugin._ensure_brush_stamp().arm(plugin, root)
 		"repeat_last_command":
 			repeat_last(plugin, root)
+		"repeat_run":
+			HFPluginRun.play(plugin, root)
+		"clear_run":
+			HFPluginRun.clear(plugin)
+			if dock:
+				dock.show_toast("Run cleared: the next command starts a new one", 0)
 		"command_line":
 			HFPluginCommandLine.open(plugin)
 		"run_command_script":
@@ -784,6 +794,7 @@ static func execute(
 static func note_command(plugin: Object, action: String) -> void:
 	if action == "repeat_last_command" or not HFCommandRegistry.dispatches(action):
 		return
+	HFPluginRun.on_command(plugin, action)
 	if not ("recent_commands" in plugin and "last_repeatable_command" in plugin):
 		return
 	var recent: Array = plugin.recent_commands

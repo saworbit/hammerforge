@@ -275,37 +275,17 @@ static func duplicate_selected(
 ) -> bool:
 	var selection = plugin.get_editor_interface().get_selection()
 	var nodes = plugin._current_selection_nodes()
-	var brush_infos: Array = []
-	var entity_infos: Array = []
-	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
-	var shift: Vector3 = offset if offset is Vector3 else Vector3(step, 0.0, 0.0)
+	var shift: Vector3 = offset if offset is Vector3 else duplicate_shift(root)
 	if _duplicates_keep_links(plugin) and root.prefab_system:
 		var iid: String = root.prefab_system.whole_linked_copy(nodes)
 		if iid != "":
 			return _duplicate_linked_copy(plugin, root, iid, shift, selection)
-	for node in nodes:
-		if root.is_brush_node(node):
-			var info = root.build_duplicate_info(node, shift)
-			if not info.is_empty():
-				brush_infos.append(info)
-		elif root.is_entity_node(node):
-			var entity: Node = plugin._managed_entity_owner(root, node)
-			if entity:
-				var info: Dictionary = root.build_duplicate_entity_info(entity, shift)
-				if not info.is_empty():
-					entity_infos.append(info)
+	var infos := duplicate_infos(plugin, root, nodes, shift)
+	var brush_infos: Array = infos[0]
+	var entity_infos: Array = infos[1]
+	var groups: Dictionary = infos[2]
 	if brush_infos.is_empty() and entity_infos.is_empty():
 		return false
-	# Each copy an entity of its own, as a duplicated point entity already is: a
-	# duplicated door that kept its tie and its name joined the door it came from
-	# (#1161). Its wires are left as they are, as a point entity's are.
-	HFBrushEntity.fresh_identities(brush_infos, [], root.entity_system)
-	# A whole group copied is a new group of its own (#1723).
-	var groups: Dictionary = (
-		root.visgroup_system.regroup_copies(nodes, brush_infos, entity_infos)
-		if root.visgroup_system
-		else {}
-	)
 	var action_name := (
 		"Duplicate Brushes"
 		if entity_infos.is_empty()
@@ -322,19 +302,79 @@ static func duplicate_selected(
 		false,
 		Callable(plugin, "_record_history")
 	)
-	plugin.hf_selection.clear()
+	plugin.hf_selection = duplicates_made(root, brush_infos, entity_infos)
+	plugin._apply_hf_selection(selection)
+	return true
+
+
+## Where Duplicate puts a copy from its original: one grid step along +X.
+static func duplicate_shift(root: Node) -> Vector3:
+	return Vector3(root.grid_snap if root.grid_snap > 0.0 else 1.0, 0.0, 0.0)
+
+
+## The copies of `nodes` `shift` along, as `create_managed_duplicates()` takes
+## them: `[brush_infos, entity_infos, groups]`, `groups` the new groups a whole
+## group copied makes (#1723).
+static func duplicate_infos(plugin: Object, root: Node, nodes: Array, shift: Vector3) -> Array:
+	var brush_infos: Array = []
+	var entity_infos: Array = []
+	for node in nodes:
+		if root.is_brush_node(node):
+			var info = root.build_duplicate_info(node, shift)
+			if not info.is_empty():
+				brush_infos.append(info)
+		elif root.is_entity_node(node):
+			var entity: Node = plugin._managed_entity_owner(root, node)
+			if entity:
+				var info: Dictionary = root.build_duplicate_entity_info(entity, shift)
+				if not info.is_empty():
+					entity_infos.append(info)
+	# Each copy an entity of its own, as a duplicated point entity already is: a
+	# duplicated door that kept its tie and its name joined the door it came from
+	# (#1161). Its wires are left as they are, as a point entity's are.
+	if not brush_infos.is_empty():
+		HFBrushEntity.fresh_identities(brush_infos, [], root.entity_system)
+	# A whole group copied is a new group of its own (#1723).
+	var groups: Dictionary = (
+		root.visgroup_system.regroup_copies(nodes, brush_infos, entity_infos)
+		if root.visgroup_system
+		else {}
+	)
+	return [brush_infos, entity_infos, groups]
+
+
+## The copies `duplicate_infos()` described, once they are made.
+static func duplicates_made(root: Node, brush_infos: Array, entity_infos: Array) -> Array:
+	var made: Array = []
 	for info in brush_infos:
 		var duplicate_brush = root.find_brush_by_id(info.get("brush_id", ""))
 		if duplicate_brush:
-			plugin.hf_selection.append(duplicate_brush)
+			made.append(duplicate_brush)
 	for info in entity_infos:
 		var duplicate_entity: Node = root.entities_node.get_node_or_null(
 			NodePath(str(info.get("name", "")))
 		)
 		if duplicate_entity:
-			plugin.hf_selection.append(duplicate_entity)
-	plugin._apply_hf_selection(selection)
-	return true
+			made.append(duplicate_entity)
+	return made
+
+
+## Copies of `nodes` `shift` along, as Duplicate makes them, with no undo step:
+## for Repeat Run, which makes one step for all it plays (#1735). The copies, or
+## none.
+static func make_duplicates(plugin: Object, root: Node, nodes: Array, shift: Vector3) -> Array:
+	if _duplicates_keep_links(plugin) and root.prefab_system:
+		var iid: String = root.prefab_system.whole_linked_copy(nodes)
+		if iid != "":
+			var copy: String = root.prefab_system.duplicate_linked(iid, shift)
+			if copy == "":
+				return []
+			return root.prefab_system.pieces_of(root.prefab_system.get_instance(copy))
+	var infos := duplicate_infos(plugin, root, nodes, shift)
+	if (infos[0] as Array).is_empty() and (infos[1] as Array).is_empty():
+		return []
+	root.create_managed_duplicates(infos[0], infos[1], infos[2])
+	return duplicates_made(root, infos[0], infos[1])
 
 
 ## Whether Ctrl+D of a whole linked prefab copy makes another linked copy, as

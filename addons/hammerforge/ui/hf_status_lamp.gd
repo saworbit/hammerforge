@@ -19,6 +19,7 @@ var severity: int = HFStatusBoardType.Severity.UNKNOWN:
 		if severity == value:
 			return
 		severity = value
+		_name_state()
 		queue_redraw()
 
 ## Base control the editor theme is read from. Null falls back to dark-theme
@@ -32,6 +33,12 @@ var theme_source: Control = null:
 func _init() -> void:
 	custom_minimum_size = Vector2(DEFAULT_SIZE, DEFAULT_SIZE)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_name_state()
+
+
+## The lamp's state as its name, since the colour and the glyph are drawn (#1703).
+func _name_state() -> void:
+	accessibility_name = "Status: %s" % HFStatusBoardType.SEVERITY_LABELS.get(severity, "")
 
 
 ## The lamp colour for a severity, in the current editor theme.

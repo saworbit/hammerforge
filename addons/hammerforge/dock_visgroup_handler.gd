@@ -1039,6 +1039,16 @@ static func setup_cordon_ui(dock: Object) -> void:
 	max_row.add_child(dock.cordon_max_y)
 	max_row.add_child(dock.cordon_max_z)
 	content.add_child(max_row)
+	# Three spins under one label, so each says which it is (#1703).
+	for named in [
+		[dock.cordon_min_x, "Cordon min X"],
+		[dock.cordon_min_y, "Cordon min Y"],
+		[dock.cordon_min_z, "Cordon min Z"],
+		[dock.cordon_max_x, "Cordon max X"],
+		[dock.cordon_max_y, "Cordon max Y"],
+		[dock.cordon_max_z, "Cordon max Z"],
+	]:
+		(named[0] as Control).accessibility_name = named[1]
 
 	var selection_row = HFUIFactory.make_wrap_row()
 	dock.cordon_from_sel_btn = Button.new()

@@ -11,7 +11,10 @@ const HFPluginConsoleType = preload("plugin_console.gd")
 const HFPluginCommandLineType = preload("plugin_command_line.gd")
 const HFPluginMcpType = preload("plugin_mcp.gd")
 const HFPluginCompareType = preload("plugin_compare.gd")
+const HFAccessibilityType = preload("hf_accessibility.gd")
+const HFOverlayColorsType = preload("hf_overlay_colors.gd")
 const HFPluginAdjustLastType = preload("plugin_adjust_last.gd")
+const HFPluginRunType = preload("plugin_run.gd")
 const HFPluginCrashJournalType = preload("plugin_crash_journal.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
@@ -288,6 +291,13 @@ func _enter_tree():
 	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	_keymap = HFKeymap.load_or_default("user://hammerforge_keymap.json")
 	_user_prefs = HFUserPrefs.load_prefs()
+	# What the system asks of the interface: less motion, more contrast, less
+	# transparency (#1703).
+	HFAccessibilityType.motion = (
+		int(_user_prefs.get_pref(HFAccessibilityType.MOTION_PREF, 0)) as HFAccessibilityType.Motion
+	)
+	HFOverlayColorsType.less_transparency = HFAccessibilityType.wants_less_transparency()
+	HFOverlayColorsType.follow_system_contrast = HFAccessibilityType.wants_more_contrast()
 	# A new note is signed with the last author, across sessions (#1700).
 	DraftEntityType.last_note_author = str(_user_prefs.get_pref("note_author", ""))
 	# Each tool comes back with the settings it was last used with (#1406).
@@ -361,6 +371,13 @@ func _enter_tree():
 	_ensure_selection_readout().set_source(_selection_readout_source)
 	_selection_readout.set_show_size(bool(_user_prefs.get_pref("show_selection_size", false)))
 	HFPluginOverlays.apply_overlay_colors(self)
+	if (
+		HFOverlayColorsType.follow_system_contrast
+		and not HFOverlayColorsType.any_picked(_user_prefs)
+	):
+		HFConsoleLog.shared().info(
+			"Overlay colours start in High Contrast, as the system asks for more contrast", "ui"
+		)
 
 	HFPluginCrashJournalType.stage(self, "console")
 	HFPluginConsoleType.setup(self)
@@ -850,6 +867,7 @@ func _teardown_power_user_overlays() -> void:
 func _on_editor_selection_changed() -> void:
 	_ensure_selection_readout().queue_refresh()
 	HFPluginSelectionState.on_editor_selection_changed(self)
+	HFPluginRunType.on_selection_changed(self)
 
 
 static func should_handle_editor_object(object: Object) -> bool:
@@ -1774,6 +1792,19 @@ func _ungroup_selected(root: Node) -> bool:
 ## `HFPluginAdjustLast.note()`.
 func _note_last_run(id: String, settings: Dictionary, recipe: Dictionary) -> void:
 	HFPluginAdjustLastType.note(self, id, settings, recipe)
+	HFPluginRunType.note(self, id, settings)
+
+
+## Adjust Last made the last step again with `settings`, for the run's step for
+## it (#1735).
+func _note_run_adjusted(id: String, settings: Dictionary, version: int) -> void:
+	HFPluginRunType.adjusted(self, id, settings, version)
+
+
+## A drag of the gizmo moved `moved`, for Repeat Run (#1735). See
+## `HFPluginRun.note_moved()`.
+func _note_run_moved(moved: Array) -> void:
+	HFPluginRunType.note_moved(self, moved)
 
 
 ## Select every member of `group_name`, for a row of the dock's Groups list
@@ -1941,6 +1972,17 @@ static func hotkey_palette_action_requires_existing_root(action: String) -> bool
 ## Last Command runs again, and the commands run lately, newest first (#1694).
 var last_repeatable_command := ""
 var recent_commands: Array = []
+## The commands run since the selection last changed by hand, which Repeat Run
+## plays again (#1735): each `{id, settings, version}`. See `plugin_run.gd`.
+var run_steps: Array = []
+## The selection the run's last step left, by instance id, and whether one made
+## by hand since has the next command start a new run.
+var run_selection: Array = []
+var run_restart := false
+## The level the run was made in.
+var run_root := 0
+## Set while Repeat Run plays, so what it does is not taken into the run.
+var playing_run := false
 
 
 func _on_hotkey_palette_action(action: String) -> void:
@@ -1996,6 +2038,7 @@ func _on_coach_mark_dismissed(_tool_key: String, _dont_show: bool) -> void:
 
 func _on_undo_redo_version_changed() -> void:
 	HFPluginUndoEvents.on_version_changed(self)
+	HFPluginRunType.on_version_changed(self)
 	# A Godot undo moves a brush with no signal until the brush tracker tags it,
 	# and the first reconcile of a level the tracker was not watching tags nothing.
 	_ensure_face_selection_overlay().queue_refresh()

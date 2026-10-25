@@ -1,0 +1,1 @@
+- Repeat Run plays the commands, moves and turns made since the selection last changed by hand again, as one undo step. (issue [#1735](https://github.com/saworbit/hammerforge/issues/1735))

@@ -281,6 +281,27 @@ const COMMANDS := [
 		"palette": true
 	},
 	{
+		"id": "repeat_run",
+		"label": "Repeat Run",
+		"help":
+		"Play the commands, moves and turns made since the selection last changed by hand again, on the current selection, as one undo step.",
+		"aliases": ["repeat sequence", "repeat steps", "play again"],
+		"category": "Workflow",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "clear_run",
+		"label": "Clear Run",
+		"help": "Forget the run Repeat Run plays, so the next command starts a new one.",
+		"aliases": ["forget run", "reset run"],
+		"category": "Workflow",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "command_line",
 		"label": "Command Line",
 		"help": "Type a command and its values, such as hollow 0.125, on a line over the viewport.",

@@ -257,12 +257,19 @@ func refresh_theme_colors() -> void:
 
 
 func update_state(state: Dictionary) -> void:
-	var lifted := [_state.get("repeat_text", ""), _state.get("recent_commands", [])]
+	var lifted := _lifted(_state)
 	_state = state
 	_apply_gray_out()
 	var searching := _search_field != null and not _search_field.text.strip_edges().is_empty()
-	if not searching and lifted != [state.get("repeat_text", ""), state.get("recent_commands", [])]:
+	if not searching and lifted != _lifted(state):
 		_arrange_unsearched()
+
+
+## What the list with nothing searched puts on top, to see when it changes.
+static func _lifted(state: Dictionary) -> Array:
+	return [
+		state.get("repeat_text", ""), state.get("run_text", ""), state.get("recent_commands", [])
+	]
 
 
 func _apply_gray_out() -> void:
@@ -365,8 +372,9 @@ func _on_search_changed(text: String) -> void:
 
 
 ## The list with nothing searched: Repeat on top when there is something to
-## repeat, as "Repeat: Hollow", then the commands run lately, newest first, then
-## every command by category (#1694).
+## repeat, as "Repeat: Hollow", and Repeat Run under it with what the run holds
+## (#1735), then the commands run lately, newest first, then every command by
+## category (#1694).
 func _arrange_unsearched() -> void:
 	if _recent_header == null:
 		return
@@ -378,6 +386,15 @@ func _arrange_unsearched() -> void:
 		if repeat_text != "":
 			repeat["button"].text = "Repeat: %s" % repeat_text
 			top.append(repeat)
+	# What Repeat Run plays, so it is known before it is pressed (#1735). A run of
+	# one step is what Repeat already offers.
+	var run = _entry_of("repeat_run")
+	var run_text := str(_state.get("run_text", ""))
+	if run != null:
+		run["button"].text = run["label"]
+		if run_text != "" and int(_state.get("run_steps", 0)) > 1:
+			run["button"].text = "Repeat Run: %s" % run_text
+			top.append(run)
 	var recent: Array = []
 	for action in _state.get("recent_commands", []):
 		var entry = _entry_of(str(action))

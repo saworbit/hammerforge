@@ -37,6 +37,9 @@ func _init() -> void:
 	visible = false
 	mouse_filter = MOUSE_FILTER_IGNORE
 	z_index = 100
+	# Drawn in `_draw()`, so a screen reader is told its items (#1703).
+	accessibility_name = "Radial menu"
+	accessibility_description = ", ".join(SEGMENTS.map(func(s): return s["label"]))
 
 
 func show_at(center_pos: Vector2) -> void:
@@ -80,6 +83,7 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion:
 		_hovered_segment = _segment_at_position(event.position)
+		_name_hovered()
 		queue_redraw()
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
@@ -94,6 +98,15 @@ func _gui_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ESCAPE:
 			hide_menu()
+
+
+## The item under the pointer as the menu's name, so a screen reader says which
+## one a release would pick.
+func _name_hovered() -> void:
+	if _hovered_segment >= 0 and _hovered_segment < SEGMENTS.size():
+		accessibility_name = "Radial menu: %s" % SEGMENTS[_hovered_segment]["label"]
+	else:
+		accessibility_name = "Radial menu"
 
 
 func _segment_at_position(pos: Vector2) -> int:
