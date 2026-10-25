@@ -118,6 +118,7 @@ const GODOT_EDITOR := "godot_editor"
 const HOLDS := {
 	"snap_invert_hold": "Invert Grid Snap (hold)",
 	"snap_vertex_hold": "Snap to Vertices (hold)",
+	"sweep_select_hold": "Sweep Select (hold)",
 }
 
 ## Keys the input router takes ahead of every binding, and no binding moves: the
@@ -449,6 +450,9 @@ static func _default_bindings() -> Dictionary:
 		# handle drag, and in a draw it means height, which these do not reach.
 		"snap_invert_hold": {"keycode": KEY_CTRL},
 		"snap_vertex_hold": {"keycode": KEY_ALT},
+		# Held at a Select tool press to sweep select (#1886). Ctrl and Alt are the
+		# holds above, and A is no command of HammerForge's or of Godot's 3D view.
+		"sweep_select_hold": {"keycode": KEY_A},
 	}
 
 

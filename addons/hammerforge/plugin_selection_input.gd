@@ -39,6 +39,17 @@ static func handle_press(
 			plugin._paint_brush_with_undo(root, painted, active_material)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
+	# A press with the sweep key held sweeps, and has the pointer to its release:
+	# Godot's own selection and marquee never see it (#1886).
+	var keymap = plugin.get("_keymap")
+	if keymap and keymap.held("sweep_select_hold", event):
+		plugin._cancel_selection_gesture()
+		plugin.hf_selection = plugin._current_selection_nodes()
+		plugin._sweep_select.begin(face_select, plugin.hf_selection, root.face_selection)
+		plugin._sweep_select.sweep(plugin, root, camera, position)
+		root.clear_hover()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+
 	var shift_selection := event.shift_pressed or Input.is_key_pressed(KEY_SHIFT)
 	var toggle := (
 		face_select
@@ -77,6 +88,42 @@ static func handle_press(
 	)
 	root.clear_hover()
 	return EditorPlugin.AFTER_GUI_INPUT_CUSTOM
+
+
+## A sweep select's motion, release, right click and Escape while it has the
+## pointer (#1886). SELECT_INPUT_CONTINUE for anything else.
+static func handle_sweep(
+	plugin: Object, event: InputEvent, root: Node, camera: Camera3D, position: Vector2
+) -> int:
+	var sweep = plugin.get("_sweep_select")
+	if sweep == null or not sweep.active:
+		return SELECT_INPUT_CONTINUE
+	if event is InputEventMouseMotion:
+		if (event as InputEventMouseMotion).button_mask & MOUSE_BUTTON_MASK_LEFT == 0:
+			# Let go somewhere the release was not seen.
+			sweep.finish()
+			return SELECT_INPUT_CONTINUE
+		sweep.sweep(plugin, root, camera, position)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event is InputEventKey:
+		var key := event as InputEventKey
+		if key.pressed and key.keycode == KEY_ESCAPE:
+			sweep.cancel(plugin, root)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		return SELECT_INPUT_CONTINUE
+	if not (event is InputEventMouseButton):
+		return SELECT_INPUT_CONTINUE
+	var button := event as InputEventMouseButton
+	if button.button_index == MOUSE_BUTTON_RIGHT and button.pressed:
+		sweep.cancel(plugin, root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if button.button_index == MOUSE_BUTTON_LEFT and not button.pressed:
+		if button.canceled:
+			sweep.cancel(plugin, root)
+		else:
+			sweep.finish()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	return SELECT_INPUT_CONTINUE
 
 
 static func custom_release_result(face_selection: bool) -> int:
