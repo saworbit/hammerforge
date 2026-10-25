@@ -879,6 +879,23 @@ demand from the Actions tab, for the checks too slow for every pull request
   made again on a fresh level (#1646). The pull request suite has 16 runs of 40 in
   `tests/test_mcp_random_runs.gd`. A failing seed writes its calls, one JSON line
   each, to `user://hf_random_runs/seed_<n>.jsonl`.
+  `test_action_matrix_long.gd` runs every brush action on every brush and every
+  face action on every face of the levels in `tests/levels/`, and of a level it
+  builds itself with what those lack, turned and tilted brushes, wedges, prisms,
+  cylinders, a slanted cut, a brush entity and a structure
+  (`tests/support/matrix_variety_level.gd`) (#1648): hollow,
+  clip, carve, merge with a neighbour, flip, move to floor, reset rotation and
+  mirror copy; extrude, clip to face, material, Wrap Texture and justify. A try
+  passes when it changes the level with no script error, leaves the brushes it
+  touched closed, convex and facing out, and one undo gives back the level. It
+  is held to `tests/goldens/action_matrix.txt`, one line per brush and face,
+  which only ratchets: a try doing worse than its line fails, naming the item,
+  and one doing better says how to take it in. `HF_MATRIX_BLESS=1` writes the
+  baseline from every try, and says why each failing one failed in
+  `user://action_matrix_failures.txt`; `HF_MATRIX_ONLY=variety` runs the levels it
+  names alone, and a blessing then keeps the other levels' lines. The pull request suite runs one try in
+  40, the same ones every time, in `tests/test_action_matrix.gd`. The harness
+  is `tests/support/action_matrix_case.gd`.
 
 Run the slow tests locally with the same flags:
 ```
