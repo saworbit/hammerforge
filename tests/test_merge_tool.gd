@@ -700,23 +700,32 @@ func test_a_cylindrical_face_shows_the_same_texture_after_the_merge():
 		assert_almost_eq(now[i], shown[i], Vector2(0.001, 0.001), "the texture at corner %d" % i)
 
 
-## The two tops are one face now, with corners the sculpt was not laid on, so the
-## sculpt cannot follow, and the merge says so rather than dropping it quietly.
-func test_a_sculpt_on_a_face_that_grew_is_dropped_and_said_so():
+## The two tops are one face now, with corners the sculpt was not laid on. It
+## used to be dropped with a warning; the merged top now takes one sculpt over
+## both, a power finer, with b1's half as it was and b2's half flat (#1906).
+func test_a_sculpt_on_a_face_that_grew_goes_over_the_whole_merged_face():
 	HFLog.begin_test_capture(["could not keep"])
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	b1.rebuild_preview()
 	_make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	var sculpt := HFDisplacementData.new()
 	sculpt.init_flat(2)
+	sculpt.set_distance(2, 2, 4.0)
 	_face_towards(b1, Vector3.UP).displacement = sculpt
 	assert_true(sys.merge_brushes_by_ids(["b1", "b2"]).ok)
 	var merged = root.draft_brushes_node.get_children()[0] as DraftBrush
-	assert_null(_face_towards(merged, Vector3.UP).displacement)
-	var warnings := HFLog.get_captured_warnings()
-	assert_eq(warnings.size(), 1, "one warning")
-	if warnings.size() == 1:
-		assert_string_contains(warnings[0], "Merge could not keep 1 sculpt(s)")
+	var kept: HFDisplacementData = _face_towards(merged, Vector3.UP).displacement
+	assert_not_null(kept, "the merged top is sculpted")
+	assert_eq(kept.power, 3, "a power finer")
+	var heights: Array = []
+	for i in kept.distances.size():
+		if not is_zero_approx(kept.distances[i]):
+			heights.append(snappedf(kept.distances[i], 0.0001))
+	heights.sort()
+	# The finer grid has a point halfway to it on each side along the axis it
+	# doubled, at half its height, and nothing else is raised.
+	assert_eq(heights, [2.0, 2.0, 4.0], "b1's raised point, as it was")
+	assert_eq(HFLog.get_captured_warnings().size(), 0, "nothing lost, so nothing said")
 
 
 func test_undo_of_a_merge_puts_both_boxes_back():
