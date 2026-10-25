@@ -23,6 +23,8 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Compare with File (`compare_level`) | none | a level | yes | Show what changed since another .hflevel, outlined in the viewport and listed in the Console. |
 | End Compare (`end_compare`) | none | - | yes | Take a compare's outlines off the viewport. |
 | Repeat Last Command (`repeat_last_command`) | none | a level | yes | Run the last command again on the current selection, with the same settings. |
+| Repeat Run (`repeat_run`) | none | a level | yes | Play the commands, moves and turns made since the selection last changed by hand again, on the current selection, as one undo step. |
+| Clear Run (`clear_run`) | none | a level | yes | Forget the run Repeat Run plays, so the next command starts a new one. |
 | Command Line (`command_line`) | Shift+; | - | yes | Type a command and its values, such as hollow 0.125, on a line over the viewport. |
 | Run Command Script (`run_command_script`) | none | a level | yes | Run a text file of commands, one a line, each its own undo step. |
 | Convert Entity Definitions to JSON (`convert_entity_definitions`) | none | a level | yes | Write the entity classes the level reads from an FGD as an entities.json beside it, to edit them in that form. |
