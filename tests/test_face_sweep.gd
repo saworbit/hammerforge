@@ -161,30 +161,91 @@ func test_a_bend_too_tight_for_the_face_folds_and_makes_nothing():
 	await rig.leave_level(level)
 
 
-func test_the_pieces_carry_the_face_s_material_in_one_group_and_one_step():
+## Each side of a piece takes the look of the box's face that meets the swept face
+## along that edge, and the ends the swept face's own (#1899). Every face used to
+## take the swept face's material, so a wall's brick sides came out in the end
+## face's.
+func test_the_pieces_carry_each_side_s_material_in_one_group_and_one_step():
 	if rig.plugin == null:
 		fail_test(rig.error())
 		return
 	var made: Array = await _picked_face()
 	var level = made[0]
 	var box = made[1]
-	box.faces[made[2]].material_idx = 2
+	var slot_of := {
+		Vector3.RIGHT: 2, Vector3.UP: 3, Vector3.DOWN: 4, Vector3.BACK: 5, Vector3.FORWARD: 6
+	}
+	for face in box.faces:
+		for normal in slot_of:
+			if (face.normal as Vector3).is_equal_approx(normal):
+				face.material_idx = slot_of[normal]
 	var before: Array = level._iter_managed_brush_nodes()
 	var steps: int = rig.undo().step_count()
-	assert_true(HFPluginFaceSweep.run(rig.plugin, level, _values({"segments": 4})))
+	var straight := {"path": HFFaceSweep.Path.STRAIGHT, "segments": 4}
+	assert_true(HFPluginFaceSweep.run(rig.plugin, level, _values(straight)))
 	var pieces: Array = level._iter_managed_brush_nodes().filter(func(b): return not before.has(b))
 	assert_eq(pieces.size(), 4)
 	var groups := {}
 	for piece in pieces:
 		groups[str(piece.get_meta("group_id", ""))] = true
 		for face in piece.faces:
-			assert_eq(face.material_idx, 2, "the face's material")
+			var facing: Vector3 = (piece.global_basis * face.normal).normalized()
+			var wanted := 2
+			for normal in [Vector3.UP, Vector3.DOWN, Vector3.BACK, Vector3.FORWARD]:
+				if facing.is_equal_approx(normal):
+					wanted = slot_of[normal]
+			assert_eq(face.material_idx, wanted, "the face facing %s" % facing)
 	assert_eq(groups.size(), 1, "one group")
 	assert_false(groups.has(""), "and it is a group")
 	assert_eq(rig.undo().step_count(), steps + 1, "one step")
 	rig.undo().press_undo()
 	await rig.frame()
 	assert_eq(level._iter_managed_brush_nodes().size(), before.size(), "one Ctrl+Z takes it back")
+	await rig.leave_level(level)
+
+
+## An End scale of 0.5 ends the run at half the width and height, each piece
+## convex and meeting the next face to face (#1899).
+func test_a_straight_run_with_end_scale_half_ends_at_half_size():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _picked_face()
+	var level = made[0]
+	var cut := HFPluginFaceSweep.section(level)
+	var values := _values(
+		{
+			"path": HFFaceSweep.Path.STRAIGHT,
+			"length": 4.0,
+			"segments": 4,
+			"end_width": 0.5,
+			"end_height": 0.5,
+		}
+	)
+	var plan := HFPluginFaceSweep.plan(cut, values)
+	assert_eq(int(plan["folded"]), 0)
+	var pieces: Array = plan["pieces"]
+	assert_eq(pieces.size(), 4)
+	for i in pieces.size():
+		var faces: Array = pieces[i]["faces"]
+		assert_true(HFSolidMeasure.is_convex(faces), "piece %d is convex" % i)
+		if i > 0:
+			assert_true(
+				_share_a_face(pieces[i - 1]["faces"], faces), "piece %d meets the one before" % i
+			)
+	var far_cap: PackedVector3Array = PackedVector3Array()
+	for face in pieces[3]["faces"] as Array:
+		if (face.normal as Vector3).is_equal_approx(Vector3.RIGHT):
+			far_cap = face.local_verts
+	assert_eq(far_cap.size(), 4, "the far end is a square")
+	var low := Vector3(INF, INF, INF)
+	var high := -low
+	for corner in far_cap:
+		low = low.min(corner)
+		high = high.max(corner)
+	assert_almost_eq(high.x, 4.5, 0.0001, "4 m along")
+	assert_almost_eq(high.y - low.y, 0.5, 0.0001, "half as tall")
+	assert_almost_eq(high.z - low.z, 0.5, 0.0001, "and half as wide")
 	await rig.leave_level(level)
 
 
