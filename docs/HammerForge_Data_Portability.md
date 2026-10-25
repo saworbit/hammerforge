@@ -130,7 +130,7 @@ What *is* a defect is one level holding two brushes with the same id. The brush 
 - Missing `io_outputs` key on load = no connections (backward-compatible).
 
 ### Brush Entity Class Serialization
-- Brush entity class (any class `entities.json` marks `is_brush_entity`: `func_detail`, `func_wall`, `func_clip`, `func_door`, `func_button`, `door_basic`, `trigger_once` and `trigger_multiple`) is stored in the `brush_entity_class` key of each brush record.
+- Brush entity class (any class `entities.json` marks `is_brush_entity`: `func_detail`, `func_wall`, `func_clip`, `func_physbox`, `func_illusionary`, `func_door`, `func_button`, `door_basic`, `trigger_once` and `trigger_multiple`) is stored in the `brush_entity_class` key of each brush record.
 - `func_detail` brushes bake into one mesh per material and one collision body, the way the structural path groups and split by Cast Shadows and Lightmap Scale as it splits, with a convex hull per brush so a pile of clutter still collides as the separate solids it is. A detail brush that carries an entity name, I/O outputs or a node name you typed keeps a node of its own instead, because that is the address the runtime finds it by. The `Box_3` style name every brush starts with does not count, whatever shape it names, so a detail brush that was bevelled or vertex-edited still groups (#1144).
 - Missing key on load = no entity class (standard structural brush).
 
