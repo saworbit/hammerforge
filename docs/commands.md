@@ -166,6 +166,9 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Undo (`undo`) | none | - | no | Take back the last change. |
 | Redo (`redo`) | none | - | no | Put back the last change undone. |
 | Set Grid Snap (`set_grid_snap`) | none | - | no | Set the grid step to a value. |
+| Track Point for Guides (`track_snap_point`) | none | a level | yes | Run guides from the snap point under the pointer, or stop. Resting the pointer there does the same. |
+| Point Filter: X and Z from Here (`take_xz_for_next_pick`) | none | a level | yes | The next pick takes X and Z from the snap point under the pointer, and its height from where it lands. |
+| Clear Guides (`clear_guides`) | none | a level | yes | Stop every guide from tracked points. |
 | Next Pick: Vertex Only (`snap_next_vertex`) | none | a level | yes | The next click snaps only to a vertex, whatever snaps are on, then they all return. |
 | Next Pick: Midpoint Only (`snap_next_midpoint`) | none | a level | yes | The next click snaps only to the middle of an edge, then every snap that was on returns. |
 | Next Pick: Centre Only (`snap_next_centre`) | none | a level | yes | The next click snaps only to a brush's centre, then every snap that was on returns. |

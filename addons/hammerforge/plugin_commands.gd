@@ -745,6 +745,12 @@ static func execute(
 					plugin._activate_external_tool(tool_id, plugin.active_root)
 		"snap_next_vertex", "snap_next_midpoint", "snap_next_centre", "snap_next_perpendicular", "snap_next_grid":
 			HFPluginSnapFeedbackType.limit(plugin, action)
+		"track_snap_point":
+			HFPluginSnapFeedbackType.track_here(plugin)
+		"take_xz_for_next_pick":
+			HFPluginSnapFeedbackType.take_xz_here(plugin)
+		"clear_guides":
+			HFPluginSnapFeedbackType.clear(plugin)
 		"cancel_drag":
 			if root:
 				root.cancel_drag()

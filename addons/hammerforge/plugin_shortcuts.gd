@@ -16,6 +16,7 @@ const SHORTCUT_APPLY := -3
 @warning_ignore_start("shadowed_global_identifier")
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
 const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
+const HFPluginSnapFeedbackType = preload("plugin_snap_feedback.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 const HFPluginGroupsType = preload("plugin_groups.gd")
 const HFPluginVertexOpsType = preload("plugin_vertex_ops.gd")
@@ -201,6 +202,9 @@ static func cancel_escape_step(plugin: Object, root: Node) -> bool:
 			plugin.dock.show_toast("Texture Picker cancelled", 1)
 		return true
 	if HFPluginUVWrap.end(plugin, true):
+		return true
+	# A distance typed along a guide, or X and Z taken for the next pick (#1692).
+	if HFPluginSnapFeedbackType.cancel(plugin):
 		return true
 	var stamp = plugin.get("_brush_stamp")
 	if stamp != null and stamp.disarm():
