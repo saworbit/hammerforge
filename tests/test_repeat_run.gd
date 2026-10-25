@@ -359,3 +359,65 @@ func test_a_radial_array_plays_round_the_next_brush():
 	assert_eq(rig.undo().scene_history.get_current_action_name(), "Repeat Run")
 	dock.dup_mode_opt.selected = 0
 	await rig.leave_level(level)
+
+
+## Clip to Face Plane says which face it cut along, so the Adjust panel shows it
+## and Repeat Run cuts the next brush along the same plane (#1896).
+func test_clip_to_face_plane_shows_in_the_adjust_panel_and_plays_on_the_next_brush():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await _level()
+	var a = rig.box(level, "a", Vector3.ZERO, Vector3(64, 64, 64))
+	var b = rig.box(level, "b", Vector3(0, 0, 200), Vector3(64, 64, 64))
+	rig.box(level, "reference", Vector3(0, 200, 0), Vector3(32, 32, 32))
+	await _select([a])
+	level.face_selection = {"reference": [0]}
+	rig.forward(PluginRig.key_for("clip_to_face"))
+	assert_eq(_brushes(level).size(), 4, "a cut in two")
+	assert_eq(str(rig.plugin.last_run.get("id")), "clip_to_face", "Adjust Last has it")
+	var panel = rig.plugin._adjust_last_panel
+	assert_eq((panel.control_for("plane_brush_id") as Label).text, "reference", "and shows it")
+	assert_eq(_text(), "Clip to Face Plane", "the run holds it")
+	await _select([b])
+	var steps: int = rig.undo().step_count()
+	_run("repeat_run")
+	await rig.frame()
+	assert_eq(_brushes(level).size(), 5, "b cut along the same plane")
+	assert_null(level.find_brush_by_id("b"), "into pieces")
+	assert_eq(rig.undo().step_count(), steps + 1, "one undo step")
+	await rig.leave_level(level)
+
+
+## Replace Material says what it swapped, as the bridge names materials, so the
+## Adjust panel shows it and Repeat Run swaps it on the next selection (#1896).
+func test_replace_material_shows_in_the_adjust_panel_and_plays_on_the_next_brush():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await _level()
+	level.add_prototype_materials()
+	var a = rig.box(level, "a", Vector3.ZERO)
+	var b = rig.box(level, "b", Vector3(8, 0, 0))
+	for brush in [a, b]:
+		for face in brush.faces:
+			face.material_idx = 1
+	await _select([a])
+	rig.plugin.dock._on_replace_material_requested(1, 2, {"brush_ids": ["a"]}, false)
+	await rig.frame()
+	assert_eq(level.find_brush_by_id("a").faces[0].material_idx, 2, "a's faces swapped")
+	assert_eq(level.find_brush_by_id("b").faces[0].material_idx, 1, "b's not yet")
+	var run: Dictionary = rig.plugin.last_run
+	assert_eq(str(run.get("id")), "replace_material", "Adjust Last has it")
+	var names: Array = level.get_material_names()
+	assert_eq(run["settings"]["from"], names[1], "named as the bridge names it")
+	var panel = rig.plugin._adjust_last_panel
+	assert_eq((panel.control_for("to") as Label).text, str(names[2]), "and shows it")
+	await _select([b])
+	var steps: int = rig.undo().step_count()
+	_run("repeat_run")
+	await rig.frame()
+	for face in level.find_brush_by_id("b").faces:
+		assert_eq(face.material_idx, 2, "b's faces swapped by the run")
+	assert_eq(rig.undo().step_count(), steps + 1, "one undo step")
+	await rig.leave_level(level)

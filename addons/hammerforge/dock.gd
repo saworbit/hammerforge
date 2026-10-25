@@ -6010,6 +6010,42 @@ func _on_replace_material_requested(
 		0
 	)
 	_refresh_uv_canvas()
+	# What it swapped, as the bridge's replace_material takes it, so the Adjust
+	# panel shows it and Repeat Run swaps it on the next selection (#1896).
+	var settings := {
+		"from": _material_param(from_index),
+		"to": _material_param(to_index),
+		"scope": "shown" if bool(scope.get("visible_only", false)) else "level",
+		"reset_uv": reset_uv,
+	}
+	var again := func(s: Dictionary) -> Array:
+		var kept := scope.duplicate(true)
+		kept.erase("visible_only")
+		if str(s.get("scope", "level")) in ["shown", "1"]:
+			kept["visible_only"] = true
+		return [from_index, to_index, kept, bool(s.get("reset_uv", false))]
+	var recipe := {
+		"action": "Replace Material",
+		"method": "replace_material",
+		"args": again,
+		"scope_ids": found.keys(),
+	}
+	command_ran.emit("replace_material", settings, recipe)
+
+
+## A palette slot as the bridge names a material: by its name when no other slot
+## has that name, or as `palette:N` (`HFMcpTools._resolve_material()`).
+func _material_param(slot: int) -> String:
+	var names: Array = level_root.get_material_names() if level_root else []
+	var own := str(names[slot]).to_lower() if slot >= 0 and slot < names.size() else ""
+	if own != "":
+		var same := 0
+		for other in names:
+			if str(other).to_lower() == own:
+				same += 1
+		if same == 1:
+			return str(names[slot])
+	return "palette:%d" % slot
 
 
 func _get_selected_brush_ids() -> Array:

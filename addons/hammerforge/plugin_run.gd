@@ -47,6 +47,8 @@ const PLAYS_WITH_SETTINGS := [
 	"duplicate_array",
 	"radial_array",
 	"grid_array",
+	"clip_to_face",
+	"replace_material",
 ]
 const AXES := ["x", "y", "z"]
 ## How near a turn of the gizmo has to be to a world axis to be kept as a turn
@@ -486,6 +488,10 @@ static func step_text(step: Dictionary) -> String:
 	var id := str(step["id"])
 	var settings: Dictionary = step["settings"]
 	match id:
+		"replace_material":
+			return (
+				"Replace %s with %s" % [str(settings.get("from", "")), str(settings.get("to", ""))]
+			)
 		"nudge":
 			return "Move %s" % _offset_text(settings.get("offset", Vector3.ZERO))
 		"rotate_ccw", "rotate_cw":
