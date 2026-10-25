@@ -22,6 +22,12 @@ const KIND_CENTRE := "centre"
 const KIND_PERPENDICULAR := "perpendicular"
 ## The snap line the Measure tool sets with Align to this.
 const KIND_LINE := "line"
+## On a guide from a point the mapper rested on, and where two guides cross
+## (#1692).
+const KIND_GUIDE := "guide"
+const KIND_GUIDE_CROSS := "guides"
+## Where a guide meets a brush's edge.
+const KIND_GUIDE_EDGE := "guide edge"
 ## What the viewport calls each kind beside its marker.
 const KIND_LABELS := {
 	KIND_GRID: "Grid",
@@ -30,7 +36,24 @@ const KIND_LABELS := {
 	KIND_CENTRE: "Centre",
 	KIND_PERPENDICULAR: "Perpendicular",
 	KIND_LINE: "Line",
+	KIND_GUIDE: "Guide",
+	KIND_GUIDE_CROSS: "Guides",
+	KIND_GUIDE_EDGE: "Guide on edge",
 }
+## How many points guides run from at once. A new one past this lets the oldest
+## go.
+const TRACK_MAX := 7
+## The kinds a point can be tracked from: geometry, not the grid, which is
+## everywhere, nor a guide.
+const TRACKABLE := [KIND_VERTEX, KIND_MIDPOINT, KIND_CENTRE, KIND_PERPENDICULAR]
+## How much nearer than it is a guide counts, and a crossing more so, so a guide
+## in reach beats the grid and a crossing beats a guide (#1692).
+const GUIDE_WEIGHT := 0.5
+const EDGE_WEIGHT := 0.35
+const CROSS_WEIGHT := 0.25
+const AXIS_NAMES := ["X", "Y", "Z"]
+## Closer than this to a guide is on it already.
+const GUIDE_EPSILON := 0.0001
 ## The kinds a one-pick limit can ask for, with the snap mode each one is.
 const LIMIT_MODES := {
 	KIND_GRID: SnapMode.GRID,
@@ -155,6 +178,25 @@ var _step_anchor := Vector3.ZERO
 ## The one kind the next pick may take, or "" for the running modes.
 var _only_kind := ""
 
+## The points guides run from, oldest first, each `{point, kind}` (#1692). A
+## point is tracked by resting on it, and let go by resting on it again.
+var tracked: Array = []
+## Whether guides are offered at all. The `snap_tracking` preference sets it.
+var tracking := true
+## The point a typed distance put on the shown guide, for the next pick, or null.
+var _typed: Variant = null
+## The point X and Z are taken from for the next pick, or null: a point built from
+## two others, in plan from one and at the height of another.
+var _filter_xz: Variant = null
+## The point the pointer last rested on, and whether that rest has been counted,
+## so one rest toggles a point once. `rest_serial` tells a timer that started for
+## an earlier rest it is too late.
+var rest_point: Variant = null
+var rest_done := false
+var rest_serial := 0
+## A distance being typed along the shown guide, before Enter.
+var guide_text := ""
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
@@ -221,6 +263,18 @@ func _snap(point: Vector3, step: float, exclude_ids: Array) -> Vector3:
 	var choices := _choices(point, step, exclude_ids)
 	last_choices = choices
 	var pick := _pick_from(choices, point)
+	# A typed distance along a guide stands for the next pick, wherever the pointer
+	# is; X and Z taken from a point stand in for the pick's own (#1692).
+	if _typed is Vector3:
+		pick = {"point": _typed, "kind": KIND_GUIDE, "label": str(shown_pick.get("label", ""))}
+	elif _filter_xz is Vector3:
+		var from := pick.get("point", point) as Vector3
+		var held: Vector3 = _filter_xz
+		pick = {
+			"point": Vector3(held.x, from.y, held.z),
+			"kind": str(pick.get("kind", KIND_GRID)),
+			"label": "X and Z from the point taken, height from here",
+		}
 	if _pointer_event:
 		_picked_in_event = true
 		shown_pick = pick
@@ -266,8 +320,274 @@ func _choices(point: Vector3, step: float, exclude_ids: Array) -> Array:
 	var out: Array = []
 	for kind in nearest:
 		out.append({"point": nearest[kind][0], "kind": kind, "distance": nearest[kind][1]})
-	out.sort_custom(func(a, b): return a["distance"] < b["distance"])
+	if _only_kind == "":
+		out.append_array(guide_choices(point))
+	out.sort_custom(func(a, b): return _weighed(a) < _weighed(b))
 	return out
+
+
+## How near a choice counts when choices are ranked: a guide nearer than it is,
+## and a crossing nearer still.
+static func _weighed(choice: Dictionary) -> float:
+	match str(choice["kind"]):
+		KIND_GUIDE_CROSS:
+			return float(choice["distance"]) * CROSS_WEIGHT
+		KIND_GUIDE_EDGE:
+			return float(choice["distance"]) * EDGE_WEIGHT
+		KIND_GUIDE:
+			return float(choice["distance"]) * GUIDE_WEIGHT
+	return float(choice["distance"])
+
+
+# ---------------------------------------------------------------------------
+# Guides from tracked points (#1692)
+# ---------------------------------------------------------------------------
+
+
+## Track `point`, or let it go when it is tracked already. True when it is
+## tracked now. A point past `TRACK_MAX` lets the oldest go.
+func toggle_tracked(point: Vector3, kind: String) -> bool:
+	for i in tracked.size():
+		if (tracked[i]["point"] as Vector3).is_equal_approx(point):
+			tracked.remove_at(i)
+			revision += 1
+			return false
+	tracked.append({"point": point, "kind": kind})
+	while tracked.size() > TRACK_MAX:
+		tracked.pop_front()
+	revision += 1
+	return true
+
+
+## Let every tracked point go, and what was typed or taken for the next pick, as
+## leaving the tool does.
+func clear_tracked() -> void:
+	if tracked.is_empty() and _typed == null and _filter_xz == null:
+		return
+	tracked.clear()
+	_typed = null
+	_filter_xz = null
+	rest_point = null
+	guide_text = ""
+	revision += 1
+
+
+## The nearest point on a guide within reach of `point`, and where two guides
+## cross within reach, as choices. A guide is a tracked point's coordinate along
+## one world axis, held: a point on it is level with the tracked one that way,
+## and runs free along the working plane. So a ledge's corner above guides a
+## platform's edge on the floor under it. A crossing holds two coordinates, from
+## one tracked point or two. Each choice carries a `label` saying where it is
+## from, and a guide its `source`, the tracked point brought onto the guide, and
+## the `axis` it runs along, for a typed distance.
+func guide_choices(point: Vector3) -> Array:
+	var out: Array = []
+	if not tracking or tracked.is_empty():
+		return out
+	var best_guide := {}
+	var best_cross := {}
+	# Within reach of a tracked point its guides stand aside, so the point itself
+	# shows, to be let go of by resting on it again.
+	var near := {}
+	for i in tracked.size():
+		near[i] = point.distance_to(tracked[i]["point"]) < snap_threshold
+	for i in tracked.size():
+		if near[i]:
+			continue
+		var tracked_point: Vector3 = tracked[i]["point"]
+		for held in 3:
+			var on := point
+			on[held] = tracked_point[held]
+			var d := absf(point[held] - tracked_point[held])
+			# A guide the point is on already moves nothing: on the floor, every
+			# point on the floor is level with every other.
+			if d < GUIDE_EPSILON or d >= snap_threshold:
+				continue
+			if not best_guide.is_empty() and d >= best_guide["distance"]:
+				continue
+			var along := _along_axis(held, tracked_point, on)
+			var source := on
+			source[along] = tracked_point[along]
+			best_guide = {
+				"point": on,
+				"kind": KIND_GUIDE,
+				"distance": d,
+				"source": source,
+				"source_kind": tracked[i]["kind"],
+				"axis": along,
+				"label": guide_label(tracked[i]["kind"], source, on, along),
+			}
+	# Two coordinates held, from one tracked point or two, the third the
+	# pointer's own: where two guides cross.
+	for i in tracked.size():
+		for j in tracked.size():
+			if near[i] or near[j]:
+				continue
+			var a: Vector3 = tracked[i]["point"]
+			var b: Vector3 = tracked[j]["point"]
+			for axis_a in 3:
+				for axis_b in 3:
+					if axis_a == axis_b:
+						continue
+					# A crossing moves the point both ways, or it is one guide.
+					if (
+						absf(point[axis_a] - a[axis_a]) < GUIDE_EPSILON
+						or absf(point[axis_b] - b[axis_b]) < GUIDE_EPSILON
+					):
+						continue
+					var cross := point
+					cross[axis_a] = a[axis_a]
+					cross[axis_b] = b[axis_b]
+					var d := point.distance_to(cross)
+					if d < snap_threshold and (best_cross.is_empty() or d < best_cross["distance"]):
+						best_cross = {
+							"point": cross,
+							"kind": KIND_GUIDE_CROSS,
+							"distance": d,
+							"label":
+							(
+								"%s from %s, %s from %s"
+								% [
+									AXIS_NAMES[axis_a],
+									str(KIND_LABELS.get(tracked[i]["kind"], "")).to_lower(),
+									AXIS_NAMES[axis_b],
+									str(KIND_LABELS.get(tracked[j]["kind"], "")).to_lower()
+								]
+							),
+						}
+	if not best_guide.is_empty():
+		out.append(best_guide)
+	if not best_cross.is_empty():
+		out.append(best_cross)
+	var best_edge := _guide_on_edge(point, near)
+	if not best_edge.is_empty():
+		out.append(best_edge)
+	return out
+
+
+## Where a guide meets an edge of a brush in reach: the point on the edge level
+## with a tracked point one way. Ranked between a crossing and a guide alone.
+func _guide_on_edge(point: Vector3, near: Dictionary) -> Dictionary:
+	var best := {}
+	if root == null or not root.has_method("_iter_pick_nodes"):
+		return best
+	var edges: Array = []
+	for node in root._iter_pick_nodes():
+		if not (node is DraftBrush) or node == root.get("preview_brush"):
+			continue
+		var brush := node as DraftBrush
+		var xform := brush.global_transform
+		var reach := _world_reach(xform.basis, _snap_half_extent(brush))
+		if point.distance_to(brush.global_position) > snap_threshold + reach:
+			continue
+		var geometry := _snap_geometry_local(brush)
+		var local_verts: PackedVector3Array = geometry["verts"]
+		for edge in geometry["edges"]:
+			edges.append([xform * local_verts[edge[0]], xform * local_verts[edge[1]]])
+	for i in tracked.size():
+		if near.get(i, false):
+			continue
+		var tracked_point: Vector3 = tracked[i]["point"]
+		for held in 3:
+			for edge in edges:
+				var a: Vector3 = edge[0]
+				var b: Vector3 = edge[1]
+				var run := b[held] - a[held]
+				if absf(run) < GUIDE_EPSILON:
+					continue
+				var t := (tracked_point[held] - a[held]) / run
+				if t < 0.0 or t > 1.0:
+					continue
+				var meet := a.lerp(b, t)
+				var d := point.distance_to(meet)
+				if d < GUIDE_EPSILON or d >= snap_threshold:
+					continue
+				if best.is_empty() or d < best["distance"]:
+					best = {
+						"point": meet,
+						"kind": KIND_GUIDE_EDGE,
+						"distance": d,
+						"label":
+						(
+							"Edge, level with the %s on %s"
+							% [
+								str(KIND_LABELS.get(tracked[i]["kind"], "point")).to_lower(),
+								AXIS_NAMES[held]
+							]
+						),
+					}
+	return best
+
+
+## The axis a guide holding `held` runs along, for a label and a typed distance:
+## across the floor when it can, where most points are placed, and up a wall
+## otherwise.
+static func _along_axis(held: int, tracked_point: Vector3, on: Vector3) -> int:
+	match held:
+		0:
+			return 2 if not is_equal_approx(on.z, tracked_point.z) else 1
+		2:
+			return 0 if not is_equal_approx(on.x, tracked_point.x) else 1
+	return 0 if absf(on.x - tracked_point.x) >= absf(on.z - tracked_point.z) else 2
+
+
+## "Vertex: 2.5 m along +X": what the guide comes from, and how far along it
+## `on` is.
+static func guide_label(kind: String, source: Vector3, on: Vector3, axis: int) -> String:
+	var along := on[axis] - source[axis]
+	var from := str(KIND_LABELS.get(kind, "Point"))
+	if is_zero_approx(along):
+		return "%s: on it" % from
+	return (
+		"%s: %s m along %s%s"
+		% [from, String.num(absf(along), 3), "+" if along > 0.0 else "-", AXIS_NAMES[axis]]
+	)
+
+
+## Put the next pick `distance` along the guide the viewport shows, from its
+## source, the way the pointer is from it. False when no guide shows.
+func type_along_guide(distance: float) -> bool:
+	if str(shown_pick.get("kind", "")) != KIND_GUIDE or not shown_pick.has("source"):
+		return false
+	var source: Vector3 = shown_pick["source"]
+	var axis := int(shown_pick["axis"])
+	var at: Vector3 = shown_pick["point"]
+	var way := 1.0 if at[axis] >= source[axis] else -1.0
+	var typed := source
+	typed[axis] += way * distance
+	_typed = typed
+	shown_pick = {
+		"point": typed,
+		"kind": KIND_GUIDE,
+		"source": source,
+		"source_kind": str(shown_pick.get("source_kind", "")),
+		"axis": axis,
+		"label": guide_label(str(shown_pick.get("source_kind", "")), source, typed, axis),
+	}
+	revision += 1
+	return true
+
+
+## Take X and Z from `point` for the next pick, which keeps its own height: a
+## point in plan from one place and at the height of another.
+func take_xz_from(point: Vector3) -> void:
+	_filter_xz = point
+	revision += 1
+
+
+func has_pending_point() -> bool:
+	return _typed != null or _filter_xz != null
+
+
+## Drop what was typed or taken for the next pick, as Escape does. True when
+## there was something.
+func cancel_pending_point() -> bool:
+	if not has_pending_point():
+		return false
+	_typed = null
+	_filter_xz = null
+	revision += 1
+	return true
 
 
 ## The choice a pick takes: the kind Tab stepped to while the pointer stays near
@@ -326,6 +646,8 @@ func next_pick_limit() -> String:
 ## A pick was taken, by a click or the end of a drag: a one-pick limit and a Tab
 ## step are spent.
 func pick_taken() -> void:
+	_typed = null
+	_filter_xz = null
 	if _only_kind == "" and _stepped_kind == "":
 		return
 	_only_kind = ""

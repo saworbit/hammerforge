@@ -394,6 +394,17 @@ const COMMANDS := [
 		"repeat": true
 	},
 	{
+		"id": "sweep_faces",
+		"label": "Sweep Faces",
+		"help":
+		"Carry the faces picked in Face Select along a straight run, an arc or an S bend, as a run of brushes.",
+		"aliases": ["sweep", "bend faces", "follow path"],
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "clip_to_face",
 		"label": "Clip to Face Plane",
 		"help": "Cut the selected brushes along the plane of the face picked in Face Select.",
@@ -2558,6 +2569,38 @@ const COMMANDS := [
 		"help": "Start the Measure tool, which draws rulers between points.",
 		"category": "Tools",
 		"needs_level": false,
+		"selection": {}
+	},
+	{
+		"id": "track_snap_point",
+		"label": "Track Point for Guides",
+		"help":
+		"Run guides from the snap point under the pointer, or stop. Resting the pointer there does the same.",
+		"aliases": ["guide from here", "track point"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
+		"selection": {}
+	},
+	{
+		"id": "take_xz_for_next_pick",
+		"label": "Point Filter: X and Z from Here",
+		"help":
+		"The next pick takes X and Z from the snap point under the pointer, and its height from where it lands.",
+		"aliases": ["need y", "point filter", "x and z from here"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
+		"selection": {}
+	},
+	{
+		"id": "clear_guides",
+		"label": "Clear Guides",
+		"help": "Stop every guide from tracked points.",
+		"aliases": ["forget guides"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
 		"selection": {}
 	},
 	{

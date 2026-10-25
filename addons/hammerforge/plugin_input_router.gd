@@ -152,6 +152,11 @@ static func _handle_keyboard(
 		HFPluginCommands.execute(plugin, "command_line")
 		return STOP
 
+	# A distance typed along the guide the viewport shows, and Shift tracking a
+	# point when the preferences say so (#1692). Only while a guide shows, or a
+	# number is being typed, so a key goes on as before otherwise.
+	if HFPluginSnapFeedbackType.key(plugin, event):
+		return STOP
 	# External tool keyboard dispatch first — external tools can override keys
 	if plugin._tool_registry and plugin._tool_registry.has_active_external_tool():
 		var ext_result = plugin._tool_registry.dispatch_keyboard(event)

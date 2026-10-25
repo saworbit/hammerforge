@@ -40,6 +40,7 @@ const HFPluginCompare = preload("plugin_compare.gd")
 const HFPluginAdjustLast = preload("plugin_adjust_last.gd")
 const HFPluginCommandLine = preload("plugin_command_line.gd")
 const HFPluginDimensions = preload("plugin_dimensions.gd")
+const HFPluginFaceSweep = preload("plugin_face_sweep.gd")
 const HFPluginGroups = preload("plugin_groups.gd")
 const HFPluginRun = preload("plugin_run.gd")
 @warning_ignore_restore("shadowed_global_identifier")
@@ -325,6 +326,8 @@ static func execute(
 			plugin._clip_selected(root)
 		"clip_to_face":
 			plugin._clip_to_face_plane_selected(root)
+		"sweep_faces":
+			HFPluginFaceSweep.open(plugin, root)
 		"run_trim_along_faces":
 			HFPluginEditActions.run_trim_along_faces(plugin, root)
 		"repick_trim_run":
@@ -746,6 +749,12 @@ static func execute(
 					plugin._activate_external_tool(tool_id, plugin.active_root)
 		"snap_next_vertex", "snap_next_midpoint", "snap_next_centre", "snap_next_perpendicular", "snap_next_grid":
 			HFPluginSnapFeedbackType.limit(plugin, action)
+		"track_snap_point":
+			HFPluginSnapFeedbackType.track_here(plugin)
+		"take_xz_for_next_pick":
+			HFPluginSnapFeedbackType.take_xz_here(plugin)
+		"clear_guides":
+			HFPluginSnapFeedbackType.clear(plugin)
 		"keep_ruler_as_dimension":
 			HFPluginDimensions.keep_last_ruler(plugin)
 		"cancel_drag":

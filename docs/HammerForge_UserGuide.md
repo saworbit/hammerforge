@@ -786,6 +786,15 @@ That face can belong to any brush, including one you drew purely as a guide and
 delete afterwards — draw a box, rotate it to the angle you want, and use one of its
 faces as a straightedge.
 
+### Sweeping faces along a bend
+
+**Sweep Faces**, in the palette, carries the faces picked in Face Select somewhere else as a run of brushes ([#1714](https://github.com/saworbit/hammerforge/issues/1714)): a pipe with a flange, an arched corridor's profile or a bevelled beam bent round a corner. Pick the faces, all in one plane and facing one way, and run it. The dialog takes the path:
+- **Straight**: a run of **Length** along the way the faces point.
+- **Arc**: a circular bend of **Angle** degrees with **Radius**, turning **Toward** the faces' up, down, left or right.
+- **S bend**: **Length** along and **Offset** aside, ending facing the way it began.
+
+**Segments** sets how many pieces, and **Iterations** repeats the sweep from where it ended, so four quarter arcs close a loop and a few repeats make a long run of bends. Each face is swept as its own section, and each piece is one convex brush between two cuts, so neighbours meet face to face. The pieces are outlined in cyan as the values change. A bend too tight for the faces' width folds a piece back on itself: it is drawn red, OK is greyed out, and nothing is made. The pieces take the material and texture settings of the face they came from, and are made as one group in one undo step.
+
 ### The Clip tool
 
 For a cut that no face lines up with, press `C` with the brushes to cut
@@ -1870,6 +1879,11 @@ With **Vertex (V)** on, a vertex drag lands the vertex you grabbed on another br
 
 **One pick of one kind.** **Next Pick: Vertex Only**, **Midpoint Only**, **Centre Only**, **Perpendicular Only** and **Grid Only** limit the next pick to that kind, whatever snaps are on, and every snap that was on returns after it. They are in the command palette and ship with no key; give one a key in the shortcut dialog.
 
+**Guides from points you rest on** ([#1692](https://github.com/saworbit/hammerforge/issues/1692)). Rest the pointer on a vertex, a midpoint, a centre or a perpendicular for half a second and it is marked with a small plus; rest on it again to let it go. Up to seven are kept, the oldest going first, and switching tool lets them all go. Dotted guides run from each one along the world axes. A point placed near a guide lands on it, level with the marked point that way, so a doorway lines up with a pillar across the room and a platform's edge sits under a ledge above. Where two guides cross, the crossing wins, then where a guide meets a brush's edge, and the word beside the marker says what each guide comes from; on one guide it says how far along it the point is, as "Vertex: 2.5 m along +X". A point on a guide is marked with a bar, a crossing with an X and a guide meeting an edge with a bowtie. Near a marked point its own guides stand aside, so the point itself shows.
+- **A distance along a guide.** With a guide showing, type a number and press Enter, and the next pick lands that far along the guide from its point, the way the pointer is from it. Backspace takes a digit back and Escape drops it.
+- **A point from two others.** **Point Filter: X and Z from Here**, in the palette with no key, takes X and Z from the snap point under the pointer for the next pick, which takes its height from where it lands: in plan from one vertex, at the height of a face somewhere else. Escape drops it.
+- **Track Point for Guides** and **Clear Guides** in the palette mark the point under the pointer, or let every one go. Untick **Guides from points** under Viewport in the Console's Controls to turn it all off, and tick **Shift takes a guide point** to mark points with Shift in place of a rest.
+
 **Tip:** Use Vertex for corner alignment, Center for centered placement, Edge for exact midpoints, and Perpendicular for a right-angle projection onto an edge.
 
 ## Undo/Redo
@@ -2131,6 +2145,7 @@ Preferences include:
 - The settings each tool, the Build tab and each structure type were last used with (Test → Settings → Reset Tool Settings clears them)
 - Overlay colours (Test → Settings → Colours), each kept as a hex string such as `"#ffd133bf"`; one that is not a colour falls back to its default with a warning
 - Motion (`ui_motion`): 0 follow the system, 1 animate, 2 reduce
+- Guides from points (`snap_tracking`) and Shift takes a guide point (`snap_tracking_shift`)
 - Show dimensions (`show_dimensions`)
 
 ## Clipboard
