@@ -105,6 +105,10 @@ msgstr ""
 msgid "Add to Visgroup"
 msgstr ""
 
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Added output: {output} → {target}.{input}"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Adjust Last"
 msgstr ""
@@ -176,6 +180,12 @@ msgstr ""
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "Any material in the palette"
 msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Applied preset '{preset}' ({count} connection)"
+msgid_plural "Applied preset '{preset}' ({count} connections)"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "Apply"
@@ -391,6 +401,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Bevel the selected edge (vertex mode, edge sub-mode)"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Bit {number}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/hf_command_registry.gd
@@ -2423,6 +2437,10 @@ msgstr ""
 msgid "No materials loaded. Refresh Prototypes is under Material Library."
 msgstr ""
 
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "No sound at {path}"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Noise"
 msgstr ""
@@ -2641,6 +2659,18 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Pick Pivot"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Pick a sound first"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Pick a {kind} file"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Pick {kind}"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
@@ -4465,12 +4495,20 @@ msgstr ""
 msgid "Wire Connection"
 msgstr ""
 
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Wired: {output} → {target}.{input}"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Wireframe"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Wires:"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Wiring below is for {name}, the first of them."
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -4597,6 +4635,12 @@ msgstr ""
 msgid "{action}: select a visgroup first"
 msgstr ""
 
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "{count} entity. A value goes on each one that has it."
+msgid_plural "{count} entities. A value goes on each one that has it."
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/plugin_face_sweep.gd
 msgid "{count} piece"
 msgid_plural "{count} pieces"
@@ -4605,6 +4649,14 @@ msgstr[1] ""
 
 #: addons/hammerforge/plugin_face_sweep.gd
 msgid "{folded} of {count} pieces fold back on themselves: widen the radius or cut more segments"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "{label} ({have} of {count}):"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "{label}:"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
