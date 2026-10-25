@@ -71,7 +71,8 @@ static func refresh_view_filters(dock: Object) -> void:
 		return
 	var root = dock.level_root
 	var hidden: Dictionary = root.view_filters if root else {}
-	# Each row as [node name, key, text]; a heading has no key.
+	# Each row as [node name, key, text]; a heading has no key, and its kind for
+	# its text.
 	var rows: Array = []
 	for kind in HFViewFiltersType.KINDS:
 		rows.append([kind.replace(":", "_"), kind, HFViewFiltersType.LABELS[kind]])
@@ -87,8 +88,7 @@ static func refresh_view_filters(dock: Object) -> void:
 		names.sort()
 		if names.is_empty():
 			continue
-		var heading := "Brush entity classes" if kind == "brush_entity" else "Point entity classes"
-		rows.append(["Heading_" + kind, "", heading])
+		rows.append(["Heading_" + kind, "", kind])
 		for class_name_shown in names:
 			var key := "%s:%s" % [kind, class_name_shown]
 			rows.append([key.replace(":", "_"), key, "  " + class_name_shown])
@@ -113,7 +113,12 @@ static func refresh_view_filters(dock: Object) -> void:
 			if row[1] == "":
 				var head := Label.new()
 				head.name = row[0]
-				head.text = row[2]
+				# Each a literal straight after `text =`, which is what
+				# `tools/gen_pot.gd` reads, so the POT keeps both.
+				if row[2] == "brush_entity":
+					head.text = "Brush entity classes"
+				else:
+					head.text = "Point entity classes"
 				head.add_theme_font_size_override("font_size", 11)
 				head.modulate = Color(1, 1, 1, 0.7)
 				box.add_child(head)
