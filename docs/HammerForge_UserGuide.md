@@ -1235,7 +1235,7 @@ A move or turn is kept as how far it went, not where it ended: the arrow keys, P
 - **Starting over.** Select something else by hand, or with a selection command such as Select Similar, and the next command starts a new run. Until then Repeat Run still plays the last run, on what you have selected: hollow and clip one room, select the next, Repeat Run.
 - **What it cannot play.** A change the run cannot hold, such as Flip, a texture command or Delete, ends the run, and the next one starts after it. **Clear Run** empties it. Ctrl+Z takes a step out of the run along with the level.
 - **Refusals.** A step that is refused on the new selection stops the run, takes back the steps it had already made, and says which step and why: "Repeat Run stopped at step 2 of 2, Hollow (0.5 m): ...".
-- **What it holds.** With nothing typed, the palette shows **Repeat Run: Duplicate, Move +Y 3 m, Rotate CCW 15° Y** under Repeat, so you know what a press does before you make it. Neither command has a key by default; give them one in the shortcut dialog.
+- **What it holds.** With nothing typed, the palette shows **Repeat Run: Duplicate, Move +Y 3 m, Rotate CCW 15° Y** under Repeat once the run holds two steps, so you know what a press does before you make it. Neither command has a key by default; give them one in the shortcut dialog.
 
 ## Example Library
 
