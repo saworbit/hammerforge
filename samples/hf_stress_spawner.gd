@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends Node
 
 @export var grid_x: int = 10
