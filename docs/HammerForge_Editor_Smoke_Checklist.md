@@ -275,6 +275,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - With **V** on, drag a vertex of one brush near a corner of another. Confirm it lands on that corner within about 10 pixels with a marker on it, and the other selected vertices move by the same amount. Turn V off and hold **Alt** for the same. Drag a resize handle near another brush's corner and confirm its face stops level with it (#1399).
 - Press **Alt+Left** on a selected brush and confirm it moves a tenth of the grid step. **Alt+Shift+PageUp** moves it up a tenth, while **Alt+PageUp** alone still moves the drawing grid up.
 - Draw a box at a finer snap so it sits off the grid, and turn a second one 30 degrees. Select both and press **Ctrl+B**. Confirm each one's bounds' minimum corner lands on the grid with its size and turn kept, as one undo step, and that pressing it again records nothing. In vertex mode, Ctrl+B moves the selected vertices to the grid instead, and a snap that would dent the brush is refused with the reason (#1398).
+- Rest the pointer on a box's corner for half a second. Confirm a small plus marks it and dotted guides run from it along X, Y and Z. Start a draw near one of its guides across the room and confirm the point lands on the guide, marked with a bar, and the word beside the marker says how far along it is (#1692).
+- Mark a second point and place near where the two points' guides cross. Confirm the crossing wins, marked with an X. Rest on a marked point again and confirm it lets go; switch tool and confirm every guide goes.
 
 ### 3. Guided Step Flow
 - Step 1: draw an additive room brush; confirm the tutorial advances.
@@ -315,6 +317,11 @@ It writes one PNG per tab under `user://console_preview/`.
 - Select the prefab in the library, point at the floor in the viewport and press **Space**. Confirm the menu offers **Place <name> Here** and that choosing it puts the prefab where the cursor was, as one undo step named **Place Prefab: <name>**. Deselect it in the library, press Space again, and confirm the item is gone (#1301).
 - Drag a brush preset from **Test → Presets** onto a face in the viewport. Confirm the brush lands there and takes the Active Material (#1580, #1405).
 - Save a selection from the Prefabs panel with **Save Linked**, then press Ctrl+Z. Confirm the selection is no longer linked and the prefab file stays; Ctrl+Shift+Z links it again. Name a brush preset `CON`, then `..x`: confirm each is saved, listed under the name typed, and loads again (#1451, #1464).
+
+### 6b. Named Groups
+- Select two brushes and press **Ctrl+G**. Confirm it asks for a name with one ready, and Enter makes the group. Make a second group, select both groups and press Ctrl+G again. Confirm a click on any piece selects all of them, and the Groups list shows the two inner groups indented under the new one (#1723).
+- Double click the outer group. Confirm the rest of the level is drawn faded and a click picks one inner group. Press **Escape** and confirm the group closes and is selected.
+- Press **Ctrl+D** on the whole outer group. Confirm the copy is a group of its own, named with "copy", and a click on it selects only the copies.
 
 ### Empty Apply Cuts
 - With no pending cuts, click Apply Cuts and confirm no undo step appears. With cuts pending, apply them and confirm one Apply Pending Cuts step. Undo and confirm the pending cutters return.
@@ -527,6 +534,11 @@ It writes one PNG per tab under `user://console_preview/`.
 - Detach a structure, press Ctrl+Z, then Ctrl+Shift+Z. Select one of its former pieces and confirm the section stays on Create and the toolbar shows no **Upd** or **Det** (#1306).
 - Press `Ctrl+Shift+A` with the Type dropdown on Dome. Confirm the shortcut builds a dome, not an arch.
 
+### 7c-8. Sweep Faces
+- In Face Select, pick one face of a box and run **Sweep Faces** from the palette. Choose **Arc**, 90 degrees, Radius 3 and 8 Segments. Confirm the pieces are outlined in cyan as the values change, OK makes 8 brushes that meet face to face in one group, and one Ctrl+Z takes them all away (#1714).
+- Lower the Radius until the bend is tighter than the face is wide. Confirm the outline turns red, OK is greyed out and nothing is made.
+- Pick two faces that are not in one plane and run it. Confirm it is refused with the reason.
+
 ### 7d. Face Winding Migration (Old Saves)
 - Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).
 - Confirm all brush faces render with textures visible from outside (not inside-out).
@@ -534,6 +546,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Bake the level; confirm baked geometry is textured correctly (not inside-out or black).
 - Save the level. Re-open it; confirm faces still render correctly (migration should have written the current `winding_version`, 3).
 - Create a new brush in the same level; confirm its faces also render correctly alongside the migrated ones.
+- Run **Show Face Direction** from the palette. Confirm the front of every brush face is drawn blue and the back red, and that running it again takes the look off (#1869).
 
 ### 8. Vertex Editing (Edge Sub-Mode)
 - Select a brush and enter vertex mode (V key or the V toggle button in the toolbar).
@@ -762,6 +775,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click "Hollow" in the palette (or press Enter); confirm hollow executes and the palette closes.
 - Press **Esc** while the palette is open; confirm it closes without executing anything.
 - Toggle paint mode on; press **Shift+?**. Confirm paint tools (Bucket, Erase, Ramp, etc.) are now enabled.
+- Hollow a brush, then change Thickness in the **Adjust** panel in the viewport's bottom right corner. Confirm the walls rebuild and one Ctrl+Z gives back the solid (#1867).
+- Select a brush, **Duplicate** it, move the copy up with Page Up and press **Rotate CW**. Open the palette and confirm its top rows show **Repeat Run:** with those steps. Run Repeat Run twice and confirm two more copies, each up and turned from the last, each press one undo step (#1735).
 
 ### 14. Coach Marks (First-Use Tool Guides)
 - Press **P** to activate the Polygon tool for the first time. Confirm a floating coach mark overlay appears with step-by-step instructions.
@@ -840,6 +855,9 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press **A**; confirm align mode toggles off.
 - Press **Delete**; confirm the last ruler is removed.
 - Press **Escape**; confirm all rulers are cleared.
+- Draw a ruler between the corners of two walls and press **K**. Confirm the dimension stays after the Measure tool is left, drawn as a line with a tick at each end and its length at the middle (#1699).
+- Move one wall. Confirm the dimension follows it, with no undo step of its own. Set its Check to **At least player width** in Entity Properties and narrow the gap below the player's width. Confirm it turns red and Validate names it.
+- Clip away the corner one end is on. Confirm that end comes loose and the dimension is drawn amber.
 
 ### 22. Undo History Browser
 - Open **Test → History** section.
@@ -861,6 +879,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Switch Godot to a light theme (Editor Settings → Interface → Theme → Base Color).
 - Confirm all HammerForge panels (context toolbar, coach marks, toasts, command palette, operation replay) adapt to light colors.
 - Switch back to dark theme; confirm panels revert to dark colors.
+- Set the system to reduce motion (on Windows, Animation effects off). With **Motion** on **Follow system** under **Test → Settings**, confirm toasts, the HUD's hints and the context toolbar's hint bar appear and go at once, with no slide or fade (#1703).
+- With no overlay colour picked, turn on the system's contrast setting and start the editor. Confirm the overlay colours start in High Contrast and the Console says so once. In the dock, press **Tab** repeatedly and confirm every button can be reached.
 
 ### 25. Export Playtest Build
 - Open **Test → Advanced Bake**. Click **Export Playtest Build**.
