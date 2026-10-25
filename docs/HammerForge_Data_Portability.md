@@ -30,7 +30,7 @@ One row for each thing a level holds, one column for each file it goes through. 
 | I/O wires | Kept | Kept | Kept | Lost | Kept |
 | Brush entities | Kept | Kept | Kept | Kept as named nodes | Kept |
 | Visgroups | Kept | Kept | Lost | Not applicable | Lost |
-| Groups | Kept | Kept | Lost | Not applicable | Lost |
+| Groups | Kept | Kept | Lost | Not applicable | Kept |
 | Structures | Kept | Kept | Lost | Not applicable | Lost |
 | Prefab copies | Kept | Kept | Lost | Not applicable | Lost |
 | Cordons | Kept | Kept | Lost | Not applicable | Not applicable |
@@ -42,6 +42,7 @@ One row for each thing a level holds, one column for each file it goes through. 
 - **Kept as mesh.** A `.glb` holds what the bake built, so a row arrives as the triangles it made and not as something you can still edit. A cylinder, a cut or a sculpt cannot be got back from it; keep the `.hflevel` for that.
 - **Not applicable.** The format has no place for the row, and the export leaves out nothing by not having one. A `.glb` has no visgroups or structures, and the bake has applied the cordons and the bake options already. A prefab is a set of pieces rather than a level, so it holds no cordons, level bake options or floor paint.
 - **The `.map` column.** A brush keeps its faces and loses the shape it was made as, so a cylinder comes back as a plain brush with a cylinder's faces. A cut is left out rather than written as a solid that would fill its hole. Texture settings come back as the map's own texture axes, so a face draws the same while its numbers differ, and entity properties come back as text, which is how the format writes every value.
+- **Groups in a prefab.** A prefab keeps each group the selection holds whole, nested as it was. A group the selection holds only part of belongs to the level, and the prefab leaves it out (#1897).
 - **Structures and prefab copies** keep their brushes wherever brushes are kept. What is lost is the record that can still change them: a staircase comes back as its steps.
 - The `.tscn` column is the default **Scene Keeps** setting, Brushes and bake. A scene set to keep only its bake loads its `.hflevel` when it opens, below.
 - Bake profiles are editor preferences rather than part of a level, and no file here carries them.
@@ -246,7 +247,8 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 ## Prefabs: `.hfprefab`
 - `.hfprefab` files store reusable brush + entity groups as JSON.
 - Transforms are stored relative to the group centroid, so prefabs can be placed at any world position.
-- Brush IDs and group IDs are stripped on capture; new ones are assigned on instantiation.
+- Brush IDs are stripped on capture; new ones are assigned on instantiation.
+- A group the selection holds whole is kept: a `groups` list records each one's `name` and the `parent` group it is inside, outer ones first, and each piece's `group_id` names its own. Placement makes a group of its own for each, nested as they were, under its name or the next free one, so a prefab of a building with a roof group and a wall group places with both. A group the selection holds only part of is not named, so a prefab never puts a piece in a group of the level it is placed into. A file written before `groups` existed has none, and places as it did (#1897).
 - Entity I/O connections are captured and remapped to new entity names when instantiated. The remap runs over the entities the placement just created, not over a name lookup, so an authored name that collides with another copy's node name cannot send it to the wrong one.
 - The authored entity name travels verbatim, so placing a prefab twice gives both copies the same name. The I/O remap works off node names, which are made unique on placement; rename the copies yourself if two of them are meant to be told apart by an output.
 - Face materials travel by **path**, not by slot number. A face’s material is an index into the *level’s* palette, so a `materials` block records what each referenced slot meant and placement resolves those paths against the destination palette, appending any it does not already hold and rewriting the face indices to match. Placing the same prefab twice does not add the material twice. A material with no file of its own (made in the editor session, a `.map` import's placeholder, or one saved inside a scene) is recorded by name: placement finds that same material or one of that name in the destination palette, and appends it otherwise. While the editor that wrote the file still has the material, the material itself is appended; after that only a blank stand-in carrying its name can be, and the placement says so. One with no name either cannot be carried, so the placement warns and the face keeps whatever the destination holds there — save the material to disk first if its look should travel.

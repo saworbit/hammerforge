@@ -2154,7 +2154,7 @@ Preferences include:
 
 The clipboard is a prefab without a name. It is the same capture a prefab gets, so a copied piece arrives with its entity wiring, its brush entity ties, and a record of what each material slot meant; pasting into a level with a different palette resolves those against the destination and appends anything it does not already hold. What a prefab has and the clipboard does not is a name, a place in the library, and a link back to its source: a pasted piece is geometry, not an instance that follows an asset when the asset changes.
 
-Brush ids and brush entity ties are minted fresh on every paste, and each authored name gets one of its own with the pasted wiring following it, so pasting twice gives two pieces the level can tell apart. Group and visgroup membership is deliberately not carried, because a visgroup is a list of names registered per level and pasting into a level that has never heard of "West Wing" would otherwise put brushes in a group with no row in the panel.
+Brush ids and brush entity ties are minted fresh on every paste, and each authored name gets one of its own with the pasted wiring following it, so pasting twice gives two pieces the level can tell apart. Visgroup membership is deliberately not carried, because a visgroup is a list of names registered per level and pasting into a level that has never heard of "West Wing" would otherwise put brushes in a visgroup with no row in the panel. Groups are carried the way Ctrl+D carries them: a group copied whole comes in as a group of its own, "House copy", with copies of the groups inside it. A copy of a member of an open group joins that group when pasted back into the level it came from, and is in no group anywhere else ([#1897](https://github.com/saworbit/hammerforge/issues/1897)).
 
 The buffer is a file in `user://`, not something the level holds, so it survives closing a level and restarting the editor, and a piece copied in one project can be pasted into another.
 
@@ -2584,7 +2584,7 @@ Groups let you persistently link brushes/entities so they select and move togeth
 
 **The Groups list**, under the group buttons, shows every group in the level, those inside another indented under it, each with how many it holds: "House (4)". A click on a row selects that group. **Rename** gives the highlighted group a new name (or use **Rename Group** in the palette), **Open** opens it, and **Add Sel** and **Rem Sel** put the selection in it or take it out without taking the rest apart. **Add to Group** and **Remove from Group** in the palette do the same for the highlighted group, or the open one.
 
-**Duplicates.** Ctrl+D of a whole group makes a second group, "House copy", with copies of the groups inside it, so a click on the copy selects only the copies. Copying a member of an open group adds the copy to that group.
+**Duplicates.** Ctrl+D of a whole group makes a second group, "House copy", with copies of the groups inside it, so a click on the copy selects only the copies. Copying a member of an open group adds the copy to that group. Copy and Paste, Paste at Cursor and Mirror Copy follow the same rule, and a prefab keeps the groups it was saved with: a placed copy gets groups of its own, nested as they were, under their names or the next free one ("House 2") ([#1897](https://github.com/saworbit/hammerforge/issues/1897)).
 
 A selected group's name shows above it in the viewport.
 

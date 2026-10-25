@@ -776,6 +776,33 @@ func remove_units_from_group(nodes: Array, group_name: String) -> void:
 	_cleanup_empty_group(group_name)
 
 
+## The groups a copy of `nodes` takes whole, those whose members are all among
+## them (#1723), each as `{"name", "parent"}`, outer ones first, `parent` the
+## group it is inside now. What Duplicate, Mirror Copy, the clipboard and a
+## prefab all copy a group by (#1897).
+func whole_groups(nodes: Array) -> Array:
+	var copied: Dictionary = {}
+	var involved: Array = []
+	for node in nodes:
+		if not (node is Node) or not is_instance_valid(node):
+			continue
+		copied[node] = true
+		for group_name in group_chain_of(node):
+			if not involved.has(group_name):
+				involved.append(group_name)
+	involved.sort_custom(func(a, b): return group_depth(a) < group_depth(b))
+	var out: Array = []
+	for group_name in involved:
+		var whole := true
+		for member in group_members_deep(group_name):
+			if not copied.has(member):
+				whole = false
+				break
+		if whole:
+			out.append({"name": group_name, "parent": parent_of_group(group_name)})
+	return out
+
+
 ## Duplicate (#1723): a group whose members are all among `originals` is copied
 ## as a new group, "<name> copy", inside the copy of its parent when that is
 ## copied too and otherwise beside it. The copies' infos are given the new names;
@@ -783,35 +810,48 @@ func remove_units_from_group(nodes: Array, group_name: String) -> void:
 ## inside an open group should. Returns the new groups, name to parent, outer
 ## ones first, for `add_groups()` to make.
 func regroup_copies(originals: Array, brush_infos: Array, entity_infos: Array) -> Dictionary:
-	var copied: Dictionary = {}
-	var involved: Array = []
-	for node in originals:
-		if not (node is Node) or not is_instance_valid(node):
-			continue
-		copied[node] = true
-		for group_name in group_chain_of(node):
-			if not involved.has(group_name):
-				involved.append(group_name)
-	if involved.is_empty():
-		return {}
-	involved.sort_custom(func(a, b): return group_depth(a) < group_depth(b))
-	var renamed: Dictionary = {}
+	return place_copied_groups(whole_groups(originals), " copy", true, brush_infos, entity_infos)
+
+
+## The groups a copy brings, `recorded` as `whole_groups()` gave them (#1897):
+## each a new group, its name with `suffix` and made unique, inside the copy of
+## its parent when that came too. A group the copy is inside but did not take
+## whole stays the copy's when `keep_outer` and this level has it, as a copy made
+## inside an open group joins it; otherwise the copy goes at the top. The infos
+## are given the new names, and `renamed` is filled with them, old to new, for
+## infos built later. Returns the new groups, name to parent, outer ones first,
+## for `add_groups()` to make.
+func place_copied_groups(
+	recorded: Array,
+	suffix: String,
+	keep_outer: bool,
+	brush_infos: Array,
+	entity_infos: Array,
+	renamed: Dictionary = {}
+) -> Dictionary:
 	var made: Dictionary = {}
-	for group_name in involved:
-		var whole := true
-		for member in group_members_deep(group_name):
-			if not copied.has(member):
-				whole = false
-				break
-		if not whole:
+	for record in recorded:
+		if not (record is Dictionary):
 			continue
-		var copy_name := _unused_name("%s copy" % group_name, made)
+		var group_name := str(record.get("name", "")).strip_edges()
+		if group_name == "" or renamed.has(group_name):
+			continue
+		var copy_name := _unused_name(group_name + suffix, made)
 		renamed[group_name] = copy_name
-		var around := parent_of_group(group_name)
-		made[copy_name] = renamed.get(around, around)
+		var around := str(record.get("parent", ""))
+		if renamed.has(around):
+			around = renamed[around]
+		elif not (keep_outer and groups.has(around)):
+			around = ""
+		made[copy_name] = around
 	for info in brush_infos + entity_infos:
-		if info is Dictionary and renamed.has(str(info.get("group_id", ""))):
-			info["group_id"] = renamed[str(info["group_id"])]
+		if not (info is Dictionary):
+			continue
+		var group_id := str(info.get("group_id", ""))
+		if renamed.has(group_id):
+			info["group_id"] = renamed[group_id]
+		elif group_id != "" and not (keep_outer and groups.has(group_id)):
+			info.erase("group_id")
 	return made
 
 
@@ -820,6 +860,15 @@ func add_groups(made: Dictionary) -> void:
 	for group_name in made:
 		create_group(str(group_name))
 		_set_parent(str(group_name), str(made[group_name]))
+
+
+## Take back any of `made`'s groups left holding nothing, as when none of a
+## copy's pieces could be built (#1897). Inner ones first.
+func drop_empty_groups(made: Dictionary) -> void:
+	var names := made.keys()
+	names.reverse()
+	for group_name in names:
+		_cleanup_empty_group(str(group_name))
 
 
 func _unused_name(base: String, also_taken: Dictionary) -> String:

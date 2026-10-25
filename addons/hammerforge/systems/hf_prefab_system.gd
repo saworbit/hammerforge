@@ -441,6 +441,10 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 		if placed.has("transform"):
 			placed["transform"] = frame * (placed["transform"] as Transform3D)
 		placed_entities.append(placed)
+	# The copy keeps the groups it is in, carried over by node name below. The
+	# names a prefab's own groups have in it are not this level's (#1897).
+	for placed in placed_brushes + placed_entities:
+		placed.erase("group_id")
 	# Read before `fresh_identities()` mints new ties, which it groups by.
 	var own := _own_names(placed_brushes + placed_entities, own_names)
 	# Entities of their own, as a placement makes them (#1158, #1159), under the
@@ -959,7 +963,9 @@ func push_instance_to_source(instance_id: String) -> bool:
 		root.brush_system, root.entity_system, brush_nodes, entity_nodes
 	)
 	_leave_kept_out(rec, captured, prefab.get_variant_data(rec.variant_name))
-	prefab.set_variant_data(rec.variant_name, captured.brush_infos, captured.entity_infos)
+	prefab.set_variant_data(
+		rec.variant_name, captured.brush_infos, captured.entity_infos, captured.groups
+	)
 
 	var err := prefab.save_to_file(rec.source_path)
 	return err == OK
@@ -1272,12 +1278,15 @@ func quick_save_prefab(
 func copy_to_clipboard(brush_nodes: Array, entity_nodes: Array) -> bool:
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return false
+	# With the groups it takes only part of, and the level it came from, so a
+	# paste back into this level puts a copy where Duplicate would (#1897).
 	var prefab = HFPrefabType.capture_from_selection(
-		root.brush_system, root.entity_system, brush_nodes, entity_nodes
+		root.brush_system, root.entity_system, brush_nodes, entity_nodes, true
 	)
 	if prefab.brush_infos.is_empty() and prefab.entity_infos.is_empty():
 		return false
 	prefab.prefab_name = "Clipboard"
+	prefab.source_level = str(root.get("level_uid"))
 	var err := prefab.save_to_file(clipboard_path)
 	if err != OK:
 		# The same rule the prefab save learned in #667: a write that failed has
@@ -1357,10 +1366,13 @@ func clipboard_is_empty() -> bool:
 ## lineage, and is the only placement that lines a pasted piece up with the one
 ## it came from.
 ##
-## Brush ids are minted fresh, and group and visgroup membership is dropped by
-## the capture, so pasting into a level that has never heard of "West Wing" does
-## not put brushes in a group with no row in the panel. Material slots are
-## resolved against the destination's palette.
+## Brush ids are minted fresh, and visgroup membership is dropped by the capture,
+## so pasting into a level that has never heard of "West Wing" does not put
+## brushes in a visgroup with no row in the panel. A group copied whole comes in
+## as "<name> copy", nested as it was, as Duplicate makes it; a copy of a member
+## of a group copied in part joins that group in the level it came from, and no
+## group anywhere else (#1897). Material slots are resolved against the
+## destination's palette.
 func paste_from_clipboard(at: Vector3 = Vector3.INF) -> Dictionary:
 	var empty := {"brush_ids": [], "entity_count": 0, "entity_names": [], "entity_nodes": []}
 	var prefab = clipboard_contents()
@@ -1369,7 +1381,9 @@ func paste_from_clipboard(at: Vector3 = Vector3.INF) -> Dictionary:
 	if prefab.brush_infos.is_empty() and prefab.entity_infos.is_empty():
 		return empty
 	var placement: Vector3 = prefab.source_centroid if not at.is_finite() else at
-	return prefab.instantiate(root.brush_system, root.entity_system, root, placement)
+	return prefab.instantiate(
+		root.brush_system, root.entity_system, root, placement, "", Basis.IDENTITY, " copy"
+	)
 
 
 # ---------------------------------------------------------------------------
