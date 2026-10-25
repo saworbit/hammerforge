@@ -48,6 +48,7 @@ const HFClipToolType = preload("hf_clip_tool.gd")
 const HFHullToolType = preload("hf_hull_tool.gd")
 const HFShearToolType = preload("hf_shear_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
+const HFSweepSelectType = preload("hf_sweep_select.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
 const HFFaceSelectionOverlayType = preload("hf_face_selection_overlay.gd")
 const HFPivotMarkerType = preload("hf_pivot_marker.gd")
@@ -75,6 +76,10 @@ var hf_selection: Array = []
 ## The scene the "no level here" hint was last shown for, so it shows once each.
 var _no_level_hint_scene_id := 0
 var _selection_gesture := HFSelectionGestureType.new()
+## A drag with the sweep key held, from its press to its release (#1886). Read by
+## the selection input and the Escape ladder.
+@warning_ignore("unused_private_class_variable")
+var _sweep_select := HFSweepSelectType.new()
 var _brush_change_tracker := HFBrushChangeTrackerType.new()
 var _brush_reconcile_queued := false
 ## The queued check looks at every brush rather than at those the steps since
