@@ -55,6 +55,7 @@ const HFPivotMarkerType = preload("hf_pivot_marker.gd")
 const HFSelectionReadoutType = preload("hf_selection_readout.gd")
 const HFTextureGizmoType = preload("hf_texture_gizmo.gd")
 const HFPluginBrushStampType = preload("plugin_brush_stamp.gd")
+const HFPluginSweepHandlesType = preload("plugin_sweep_handles.gd")
 var dock: DockType
 ## The Console main screen and the lamp that opens it from the 3D toolbar.
 ## Optional surface: if the editor refuses either, the rest of the plugin
@@ -95,6 +96,10 @@ var _selection_readout := HFSelectionReadoutType.new()
 var _texture_gizmo := HFTextureGizmoType.new()
 ## Repeat's stamp of the brush the last Draw made (#1407).
 var _brush_stamp := HFPluginBrushStampType.new()
+## The Sweep dialog's pivot and end handles while it is open on an Arc (#1885).
+## Read by name, from the viewport router and the Escape ladder.
+@warning_ignore("unused_private_class_variable")
+var _sweep_handles := HFPluginSweepHandlesType.new()
 ## The Control Godot draws the 3D viewport overlay through, captured the first
 ## time _forward_3d_force_draw_over_viewport runs. Viewport overlays are
 ## parented here rather than into the toolbar row, which is a layout container

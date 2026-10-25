@@ -14,19 +14,12 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
 const FaceData = preload("face_data.gd")
+const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
+const HFOpResult = preload("hf_op_result.gd")
+const HFSweepBuilder = preload("hf_sweep_builder.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFFaceSweep = preload("hf_face_sweep.gd")
-const LevelRootType = preload("level_root.gd")
 const HFSweepPreview = preload("systems/hf_sweep_preview.gd")
-
-## Which way the run turns or steps aside, in the start frame: the face's own up,
-## down, left and right as the frame sets them.
-const TOWARD := {
-	"Up": Vector2(0, 1),
-	"Down": Vector2(0, -1),
-	"Left": Vector2(-1, 0),
-	"Right": Vector2(1, 0),
-}
 
 ## What the dialog starts with.
 const DEFAULTS := {
@@ -35,7 +28,7 @@ const DEFAULTS := {
 	"angle": 90.0,
 	"radius": 4.0,
 	"offset": 2.0,
-	"toward": "Right",
+	"toward": 0.0,
 	"segments": 8,
 	"iterations": 1,
 	"end_width": 1.0,
@@ -43,190 +36,99 @@ const DEFAULTS := {
 }
 
 
-## The picked faces as a cross section: `{ok, rings, normal, sources, sides}`,
-## each ring a face's corners in world space with its source FaceData beside it,
-## and for each of its edges the face of the same brush that meets it there, or
-## null; or `{ok: false, reason}` when nothing is picked or the faces are not in
+## The picked faces as a cross section, read as a Sweep structure reads its run
+## (#1885): `{ok, run, placement}`, the run in the space of the sweep's start
+## frame, or `{ok: false, reason}` when nothing is picked or the faces are not in
 ## one plane.
 static func section(root: Node) -> Dictionary:
-	var rings: Array = []
-	var sources: Array = []
-	var sides: Array = []
-	var normal := Vector3.ZERO
-	var plane := Plane()
-	var picked: Dictionary = root.get("face_selection") if root else {}
-	for brush_key in picked:
-		var brush = root.find_brush_by_id(str(brush_key))
-		if brush == null:
-			continue
-		var xform: Transform3D = (brush as Node3D).global_transform
-		for index in picked[brush_key]:
-			if int(index) < 0 or int(index) >= brush.faces.size():
-				continue
-			var face: FaceData = brush.faces[int(index)]
-			var ring := PackedVector3Array()
-			for corner in face.local_verts:
-				ring.append(xform * corner)
-			if ring.size() < 3:
-				continue
-			var facing := (xform.basis.inverse().transposed() * face.normal).normalized()
-			if rings.is_empty():
-				normal = facing
-				plane = Plane(facing, ring[0])
-			elif facing.dot(normal) < 0.999 or absf(plane.distance_to(ring[0])) > 0.001:
-				return {"ok": false, "reason": "Pick faces that lie in one plane, facing one way"}
-			rings.append(ring)
-			sources.append(face)
-			sides.append(_faces_along_edges(brush, face))
-	if rings.is_empty():
+	if root == null:
 		return {"ok": false, "reason": "Pick the faces to sweep in Face Select first"}
-	return {"ok": true, "rings": rings, "normal": normal, "sources": sources, "sides": sides}
+	var picked: Dictionary = root.get("face_selection")
+	if picked == null or picked.is_empty():
+		return {"ok": false, "reason": "Pick the faces to sweep in Face Select first"}
+	var read: Dictionary = root.run_from_faces(HFGeneratorSystem.TYPE_SWEEP, picked)
+	if read.has("refused"):
+		var reason := str(read["refused"]).trim_prefix("Sweep: ")
+		return {"ok": false, "reason": reason.left(1).to_upper() + reason.substr(1)}
+	if HFSweepBuilder.rings_of(read["run"]).is_empty():
+		return {"ok": false, "reason": "Pick the faces to sweep in Face Select first"}
+	return {"ok": true, "run": read["run"], "placement": read["placement"]}
 
 
-## For each edge of `face`, from corner i to i + 1, the other face of `brush`
-## holding both its corners, or null.
-static func _faces_along_edges(brush: Node, face: FaceData) -> Array:
-	var out: Array = []
-	var corners: PackedVector3Array = face.local_verts
-	for i in corners.size():
-		var a := corners[i]
-		var b := corners[(i + 1) % corners.size()]
-		var found: FaceData = null
-		for other in brush.faces:
-			if other == null or other == face:
-				continue
-			var has_a := false
-			var has_b := false
-			for corner in (other as FaceData).local_verts:
-				has_a = has_a or corner.distance_to(a) <= 0.001
-				has_b = has_b or corner.distance_to(b) <= 0.001
-			if has_a and has_b:
-				found = other
-				break
-		out.append(found)
-	return out
+## The dialog's values as a Sweep's settings. Toward is in degrees; one of the
+## four it used to be named by is read as its angle.
+static func settings_of(values: Dictionary) -> Dictionary:
+	var settings := values.duplicate()
+	var toward: Variant = values.get("toward", 0.0)
+	settings["toward"] = HFSweepBuilder.TOWARD_DEGREES.get(str(toward), float(toward))
+	return settings
 
 
-## What sweeping `cut` with `values` makes: `{pieces, folded, frames}`.
+## What sweeping `cut` with `values` makes: `{pieces, folded, frames}`, placed in
+## the level, for the dialog's outline.
 static func plan(cut: Dictionary, values: Dictionary) -> Dictionary:
-	var start := HFFaceSweep.start_frame(cut["rings"], cut["normal"])
-	var end := HFFaceSweep.end_frame(
-		start,
-		int(values["path"]),
-		float(values["length"]),
-		float(values["angle"]),
-		float(values["radius"]),
-		float(values["offset"]),
-		TOWARD.get(str(values["toward"]), Vector2(1, 0))
-	)
-	var frame_list := HFFaceSweep.frames(int(values["path"]), start, end, int(values["segments"]))
-	frame_list = HFFaceSweep.repeated(frame_list, int(values["iterations"]))
-	var end_scale := Vector2(
-		float(values.get("end_width", 1.0)), float(values.get("end_height", 1.0))
-	)
-	var made := HFFaceSweep.pieces(cut["rings"], frame_list, end_scale)
-	made["frames"] = frame_list
+	var made := HFSweepBuilder.plan(settings_of(values), cut["run"])
+	var placement: Transform3D = cut["placement"]
+	for piece in made["pieces"]:
+		for face in piece["faces"]:
+			var placed := PackedVector3Array()
+			for corner in (face as FaceData).local_verts:
+				placed.append(placement * corner)
+			face.local_verts = placed
+			face.normal = (placement.basis * (face as FaceData).normal).normalized()
+	var frames: Array = []
+	for frame in made["frames"]:
+		frames.append(placement * (frame as Transform3D))
+	made["frames"] = frames
 	return made
 
 
-## Sweep the picked faces with `values` as one undo step. False, with the reason
+## Sweep the picked faces with `values` as one undo step, kept as a Sweep
+## structure so its values can be changed after (#1885). False, with the reason
 ## said and nothing made, when a piece folds or nothing is picked.
 static func run(plugin: Object, root: Node, values: Dictionary) -> bool:
 	var cut := section(root)
 	if not bool(cut["ok"]):
 		_say(plugin, str(cut["reason"]), 1)
 		return false
-	var made := plan(cut, values)
-	var pieces: Array = made["pieces"]
-	if int(made["folded"]) > 0:
-		_say(
-			plugin,
-			(
-				"Sweep: %d of %d pieces fold back on themselves. Widen the radius or cut more segments"
-				% [int(made["folded"]), pieces.size()]
-			),
-			1
-		)
-		return false
-	if pieces.is_empty():
+	var settings := settings_of(values)
+	var check := HFGeneratorSystem.can_build(HFGeneratorSystem.TYPE_SWEEP, settings, cut["run"])
+	if not check.ok:
+		_say(plugin, "%s. %s" % [check.message, check.fix_hint], 1)
 		return false
 	var before: Dictionary = root.capture_state()
-	var group := _group_name(root, pieces.size())
-	for piece in pieces:
-		var faces: Array = piece["faces"]
-		_take_looks(piece, cut)
-		var info := _info(faces, group)
-		root.brush_system.give_active_material(info)
-		_keep_looks(info, faces)
-		root.brush_system.create_brush_from_info(info)
-	if root.get("visgroup_system"):
+	var known: Array = root.generator_system.generators.keys()
+	var made: HFOpResult = root.create_generator(
+		HFGeneratorSystem.TYPE_SWEEP,
+		settings,
+		cut["placement"],
+		root.get("active_material"),
+		cut["run"]
+	)
+	if not made.ok:
+		_say(plugin, made.user_text(), 1)
+		return false
+	var record = null
+	for generator_id in root.generator_system.generators:
+		if not known.has(generator_id):
+			record = root.generator_system.generators[generator_id]
+	var count: int = record.brush_ids.size() if record else 0
+	var group := _group_name(root, count)
+	if record and root.get("visgroup_system"):
 		root.visgroup_system.create_group(group)
+		for brush_id in record.brush_ids:
+			var piece = root.find_brush_by_id(str(brush_id))
+			if piece:
+				piece.set_meta("group_id", group)
 	HFUndoHelper.commit_completed(
 		plugin.call("_get_undo_redo"),
 		root,
-		"Sweep Faces (%d pieces)" % pieces.size(),
+		"Sweep Faces (%d pieces)" % count,
 		before,
 		Callable(plugin, "_record_history")
 	)
-	_say(plugin, "Swept into %d pieces, grouped as %s" % [pieces.size(), group], 0)
+	_say(plugin, "Swept into %d pieces, grouped as %s" % [count, group], 0)
 	return true
-
-
-## Each face of `piece` takes the look of the face it ran along: a side the face
-## of the source brush that meets the swept face along that edge, so a wall's
-## brick sides stay brick down the run, and an end the swept face's own (#1899).
-static func _take_looks(piece: Dictionary, cut: Dictionary) -> void:
-	var ring_index := int(piece["section"])
-	var swept: FaceData = cut["sources"][ring_index]
-	var all_sides: Array = cut.get("sides", [])
-	var sides: Array = all_sides[ring_index] if ring_index < all_sides.size() else []
-	var edges: PackedInt32Array = piece.get("edges", PackedInt32Array())
-	var faces: Array = piece["faces"]
-	for i in faces.size():
-		var edge := edges[i] if i < edges.size() else -1
-		var look: FaceData = swept
-		if edge >= 0 and edge < sides.size() and sides[edge] != null:
-			look = sides[edge]
-		HFFaceSweep.take_look([faces[i]], look)
-
-
-## What `create_brush_from_info()` takes for one piece: its faces local to their
-## middle, in a group with the rest.
-static func _info(faces: Array, group: String) -> Dictionary:
-	var middle := Vector3.ZERO
-	var count := 0
-	for face: FaceData in faces:
-		for corner in face.local_verts:
-			middle += corner
-			count += 1
-	if count > 0:
-		middle /= count
-	var low := Vector3(INF, INF, INF)
-	var high := Vector3(-INF, -INF, -INF)
-	var face_dicts: Array = []
-	for face: FaceData in faces:
-		var local := PackedVector3Array()
-		for corner in face.local_verts:
-			local.append(corner - middle)
-			low = low.min(corner - middle)
-			high = high.max(corner - middle)
-		face.local_verts = local
-		face_dicts.append(face.to_dict())
-	return {
-		"shape": LevelRootType.BrushShape.CUSTOM,
-		"size": high - low,
-		"operation": CSGShape3D.OPERATION_UNION,
-		"center": middle,
-		"faces": face_dicts,
-		"group_id": group,
-	}
-
-
-## The source faces' looks over whatever the active material would give.
-static func _keep_looks(info: Dictionary, faces: Array) -> void:
-	var face_dicts: Array = info["faces"]
-	for i in mini(face_dicts.size(), faces.size()):
-		face_dicts[i] = (faces[i] as FaceData).to_dict()
 
 
 static func _group_name(root: Node, count: int) -> String:
@@ -246,7 +148,8 @@ static func _group_name(root: Node, count: int) -> String:
 
 
 ## Open the Sweep dialog for the picked faces, with the pieces outlined as the
-## values change.
+## values change. On an Arc its handles in the viewport set the bend too (#1885),
+## so the dialog leaves the viewport the pointer.
 static func open(plugin: Object, root: Node) -> bool:
 	var cut := section(root)
 	if not bool(cut["ok"]):
@@ -254,9 +157,11 @@ static func open(plugin: Object, root: Node) -> bool:
 		return false
 	var values: Dictionary = DEFAULTS.duplicate()
 	var preview := HFSweepPreview.new(root)
+	var handles = plugin.get("_sweep_handles")
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "Sweep Faces"
 	dialog.min_size = Vector2i(360, 240)
+	dialog.exclusive = false
 	var box := VBoxContainer.new()
 	dialog.add_child(box)
 	var grid := GridContainer.new()
@@ -266,9 +171,12 @@ static func open(plugin: Object, root: Node) -> bool:
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(status)
 	var rows := {}
+	var spins := {}
 	var refresh := func():
 		var made := plan(cut, values)
 		preview.show_pieces(made["pieces"])
+		if handles != null:
+			handles.draw()
 		var folded := int(made["folded"])
 		var total := (made["pieces"] as Array).size()
 		dialog.get_ok_button().disabled = folded > 0
@@ -297,21 +205,27 @@ static func open(plugin: Object, root: Node) -> bool:
 			refresh.call()
 	)
 	_row(grid, rows, "path", "Path:", path_pick)
+	# Radius and Toward take the steps a dragged pivot lands on, so a value the
+	# handle set reads back the same; their arrows still step as before.
 	for spec in [
 		["length", "Length (m):", 0.1, 1000.0, 0.1],
 		["angle", "Angle (degrees):", -360.0, 360.0, 1.0],
-		["radius", "Radius (m):", 0.1, 1000.0, 0.1],
+		["radius", "Radius (m):", 0.1, 1000.0, HFSweepBuilder.RADIUS_STEP, 0.1],
 		["offset", "Offset (m):", -1000.0, 1000.0, 0.1],
 		["segments", "Segments:", 1.0, float(HFFaceSweep.MAX_SEGMENTS), 1.0],
 		["iterations", "Iterations:", 1.0, float(HFFaceSweep.MAX_ITERATIONS), 1.0],
 		# How wide and tall the far end is, as a part of the start (#1899).
 		["end_width", "End width scale:", 0.05, 20.0, 0.05],
 		["end_height", "End height scale:", 0.05, 20.0, 0.05],
+		# Any way along the faces, as dragging the pivot gives it (#1885).
+		["toward", "Toward (degrees):", -360.0, 360.0, 1.0, 15.0],
 	]:
 		var spin := SpinBox.new()
 		spin.min_value = spec[2]
 		spin.max_value = spec[3]
 		spin.step = spec[4]
+		if spec.size() > 5:
+			spin.custom_arrow_step = spec[5]
 		spin.value = float(values[spec[0]])
 		spin.accessibility_name = str(spec[1]).trim_suffix(":")
 		var key: String = spec[0]
@@ -324,30 +238,37 @@ static func open(plugin: Object, root: Node) -> bool:
 				refresh.call()
 		)
 		_row(grid, rows, key, spec[1], spin)
-	var toward_pick := OptionButton.new()
-	for way in TOWARD:
-		toward_pick.add_item(way)
-	toward_pick.selected = TOWARD.keys().find(values["toward"])
-	toward_pick.accessibility_name = "Toward"
-	toward_pick.item_selected.connect(
-		func(index: int):
-			values["toward"] = TOWARD.keys()[index]
-			refresh.call()
-	)
-	_row(grid, rows, "toward", "Toward:", toward_pick)
+		spins[key] = spin
+	var let_go := func():
+		if handles != null:
+			handles.let_go(values)
+		preview.destroy()
 	dialog.confirmed.connect(
 		func():
-			preview.destroy()
+			let_go.call()
 			if is_instance_valid(root):
 				run(plugin, root, values)
 			dialog.queue_free()
 	)
 	dialog.canceled.connect(
 		func():
-			preview.destroy()
+			let_go.call()
 			dialog.queue_free()
 	)
+	# Freed some other way, as the plugin's teardown frees open dialogs.
+	dialog.tree_exiting.connect(
+		func():
+			if handles != null:
+				handles.let_go(values)
+	)
 	plugin.call("_add_confirmable_dialog", dialog)
+	if handles != null and is_instance_valid(root):
+		# A drag sets the fields it changed, and the outline follows.
+		var follow := func():
+			for field in ["radius", "toward", "angle"]:
+				(spins[field] as SpinBox).set_value_no_signal(float(values[field]))
+			refresh.call()
+		handles.attach(root, cut, values, preview, follow)
 	refresh.call()
 	if dialog.is_inside_tree():
 		dialog.popup_centered()

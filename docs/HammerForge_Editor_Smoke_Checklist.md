@@ -538,6 +538,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - In Face Select, pick one face of a box and run **Sweep Faces** from the palette. Choose **Arc**, 90 degrees, Radius 3 and 8 Segments. Confirm the pieces are outlined in cyan as the values change, OK makes 8 brushes that meet face to face in one group, and one Ctrl+Z takes them all away (#1714).
 - Lower the Radius until the bend is tighter than the face is wide. Confirm the outline turns red, OK is greyed out and nothing is made.
 - Pick two faces that are not in one plane and run it. Confirm it is refused with the reason.
+- Open it again on **Arc**. Drag the orange pivot handle along the face and confirm Radius and Toward follow it in grid steps and the outline follows. Drag the yellow end handle round the pivot and confirm Angle moves in 15 degree steps. Type a Radius and confirm the handle moves. Start a drag and right click: the values go back (#1885).
+- Press OK, select one of the pieces, raise Segments in the Structure section and press **Update Sweep**. Confirm the bend rebuilds smoother in one undo step, still one group (#1885).
 
 ### 7d. Face Winding Migration (Old Saves)
 - Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).

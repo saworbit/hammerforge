@@ -192,6 +192,10 @@ static func cancel_escape_step(plugin: Object, root: Node) -> bool:
 	var texture_gizmo = plugin.get("_texture_gizmo")
 	if texture_gizmo and texture_gizmo.cancel():
 		return true
+	# So does a Sweep handle drag put the values back (#1885).
+	var sweep_handles = plugin.get("_sweep_handles")
+	if sweep_handles and sweep_handles.cancel():
+		return true
 	if plugin._hotkey_palette and plugin._hotkey_palette.visible:
 		plugin._hotkey_palette.visible = false
 		return true

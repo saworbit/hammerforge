@@ -1429,8 +1429,15 @@ static func refresh_structure_preview(dock: Object) -> void:
 		# A new Trim Run has no run until Create reads the picked faces.
 		if HFGeneratorSystem.follows_run(type):
 			dock.level_root.clear_structure_preview()
+			var what := (
+				"the faces to sweep" if type == HFGeneratorSystem.TYPE_SWEEP else "the wall faces"
+			)
 			_show_structure_message(
-				dock, "Pick the wall faces in Face Select, then press Create Trim Run"
+				dock,
+				(
+					"Pick %s in Face Select, then press Create %s"
+					% [what, HFGeneratorSystem.display_name(type)]
+				)
 			)
 			return
 
@@ -1805,10 +1812,14 @@ static func on_create_structure(dock: Object) -> void:
 ## A Trim Run is built along the faces picked in Face Select, which the plugin
 ## reads, rather than at the selection, so Create runs its command (#1414).
 static func _create_along_faces(dock: Object) -> void:
+	# A Sweep is made by the Sweep Faces dialog on the picked faces (#1885).
+	var sweep := structure_type(dock) == HFGeneratorSystem.TYPE_SWEEP
+	var command := "sweep_faces" if sweep else "run_trim_along_faces"
 	if dock.command_requested.get_connections().is_empty():
-		dock._set_status("Run Trim Along Faces needs the HammerForge plugin running", true)
+		var label := "Sweep Faces" if sweep else "Run Trim Along Faces"
+		dock._set_status("%s needs the HammerForge plugin running" % label, true)
 		return
-	dock.command_requested.emit("run_trim_along_faces")
+	dock.command_requested.emit(command)
 
 
 ## Rebuild the selected structure from the section's settings, and never build a

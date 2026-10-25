@@ -1,12 +1,17 @@
 @tool
 extends "hf_preview_system.gd"
 ## The pieces a sweep would make, outlined before they exist (#1714): cyan for a
-## piece it can make, red for one that folds back on itself.
+## piece it can make, red for one that folds back on itself. On an Arc, the
+## handles that set where it turns about and how far are drawn over them (#1885).
 
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 
 var _good: StandardMaterial3D
 var _bad: StandardMaterial3D
+## The pivot handle and the end handle, kept out of the pool, whose meshes are
+## the pieces by index.
+var _pivot: MeshInstance3D = null
+var _end: MeshInstance3D = null
 
 
 func _init(p_root: Node3D = null) -> void:
@@ -38,6 +43,31 @@ func show_pieces(pieces: Array, rings_of: Callable = Callable()) -> void:
 		mesh_instance.visible = true
 	_hide_meshes_from(pieces.size())
 	_preview_container.visible = not pieces.is_empty()
+
+
+## Draw the pivot handle's `pivot_lines` and the end handle's `end_lines`, in
+## world space. Empty lines take that handle away.
+func show_handles(pivot_lines: PackedVector3Array, end_lines: PackedVector3Array) -> void:
+	_build_container()
+	if not is_instance_valid(_preview_container):
+		return
+	_pivot = _handle_mesh(_pivot, "SweepPivotHandle", Color(1.0, 0.6, 0.1, 0.95), pivot_lines)
+	_end = _handle_mesh(_end, "SweepEndHandle", Color(1.0, 0.9, 0.2, 0.95), end_lines)
+
+
+func _handle_mesh(
+	mesh_instance: MeshInstance3D, mesh_name: String, color: Color, lines: PackedVector3Array
+) -> MeshInstance3D:
+	if not is_instance_valid(mesh_instance):
+		mesh_instance = MeshInstance3D.new()
+		mesh_instance.name = mesh_name
+		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mesh_instance.material_override = ghost_material(color)
+		_preview_container.add_child(mesh_instance)
+	mesh_instance.visible = not lines.is_empty()
+	if not lines.is_empty():
+		mesh_instance.mesh = HFOutlineUtil.line_mesh(lines)
+	return mesh_instance
 
 
 func _preview_name() -> String:

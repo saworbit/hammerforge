@@ -799,7 +799,8 @@ static func repick_trim_run(plugin: Object, root: Node) -> bool:
 	if root.face_selection.is_empty():
 		root.user_message.emit("%s: pick the faces it should follow in Face Select" % label, 1)
 		return false
-	var read: Dictionary = root.trim_run_from_faces(root.face_selection)
+	# Read as its own type reads a run: a Trim Run's walls or a Sweep's faces (#1885).
+	var read: Dictionary = root.run_from_faces(record.type, root.face_selection)
 	if read.has("refused"):
 		root.user_message.emit(_refusal_text(read), 1)
 		return false
