@@ -310,6 +310,7 @@ addons/hammerforge/
   plugin_texture_keys.gd The nudge keys sliding and turning the texture on the picked faces in Face Select
   plugin_command_line.gd Runs what is typed on the command line, and command scripts read from a file
   plugin_face_sweep.gd   Sweep Faces: the picked faces as a section, the dialog and its preview, the pieces as one step
+  plugin_sweep_handles.gd  The Sweep dialog's pivot and end handles in the viewport, and their drags
   plugin_adjust_last.gd  Adjust Last: the last command's settings and how to make its step again with others
   plugin_dimensions.gd   Dimensions drawn over the viewport, and keeping a Measure ruler as one
   plugin_groups.gd       Groups: Group Selection with a name, Ungroup a level, open and close a group, add, remove, rename
@@ -409,6 +410,7 @@ addons/hammerforge/
   hf_ring_builder.gd     Rings: a tube polygon swept round an axis, one convex piece per segment
   hf_door_frame_builder.gd  Door frames: posts and a flat or arched head round an opening, and the opening's cut
   hf_trim_run_builder.gd  Trim runs: a skirting or cornice along picked wall faces, read from them as a run
+  hf_sweep_builder.gd    Sweeps kept as structures: the picked faces as a run, rebuilt along an arc, a straight or an S bend
   hf_structure_presets.gd  HFStructurePresets: named Structure settings per type, read through the schema
   hf_convex_clip.gd      Splitting and building convex solids: the geometry behind Clip, Carve, Hollow and every generator
   hf_hull.gd             The convex hull of a set of points as the faces of one brush, for Hull of Selection and the Hull tool

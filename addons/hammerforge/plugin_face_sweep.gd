@@ -21,15 +21,6 @@ const HFSweepBuilder = preload("hf_sweep_builder.gd")
 const HFFaceSweep = preload("hf_face_sweep.gd")
 const HFSweepPreview = preload("systems/hf_sweep_preview.gd")
 
-## Which way the run turns or steps aside, in the start frame: the face's own up,
-## down, left and right as the frame sets them.
-const TOWARD := {
-	"Up": Vector2(0, 1),
-	"Down": Vector2(0, -1),
-	"Left": Vector2(-1, 0),
-	"Right": Vector2(1, 0),
-}
-
 ## What the dialog starts with.
 const DEFAULTS := {
 	"path": HFFaceSweep.Path.ARC,
@@ -37,7 +28,7 @@ const DEFAULTS := {
 	"angle": 90.0,
 	"radius": 4.0,
 	"offset": 2.0,
-	"toward": "Right",
+	"toward": 0.0,
 	"segments": 8,
 	"iterations": 1,
 	"end_width": 1.0,
@@ -64,12 +55,12 @@ static func section(root: Node) -> Dictionary:
 	return {"ok": true, "run": read["run"], "placement": read["placement"]}
 
 
-## The dialog's values as a Sweep's settings: Toward by its place in the list, as
-## a structure keeps a choice.
+## The dialog's values as a Sweep's settings. Toward is in degrees; one of the
+## four it used to be named by is read as its angle.
 static func settings_of(values: Dictionary) -> Dictionary:
 	var settings := values.duplicate()
-	var toward := HFSweepBuilder.TOWARD_NAMES.find(str(values.get("toward", "Right")))
-	settings["toward"] = toward if toward >= 0 else int(values.get("toward", 3))
+	var toward: Variant = values.get("toward", 0.0)
+	settings["toward"] = HFSweepBuilder.TOWARD_DEGREES.get(str(toward), float(toward))
 	return settings
 
 
@@ -157,7 +148,8 @@ static func _group_name(root: Node, count: int) -> String:
 
 
 ## Open the Sweep dialog for the picked faces, with the pieces outlined as the
-## values change.
+## values change. On an Arc its handles in the viewport set the bend too (#1885),
+## so the dialog leaves the viewport the pointer.
 static func open(plugin: Object, root: Node) -> bool:
 	var cut := section(root)
 	if not bool(cut["ok"]):
@@ -165,9 +157,11 @@ static func open(plugin: Object, root: Node) -> bool:
 		return false
 	var values: Dictionary = DEFAULTS.duplicate()
 	var preview := HFSweepPreview.new(root)
+	var handles = plugin.get("_sweep_handles")
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "Sweep Faces"
 	dialog.min_size = Vector2i(360, 240)
+	dialog.exclusive = false
 	var box := VBoxContainer.new()
 	dialog.add_child(box)
 	var grid := GridContainer.new()
@@ -177,9 +171,12 @@ static func open(plugin: Object, root: Node) -> bool:
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(status)
 	var rows := {}
+	var spins := {}
 	var refresh := func():
 		var made := plan(cut, values)
 		preview.show_pieces(made["pieces"])
+		if handles != null:
+			handles.draw()
 		var folded := int(made["folded"])
 		var total := (made["pieces"] as Array).size()
 		dialog.get_ok_button().disabled = folded > 0
@@ -208,21 +205,27 @@ static func open(plugin: Object, root: Node) -> bool:
 			refresh.call()
 	)
 	_row(grid, rows, "path", "Path:", path_pick)
+	# Radius and Toward take the steps a dragged pivot lands on, so a value the
+	# handle set reads back the same; their arrows still step as before.
 	for spec in [
 		["length", "Length (m):", 0.1, 1000.0, 0.1],
 		["angle", "Angle (degrees):", -360.0, 360.0, 1.0],
-		["radius", "Radius (m):", 0.1, 1000.0, 0.1],
+		["radius", "Radius (m):", 0.1, 1000.0, HFSweepBuilder.RADIUS_STEP, 0.1],
 		["offset", "Offset (m):", -1000.0, 1000.0, 0.1],
 		["segments", "Segments:", 1.0, float(HFFaceSweep.MAX_SEGMENTS), 1.0],
 		["iterations", "Iterations:", 1.0, float(HFFaceSweep.MAX_ITERATIONS), 1.0],
 		# How wide and tall the far end is, as a part of the start (#1899).
 		["end_width", "End width scale:", 0.05, 20.0, 0.05],
 		["end_height", "End height scale:", 0.05, 20.0, 0.05],
+		# Any way along the faces, as dragging the pivot gives it (#1885).
+		["toward", "Toward (degrees):", -360.0, 360.0, 1.0, 15.0],
 	]:
 		var spin := SpinBox.new()
 		spin.min_value = spec[2]
 		spin.max_value = spec[3]
 		spin.step = spec[4]
+		if spec.size() > 5:
+			spin.custom_arrow_step = spec[5]
 		spin.value = float(values[spec[0]])
 		spin.accessibility_name = str(spec[1]).trim_suffix(":")
 		var key: String = spec[0]
@@ -235,30 +238,37 @@ static func open(plugin: Object, root: Node) -> bool:
 				refresh.call()
 		)
 		_row(grid, rows, key, spec[1], spin)
-	var toward_pick := OptionButton.new()
-	for way in TOWARD:
-		toward_pick.add_item(way)
-	toward_pick.selected = TOWARD.keys().find(values["toward"])
-	toward_pick.accessibility_name = "Toward"
-	toward_pick.item_selected.connect(
-		func(index: int):
-			values["toward"] = TOWARD.keys()[index]
-			refresh.call()
-	)
-	_row(grid, rows, "toward", "Toward:", toward_pick)
+		spins[key] = spin
+	var let_go := func():
+		if handles != null:
+			handles.let_go(values)
+		preview.destroy()
 	dialog.confirmed.connect(
 		func():
-			preview.destroy()
+			let_go.call()
 			if is_instance_valid(root):
 				run(plugin, root, values)
 			dialog.queue_free()
 	)
 	dialog.canceled.connect(
 		func():
-			preview.destroy()
+			let_go.call()
 			dialog.queue_free()
 	)
+	# Freed some other way, as the plugin's teardown frees open dialogs.
+	dialog.tree_exiting.connect(
+		func():
+			if handles != null:
+				handles.let_go(values)
+	)
 	plugin.call("_add_confirmable_dialog", dialog)
+	if handles != null and is_instance_valid(root):
+		# A drag sets the fields it changed, and the outline follows.
+		var follow := func():
+			for field in ["radius", "toward", "angle"]:
+				(spins[field] as SpinBox).set_value_no_signal(float(values[field]))
+			refresh.call()
+		handles.attach(root, cut, values, preview, follow)
 	refresh.call()
 	if dialog.is_inside_tree():
 		dialog.popup_centered()
