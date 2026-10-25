@@ -39,6 +39,7 @@ const HFSettingsFile = preload("hf_settings_file.gd")
 const HFPluginCompare = preload("plugin_compare.gd")
 const HFPluginAdjustLast = preload("plugin_adjust_last.gd")
 const HFPluginCommandLine = preload("plugin_command_line.gd")
+const HFPluginGroups = preload("plugin_groups.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -130,6 +131,11 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 			entity_count += 1
 	state["brush_count"] = brush_count
 	state["entity_count"] = entity_count
+	# The group the selection is, and the group open now (#1723).
+	state["selected_group"] = HFPluginGroups.selected_group(plugin, root) if root else ""
+	var groups = root.get("visgroup_system") if root else null
+	state["open_group"] = str(groups.open_group) if groups else ""
+	state["target_group"] = HFPluginGroups.target_group(plugin, root) if root else ""
 	# Godot nodes Convert to Brushes takes, so the viewport menu can offer it.
 	var convertible_count := 0
 	for node in selection_nodes:
@@ -382,6 +388,16 @@ static func execute(
 			plugin._group_selected(root)
 		"ungroup":
 			plugin._ungroup_selected(root)
+		"open_group":
+			HFPluginGroups.open_selected_group(plugin, root)
+		"close_group":
+			HFPluginGroups.close_group(plugin, root)
+		"add_to_group":
+			HFPluginGroups.add_selection_to_group(plugin, root)
+		"remove_from_group":
+			HFPluginGroups.remove_selection_from_group(plugin, root)
+		"rename_group":
+			HFPluginGroups.rename_selected_group(plugin, root)
 		"move_to_floor":
 			plugin._move_selected_to_floor(root)
 		"move_to_ceiling":

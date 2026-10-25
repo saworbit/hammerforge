@@ -1,0 +1,11 @@
+{
+	"what": "Which group each group inside another is in, child name to parent name.",
+	"older_builds": "Every group loads at the top, none inside another, with its own members.",
+	"keys": [
+		"state.group_parents",
+		"state.group_parents{}"
+	],
+	"maps": [
+		"state.group_parents"
+	]
+}

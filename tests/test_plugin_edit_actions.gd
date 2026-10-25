@@ -150,6 +150,7 @@ func test_group_ungroup_and_merge_act_on_the_selection():
 	rig.select([a, b])
 	var mark := _history_size()
 	assert_true(rig.plugin._group_selected(level))
+	assert_eq(await rig.accept_dialogs(), 1, "Group asks for a name first (#1723)")
 	var group := str(level.visgroup_system.get_group_of(a))
 	assert_ne(group, "", "Group made a group")
 	assert_eq(str(level.visgroup_system.get_group_of(b)), group, "of both")

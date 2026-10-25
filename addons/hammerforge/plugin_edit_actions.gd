@@ -7,6 +7,7 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
+const HFPluginGroups = preload("plugin_groups.gd")
 const HFOpResult = preload("hf_op_result.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
 const HFBrushConversion = preload("hf_brush_conversion.gd")
@@ -299,6 +300,12 @@ static func duplicate_selected(
 	# duplicated door that kept its tie and its name joined the door it came from
 	# (#1161). Its wires are left as they are, as a point entity's are.
 	HFBrushEntity.fresh_identities(brush_infos, [], root.entity_system)
+	# A whole group copied is a new group of its own (#1723).
+	var groups: Dictionary = (
+		root.visgroup_system.regroup_copies(nodes, brush_infos, entity_infos)
+		if root.visgroup_system
+		else {}
+	)
 	var action_name := (
 		"Duplicate Brushes"
 		if entity_infos.is_empty()
@@ -311,7 +318,7 @@ static func duplicate_selected(
 		root,
 		action_name,
 		"create_managed_duplicates",
-		[brush_infos, entity_infos],
+		[brush_infos, entity_infos, groups],
 		false,
 		Callable(plugin, "_record_history")
 	)
@@ -443,47 +450,13 @@ static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bo
 	return true
 
 
+## Group Selection and Ungroup, which `plugin_groups.gd` makes (#1723).
 static func group_selected(plugin: Object, root: Node) -> bool:
-	var nodes = plugin._hammerforge_selection_nodes(root)
-	if nodes.size() < 2 or not root or not root.visgroup_system:
-		return false
-	var group_name = "group_%d" % Time.get_ticks_usec()
-	var before: Dictionary = root.capture_state()
-	root.visgroup_system.group_selection(group_name, nodes)
-	HFUndoHelper.commit_completed(
-		plugin._get_undo_redo(),
-		root,
-		"Group Selection",
-		before,
-		Callable(plugin, "_record_history")
-	)
-	if plugin.dock:
-		plugin.dock.refresh_visgroup_ui()
-	return true
+	return HFPluginGroups.group_selected(plugin, root)
 
 
 static func ungroup_selected(plugin: Object, root: Node) -> bool:
-	var nodes = plugin._hammerforge_selection_nodes(root)
-	if nodes.is_empty() or not root or not root.visgroup_system:
-		return false
-	var grouped: Array = []
-	for node in nodes:
-		if str(root.visgroup_system.get_group_of(node)) != "":
-			grouped.append(node)
-	if grouped.is_empty():
-		return false
-	var before: Dictionary = root.capture_state()
-	root.visgroup_system.ungroup_nodes(grouped)
-	HFUndoHelper.commit_completed(
-		plugin._get_undo_redo(),
-		root,
-		"Ungroup Selection",
-		before,
-		Callable(plugin, "_record_history")
-	)
-	if plugin.dock:
-		plugin.dock.refresh_visgroup_ui()
-	return true
+	return HFPluginGroups.ungroup_selected(plugin, root)
 
 
 static func hollow_selected(plugin: Object, root: Node) -> bool:

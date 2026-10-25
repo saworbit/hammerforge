@@ -1407,7 +1407,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
 - **Settings**: Show HUD, Size at cursor, Draw hover preview, Show agent changes, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import, Reset Tool Settings. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level. Under the **Colours** heading at the end of Settings, a colour button sets each overlay colour: Selected brush (the outline of a selected brush or entity, drawn faintly round the rest), Selected face (the tint on faces picked in Face Select), Hover (the outline of the brush under the cursor, and a hovered vertex or edge), Vertex handle and Selected vertex (edges draw the handle colour at half strength), Solid brush and Cut brush (the see-through look of a solid or a cut with no material, and a cut's outline), Cordon wireframe (fainter for a cordon switched off), Extrude up and Extrude down (the hovered face and the ghost while extruding), Draw preview (the solid being drawn), Pending cut (a cut waiting for Apply, and a cut being drawn) ([#1680](https://github.com/saworbit/hammerforge/issues/1680)), the brush entity looks: func_detail, trigger_*, func_wall, func_clip and Other brush entity ([#1760](https://github.com/saworbit/hammerforge/issues/1760)), Agent change (the outline round what an agent just changed over the bridge, which **Show agent changes** turns off) ([#1653](https://github.com/saworbit/hammerforge/issues/1653)), the three Compare colours, and Face Direction: front and Face Direction: back (the two sides of every face while **Show Face Direction** is on) ([#1869](https://github.com/saworbit/hammerforge/issues/1869)). A change shows in the viewport at once, on what is already drawn. **High Contrast** sets all twenty three to colours that stay apart for the common kinds of colour blindness, with solids and cuts told apart by brightness as well as hue and no brush entity drawn blue under the blue selection, and **Reset** puts the defaults back. The colours are kept with your preferences, not in the level, and never reach a bake.
 - **Performance**: Health summary (green Healthy, yellow Edits Slowing above 100 brushes and entities, red Edits Pause above 1,000; the pause after an edit is what grows with the count, [#1622](https://github.com/saworbit/hammerforge/issues/1622)), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time from pressing Bake to the result, waits included ([#1623](https://github.com/saworbit/hammerforge/issues/1623)), recommended chunk size.
-- **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Cast Shadows for the highlighted visgroup, Group Sel/Ungroup.
+- **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Cast Shadows for the highlighted visgroup, Group Sel/Ungroup, and the Groups list with Rename, Open, Add Sel and Rem Sel.
 - **Cordon**: Enable checkbox, cordon list with Remove, a Bake checkbox and a name for the chosen cordon, min/max spinboxes for it, Set from Selection, Add from Selection.
 - **Prefabs**: Save/search/filter/delete prefabs. Browse with tag filtering and variant indicators. Drag-from the library to instantiate. Save Linked for live propagation. Right-click for variant/tag editing.
 - **Agent Bridge**: Allow agent connections (MCP), a lamp, what the bridge is doing, and what the agent last did. See [Agent Bridge (MCP)](HammerForge_Agent_Bridge.md).
@@ -2536,13 +2536,24 @@ and the bake ignores it. The two colours are **Face Direction: front** and
 Groups let you persistently link brushes/entities so they select and move together.
 
 1. Select the brushes/entities you want to group.
-2. Press **Ctrl+G** (or click **Group Sel** in the Test tab → Visgroups & Groups section).
+2. Press **Ctrl+G** (or click **Group Sel** in the Test tab → Visgroups & Groups section). It asks for a name, with one ready from what is selected, such as "Group of 6 brushes"; Enter takes it.
 3. Click any member of the group -- all members are selected automatically.
-4. Press **Ctrl+U** (or click **Ungroup**) to dissolve the group.
+4. Press **Ctrl+U** (or click **Ungroup**) to take the group apart.
+
+**Groups inside groups** ([#1723](https://github.com/saworbit/hammerforge/issues/1723)). Select a roof group and a wall group and press Ctrl+G, and the two go into the new group as groups: a click on any piece selects the whole house. Ungroup takes one level apart, so the roof and the walls are groups again.
+
+**Opening a group.** Double click a group, or use **Open Group** in the palette or **Open** under the Groups list, to change its members one at a time without ungrouping it. Inside, a click selects one member, or one group inside it, and the rest of the level is drawn faded. Opening a group inside goes one level further in. **Escape** closes one level and selects the group it closed; a click on something outside closes it too.
+
+**The Groups list**, under the group buttons, shows every group in the level, those inside another indented under it, each with how many it holds: "House (4)". A click on a row selects that group. **Rename** gives the highlighted group a new name (or use **Rename Group** in the palette), **Open** opens it, and **Add Sel** and **Rem Sel** put the selection in it or take it out without taking the rest apart. **Add to Group** and **Remove from Group** in the palette do the same for the highlighted group, or the open one.
+
+**Duplicates.** Ctrl+D of a whole group makes a second group, "House copy", with copies of the groups inside it, so a click on the copy selects only the copies. Copying a member of an open group adds the copy to that group.
+
+A selected group's name shows above it in the viewport.
 
 Notes:
-- Each node can belong to one group at a time.
-- Groups persist in `.hflevel` saves and undo/redo state.
+- A brush or entity is in one group, which can be inside another.
+- Names and nesting persist in `.hflevel` saves, the scene and undo/redo state. A level saved before nesting opens with its groups as they were.
+- The open group is the editor's, not the level's: it is not saved, and opening or closing one is not an undo step.
 
 ## Per-Face UV Controls
 

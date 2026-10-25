@@ -11,6 +11,7 @@ const HFUIFactory = preload("ui/hf_ui_factory.gd")
 const HFBakeSplit = preload("hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFViewFiltersType = preload("hf_view_filters.gd")
+const HFGroupNameDialogType = preload("ui/hf_group_name_dialog.gd")
 
 ## How far a cordon bound may sit from the origin.
 ##
@@ -219,6 +220,180 @@ static func setup_visgroup_ui(dock: Object) -> void:
 	group_buttons.add_child(dock.ungroup_btn)
 	_fill_lines(group_buttons)
 	content.add_child(group_buttons)
+	_setup_group_list(dock, content)
+
+
+## Every group in the level, the ones inside another under it, each with how many
+## it holds (#1723). A click selects the group.
+static func _setup_group_list(dock: Object, content: Control) -> void:
+	var head := Label.new()
+	head.text = "Groups"
+	head.add_theme_font_size_override("font_size", 11)
+	head.modulate = Color(1, 1, 1, 0.7)
+	content.add_child(head)
+	dock.group_list = ItemList.new()
+	dock.group_list.name = "GroupList"
+	dock.group_list.custom_minimum_size.y = 80
+	dock.group_list.select_mode = ItemList.SELECT_SINGLE
+	dock.group_list.allow_reselect = true
+	dock.group_list.accessibility_name = "Groups"
+	dock.group_list.item_clicked.connect(dock._on_group_item_clicked)
+	content.add_child(dock.group_list)
+	var row = HFUIFactory.make_wrap_row()
+	for spec in [
+		["Rename", "Rename the highlighted group", "_on_group_rename", "group_rename_btn"],
+		[
+			"Open",
+			"Open the highlighted group: its members pick one at a time, the rest is faded. Escape closes it",
+			"_on_group_open",
+			"group_open_btn"
+		],
+		[
+			"Add Sel",
+			"Put the selection in the highlighted group, groups as groups",
+			"_on_group_add_selection",
+			"group_add_sel_btn"
+		],
+		[
+			"Rem Sel",
+			"Take the selection out of the highlighted group, and leave the rest of it",
+			"_on_group_remove_selection",
+			"group_remove_sel_btn"
+		],
+	]:
+		var button := Button.new()
+		button.text = spec[0]
+		button.tooltip_text = spec[1]
+		button.pressed.connect(Callable(dock, spec[2]))
+		row.add_child(button)
+		dock.set(spec[3], button)
+	_fill_lines(row)
+	content.add_child(row)
+
+
+## The Groups list again from the level: each group in order, those inside one
+## after it and indented, "Bridge (6)", and the open one marked.
+static func refresh_group_list(dock: Object) -> void:
+	var group_list: ItemList = dock.get("group_list")
+	if group_list == null or not is_instance_valid(group_list):
+		return
+	var highlighted := selected_group_name(dock)
+	group_list.clear()
+	var system = dock.level_root.get("visgroup_system") if dock.level_root else null
+	if system == null:
+		return
+	for group_name in system.get_group_names():
+		if system.parent_of_group(group_name) == "":
+			_add_group_rows(dock, system, group_name, 0)
+	for i in group_list.item_count:
+		if str(group_list.get_item_metadata(i)) == highlighted:
+			group_list.select(i)
+
+
+static func _add_group_rows(dock: Object, system: Object, group_name: String, depth: int) -> void:
+	var group_list: ItemList = dock.group_list
+	var label := (
+		"%s%s (%d)"
+		% ["    ".repeat(depth), group_name, system.group_members_deep(group_name).size()]
+	)
+	if str(system.open_group) == group_name:
+		label += "  (open)"
+	var index := group_list.add_item(label)
+	group_list.set_item_metadata(index, group_name)
+	# A loop a hand edit made would otherwise never end.
+	if depth < 32:
+		for child in system.child_groups(group_name):
+			_add_group_rows(dock, system, child, depth + 1)
+
+
+## The group highlighted in the Groups list, or "".
+static func selected_group_name(dock: Object) -> String:
+	var group_list: ItemList = dock.get("group_list")
+	if group_list == null or not is_instance_valid(group_list):
+		return ""
+	var picked := group_list.get_selected_items()
+	if picked.is_empty():
+		return ""
+	return str(group_list.get_item_metadata(picked[0]))
+
+
+## A click on a row selects that group. One inside another opens the one around
+## it first, as a click in the viewport would need.
+static func on_group_item_clicked(dock: Object, index: int, mouse_button_index: int) -> void:
+	if dock == null or mouse_button_index != MOUSE_BUTTON_LEFT or not dock.level_root:
+		return
+	var group_name := str(dock.group_list.get_item_metadata(index))
+	var system = dock.level_root.visgroup_system
+	if system == null or not system.groups.has(group_name):
+		return
+	var around: String = system.parent_of_group(group_name)
+	if around != "" and not system.group_path(str(system.open_group)).has(around):
+		system.set_open_group(around)
+	dock.group_selection_requested.emit(group_name)
+	refresh_group_list(dock)
+
+
+static func on_group_rename(dock: Object) -> void:
+	var group_name := selected_group_name(dock)
+	if group_name == "" or not dock.level_root:
+		if dock and dock.has_method("show_toast"):
+			dock.show_toast("Highlight a group in the Groups list first", 1)
+		return
+	var dialog := HFGroupNameDialogType.make(
+		"Rename Group",
+		group_name,
+		func(new_name: String):
+			if not is_instance_valid(dock) or not dock.level_root:
+				return
+			var system = dock.level_root.visgroup_system
+			if new_name == group_name:
+				return
+			if system.groups.has(new_name):
+				dock.show_toast('A group is already called "%s"' % new_name, 1)
+				return
+			dock._commit_state_action("Rename Group", "rename_group", [group_name, new_name])
+			refresh_visgroup_ui(dock)
+	)
+	dialog.canceled.connect(func(): dialog.queue_free())
+	dialog.confirmed.connect(func(): dialog.queue_free(), CONNECT_DEFERRED)
+	dock.add_child(dialog)
+	dialog.popup_centered()
+
+
+static func on_group_open(dock: Object) -> void:
+	var group_name := selected_group_name(dock)
+	if group_name == "" or not dock.level_root:
+		return
+	dock.level_root.visgroup_system.set_open_group(group_name)
+	refresh_group_list(dock)
+	dock.show_toast("Open: %s. Its members pick one at a time. Escape closes it" % group_name, 0)
+
+
+static func on_group_add_selection(dock: Object) -> void:
+	var group_name := selected_group_name(dock)
+	if group_name == "" or not dock.level_root or dock._selection_nodes.is_empty():
+		return
+	if not dock._guard_selection_action("Add to Group"):
+		return
+	dock._commit_state_action(
+		"Add to Group", "add_units_to_group", [dock._selection_nodes.duplicate(), group_name], true
+	)
+	refresh_visgroup_ui(dock)
+
+
+static func on_group_remove_selection(dock: Object) -> void:
+	var group_name := selected_group_name(dock)
+	if group_name == "" or not dock.level_root or dock._selection_nodes.is_empty():
+		return
+	if not dock._guard_selection_action("Remove from Group"):
+		return
+	dock._commit_state_action(
+		"Remove from Group",
+		"remove_units_from_group",
+		[dock._selection_nodes.duplicate(), group_name],
+		true
+	)
+	refresh_visgroup_ui(dock)
 
 
 ## What is shown, apart from each visgroup's own eye (#1697): isolate, hide the
@@ -467,6 +642,7 @@ static func refresh_visgroup_ui(dock: Object) -> void:
 		if not notes.is_empty():
 			dock.visgroup_list.set_item_tooltip(index, ". ".join(notes))
 	sync_visgroup_cast_shadow(dock)
+	refresh_group_list(dock)
 	_sync_view_controls(dock, system)
 
 
@@ -749,17 +925,31 @@ static func on_visgroup_rename(dock: Object) -> void:
 	line_edit.grab_focus()
 
 
+## Group Selection from the dock: the name it asks for, then the selection
+## grouped as Ctrl+G groups it, whole groups going in as groups (#1723).
 static func on_group_selection(dock: Object) -> void:
 	if dock == null or not dock.level_root or dock._selection_nodes.size() < 2:
 		return
 	if not dock._guard_selection_action("Group Selection"):
 		return
-	dock._commit_state_action(
+	var system = dock.level_root.visgroup_system
+	if system == null:
+		return
+	var nodes: Array = dock._selection_nodes.duplicate()
+	var dialog := HFGroupNameDialogType.make(
 		"Group Selection",
-		"group_selection",
-		["group_%d" % Time.get_ticks_usec(), dock._selection_nodes.duplicate()],
-		true
+		system.default_group_name(nodes),
+		func(group_name: String):
+			if not is_instance_valid(dock) or not dock.level_root:
+				return
+			var unique: String = dock.level_root.visgroup_system.unique_group_name(group_name)
+			dock._commit_state_action("Group Selection", "group_units", [unique, nodes], true)
+			refresh_visgroup_ui(dock)
 	)
+	dialog.canceled.connect(func(): dialog.queue_free())
+	dialog.confirmed.connect(func(): dialog.queue_free(), CONNECT_DEFERRED)
+	dock.add_child(dialog)
+	dialog.popup_centered()
 
 
 static func on_ungroup_selection(dock: Object) -> void:
@@ -768,7 +958,7 @@ static func on_ungroup_selection(dock: Object) -> void:
 	if not dock._guard_selection_action("Ungroup Selection"):
 		return
 	dock._commit_state_action(
-		"Ungroup Selection", "ungroup_nodes", [dock._selection_nodes.duplicate()], true
+		"Ungroup Selection", "ungroup_units", [dock._selection_nodes.duplicate()], true
 	)
 
 

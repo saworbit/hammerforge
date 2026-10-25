@@ -38,6 +38,7 @@ static func on_editor_selection_changed(plugin: Object) -> void:
 			root.clear_face_selection()
 		plugin.dock.show_toast("Face Select closed for object editing", 0)
 	var normalized_nodes := normalize_editor_selection(plugin, nodes, root)
+	close_open_group_picked_outside(plugin, root, selection_before, normalized_nodes)
 	var remove_group: bool = plugin.group_removal_requested(
 		plugin._native_selection_active,
 		plugin._native_selection_additive,
@@ -148,10 +149,28 @@ static func expand_native_group_selection(
 	for node in selection_before + current_selection:
 		if not is_instance_valid(node):
 			continue
-		var group_id: String = str(root.visgroup_system.get_group_of(node))
+		# The whole of the outermost group, or with a group open the group one level
+		# inside it, which is what a click selects (#1723).
+		var group_id: String = str(root.visgroup_system.selection_unit_of(node))
 		if group_id != "" and not groups.has(group_id):
-			groups[group_id] = root.visgroup_system.get_group_members(group_id)
+			groups[group_id] = root.visgroup_system.group_members_deep(group_id)
 	return expand_native_group_members(selection_before, current_selection, toggle, groups)
+
+
+## A pick of something outside the open group closes it (#1723), so the pick
+## selects as it would with no group open.
+static func close_open_group_picked_outside(
+	plugin: Object, root: Node, selection_before: Array, picked: Array
+) -> void:
+	var system = root.get("visgroup_system") if root else null
+	if system == null or str(system.open_group) == "":
+		return
+	for node in picked:
+		if not selection_before.has(node) and not system.inside_open_group(node):
+			system.set_open_group("")
+			if plugin.get("dock"):
+				plugin.dock.refresh_visgroup_ui()
+			return
 
 
 static func expand_native_group_members(

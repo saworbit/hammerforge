@@ -310,6 +310,7 @@ addons/hammerforge/
   plugin_texture_keys.gd The nudge keys sliding and turning the texture on the picked faces in Face Select
   plugin_command_line.gd Runs what is typed on the command line, and command scripts read from a file
   plugin_adjust_last.gd  Adjust Last: the last command's settings and how to make its step again with others
+  plugin_groups.gd       Groups: Group Selection with a name, Ungroup a level, open and close a group, add, remove, rename
   plugin_compare.gd      Compare With: reads the other `.hflevel`, draws the outlines and fills the Console's Compare tab
   plugin_crash_journal.gd  The crash journal in the editor: started first, fed by every undo step and bridge call, read on the next start
   plugin_mcp.gd          The MCP bridge in the editor: the session's dispatcher, and the listener the Test tab turns on and off
@@ -479,6 +480,7 @@ addons/hammerforge/
     hf_coach_marks.gd      First-use tool guides (10 tools, per-tool dismissal, auto-trigger on activation)
     hf_operation_replay.gd Operation timeline with undo/redo replay (Ctrl+Shift+T toggle)
     hf_example_library.gd  Example level browser (5 built-in demos, search, annotations, one-click load)
+    hf_group_name_dialog.gd The name question Group Selection and Rename Group ask
     hf_selection_filter.gd Selection filter popover (by normal/material/similar/visgroup/type)
     paint_tab_builder.gd   Builds Paint tab sections + signal connections
     entity_tab_builder.gd  Builds Entity Properties + Entity I/O + I/O Wiring sections (all context-hidden until entity selected)
