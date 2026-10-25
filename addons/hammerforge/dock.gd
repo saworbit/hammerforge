@@ -470,6 +470,8 @@ var undo_redo: Object = null
 var connected_root: Node = null
 var snap_button_group: ButtonGroup
 var syncing_snap := false
+## The floor grid's turn about up, beside its size (#1893).
+var grid_angle_spin: SpinBox = null
 var snap_grid_btn: Button = null
 var snap_vertex_btn: Button = null
 var snap_center_btn: Button = null
@@ -3409,6 +3411,22 @@ func set_selection_nodes(nodes: Array) -> void:
 			_io_wiring_panel.set_source_entity(null)
 
 
+## A typed Grid Angle turns the floor grid, its lines through where they ran.
+func _on_grid_angle_changed(value: float) -> void:
+	if not is_instance_valid(level_root) or not level_root.grid_system:
+		return
+	level_root.grid_system.set_turn(value)
+	if is_instance_valid(_plugin):
+		_plugin._update_hud_context()
+
+
+## The level's grid turned, from the field, Align Grid or Reset Grid: the field
+## shows the turn it took, between -45 and 45.
+func _on_root_grid_turn_changed(degrees: float) -> void:
+	if grid_angle_spin:
+		grid_angle_spin.set_value_no_signal(degrees)
+
+
 func _on_grid_position_command(action: String) -> void:
 	if not is_instance_valid(level_root) or not level_root.grid_system:
 		return
@@ -3433,6 +3451,20 @@ func _build_snap_mode_buttons() -> void:
 		return
 	var parent = grid_row.get_parent()
 	var idx = grid_row.get_index() + 1
+	var angle_label := Label.new()
+	angle_label.text = "Angle"
+	grid_row.add_child(angle_label)
+	grid_angle_spin = SpinBox.new()
+	grid_angle_spin.name = "GridAngle"
+	grid_angle_spin.min_value = -180.0
+	grid_angle_spin.max_value = 180.0
+	grid_angle_spin.step = 0.01
+	grid_angle_spin.custom_arrow_step = 15.0
+	grid_angle_spin.suffix = "°"
+	grid_angle_spin.accessibility_name = "Grid Angle"
+	grid_angle_spin.tooltip_text = "Turn the floor grid about up. 0 is the world's grid"
+	grid_angle_spin.value_changed.connect(_on_grid_angle_changed)
+	grid_row.add_child(grid_angle_spin)
 	var position_row := HFUIFactory.make_wrap_row()
 	position_row.name = "GridPosition"
 	for pair in [

@@ -147,8 +147,11 @@ func _setup_grid_label() -> void:
 
 
 ## Show snap metres and, when axis is nonempty, that axis and its plane position.
-## Omitting axis preserves the snap-only label used by existing callers.
-func update_grid_snap(value: float, axis: String = "", plane_position: float = 0.0) -> void:
+## Omitting axis preserves the snap-only label used by existing callers. A grid
+## turned `turn` degrees says so after its size, as `Grid: 0.5 @ 30°` (#1893).
+func update_grid_snap(
+	value: float, axis: String = "", plane_position: float = 0.0, turn: float = 0.0
+) -> void:
 	if not _grid_label:
 		return
 	# Format: display exact value, strip trailing zeros
@@ -161,6 +164,13 @@ func update_grid_snap(value: float, axis: String = "", plane_position: float = 0
 		# raised an engine error on every fractional snap.
 		var s := String.num(value, 4).rstrip("0").rstrip(".")
 		text = "Grid: %s" % s
+	if turn != 0.0:
+		var angle := (
+			"%d" % int(roundf(turn))
+			if is_equal_approx(turn, roundf(turn))
+			else String.num(turn, 2).rstrip("0").rstrip(".")
+		)
+		text += " @ %s°" % angle
 	if axis != "":
 		var height := String.num(plane_position, 4).rstrip("0").rstrip(".")
 		if height == "" or height == "-":

@@ -31,15 +31,18 @@ const AXES: Array[Vector3] = [
 
 
 ## The move for `keycode`: by the view when `camera` is given, else the fixed
-## mapping. Zero for a key that is no nudge key.
-static func nudge_direction(keycode: int, camera: Camera3D = null) -> Vector3:
+## mapping. Zero for a key that is no nudge key. On a grid turned by `turn`, along
+## the grid's own axes rather than the world's (#1893).
+static func nudge_direction(
+	keycode: int, camera: Camera3D = null, turn: Basis = Basis.IDENTITY
+) -> Vector3:
 	if not FIXED.has(keycode):
 		return Vector3.ZERO
 	if keycode == KEY_PAGEUP or keycode == KEY_PAGEDOWN:
 		return FIXED[keycode]
 	if camera == null or not is_instance_valid(camera):
-		return FIXED[keycode]
-	var basis := camera.global_transform.basis.orthonormalized()
+		return turn * FIXED[keycode]
+	var basis := turn.inverse() * camera.global_transform.basis.orthonormalized()
 	var screen_up: Vector3 = basis.y
 	var screen_right: Vector3 = basis.x
 	var horizontal := camera.projection != Camera3D.PROJECTION_ORTHOGONAL
@@ -54,13 +57,13 @@ static func nudge_direction(keycode: int, camera: Camera3D = null) -> Vector3:
 		screen_right.y = 0.0
 	match keycode:
 		KEY_UP:
-			return nearest_axis(screen_up, horizontal)
+			return turn * nearest_axis(screen_up, horizontal)
 		KEY_DOWN:
-			return nearest_axis(-screen_up, horizontal)
+			return turn * nearest_axis(-screen_up, horizontal)
 		KEY_LEFT:
-			return nearest_axis(-screen_right, horizontal)
+			return turn * nearest_axis(-screen_right, horizontal)
 		_:
-			return nearest_axis(screen_right, horizontal)
+			return turn * nearest_axis(screen_right, horizontal)
 
 
 ## The world axis nearest `direction`, among the horizontal four when

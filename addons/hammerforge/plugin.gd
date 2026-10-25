@@ -1090,10 +1090,13 @@ func _handle_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vect
 
 ## The way an arrow or Page key moves the selection: along the world axis
 ## nearest its direction in the view it was pressed in, unless the mapper keeps
-## the fixed mapping (#1716).
+## the fixed mapping (#1716). On a turned grid, its axes (#1893).
 func _get_nudge_direction(keycode: int) -> Vector3:
 	var follow := _user_prefs == null or bool(_user_prefs.get_pref("nudge_follows_view", true))
-	return HFViewAxes.nudge_direction(keycode, last_3d_camera if follow else null)
+	var root = _get_level_root()
+	var grid = root.get("grid_system") if root else null
+	var turn: Basis = grid.grid_frame().basis if grid else Basis.IDENTITY
+	return HFViewAxes.nudge_direction(keycode, last_3d_camera if follow else null, turn)
 
 
 ## The last move, as the HUD shows it for a moment: [text, when].

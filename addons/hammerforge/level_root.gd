@@ -653,6 +653,8 @@ signal bake_progress(value: float, label: String)
 
 # Settings
 signal grid_snap_changed(value: float)
+## The grid turned about its normal, or back to the world's grid at 0 (#1893).
+signal grid_turn_changed(degrees: float)
 ## The level's settings were set from a file or an undo step, all at once, so
 ## anything showing them has to read them again (#968).
 signal settings_applied
@@ -5743,6 +5745,8 @@ func _snap_point(point: Vector3, exclude_ids: Array = []) -> Vector3:
 		return snap_system.snap_point(point, grid_snap, exclude_ids)
 	if grid_snap <= 0.0:
 		return point
+	if grid_system:
+		return grid_system.grid_point(point, grid_snap)
 	return point.snapped(Vector3(grid_snap, grid_snap, grid_snap))
 
 

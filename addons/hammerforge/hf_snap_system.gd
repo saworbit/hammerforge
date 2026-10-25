@@ -292,7 +292,10 @@ func _choices(point: Vector3, step: float, exclude_ids: Array) -> Array:
 	if _only_kind == KIND_GRID and step <= 0.0:
 		step = float(root.get("grid_snap")) if root else 0.0
 	if step > 0.0 and (_only_kind == "" or _only_kind == KIND_GRID):
-		var grid_snapped := point.snapped(Vector3(step, step, step))
+		var grid = root.get("grid_system") if root else null
+		var grid_snapped: Vector3 = (
+			grid.grid_point(point, step) if grid else point.snapped(Vector3(step, step, step))
+		)
 		nearest[KIND_GRID] = [grid_snapped, point.distance_to(grid_snapped)]
 	var running := enabled_modes
 	if _only_kind != "" and _only_kind != KIND_GRID:
