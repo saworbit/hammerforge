@@ -34,6 +34,7 @@ const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFObjectFilter = preload("../hf_object_filter.gd")
 const HFEntityCensus = preload("../hf_entity_census.gd")
 const HFLevelPlan = preload("../hf_level_plan.gd")
+const HFDimensions = preload("../hf_dimensions.gd")
 const HFAcceptedFindings = preload("../hf_accepted_findings.gd")
 
 ## World axes a face selector may name.
@@ -1519,7 +1520,7 @@ func entity_dict(root: Node, entity: DraftEntity) -> Dictionary:
 	for key in entity.entity_data:
 		properties[str(key)] = _plain(entity.entity_data[key])
 	var degrees := HFMcpProtocol.degrees_from_basis(entity.global_transform.basis)
-	return {
+	var out := {
 		"entity": str(root.get_path_to(entity)),
 		"entity_class": entity.entity_class,
 		"name": str(entity.get_meta("entity_name", "")),
@@ -1530,6 +1531,18 @@ func entity_dict(root: Node, entity: DraftEntity) -> Dictionary:
 		"prefab": prefab_of(root, entity),
 		"locked": is_locked(root, entity),
 	}
+	# A dimension's length now and its check, worked out from what its ends are on
+	# (#1699).
+	if HFDimensions.is_dimension(entity):
+		var measured := HFDimensions.measure(root, entity)
+		out["dimension"] = {
+			"length": float(measured["length"]),
+			"check": str(measured["check"]),
+			"needs": float(measured["needs"]),
+			"passes": bool(measured["passes"]),
+			"detached": bool(measured["detached"]),
+		}
+	return out
 
 
 ## An entity's wiring, in the words hf_add_entity_output takes.

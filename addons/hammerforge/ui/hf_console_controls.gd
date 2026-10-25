@@ -72,6 +72,12 @@ const GROUPS := [
 				"A word beside the snap marker says what the point is on: Vertex, Midpoint, Centre, Perpendicular or Grid. The marker's shape says it too."
 			},
 			{
+				"pref": "show_dimensions",
+				"label": "Show dimensions",
+				"help":
+				"Draws the dimensions kept in the level, with their lengths: amber with an end come loose, red when a check fails."
+			},
+			{
 				"pref": "nudge_follows_view",
 				"label": "Arrows follow the view",
 				"help":

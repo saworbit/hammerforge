@@ -39,6 +39,7 @@ const HFSettingsFile = preload("hf_settings_file.gd")
 const HFPluginCompare = preload("plugin_compare.gd")
 const HFPluginAdjustLast = preload("plugin_adjust_last.gd")
 const HFPluginCommandLine = preload("plugin_command_line.gd")
+const HFPluginDimensions = preload("plugin_dimensions.gd")
 const HFPluginGroups = preload("plugin_groups.gd")
 const HFPluginRun = preload("plugin_run.gd")
 @warning_ignore_restore("shadowed_global_identifier")
@@ -745,6 +746,8 @@ static func execute(
 					plugin._activate_external_tool(tool_id, plugin.active_root)
 		"snap_next_vertex", "snap_next_midpoint", "snap_next_centre", "snap_next_perpendicular", "snap_next_grid":
 			HFPluginSnapFeedbackType.limit(plugin, action)
+		"keep_ruler_as_dimension":
+			HFPluginDimensions.keep_last_ruler(plugin)
 		"cancel_drag":
 			if root:
 				root.cancel_drag()

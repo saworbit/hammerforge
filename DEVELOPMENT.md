@@ -310,6 +310,7 @@ addons/hammerforge/
   plugin_texture_keys.gd The nudge keys sliding and turning the texture on the picked faces in Face Select
   plugin_command_line.gd Runs what is typed on the command line, and command scripts read from a file
   plugin_adjust_last.gd  Adjust Last: the last command's settings and how to make its step again with others
+  plugin_dimensions.gd   Dimensions drawn over the viewport, and keeping a Measure ruler as one
   plugin_groups.gd       Groups: Group Selection with a name, Ungroup a level, open and close a group, add, remove, rename
   plugin_run.gd          Repeat Run: the commands, moves and turns since the selection changed by hand, played again as one step
   plugin_compare.gd      Compare With: reads the other `.hflevel`, draws the outlines and fills the Console's Compare tab
@@ -342,6 +343,7 @@ addons/hammerforge/
   hf_update_check.gd     HFUpdateCheck: whether a newer HammerForge is out, and whether to ask at all
   hf_entity_census.gd    Every entity in a level, counted by class and written out as a table
   hf_level_plan.gd       A top down plan of a level, drawn from its brushes so it draws headless and in CI
+  hf_dimensions.gd       Dimensions: ends attached to brush corners, edges and faces, measured and checked
   hf_notes.gd            Notes left in the level: the editor only `note` entity, its kinds, author and done flag
   hf_command_line.gd     Reads a typed command line (`hollow 0.125`, `hollow thickness=0.125`) into a command and its values
   hf_level_compare.gd    What changed between two level bundles: brushes face by face, entities, wires, visgroups, cordons and paint

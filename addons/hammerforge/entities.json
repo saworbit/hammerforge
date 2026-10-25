@@ -610,6 +610,55 @@
       }
     ]
   },
+  "dimension": {
+    "class": "",
+    "category": "Editor",
+    "editor_only": true,
+    "description": "A length kept in the level: between two brush corners, edges or faces it follows, held to a check. Never baked, exported or run.",
+    "preview": {
+      "type": "box",
+      "size": [
+        0.12,
+        0.12,
+        0.12
+      ],
+      "color": "#f2f2f2",
+      "alpha": 0.9
+    },
+    "outputs": [],
+    "inputs": [],
+    "properties": [
+      {
+        "name": "title",
+        "type": "string",
+        "label": "Title",
+        "default": "Dimension"
+      },
+      {
+        "name": "check",
+        "type": "enum",
+        "label": "Check",
+        "enum_values": [
+          "None",
+          "At least player width",
+          "At least player height",
+          "At most jump height",
+          "At most step height",
+          "At least",
+          "At most"
+        ],
+        "default": "None",
+        "tooltip": "Drawn red, and listed by Validate, when the length fails it."
+      },
+      {
+        "name": "value",
+        "type": "float",
+        "label": "Value (m)",
+        "default": 0.0,
+        "tooltip": "The length At least and At most hold it to."
+      }
+    ]
+  },
   "note": {
     "class": "",
     "category": "Editor",

@@ -17,6 +17,7 @@ const HFConvexClip = preload("../hf_convex_clip.gd")
 const HFHiddenFaceSearch = preload("../hf_hidden_face_search.gd")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFNotes = preload("../hf_notes.gd")
+const HFDimensions = preload("../hf_dimensions.gd")
 const HFAcceptedFindings = preload("../hf_accepted_findings.gd")
 const HFValidationChecks = preload("../hf_validation_checks.gd")
 
@@ -324,6 +325,10 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	_check = "notes"
 	if _runs("notes"):
 		_check_open_todo_notes(issues)
+	# A dimension held to the player, or to a length, that the level breaks (#1699).
+	_check = "dimensions"
+	if _runs("dimensions"):
+		_check_dimensions(issues)
 	# Stairs, doorways and ramps built from brushes, against the player (#1046).
 	_check = "traversal"
 	if _runs("traversal"):
@@ -1056,6 +1061,14 @@ func _check_spawn(issues: Array) -> void:
 		),
 		spawn
 	)
+
+
+## Each dimension whose check fails, named, with its length and what it needs.
+func _check_dimensions(issues: Array) -> void:
+	for dimension in HFDimensions.dimensions(root):
+		var measured := HFDimensions.measure(root, dimension)
+		if not bool(measured["passes"]):
+			_found(issues, HFDimensions.failure_text(dimension, measured), dimension)
 
 
 ## Each To Do note not marked Done, when the level asks for it (#1818), so a ship
