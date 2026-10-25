@@ -125,6 +125,9 @@ func test_an_array_shows_its_count_and_a_new_count_makes_that_many():
 	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "count", 4))
 	await rig.frame()
 	assert_eq(level._iter_managed_brush_nodes().size(), 5, "and four copies")
+	assert_eq(
+		int(dock.dup_count_spin.value), 4, "the dock's count follows, for the next one (#1896)"
+	)
 	await rig.leave_level(level)
 
 

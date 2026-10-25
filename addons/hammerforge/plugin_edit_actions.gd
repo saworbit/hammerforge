@@ -459,6 +459,16 @@ static func _note_run(plugin: Object, id: String, settings: Dictionary, recipe: 
 		plugin.call("_note_last_run", id, settings, recipe)
 
 
+## A Hollow's thickness changed in Adjust Last, on the dock's Hollow box too, so
+## the next Hollow and Repeat Last Command take it (#1896).
+static func _hollow_to_dock(settings: Dictionary, plugin: Object) -> void:
+	if not is_instance_valid(plugin):
+		return
+	var dock = plugin.get("dock")
+	if dock and dock.get("hollow_thickness") and settings.has("thickness"):
+		dock.hollow_thickness.value = float(settings["thickness"])
+
+
 static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bool:
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
 	var targets := collect_managed_targets(plugin, root)
@@ -544,7 +554,12 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 				true
 			)
 			var again := func(s: Dictionary) -> Array: return [brush_id, float(s["thickness"])]
-			var recipe := {"action": "Hollow", "method": "hollow_brush_by_id", "args": again}
+			var recipe := {
+				"action": "Hollow",
+				"method": "hollow_brush_by_id",
+				"args": again,
+				"dock": _hollow_to_dock.bind(plugin),
+			}
 			_note_run(plugin, "hollow", {"thickness": thickness}, recipe)
 			dlg.queue_free()
 	)
