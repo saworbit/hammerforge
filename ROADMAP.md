@@ -21,7 +21,7 @@ panel included; it says nothing of how deep each one goes.
 
 The last list is done, below. What comes after it has not been chosen yet.
 
-Under way: a translatable interface ([#1702](https://github.com/saworbit/hammerforge/issues/1702)). Its first step, a translation domain of HammerForge's own and a POT kept current, is in #1890.
+Under way: a translatable interface ([#1702](https://github.com/saworbit/hammerforge/issues/1702)). Its first step, a translation domain of HammerForge's own and a POT kept current, landed in #1890.
 
 What is done is below, newest first.
 
