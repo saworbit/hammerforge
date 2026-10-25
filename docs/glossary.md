@@ -85,6 +85,12 @@ clicked with the Hull tool, whether they touch or not.
 
 - **In HammerForge:** Hull of Selection and the Hull tool.
 
+### Sweep
+A run of brushes made by carrying picked faces along a straight run, an arc or an
+S bend, one convex brush per piece, the pieces meeting face to face.
+
+- **In HammerForge:** Sweep Faces in the palette.
+
 ### Face
 One flat side of a brush, with its own material and texture settings.
 
@@ -182,10 +188,13 @@ brush can be in several.
 - **In HammerForge:** the Manage tab's Visgroups & Groups.
 
 ### Group
-Brushes and entities that select and move together. A brush is in one group at
-most. A visgroup decides what is seen; a group decides what is picked up together.
+Brushes and entities that select and move together, under a name. A brush is in
+one group, and a group can be inside another. Opening a group lets its members be
+picked one at a time. A visgroup decides what is seen; a group decides what is
+picked up together.
 
-- **In HammerForge:** the Manage tab's Visgroups & Groups, Group and Ungroup.
+- **In HammerForge:** the Manage tab's Visgroups & Groups and its Groups list,
+  Group and Ungroup, Open Group.
 
 ### View Filters
 The editor's own way to hide a kind of thing, such as triggers or lights, without
@@ -226,6 +235,14 @@ One connection from an output to an input, drawn between the two in the viewport
 Where the player starts in a playtest.
 
 - **In HammerForge:** the Test tab, the spawn entity.
+
+### Dimension
+A length kept in the level. Each end is attached to the brush vertex, edge middle
+or face centre it lies on, or is a point of its own, and a check can hold the
+length to the player's sizes or to a value. Like a note, it is never baked or
+exported.
+
+- **In HammerForge:** K in the Measure tool, Keep Ruler as Dimension, Validate.
 
 ## The level and its files
 
@@ -301,3 +318,24 @@ One entry in the undo history. Most commands make one; a run of quick nudges
 merges into one.
 
 - **In HammerForge:** `Ctrl+Z`, the Undo History browser.
+
+### Adjust Last
+Changing the settings of the command that just ran. Its step is made again with
+the new values, so the history still holds one step for it.
+
+- **In HammerForge:** the Adjust panel in the viewport's corner, Adjust Last in
+  the palette.
+
+### Repeat Run
+Every command, move and turn since the selection last changed by hand, played
+again on what is selected now as one undo step. Repeat Last Command plays only
+the last command.
+
+- **In HammerForge:** the palette.
+
+### Guide
+A dotted line from a marked snap point along a world axis. A point placed near
+one lands on it, or where two cross.
+
+- **In HammerForge:** rest the pointer on a snap point, Track Point for Guides,
+  Clear Guides.
