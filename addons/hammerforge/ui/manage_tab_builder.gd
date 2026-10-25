@@ -10,6 +10,7 @@ const HFBakeProfilesType = preload("../hf_bake_profiles.gd")
 const HFMcpPanelType = preload("hf_mcp_panel.gd")
 const HFOverlayColorsPanelType = preload("hf_overlay_colors_panel.gd")
 const HFStatusBoardType = preload("../hf_status_board.gd")
+const HFAccessibilityType = preload("../hf_accessibility.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -535,6 +536,14 @@ func build(parent: Control) -> void:
 	dock.show_hud = dock._make_check("Show HUD", true)
 	stc.add_child(dock.show_hud)
 
+	# How the interface moves: as the system asks, always, or never (#1703).
+	dock.ui_motion = HFUIFactoryType.make_option(HFAccessibilityType.MOTION_LABELS)
+	dock.ui_motion.tooltip_text = (
+		"Whether toasts, the HUD and the context toolbar slide and fade\n"
+		+ "Follow system does what the system's own setting asks"
+	)
+	stc.add_child(dock._make_label_row("Motion:", dock.ui_motion))
+
 	dock.power_user_overlays = dock._make_check("Power-user overlays", false)
 	stc.add_child(dock.power_user_overlays)
 
@@ -742,6 +751,8 @@ func connect_signals() -> void:
 		dock.save_preset_btn.pressed.connect(dock._on_save_preset)
 	if dock.show_hud:
 		dock.show_hud.toggled.connect(dock._on_show_hud_toggled)
+	if dock.ui_motion:
+		dock.ui_motion.item_selected.connect(dock._on_ui_motion_selected)
 	if dock.power_user_overlays:
 		dock.power_user_overlays.toggled.connect(dock._on_power_user_overlays_toggled)
 	if dock.size_at_cursor:

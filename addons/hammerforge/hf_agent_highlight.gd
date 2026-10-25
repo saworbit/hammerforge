@@ -9,6 +9,7 @@ extends RefCounted
 ## changed, and Focus Selection frames it.
 
 const HFOutlineUtil = preload("hf_outline_util.gd")
+const HFAccessibility = preload("hf_accessibility.gd")
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
@@ -59,7 +60,10 @@ func show(root: Node, nodes: Array, finished: Callable = Callable()) -> void:
 	root.add_child(_mesh, false, Node.INTERNAL_MODE_BACK)
 	_mesh.global_transform = Transform3D.IDENTITY
 	var tween := _mesh.create_tween()
-	tween.tween_method(_fade, 1.0, 0.0, SECONDS)
+	if HFAccessibility.reduce_motion():
+		tween.tween_interval(SECONDS)
+	else:
+		tween.tween_method(_fade, 1.0, 0.0, SECONDS)
 	tween.tween_callback(_done.bind(finished))
 
 
