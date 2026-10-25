@@ -2186,10 +2186,27 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 			)
 		)
 		return plan
+	# A sculpt follows a face that grew onto the union, unless the face it grew
+	# into has more than four corners; then nothing can hold it, and the merge is
+	# refused rather than made with a warning after the work is gone (#1906).
+	var lost := HFConvexClip.sculpts_a_union_would_drop(
+		union["faces"], union["origins"], union["parts"]
+	)
+	if lost > 0:
+		plan["result"] = HFOpResult.fail(
+			"Merge: %d sculpt%s would be lost" % [lost, "" if lost == 1 else "s"],
+			(
+				"A sculpt is laid on a face with four corners, and these brushes join a "
+				+ "sculpted face into one with more. Merge brushes whose sculpted faces "
+				+ "make a four-cornered face, or take the sculpt off first"
+			)
+		)
+		return plan
 	plan["drafts"] = drafts
 	plan["placement"] = placement
 	plan["faces"] = union["faces"]
 	plan["origins"] = union["origins"]
+	plan["parts"] = union["parts"]
 	plan["brush_of"] = brush_of
 	return plan
 
@@ -2330,7 +2347,7 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	var faces: Array = plan["faces"]
 	var origins: Dictionary = plan["origins"]
 	var brush_of: Dictionary = plan["brush_of"]
-	var lost := HFConvexClip.carry_onto_union(faces, origins)
+	var lost := HFConvexClip.carry_onto_union(faces, origins, plan.get("parts", {}))
 	if lost > 0:
 		var why := "A sculpt is laid on its face's corners, and a face that grew has new ones."
 		HFLog.warn("HammerForge: Merge could not keep %d sculpt(s). %s" % [lost, why])

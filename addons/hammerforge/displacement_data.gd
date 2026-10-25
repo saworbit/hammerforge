@@ -424,6 +424,87 @@ func resampled_onto(
 	return out
 
 
+## The sculpts of faces that make one quad together, laid onto that quad as one
+## sculpt of power `out_power`: how a Merge keeps the relief of the faces it
+## joins on one plane (#1906). `parts` is `[[sculpt or null, corners], ...]`, each
+## a quad lying in `corners`' quad, in the same space and order as
+## `resampled_onto()` takes them; a part with no sculpt is flat. Each grid point
+## takes the height of the part it falls in, read off that part's grid as
+## `resampled_onto()` reads one, with the part's own elevation folded in. The
+## elevation and sew group are the first sculpt's. Null unless the quad and every
+## part are quads and at least one part has a sculpt.
+static func merged_onto(
+	parts: Array, corners: PackedVector3Array, out_power: int
+) -> HFDisplacementData:
+	if corners.size() != 4:
+		return null
+	var first: HFDisplacementData = null
+	var any_offsets := false
+	for part in parts:
+		if (part[1] as PackedVector3Array).size() != 4:
+			return null
+		var sculpt: HFDisplacementData = part[0]
+		if sculpt == null:
+			continue
+		if first == null:
+			first = sculpt
+		any_offsets = any_offsets or not sculpt.offsets.is_empty()
+	if first == null:
+		return null
+	var out := HFDisplacementData.new()
+	out.init_flat(out_power)
+	out.elevation = first.elevation
+	out.sew_group = first.sew_group
+	if any_offsets:
+		out.offsets.resize(out.get_vertex_count())
+		out.offsets.fill(Vector3.ZERO)
+	var last := out.get_dim() - 1
+	for row in range(last + 1):
+		for col in range(last + 1):
+			var u := float(col) / float(last)
+			var v := float(row) / float(last)
+			var top: Vector3 = corners[0].lerp(corners[1], u)
+			var bottom: Vector3 = corners[3].lerp(corners[2], u)
+			var point := top.lerp(bottom, v)
+			var part := _part_holding(parts, point)
+			var sculpt: HFDisplacementData = part[0]
+			if sculpt == null:
+				continue
+			var span := sculpt.get_dim() - 1
+			var weights := sculpt._triangle_weights(_place_on_quad(part[1], point) * float(span))
+			var scale := sculpt.elevation / out.elevation if out.elevation != 0.0 else 1.0
+			var count := sculpt.get_vertex_count()
+			var target := row * (last + 1) + col
+			for k in range(0, 6, 2):
+				var source: int = weights[k]
+				var weight: float = weights[k + 1]
+				if sculpt.distances.size() == count:
+					out.distances[target] += sculpt.distances[source] * weight * scale
+				if sculpt.alphas.size() == count:
+					out.alphas[target] += sculpt.alphas[source] * weight
+				if any_offsets and sculpt.offsets.size() == count:
+					out.offsets[target] += sculpt.offsets[source] * weight
+	return out
+
+
+## The part of `parts` that `point` lies in, or the nearest when it lies in none,
+## as `merged_onto()` takes them.
+static func _part_holding(parts: Array, point: Vector3) -> Array:
+	var nearest: Array = parts[0]
+	var nearest_miss := INF
+	for part in parts:
+		var quad: PackedVector3Array = part[1]
+		var at := _place_on_quad(quad, point)
+		var back: Vector3 = quad[0].lerp(quad[1], at.x).lerp(quad[3].lerp(quad[2], at.x), at.y)
+		var miss := back.distance_to(point)
+		if miss < 0.0001:
+			return part
+		if miss < nearest_miss:
+			nearest = part
+			nearest_miss = miss
+	return nearest
+
+
 ## The three grid points of the triangle `at` falls in, with their weights, as
 ## `[index, weight, index, weight, index, weight]`. `at` is (col, row) on this grid,
 ## and the triangles are the ones `cell_triangles()` draws.
