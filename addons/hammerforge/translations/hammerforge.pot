@@ -486,6 +486,10 @@ msgid "Cancel drag (Right-click)"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
+msgid "Carry the faces picked in Face Select along a straight run, an arc or an S bend, as a run of brushes."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
 msgid "Carry the selected face's texture over an edge onto the next face you click."
 msgstr ""
 
@@ -579,6 +583,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Clear Face Selection"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Clear Guides"
 msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
@@ -1893,6 +1901,10 @@ msgstr ""
 msgid "Keep First"
 msgstr ""
 
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Keep Ruler as Dimension"
+msgstr ""
+
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "Keep nothing of this copy's own, and take the prefab's values again"
 msgstr ""
@@ -1903,6 +1915,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Keep texture alignment while moving, resizing, hollowing, or clipping brushes"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Keep the Measure tool's last ruler in the level as a dimension that follows the brushes it ends on. K in the tool does the same."
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_log_view.gd
@@ -2641,6 +2657,10 @@ msgstr ""
 msgid "Play the commands, moves and turns made since the selection last changed by hand again, on the current selection, as one undo step."
 msgstr ""
 
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Point Filter: X and Z from Here"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Point entity classes"
 msgstr ""
@@ -3107,6 +3127,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_command_line_view.gd
 msgid "Run a text file of commands, one a line, each its own undo step."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Run guides from the snap point under the pointer, or stop. Resting the pointer there does the same."
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -3794,6 +3818,10 @@ msgid "Step°:"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
+msgid "Stop every guide from tracked points."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
 msgid "Stop the drag in progress and clear any typed number."
 msgstr ""
 
@@ -3847,6 +3875,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Swap one material for another on every face that wears it."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_face_sweep.gd
+msgid "Sweep Faces"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -3989,6 +4021,10 @@ msgstr ""
 msgid "The next click snaps only to the middle of an edge, then every snap that was on returns."
 msgstr ""
 
+#: addons/hammerforge/hf_command_registry.gd
+msgid "The next pick takes X and Z from the snap point under the pointer, and its height from where it lands."
+msgstr ""
+
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "The property Property compares"
 msgstr ""
@@ -4083,6 +4119,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Top"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Track Point for Guides"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd

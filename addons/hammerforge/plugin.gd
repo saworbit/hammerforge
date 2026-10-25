@@ -14,6 +14,7 @@ const HFPluginCompareType = preload("plugin_compare.gd")
 const HFAccessibilityType = preload("hf_accessibility.gd")
 const HFOverlayColorsType = preload("hf_overlay_colors.gd")
 const HFPluginAdjustLastType = preload("plugin_adjust_last.gd")
+const HFPluginDimensionsType = preload("plugin_dimensions.gd")
 const HFPluginRunType = preload("plugin_run.gd")
 const HFPluginCrashJournalType = preload("plugin_crash_journal.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
@@ -1743,6 +1744,7 @@ func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
 	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
 	HFPluginHud.draw_cursor_size(self, viewport_control)
 	HFPluginSnapFeedback.draw(self, viewport_control)
+	HFPluginDimensionsType.draw(self, viewport_control)
 	if _agent_highlight:
 		_agent_highlight.draw_edge_arrow(viewport_control, last_3d_camera)
 

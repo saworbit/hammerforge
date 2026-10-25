@@ -61,6 +61,7 @@ const HFMcpCommands = preload("hf_mcp_commands.gd")
 const HFUndoHelper = preload("../undo_helper.gd")
 const LevelRoot = preload("../level_root.gd")
 const HFPlayerMetrics = preload("../hf_player_metrics.gd")
+const HFDimensions = preload("../hf_dimensions.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## Tools that only read. Their `operation_id` is ignored and they never touch
@@ -730,6 +731,10 @@ func _status() -> Dictionary:
 			else:
 				counts["brushes"] += 1
 		counts["entities"] = _root.get_entity_count()
+		# How many dimensions the level keeps, and how many fail their check (#1699).
+		var dimensions := HFDimensions.summary(_root)
+		counts["dimensions"] = dimensions["count"]
+		counts["dimensions_failing"] = dimensions["failing"]
 		grid = _root.grid_snap
 	return {
 		"bridge_version": HFMcpProtocol.BRIDGE_VERSION,

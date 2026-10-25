@@ -154,6 +154,9 @@ func test_each_kind_has_its_own_marker_shape_and_label():
 		"perpendicular": "right angle",
 		"grid": "cross",
 		"line": "diamond",
+		"guide": "bar",
+		"guides": "x",
+		"guide edge": "bowtie",
 	}
 	assert_eq(HFPluginSnapFeedbackType.SHAPES, shapes)
 	var seen := {}

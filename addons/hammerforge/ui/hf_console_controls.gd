@@ -72,6 +72,24 @@ const GROUPS := [
 				"A word beside the snap marker says what the point is on: Vertex, Midpoint, Centre, Perpendicular or Grid. The marker's shape says it too."
 			},
 			{
+				"pref": "snap_tracking",
+				"label": "Guides from points",
+				"help":
+				"Rest the pointer on a vertex, midpoint or centre and guides run from it along the world axes; a point placed near one lines up with it."
+			},
+			{
+				"pref": "snap_tracking_shift",
+				"label": "Shift takes a guide point",
+				"help":
+				"Shift over a snap point starts or ends guides from it, in place of resting the pointer there."
+			},
+			{
+				"pref": "show_dimensions",
+				"label": "Show dimensions",
+				"help":
+				"Draws the dimensions kept in the level, with their lengths: amber with an end come loose, red when a check fails."
+			},
+			{
 				"pref": "nudge_follows_view",
 				"label": "Arrows follow the view",
 				"help":

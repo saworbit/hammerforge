@@ -81,6 +81,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Extrude Down (`extrude_down`) | none | - | no | Switch to Extrude Down: drag a face to push a cut into it. |
 | Hollow (`hollow`) | Ctrl+H | 1 brush, a level | yes | Shell the selected brush into walls of the set thickness, after a preview. |
 | Clip (`clip`) | Shift+X | 1 brush, a level | yes | Split the selected brush in two across its middle, after a preview. |
+| Sweep Faces (`sweep_faces`) | none | a level | yes | Carry the faces picked in Face Select along a straight run, an arc or an S bend, as a run of brushes. |
 | Clip to Face Plane (`clip_to_face`) | Shift+Alt+X | a level | yes | Cut the selected brushes along the plane of the face picked in Face Select. |
 | Create Structure (`create_arch`) | Ctrl+Shift+A | a level | yes | Open the structure builder: stairs, arches, domes and the rest. |
 | Update Structure (`update_structure`) | none | a level | no | Rebuild the selected structure from the settings in its section. |
@@ -166,6 +167,10 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Undo (`undo`) | none | - | no | Take back the last change. |
 | Redo (`redo`) | none | - | no | Put back the last change undone. |
 | Set Grid Snap (`set_grid_snap`) | none | - | no | Set the grid step to a value. |
+| Track Point for Guides (`track_snap_point`) | none | a level | yes | Run guides from the snap point under the pointer, or stop. Resting the pointer there does the same. |
+| Point Filter: X and Z from Here (`take_xz_for_next_pick`) | none | a level | yes | The next pick takes X and Z from the snap point under the pointer, and its height from where it lands. |
+| Clear Guides (`clear_guides`) | none | a level | yes | Stop every guide from tracked points. |
+| Keep Ruler as Dimension (`keep_ruler_as_dimension`) | none | a level | yes | Keep the Measure tool's last ruler in the level as a dimension that follows the brushes it ends on. K in the tool does the same. |
 | Next Pick: Vertex Only (`snap_next_vertex`) | none | a level | yes | The next click snaps only to a vertex, whatever snaps are on, then they all return. |
 | Next Pick: Midpoint Only (`snap_next_midpoint`) | none | a level | yes | The next click snaps only to the middle of an edge, then every snap that was on returns. |
 | Next Pick: Centre Only (`snap_next_centre`) | none | a level | yes | The next click snaps only to a brush's centre, then every snap that was on returns. |

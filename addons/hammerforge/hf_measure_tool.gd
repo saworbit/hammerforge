@@ -14,6 +14,7 @@ extends "hf_editor_tool.gd"
 @warning_ignore_start("shadowed_global_identifier")
 const HFSizeLabels = preload("hf_size_labels.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFPluginDimensions = preload("plugin_dimensions.gd")
 
 const MAX_RULERS := 20
 const RULER_COLORS: Array[Color] = [
@@ -99,7 +100,19 @@ func handle_keyboard(event: InputEventKey) -> int:
 		KEY_A:
 			_toggle_align()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		KEY_K:
+			keep_last_ruler()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+## Keep the last ruler as a dimension in the level (#1699), its ends attached to
+## the corners, edges or faces they lie on. True when one was kept.
+func keep_last_ruler() -> bool:
+	if _measurements.is_empty() or root == null:
+		return false
+	var last: Dictionary = _measurements.back()
+	return HFPluginDimensions.keep(root, last["a"], last["b"], undo_redo, history_callback) != null
 
 
 func get_shortcut_hud_lines() -> PackedStringArray:
@@ -134,7 +147,7 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 		lines.append("Align: ON (ruler #%d)" % (_snap_ref_index + 1))
 	else:
 		lines.append("A: Toggle align  |  Ctrl+Click: Set snap ref")
-	lines.append("Shift+Click: Chain ruler")
+	lines.append("Shift+Click: Chain ruler  |  K: Keep as a dimension")
 	lines.append("Del: Remove last  |  Esc: Clear all  |  M: Exit")
 	return lines
 

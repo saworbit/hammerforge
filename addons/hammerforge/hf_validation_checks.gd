@@ -27,6 +27,7 @@ const KINDS := {
 	"spawn": "Player spawn",
 	"traversal": "Stairs, doorways and ramps",
 	"notes": "Open To Do notes",
+	"dimensions": "Dimensions whose check fails",
 }
 
 ## Where the file is read and written. A test points it somewhere of its own.

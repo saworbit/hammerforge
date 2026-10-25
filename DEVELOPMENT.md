@@ -309,7 +309,9 @@ addons/hammerforge/
   plugin_transform_tools.gd  Offset (Alt+G) and Pick Pivot: the transform tools that take a typed number or a clicked point
   plugin_texture_keys.gd The nudge keys sliding and turning the texture on the picked faces in Face Select
   plugin_command_line.gd Runs what is typed on the command line, and command scripts read from a file
+  plugin_face_sweep.gd   Sweep Faces: the picked faces as a section, the dialog and its preview, the pieces as one step
   plugin_adjust_last.gd  Adjust Last: the last command's settings and how to make its step again with others
+  plugin_dimensions.gd   Dimensions drawn over the viewport, and keeping a Measure ruler as one
   plugin_groups.gd       Groups: Group Selection with a name, Ungroup a level, open and close a group, add, remove, rename
   plugin_run.gd          Repeat Run: the commands, moves and turns since the selection changed by hand, played again as one step
   plugin_compare.gd      Compare With: reads the other `.hflevel`, draws the outlines and fills the Console's Compare tab
@@ -342,6 +344,7 @@ addons/hammerforge/
   hf_update_check.gd     HFUpdateCheck: whether a newer HammerForge is out, and whether to ask at all
   hf_entity_census.gd    Every entity in a level, counted by class and written out as a table
   hf_level_plan.gd       A top down plan of a level, drawn from its brushes so it draws headless and in CI
+  hf_dimensions.gd       Dimensions: ends attached to brush corners, edges and faces, measured and checked
   hf_notes.gd            Notes left in the level: the editor only `note` entity, its kinds, author and done flag
   hf_command_line.gd     Reads a typed command line (`hollow 0.125`, `hollow thickness=0.125`) into a command and its values
   hf_level_compare.gd    What changed between two level bundles: brushes face by face, entities, wires, visgroups, cordons and paint
@@ -424,6 +427,7 @@ addons/hammerforge/
   hf_polygon_split.gd    Splits a polygon tool outline into convex pieces
   hf_path_tool.gd        Path tool (waypoints → corridor brushes with miter joints, stairs, railings, trim, tool_id=103)
   hf_path_sweep.gd       Sweeps a band along a path, one convex piece per segment, mitred at its corners
+  hf_face_sweep.gd       Sweeps picked faces along a straight run, an arc or an S bend, one convex hull per segment
   hf_path_curve.gd       A smooth path through clicked points: centripetal Catmull-Rom or a pulled handle, sampled into pieces
   hf_trim_profile.gd     A trim's section (Flat, Chamfer, Round, Cove, Ogee, Stepped) cut into convex horizontal bands
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching; labels and categories come from hf_command_registry.gd)
@@ -522,6 +526,7 @@ addons/hammerforge/
     hf_carve_preview.gd    Green wireframe preview of carve slice pieces (confirmation before commit)
     hf_clip_preview.gd     Cyan wireframe + orange plane preview of clip halves (confirmation before commit)
     hf_hollow_preview.gd   Yellow wireframe preview of hollow wall pieces (confirmation before commit)
+    hf_sweep_preview.gd    Outlines the pieces Sweep Faces would make, red where one folds
     hf_vertex_system.gd    Vertex/edge selection, move, split, merge with convexity validation
     hf_spawn_system.gd     Player spawn lookup, validation, auto-fix, debug visualisation
     hf_traversal_check.gd  Validate's brush stairs, doorways and ramps against the playtest player
