@@ -1,0 +1,1 @@
+- A normal map on a face is lit the right way, in the editor and after a bake; face meshes had tangents made up from the normal. (issue [#1883](https://github.com/saworbit/hammerforge/issues/1883))

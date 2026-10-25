@@ -258,6 +258,11 @@ func _add_group_surface(
 		if uvs.size() > i:
 			st.set_uv(uvs[i])
 		st.add_vertex(verts[i])
+	# Tangents from the UVs, or a normal map is lit from the wrong side. Without
+	# this Godot makes one up from the normal alone (#1883). Before the weld, so
+	# each corner gets the tangent of its own face.
+	if not uvs.is_empty() and not normals.is_empty():
+		st.generate_tangents()
 	# Weld the duplicated corners into an index array. Godot generates LODs off
 	# the indices, so an unindexed surface comes back with none however the Bake
 	# Options are set.
@@ -476,6 +481,7 @@ func build_mesh_from_groups(
 				st.set_normal(all_normals[i])
 				st.set_uv(all_uvs[i])
 				st.add_vertex(all_verts[i])
+			st.generate_tangents()
 			st.index()
 			var surface_mesh = st.commit()
 			if surface_mesh and surface_mesh.get_surface_count() > 0:
@@ -969,6 +975,13 @@ func _unwrap_uv0(mesh: ArrayMesh) -> ArrayMesh:
 			new_uvs[i] = Vector2(v.dot(axes[0]), v.dot(axes[1]))
 		arrays[Mesh.ARRAY_TEX_UV] = new_uvs
 		var primitive = mesh.surface_get_primitive_type(s_idx)
+		# The tangents ran along the old UVs, and a normal map needs them along
+		# these (#1883).
+		if normals is PackedVector3Array and not normals.is_empty():
+			var st := SurfaceTool.new()
+			st.create_from_arrays(arrays, primitive)
+			st.generate_tangents()
+			arrays = st.commit_to_arrays()
 		out.add_surface_from_arrays(primitive, arrays)
 		var mat: Material = mesh.surface_get_material(s_idx)
 		if mat:
