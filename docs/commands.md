@@ -219,6 +219,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Show or Hide I/O Wires (`view_filter_wires`) | none | a level | yes | Hide the I/O wires between entities in the editor, or show them again. The level and the bake are not changed. |
 | Show or Hide Cordons (`view_filter_cordons`) | none | a level | yes | Hide the cordon boxes in the editor, or show them again. The level and the bake are not changed. |
 | Show or Hide Hidden Faces (`view_filter_hidden_faces`) | none | a level | yes | Hide the striped Hidden faces in the editor, or show them again. The level and the bake are not changed. |
+| Show Face Direction (`toggle_face_direction`) | none | a level | yes | Draw the front of every brush face in one colour and the back in another, so a face pointing into its brush shows from outside. The level and the bake are not changed. |
 | Selection Filters (`selection_filter`) | Alt+F | no mix of HammerForge and Godot nodes | yes | Open the selection filters, which pick by kind, material and more. |
 | Quick Select (`quick_select`) | none | no mix of HammerForge and Godot nodes, a level | yes | Select brushes or entities by a typed rule, such as class is light_point and energy > 2. |
 | Grow Selection (`grow_selection`) | Ctrl+] | 1 item or faces, a level | yes | Add the faces next to the selected faces, or the brushes touching the selected brushes. |

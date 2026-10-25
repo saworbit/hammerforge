@@ -181,7 +181,7 @@ Grid-based paint layers with chunked storage for large worlds:
 ### Organize Your Level
 
 - **Adjust Last** -- after Hollow, Clip, Nudge, Rotate or an array, the settings it ran with in a corner of the viewport; a change undoes the step and makes it again, as one step; settings saved by name
-- **View Filters** -- hide a kind in the editor: world, cut or clip brushes, triggers, brush entities and point entities by kind or class, structures, prefab copies, decals, I/O wires or cordons; a rule, so one made later is hidden too, never saved, ignored by the bake, with a footer chip while any is on
+- **View Filters** -- hide a kind in the editor: world, cut or clip brushes, triggers, brush entities and point entities by kind or class, structures, prefab copies, decals, I/O wires or cordons; a rule, so one made later is hidden too, never saved, ignored by the bake, with a footer chip while any is on; **Show Face Direction** draws every face's front blue and back red, so a face pointing into its brush shows from outside
 - **Visgroups** -- named visibility groups ("walls", "detail", "lighting") with per-group show/hide. **Current** makes one the group new work joins, **Leave out of bake** keeps one in the editor only, and **Locked** keeps every tool and the agent bridge off its members. **Isolate**, **Hide Sel**, **Previous** and saved **Views** change what is shown without changing the level
 - **Grouping** (Ctrl+G / Ctrl+U) -- persistent groups that select and move together
 - **Cordon** -- restrict bake to one or more AABB regions with yellow wireframes; skip everything outside them. Two rooms at opposite ends of a level bake without the space between. Each cordon has a name and its own switch, so one can sit out a bake and keep its bounds. A min/max pair entered in either order means the same region, and a cordon with a non-finite corner is refused rather than stored
@@ -215,7 +215,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Collision Mode** | Trimesh (legacy), per-brush convex hulls, or per-visgroup partitioned convex bodies |
 | **Bake Visible Only** | Skip hidden visgroups and invisible brushes |
 | **Unwrap UV0** | Per-vertex planar UV projection for surfaces without UVs |
-| **Check Issues** | Flag degenerate, floating, overlapping, non-manifold, open-edge, non-planar, and micro-gap brushes. Auto-fix: vertex weld + planarity correction |
+| **Check Issues** | Flag degenerate, floating, overlapping, non-manifold, open-edge, non-planar, and micro-gap brushes, and faces pointing into their brush. Auto-fix: vertex weld + planarity correction, and inward faces turned back on a convex brush |
 | **Bake estimate** | Time estimate scaled from the brushes the last bake took, with a tip to chunk a large level so the game can cull it |
 | **Validate** | Check level integrity before bake, including brush stairs, doorways and ramps measured against the playtest player, and brushes that add nothing to the bake: a cut that cuts nothing, a solid wholly inside another, two the same to within a millimetre; findings are listed with Select on the object each names, can be accepted with a note so they stop coming back, and follow an edit within a second; Checks chooses which kinds run for the project (#1731) |
 | **.map export** | Classic Quake or Valve 220 format |

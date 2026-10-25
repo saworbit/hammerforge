@@ -595,6 +595,18 @@ static func execute(
 						),
 						0
 					)
+		"toggle_face_direction":
+			if root:
+				root.face_direction_view = not root.face_direction_view
+				if dock:
+					dock.show_toast(
+						(
+							"Face Direction on: a face seen from behind is drawn in the back colour"
+							if root.face_direction_view
+							else "Face Direction off"
+						),
+						0
+					)
 		"quick_select":
 			HFPluginSelectionCommands.show_quick_select(plugin)
 		"grow_selection":

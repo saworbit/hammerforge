@@ -8,6 +8,7 @@ const HFCoachMarks = preload("ui/hf_coach_marks.gd")
 const HFOperationReplay = preload("ui/hf_operation_replay.gd")
 const HFRadialMenu = preload("ui/hf_radial_menu.gd")
 const HFViewportDropTarget = preload("ui/hf_viewport_drop_target.gd")
+const HFPluginCompare = preload("plugin_compare.gd")
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
@@ -454,6 +455,8 @@ static func apply_overlay_colors(plugin: Object) -> void:
 	if root == null or not is_instance_valid(root):
 		root = plugin.call("_get_level_root")
 	refresh_overlay_colors(plugin, root)
+	# The compare's fade is set beside the compare colours.
+	HFPluginCompare.refresh(plugin)
 
 
 ## Redraw `root`'s overlays when they were drawn under an older palette, and mark

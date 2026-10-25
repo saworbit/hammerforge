@@ -7,6 +7,11 @@ extends RefCounted
 ##
 ## The lines sit inside the level as an internal node with no owner, so they are
 ## never saved, never in the undo history, and gone with `clear()`.
+##
+## The brushes that did not change are faded, so what changed stands out in a
+## level of hundreds (#1864). The fade is set on the rendering server alone, on
+## the instance each brush draws its mesh through: the brush, its mesh node and
+## its materials are not touched, so nothing of it is saved or in the history.
 
 const HFOutlineUtil = preload("hf_outline_util.gd")
 const HFLevelCompare = preload("hf_level_compare.gd")
@@ -23,13 +28,22 @@ const DASH := 0.2
 const DOUBLE := 0.04
 ## An entity's outline, a box this many metres a side.
 const ENTITY_BOX := 0.5
+## How far the unchanged brushes fade unless the preferences say otherwise: 0 not
+## at all, 1 out of sight.
+const DEFAULT_FADE := 0.7
 
 var _node: Node3D = null
 var _segments := {"added": 0, "changed": 0, "removed": 0}
+## The brushes that did not change, by id, faded again whenever their nodes are.
+var _fade_ids: Array = []
+## The brush nodes faded now, to bring back on `clear()`.
+var _faded: Array[WeakRef] = []
+var _fade := DEFAULT_FADE
 
 
-## Draw `result`, from `HFLevelCompare.compare()`, over `root`, the open level.
-func show(root: Node, result: Dictionary) -> void:
+## Draw `result`, from `HFLevelCompare.compare()`, over `root`, the open level,
+## with the brushes that did not change faded by `fade`.
+func show(root: Node, result: Dictionary, fade := DEFAULT_FADE) -> void:
 	clear()
 	_segments = {"added": 0, "changed": 0, "removed": 0}
 	if root == null or not is_instance_valid(root):
@@ -69,6 +83,9 @@ func show(root: Node, result: Dictionary) -> void:
 	_add_lines(added, HFOverlayColors.COMPARE_ADDED)
 	_add_lines(changed, HFOverlayColors.COMPARE_CHANGED)
 	_add_lines(removed, HFOverlayColors.COMPARE_REMOVED)
+	_fade = clampf(fade, 0.0, 1.0)
+	_fade_ids = Array(brushes.get("same", []))
+	refresh_fade(root)
 
 
 func is_showing() -> bool:
@@ -81,6 +98,58 @@ func clear() -> void:
 			_node.get_parent().remove_child(_node)
 		_node.queue_free()
 	_node = null
+	_unfade()
+	_fade_ids = []
+
+
+## Fade the unchanged brushes again, as `root` holds them now. An undo that
+## rebuilt one made a new node, which starts unfaded.
+func refresh_fade(root: Node) -> void:
+	_unfade()
+	if not is_showing() or root == null or not is_instance_valid(root):
+		return
+	for brush_id in _fade_ids:
+		var brush: Node = root.find_brush_by_id(str(brush_id))
+		if brush != null and _draw_fade(brush, _fade):
+			_faded.append(weakref(brush))
+
+
+## A new strength for the fade, as Settings changed it.
+func set_fade(root: Node, fade: float) -> void:
+	_fade = clampf(fade, 0.0, 1.0)
+	refresh_fade(root)
+
+
+## The ids of the brushes faded now.
+func faded_ids() -> Array:
+	var out: Array = []
+	for ref in _faded:
+		var brush = ref.get_ref()
+		if brush != null and is_instance_valid(brush):
+			out.append(str(brush.get("brush_id")))
+	return out
+
+
+func _unfade() -> void:
+	for ref in _faded:
+		var brush = ref.get_ref()
+		if brush != null and is_instance_valid(brush):
+			var drawn = brush.get("mesh_instance")
+			if drawn is GeometryInstance3D:
+				_draw_fade(brush, (drawn as GeometryInstance3D).transparency)
+	_faded.clear()
+
+
+## Set the transparency `brush` draws its mesh with on the rendering server, and
+## leave the mesh node's own `transparency` as it is. False with no mesh to fade.
+static func _draw_fade(brush: Node, value: float) -> bool:
+	var drawn = brush.get("mesh_instance")
+	if not (drawn is GeometryInstance3D) or not is_instance_valid(drawn):
+		return false
+	RenderingServer.instance_geometry_set_transparency(
+		(drawn as GeometryInstance3D).get_instance(), value
+	)
+	return true
 
 
 ## How many line segments of each kind are drawn: `{added, changed, removed}`.

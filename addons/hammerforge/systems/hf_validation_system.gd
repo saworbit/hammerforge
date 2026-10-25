@@ -206,6 +206,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		for brush in geometry_repairs:
 			var repaired := fix_non_planar_faces(brush)
 			repaired += weld_brush_vertices(brush)
+			repaired += reverse_inward_faces(brush)
 			if repaired > 0:
 				fixed += repaired
 				root.tag_brush_dirty(str(brush.brush_id))
@@ -929,9 +930,41 @@ func _check_convexity(brush_nodes: Array, issues: Array) -> void:
 		var brush := node as DraftBrush
 		if not _brush_is_measurable(brush):
 			continue
+		# Turned the right way it is convex, and the faces pointing into it are
+		# the finding: `check_solid()` reads each face's plane by its winding.
+		if (
+			not HFSolidMeasure.inward_faces(brush.faces).is_empty()
+			and HFSolidMeasure.is_convex(brush.faces)
+		):
+			continue
 		var problem := str(root.vertex_system.check_solid(brush))
 		if problem != "":
 			_found(issues, NOT_CONVEX % [brush.name, problem], brush)
+
+
+const INWARD_FACES := "Brush has %d %s pointing into it, which draw as holes and bake inside out: %s"
+
+
+## Turn back each face of a convex brush that points into it, as a load turns
+## the faces of an old save (`DraftBrush._migrate_face_winding()`): the corners
+## reversed, and the texture's corners with them. A displaced face is left, since
+## its sculpt would turn inside out with it. Returns how many faces it turned.
+func reverse_inward_faces(brush: DraftBrush) -> int:
+	if not brush or not HFSolidMeasure.is_convex(brush.faces):
+		return 0
+	var turned := 0
+	for index in HFSolidMeasure.inward_faces(brush.faces):
+		var face: FaceData = brush.faces[index]
+		if face == null or face.displacement != null:
+			continue
+		face.local_verts.reverse()
+		if face.custom_uvs.size() == face.local_verts.size():
+			face.custom_uvs.reverse()
+		face.ensure_geometry()
+		turned += 1
+	if turned > 0:
+		brush.refresh_editor_look()
+	return turned
 
 
 ## What a bent brush costs, said with the finding: a torus is one by design, and
@@ -1652,6 +1685,21 @@ func _check_brush_geometry(
 	elif coincident:
 		_found(issues, "Brush has vertices a weld apart: %s" % brush.name, brush)
 		repairs.append(brush)
+	if non_finite > 0:
+		return
+	# A face wound the wrong way points into its brush: culled seen from outside,
+	# and baked facing into the solid (#1869). A negative size above is one cause
+	# of it, and many fixed bugs made others. Only a convex brush can be read by
+	# which way its faces point from its middle: a torus's inner faces point at
+	# its middle by design, and it is reported as not convex below.
+	if not HFSolidMeasure.is_convex(brush.faces):
+		return
+	var inward := HFSolidMeasure.inward_faces(brush.faces).size()
+	if inward > 0:
+		var message := INWARD_FACES % [inward, "face" if inward == 1 else "faces", brush.name]
+		_found(issues, message, brush)
+		if not repairs.has(brush):
+			repairs.append(brush)
 
 
 ## How far the furthest vertex of a face sits off the plane through its first

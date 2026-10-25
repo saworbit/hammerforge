@@ -368,6 +368,7 @@ addons/hammerforge/
   hf_overlay_mesh.gd     The see-through ImmediateMesh the drawing tools and the snap target marker draw on
   hf_overlay_colors.gd   The overlay colour palette every selection, hover, brush look, cordon and extrude overlay reads (prefs keys, defaults, High Contrast)
   hf_view_filters.gd     View Filters: hide a kind of brush, entity, wire or face in the editor only; never saved, and the bake ignores it
+  hf_face_direction.gd   Show Face Direction: the look that draws every face's front and back in two colours, culling off
   hf_selection_readout.gd  What is selected and how big: the summary the size labels and Selection Info both read
   hf_size_labels.gd      The Measure tool's label look, as Label3D nodes or drawn over the viewport beside the cursor
   hf_number_format.gd    Lengths printed to the grid step's precision, for every size readout

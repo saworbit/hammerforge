@@ -103,6 +103,7 @@ const SCHEMA := {
 	"similar_entity_keys": {"type": TYPE_ARRAY},
 	"similar_property": {"type": TYPE_STRING},
 	"show_selection_size": {"type": TYPE_BOOL},
+	"compare_fade": {"type": TYPE_FLOAT, "min": 0.0, "max": 1.0},
 	"io_wire_mode": {"type": TYPE_INT, "min": 0, "max": 2},
 	"nudge_follows_view": {"type": TYPE_BOOL},
 	"show_agent_changes": {"type": TYPE_BOOL},
@@ -145,6 +146,8 @@ const SCHEMA := {
 	HFOverlayColors.COMPARE_ADDED: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.COMPARE_CHANGED: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.COMPARE_REMOVED: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.FACE_FRONT: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.FACE_BACK: {"type": TYPE_STRING, "color": true},
 }
 
 
@@ -239,6 +242,8 @@ static func _defaults() -> Dictionary:
 		"similar_entity_keys": ["class"],
 		"similar_property": "",
 		"show_selection_size": false,
+		# How far a compare fades the brushes that did not change (#1864).
+		"compare_fade": 0.7,
 		"io_wire_mode": 0,
 		"nudge_follows_view": true,
 		"show_agent_changes": true,

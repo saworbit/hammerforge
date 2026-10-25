@@ -6,6 +6,7 @@ extends RefCounted
 
 const HFInputStateType = preload("input_state.gd")
 const HFBakePreview = preload("plugin_bake_preview.gd")
+const HFPluginCompare = preload("plugin_compare.gd")
 const HFPluginAdjustLast = preload("plugin_adjust_last.gd")
 
 
@@ -34,6 +35,7 @@ static func on_version_changed(plugin: Object) -> void:
 	if root.subtract_preview and root.subtract_preview.is_enabled():
 		root.subtract_preview.request_update()
 	HFBakePreview.sync_after_undo(plugin, root)
+	HFPluginCompare.refresh(plugin)
 	HFPluginAdjustLast.on_version_changed(plugin)
 
 
