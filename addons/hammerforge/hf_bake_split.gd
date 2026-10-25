@@ -102,13 +102,23 @@ static func set_brush_lightmap_scale(brush: Node, value: float) -> bool:
 ## `.hflevel` all go through. Only the ones it made.
 static func fields(brush: Node) -> Dictionary:
 	var out: Dictionary = {}
-	var cast := brush_cast_shadow(brush)
-	if cast != LEVEL_DEFAULT:
-		out[CAST_SHADOW_META] = cast
-	var scale := brush_lightmap_scale(brush)
-	if not is_equal_approx(scale, DEFAULT_LIGHTMAP_SCALE):
-		out[LIGHTMAP_SCALE_META] = scale
+	add_fields(brush, out)
 	return out
+
+
+## `fields()` written into `info`, for a record built in place. A brush that sets
+## neither, as most do, is answered without reading either (#1866).
+static func add_fields(brush: Node, info: Dictionary) -> void:
+	var has_cast := brush.has_meta(CAST_SHADOW_META)
+	var has_scale := brush.has_meta(LIGHTMAP_SCALE_META)
+	if not (has_cast or has_scale):
+		return
+	var cast := brush_cast_shadow(brush) if has_cast else LEVEL_DEFAULT
+	if cast != LEVEL_DEFAULT:
+		info[CAST_SHADOW_META] = cast
+	var scale := brush_lightmap_scale(brush) if has_scale else DEFAULT_LIGHTMAP_SCALE
+	if not is_equal_approx(scale, DEFAULT_LIGHTMAP_SCALE):
+		info[LIGHTMAP_SCALE_META] = scale
 
 
 ## Put a record's choices on `brush`. A `.hflevel` is JSON, so a whole number

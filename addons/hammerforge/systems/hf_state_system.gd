@@ -341,10 +341,12 @@ func capture_registries() -> Dictionary:
 ## The mirror of `capture_registries()`. Reads past a key it was not given, so a
 ## caller holding half a payload -- a scene written before an entry existed --
 ## restores the half it has rather than clearing the rest.
-func restore_registries(state: Dictionary) -> void:
+## With `made`, the nodes a restore built, so the visibility walk can be theirs
+## alone when nothing else it reads has changed (#1866).
+func restore_registries(state: Dictionary, made: Variant = null) -> void:
 	if root.visgroup_system:
 		root.visgroup_system.restore_visgroups(
-			state.get("visgroups", {}), state.get("visgroup_order", [])
+			state.get("visgroups", {}), state.get("visgroup_order", []), made
 		)
 		root.visgroup_system.restore_groups(state.get("groups", {}), state.get("group_order", []))
 		root.visgroup_system.restore_group_parents(state.get("group_parents", {}))
@@ -352,6 +354,7 @@ func restore_registries(state: Dictionary) -> void:
 	if root.generator_system:
 		root.generator_system.restore(state.get("generators", []))
 	if root.brush_system:
+		var had_arrays: bool = not root.brush_system._duplicators.is_empty()
 		root.brush_system._duplicators.clear()
 		# What the restored arrays put on their brushes, by node: both tags on a
 		# copy that seeds an array of its own.
@@ -379,8 +382,10 @@ func restore_registries(state: Dictionary) -> void:
 		# or Remove Array left the old tags in place and in the saved scene (#1309).
 		# A copy that seeded an array of its own was worse off:
 		# `get_duplicator_for_brush()` reads the source tag first, so the stale one
-		# hid the array the copy belongs to.
-		root.clear_stale_membership(["duplicator_id", "duplicator_instance_of"], restored)
+		# hid the array the copy belongs to. With no array before and none now no
+		# node holds a tag, so the walk of every node is skipped (#1866).
+		if had_arrays or not root.brush_system._duplicators.is_empty():
+			root.clear_stale_membership(["duplicator_id", "duplicator_instance_of"], restored)
 		root.brush_system.restore_hollows(state.get("hollows", []))
 		root.brush_system.forget_faces_as_loaded()
 	if root.prefab_system and state.has("prefab_instances"):
@@ -449,6 +454,11 @@ func _restore_brush_order(records: Array) -> void:
 	var container = root.draft_brushes_node
 	if container == null:
 		return
+	# Most restores put back the order the brushes already stand in, which one
+	# pass can tell, so the reorder is only paid for when it moves something
+	# (#1866).
+	if _in_record_order(container, records):
+		return
 	var ordered: Array[Node] = []
 	var taken: Dictionary = {}
 	for entry in records:
@@ -470,6 +480,27 @@ func _restore_brush_order(records: Array) -> void:
 			ordered.append(child)
 	for i in ordered.size():
 		container.move_child(ordered[i], i)
+
+
+## Whether `container`'s first children are the brushes `records` name, in their
+## order. Anything this cannot be sure of is a no, and the reorder decides.
+func _in_record_order(container: Node, records: Array) -> bool:
+	var children: Array = container.get_children()
+	var cache: Dictionary = root.brush_system._brush_cache
+	var at := 0
+	for entry in records:
+		if not (entry is Dictionary):
+			return false
+		var brush_id := str((entry as Dictionary).get("brush_id", ""))
+		if brush_id == "" or at >= children.size():
+			return false
+		var child: Node = children[at]
+		if not (child is DraftBrush) or str((child as DraftBrush).brush_id) != brush_id:
+			return false
+		if cache.get(brush_id) != child:
+			return false
+		at += 1
+	return true
 
 
 ## Decals placed with the decal tool. They are part of the level: without this a
@@ -689,12 +720,16 @@ func restore_state(state: Dictionary) -> void:
 	# one for the same reasons — an older version, a partial write, a hand edit.
 	var skipped := 0
 	var renamed: Dictionary = {}
+	# What this restore builds, which alone the visibility walk need draw when
+	# nothing it reads has changed (#1866).
+	var made: Array = []
 	for info in brushes:
 		var kept_id := ""
 		if info is Dictionary:
 			kept_id = str((info as Dictionary).get("brush_id", ""))
 		if kept_id != "" and reusable.has(kept_id):
-			root.brush_system.reregister_draft_brush(reusable[kept_id])
+			# The counter is set from the state once every brush is back.
+			root.brush_system.reregister_draft_brush(reusable[kept_id], not state.has("id_counter"))
 			# Erased so a record that names the same brush twice cannot register
 			# one node into the level twice.
 			reusable.erase(kept_id)
@@ -702,14 +737,20 @@ func restore_state(state: Dictionary) -> void:
 		var brush := _restored_brush(info, {})
 		if brush:
 			_note_rename(renamed, info, brush)
+			made.append(brush)
 		else:
 			skipped += 1
 	var pending: Array = state.get("pending", [])
 	for info in pending:
-		if not _restored_brush(info, {"pending": true}):
+		var cut := _restored_brush(info, {"pending": true})
+		if cut:
+			made.append(cut)
+		else:
 			skipped += 1
 	var committed: Array = state.get("committed", [])
 	for info in committed:
+		# Not handed to the visibility walk: a committed cutter is hidden by its
+		# cut, and the walk never reaches one.
 		if not _restored_brush(info, {"committed": true}):
 			skipped += 1
 	_restore_brush_order(brushes)
@@ -726,6 +767,7 @@ func restore_state(state: Dictionary) -> void:
 		var entity = root.entity_system.restore_entity_from_info(info)
 		if entity:
 			_note_rename(renamed, info, entity)
+			made.append(entity)
 			if info.has("visgroups"):
 				var vgs = PackedStringArray()
 				for v in info.get("visgroups", []):
@@ -737,7 +779,7 @@ func restore_state(state: Dictionary) -> void:
 	if not renamed.is_empty():
 		for node in root.entity_system._iter_io_sources():
 			root.entity_system.remap_io_connections(node, renamed)
-	restore_registries(state)
+	restore_registries(state, made)
 	restore_floor_info(state.get("floor", {}))
 	restore_sun_info(state.get("sun", {}))
 	if root.draft_brushes_node:
