@@ -30,9 +30,9 @@ const SHAPES := {
 	HFSnapSystemType.KIND_PERPENDICULAR: "right angle",
 	HFSnapSystemType.KIND_GRID: "cross",
 	HFSnapSystemType.KIND_LINE: "diamond",
-	HFSnapSystemType.KIND_GUIDE: "diamond",
-	HFSnapSystemType.KIND_GUIDE_CROSS: "cross",
-	HFSnapSystemType.KIND_GUIDE_EDGE: "triangle",
+	HFSnapSystemType.KIND_GUIDE: "bar",
+	HFSnapSystemType.KIND_GUIDE_CROSS: "x",
+	HFSnapSystemType.KIND_GUIDE_EDGE: "bowtie",
 }
 ## How long the pointer rests on a snap point before guides run from it (#1692).
 const REST_SECONDS := 0.5
@@ -91,6 +91,43 @@ static func shape_lines(shape: String, half: float) -> PackedVector2Array:
 			)
 		"diamond":
 			_ring(out, [Vector2(0, -half), Vector2(half, 0), Vector2(0, half), Vector2(-half, 0)])
+		# A guide: a bar with its ends marked (#1692).
+		"bar":
+			var tick := half * 0.5
+			(
+				out
+				. append_array(
+					[
+						Vector2(-half, 0),
+						Vector2(half, 0),
+						Vector2(-half, -tick),
+						Vector2(-half, tick),
+						Vector2(half, -tick),
+						Vector2(half, tick),
+					]
+				)
+			)
+		# Where two guides cross.
+		"x":
+			out.append_array(
+				[
+					Vector2(-half, -half),
+					Vector2(half, half),
+					Vector2(-half, half),
+					Vector2(half, -half)
+				]
+			)
+		# Where a guide meets an edge.
+		"bowtie":
+			_ring(
+				out,
+				[
+					Vector2(-half, -half),
+					Vector2(half, half),
+					Vector2(half, -half),
+					Vector2(-half, half)
+				]
+			)
 		_:
 			out.append_array(
 				[Vector2(-half, 0), Vector2(half, 0), Vector2(0, -half), Vector2(0, half)]
