@@ -140,7 +140,7 @@ func snap_selected_to_grid(step: float) -> Dictionary:
 			if vi < 0 or vi >= unique_verts.size():
 				continue
 			var local: Vector3 = unique_verts[vi]
-			var target: Vector3 = to_local * HFGridSystem.nearest_grid_point(xform * local, step)
+			var target: Vector3 = to_local * _grid_point(xform * local, step)
 			if not target.is_equal_approx(local):
 				target_positions[_vertex_key(local)] = target
 		if target_positions.is_empty():
@@ -1036,7 +1036,8 @@ func drag_to(
 		else:
 			var step: float = root.drag_grid_step() if root else 0.0
 			if step > 0.0:
-				delta = delta.snapped(Vector3.ONE * step)
+				var grid = root.get("grid_system")
+				delta = grid.grid_offset(delta, step) if grid else delta.snapped(Vector3.ONE * step)
 	# Absolute, Vector3.ZERO included, so returning to the origin or the same
 	# snap cell cannot leave a stale prior movement applied.
 	var moved := update_drag_absolute(delta)
@@ -2067,6 +2068,12 @@ static func _point_to_segment_dist_2d(p: Vector2, a: Vector2, b: Vector2) -> flo
 func _vertex_key(v: Vector3) -> String:
 	var cell := HFVertexWeld.cell(v, VERTEX_KEY_STEP)
 	return "%d,%d,%d" % [cell.x, cell.y, cell.z]
+
+
+## The grid point nearest `point`, on the grid as it is turned (#1893).
+func _grid_point(point: Vector3, step: float) -> Vector3:
+	var grid = root.get("grid_system") if root else null
+	return grid.grid_point(point, step) if grid else HFGridSystem.nearest_grid_point(point, step)
 
 
 func _find_brush(brush_id: String) -> Node3D:

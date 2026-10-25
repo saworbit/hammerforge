@@ -169,6 +169,10 @@ msgstr ""
 msgid "Amount"
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Angle"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "Any material in the palette"
 msgstr ""
@@ -4151,6 +4155,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Turn floor Paint mode on."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Turn the floor grid about up. 0 is the world's grid"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd

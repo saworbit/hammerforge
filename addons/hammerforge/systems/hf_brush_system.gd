@@ -362,19 +362,44 @@ func _nudged_on_grid(draft: DraftBrush, offset: Vector3) -> Vector3:
 ## of its world bounds on a grid point. The bounds rather than the position, so a
 ## turned brush lands with its corner on the grid too. Size and rotation stay, and
 ## the move goes through `set_brush_transform_by_id()` as a nudge's does, so
-## texture lock treats the two alike.
+## texture lock treats the two alike. On a turned grid the bounds are the grid's
+## own, so a brush square to it lands with its faces on its lines (#1893).
 func snap_brushes_to_grid(brush_ids: Array, step: float) -> void:
 	if not (step > 0.0):
 		return
+	var grid = root.get("grid_system")
 	for brush_id in brush_ids:
 		var brush_key := str(brush_id)
 		var brush = _find_brush_by_id(brush_key)
 		if not (brush and brush is DraftBrush):
 			continue
 		var draft := brush as DraftBrush
-		var corner := world_bounds_of(draft).position
-		var offset := HFGridSystem.nearest_grid_point(corner, step) - corner
+		var offset: Vector3
+		if grid and grid.is_turned():
+			var frame: Transform3D = grid.grid_frame()
+			var corner := _bounds_in(draft, frame.affine_inverse()).position
+			offset = frame.basis * (corner.snapped(Vector3.ONE * step) - corner)
+		else:
+			var corner := world_bounds_of(draft).position
+			offset = HFGridSystem.nearest_grid_point(corner, step) - corner
 		set_brush_transform_by_id(brush_key, draft.size, draft.global_position + offset)
+
+
+## `brush`'s corners carried by `to_frame` from the world, as one box.
+func _bounds_in(brush: DraftBrush, to_frame: Transform3D) -> AABB:
+	var bounds := AABB()
+	var found := false
+	for face in brush.faces:
+		if face == null:
+			continue
+		for corner in (face as FaceData).local_verts:
+			var point: Vector3 = to_frame * (brush.global_transform * corner)
+			if found:
+				bounds = bounds.expand(point)
+			else:
+				bounds = AABB(point, Vector3.ZERO)
+				found = true
+	return bounds
 
 
 func duplicate_brush(brush: Node) -> Node:

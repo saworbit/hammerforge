@@ -53,6 +53,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Numeric input** -- type exact dimensions during any drag or extrude; a base takes width, depth and height as `6,4,3`, with Tab or a comma between them
 - **Cancel preview with undo** -- Ctrl+Z cancels an unfinished draw or extrusion and keeps earlier actions in history
 - **Drawing plane** -- Grid Up/Down, Reset and Align Grid to Selection place an axis-aligned plane; the HUD shows its axis and position
+- **Turned grid** -- the floor grid turns about up to a picked edge, a turned brush or a typed Angle, for a part of a level set at an angle; draws build square to it, and the resize handles, vertex drags, Snap to Grid and the arrow nudges follow its lines
 - **Draw hover preview** -- before the click, the face a draw would start on is tinted for the grid's level, a raised face or one that is not flat, and a cross and two bright grid lines mark the snapped start
 - **Draw on Face** (L) -- a draw that starts on a brush face builds on that face's plane and pulls along its normal: a Solid grows out of a wall and a Cutout cuts into it
 - **Resize gizmo** with world-space grid snap, opposite-face anchoring under rotated/non-uniformly scaled parents, and shape-aware sizing: spheres stay uniform, cylinder/cone/capsule X/Z handles change one shared radius, and capsules can never be resized shorter than their diameter
