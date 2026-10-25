@@ -11,6 +11,8 @@ const HFPluginConsoleType = preload("plugin_console.gd")
 const HFPluginCommandLineType = preload("plugin_command_line.gd")
 const HFPluginMcpType = preload("plugin_mcp.gd")
 const HFPluginCompareType = preload("plugin_compare.gd")
+const HFAccessibilityType = preload("hf_accessibility.gd")
+const HFOverlayColorsType = preload("hf_overlay_colors.gd")
 const HFPluginAdjustLastType = preload("plugin_adjust_last.gd")
 const HFPluginRunType = preload("plugin_run.gd")
 const HFPluginCrashJournalType = preload("plugin_crash_journal.gd")
@@ -289,6 +291,13 @@ func _enter_tree():
 	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	_keymap = HFKeymap.load_or_default("user://hammerforge_keymap.json")
 	_user_prefs = HFUserPrefs.load_prefs()
+	# What the system asks of the interface: less motion, more contrast, less
+	# transparency (#1703).
+	HFAccessibilityType.motion = (
+		int(_user_prefs.get_pref(HFAccessibilityType.MOTION_PREF, 0)) as HFAccessibilityType.Motion
+	)
+	HFOverlayColorsType.less_transparency = HFAccessibilityType.wants_less_transparency()
+	HFOverlayColorsType.follow_system_contrast = HFAccessibilityType.wants_more_contrast()
 	# A new note is signed with the last author, across sessions (#1700).
 	DraftEntityType.last_note_author = str(_user_prefs.get_pref("note_author", ""))
 	# Each tool comes back with the settings it was last used with (#1406).
@@ -360,6 +369,13 @@ func _enter_tree():
 	_ensure_selection_readout().set_source(_selection_readout_source)
 	_selection_readout.set_show_size(bool(_user_prefs.get_pref("show_selection_size", false)))
 	HFPluginOverlays.apply_overlay_colors(self)
+	if (
+		HFOverlayColorsType.follow_system_contrast
+		and not HFOverlayColorsType.any_picked(_user_prefs)
+	):
+		HFConsoleLog.shared().info(
+			"Overlay colours start in High Contrast, as the system asks for more contrast", "ui"
+		)
 
 	HFPluginCrashJournalType.stage(self, "console")
 	HFPluginConsoleType.setup(self)

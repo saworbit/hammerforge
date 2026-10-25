@@ -84,6 +84,9 @@ func _init() -> void:
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	# A click takes the keyboard, so Escape reaches a drag under way.
 	focus_mode = Control.FOCUS_CLICK
+	# Drawn in `_draw()`, so a screen reader is told what it holds (#1703).
+	accessibility_name = "UV editor"
+	accessibility_description = ("The picked face's texture corners: drag a corner handle to move it, or the face to move them all")
 
 
 ## Showing a face leaves it on its projection: the canvas draws `shown_uvs()`, and

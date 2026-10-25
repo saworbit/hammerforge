@@ -18,6 +18,7 @@ const HFStatusBoardType = preload("../hf_status_board.gd")
 const HFNotesType = preload("../hf_notes.gd")
 const HFConsoleLogType = preload("../hf_console_log.gd")
 const HFStatusLampType = preload("hf_status_lamp.gd")
+const HFAccessibilityType = preload("../hf_accessibility.gd")
 const HFStatusRowType = preload("hf_status_row.gd")
 const HFConsoleControlsType = preload("hf_console_controls.gd")
 const HFConsoleLogViewType = preload("hf_console_log_view.gd")
@@ -87,6 +88,7 @@ func _init() -> void:
 func _ready() -> void:
 	visibility_changed.connect(_on_visibility_changed)
 	_on_visibility_changed()
+	HFAccessibilityType.attach(self)
 
 
 func _exit_tree() -> void:

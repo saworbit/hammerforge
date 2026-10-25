@@ -12,6 +12,7 @@ const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 const HFMaterialBrowserType = preload("res://addons/hammerforge/ui/hf_material_browser.gd")
 const HFShapeIconsType = preload("res://addons/hammerforge/ui/hf_shape_icons.gd")
 const HFCommandAvailabilityType = preload("res://addons/hammerforge/hf_command_availability.gd")
+const HFAccessibility = preload("res://addons/hammerforge/hf_accessibility.gd")
 
 signal action_requested(action: String, args: Array)
 signal operation_toggle_requested
@@ -926,9 +927,12 @@ func _show_auto_hint(text: String, btn_text: String, action: String) -> void:
 	_auto_hint_action = action
 	if not _auto_hint_bar.visible:
 		_auto_hint_bar.visible = true
-		_auto_hint_bar.modulate = Color(1, 1, 1, 0)
 		if _auto_hint_tween and _auto_hint_tween.is_valid():
 			_auto_hint_tween.kill()
+		if HFAccessibility.reduce_motion():
+			_auto_hint_bar.modulate = Color(1, 1, 1, 1)
+			return
+		_auto_hint_bar.modulate = Color(1, 1, 1, 0)
 		_auto_hint_tween = create_tween()
 		_auto_hint_tween.tween_property(_auto_hint_bar, "modulate:a", 1.0, 0.2)
 
