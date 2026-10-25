@@ -1,0 +1,1 @@
+- HammerForge follows the system's motion, contrast and transparency settings, every dock button can be reached with Tab, and every control is named for a screen reader. (issue [#1703](https://github.com/saworbit/hammerforge/issues/1703))

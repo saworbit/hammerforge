@@ -179,6 +179,12 @@ const CORDON_OFF_SHARE := 0.25
 
 ## Empty until the plugin sets a palette, which is today's look.
 static var _colors: Dictionary = {}
+## Draw see-through fills more opaque, as a system that asks for less
+## transparency wants (#1703). The plugin sets it.
+static var less_transparency := false
+## Start with High Contrast when the user has picked no colour, as a system that
+## asks for more contrast wants (#1703). The plugin sets it.
+static var follow_system_contrast := false
 ## Counts the palette changes, so a level drawn under an older palette can be
 ## found and redrawn when it is next in front.
 static var _revision := 0
@@ -188,9 +194,10 @@ static var _brush_revision := 0
 
 ## The colour overlay `key` is drawn in now.
 static func get_color(key: String) -> Color:
-	if _colors.has(key):
-		return _colors[key]
-	return DEFAULTS.get(key, Color.WHITE)
+	var color: Color = _colors[key] if _colors.has(key) else DEFAULTS.get(key, Color.WHITE)
+	if less_transparency and color.a < 1.0:
+		color.a = lerpf(color.a, 1.0, 0.5)
+	return color
 
 
 ## Take every colour from `prefs`, an `HFUserPrefs`, or today's look with none.
@@ -199,6 +206,8 @@ static func apply_prefs(prefs: Object) -> bool:
 	var next := {}
 	for key in DEFAULTS:
 		next[key] = from_pref(prefs.get_pref(key) if prefs else null, key)
+	if follow_system_contrast and not any_picked(prefs):
+		next = HIGH_CONTRAST.duplicate()
 	var now := {}
 	for key in DEFAULTS:
 		now[key] = get_color(key)
@@ -211,6 +220,17 @@ static func apply_prefs(prefs: Object) -> bool:
 	_colors = next
 	_revision += 1
 	return true
+
+
+## Whether the user has picked any overlay colour themselves, in `prefs`.
+static func any_picked(prefs: Object) -> bool:
+	var data: Variant = prefs.get("data") if prefs else null
+	if not (data is Dictionary):
+		return false
+	for key in DEFAULTS:
+		if (data as Dictionary).has(key):
+			return true
+	return false
 
 
 ## Back to today's look. Tests use this to leave the palette as they found it.

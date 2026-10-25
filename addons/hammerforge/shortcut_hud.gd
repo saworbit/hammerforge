@@ -1,6 +1,8 @@
 @tool
 extends Control
 
+const HFAccessibility = preload("res://addons/hammerforge/hf_accessibility.gd")
+
 @onready var label: Label = $Panel/Margin/Label
 
 ## The HUD is parented into the 3D viewport toolbar, which is a BoxContainer:
@@ -178,6 +180,8 @@ func _flash_grid_label() -> void:
 		return
 	if _grid_flash_tween and _grid_flash_tween.is_valid():
 		_grid_flash_tween.kill()
+	if HFAccessibility.reduce_motion():
+		return
 	# Bright flash then fade back to normal
 	_grid_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.6, 1.0))
 	_grid_flash_tween = create_tween()
@@ -304,8 +308,11 @@ func _show_hint(text: String) -> void:
 	if _hint_tween and _hint_tween.is_valid():
 		_hint_tween.kill()
 	_hint_tween = create_tween()
-	_hint_tween.tween_interval(4.0)
-	_hint_tween.tween_property(_hint_label, "modulate:a", 0.0, 1.0)
+	if HFAccessibility.reduce_motion():
+		_hint_tween.tween_interval(5.0)
+	else:
+		_hint_tween.tween_interval(4.0)
+		_hint_tween.tween_property(_hint_label, "modulate:a", 0.0, 1.0)
 	_hint_tween.tween_callback(_hide_hint)
 
 

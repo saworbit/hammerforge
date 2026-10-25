@@ -366,6 +366,7 @@ addons/hammerforge/
   hf_view_axes.gd        Which world axis an arrow key moves along, for the view it is pressed in
   hf_uv_multi.gd         Texture settings typed once for every picked face, mixed where they disagree
   hf_overlay_mesh.gd     The see-through ImmediateMesh the drawing tools and the snap target marker draw on
+  hf_accessibility.gd    What the system asks of the interface (motion, contrast, transparency), Tab reach and control names
   hf_overlay_colors.gd   The overlay colour palette every selection, hover, brush look, cordon and extrude overlay reads (prefs keys, defaults, High Contrast)
   hf_view_filters.gd     View Filters: hide a kind of brush, entity, wire or face in the editor only; never saved, and the bake ignores it
   hf_face_direction.gd   Show Face Direction: the look that draws every face's front and back in two colours, culling off

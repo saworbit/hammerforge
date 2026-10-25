@@ -166,6 +166,7 @@ func _build_ui() -> void:
 	r2_lbl.custom_minimum_size.x = 45
 	row2.add_child(r2_lbl)
 	_wire_target = OptionButton.new()
+	_wire_target.accessibility_name = "Target"
 	_wire_target.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# The inputs on offer belong to whatever is being wired to, so they follow it.
 	_wire_target.item_selected.connect(_on_wire_target_selected)
@@ -201,6 +202,7 @@ func _build_ui() -> void:
 	_wire_delay.step = 0.1
 	_wire_delay.suffix = "s"
 	_wire_delay.custom_minimum_size.x = 65
+	_wire_delay.accessibility_name = "Delay"
 	row4.add_child(_wire_delay)
 	_wire_once = CheckBox.new()
 	_wire_once.text = "1x"
@@ -227,6 +229,7 @@ func _build_ui() -> void:
 	var preset_row = HBoxContainer.new()
 	add_child(preset_row)
 	_preset_option = OptionButton.new()
+	_preset_option.accessibility_name = "Wiring preset"
 	_preset_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_preset_option.item_selected.connect(_on_preset_selected)
 	preset_row.add_child(_preset_option)

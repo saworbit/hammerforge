@@ -3,6 +3,8 @@ extends VBoxContainer
 ## Lightweight toast notification system for surfacing messages to the user.
 ## Stacks up to MAX_TOASTS transient labels that auto-fade after a duration.
 
+const HFAccessibility = preload("../hf_accessibility.gd")
+
 const MAX_TOASTS := 5
 
 enum Level { INFO, WARNING, ERROR }
@@ -50,6 +52,9 @@ func show_toast(message: String, level: int = Level.INFO) -> void:
 	label.text = message
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# A screen reader reads it out: a refusal at once, the rest when it is free
+	# (#1703).
+	label.accessibility_live = HFAccessibility.live_mode(level)
 	panel.add_child(label)
 	add_child(panel)
 
@@ -67,6 +72,10 @@ func show_toast(message: String, level: int = Level.INFO) -> void:
 	# freed capture, which the engine reports as an error with no script line to
 	# it (#1326).
 	var tween := panel.create_tween()
-	tween.tween_interval(duration - 1.0)
-	tween.tween_property(panel, "modulate:a", 0.0, 1.0)
+	if HFAccessibility.reduce_motion():
+		# There and then gone, with no fade (#1703).
+		tween.tween_interval(duration)
+	else:
+		tween.tween_interval(duration - 1.0)
+		tween.tween_property(panel, "modulate:a", 0.0, 1.0)
 	tween.tween_callback(panel.queue_free)
