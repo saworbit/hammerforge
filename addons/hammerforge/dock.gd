@@ -2940,6 +2940,24 @@ func get_sides() -> int:
 	return int(sides_spin.value)
 
 
+## The Sides count Ctrl+wheel steps in Draw, or 0 when the shape has none (#1891).
+func wheel_sides() -> int:
+	if not sides_spin or not _shape_requires_sides(active_shape):
+		return 0
+	return get_sides()
+
+
+## Steps the Sides box by `step`, within its range, and returns the count it
+## holds now (#1891).
+func step_sides(step: int) -> int:
+	if not sides_spin:
+		return 4
+	sides_spin.value = clampi(
+		get_sides() + step, int(sides_spin.min_value), int(sides_spin.max_value)
+	)
+	return get_sides()
+
+
 func get_grid_snap() -> float:
 	return grid_snap.value
 

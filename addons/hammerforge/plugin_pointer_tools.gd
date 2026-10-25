@@ -84,6 +84,39 @@ static func handle_draw(
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
+## Ctrl+wheel steps Sides by one a notch for a shape that has Sides, with Draw
+## idle or partway through a draw, and a draw under way is made with the new
+## count (#1891). Anything else goes on to Godot: a shape with no Sides, the
+## plain wheel, Alt+wheel.
+static func handle_draw_wheel(plugin: Object, event: InputEventMouseButton, root: Node) -> int:
+	var step := 0
+	if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+		step = 1
+	elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		step = -1
+	if step == 0 or not event.ctrl_pressed:
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	if event.alt_pressed or event.shift_pressed or event.meta_pressed:
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	var dock = plugin.dock
+	if dock == null or dock.wheel_sides() == 0:
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	var state = root.input_state
+	var drawing: bool = state.is_drag_base() or state.is_drag_height()
+	if drawing and not root._shape_uses_sides(state.drag_shape):
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	# A notch is a press and a release; the release of one taken here is ours too.
+	if not event.pressed:
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	var sides: int = dock.step_sides(step)
+	if drawing:
+		state.drag_sides = sides
+		if root.preview_brush:
+			root.preview_brush.sides = sides
+	plugin._update_hud_context()
+	return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+
 static func handle_motion(
 	plugin: Object,
 	event: InputEventMouseMotion,
