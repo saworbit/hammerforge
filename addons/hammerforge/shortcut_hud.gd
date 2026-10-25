@@ -380,14 +380,22 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 
 	# Draw tool
 	var drawing := ""
+	var sides := int(ctx.get("draw_sides", 0))
 	match mode:
 		1:
-			drawing = _draw_base_shortcuts(axis_lock)
+			drawing = _draw_base_shortcuts(axis_lock, sides)
 		2:
-			drawing = _draw_height_shortcuts()
+			drawing = _draw_height_shortcuts(sides)
 		_:
-			drawing = _draw_idle_shortcuts(axis_lock)
+			drawing = _draw_idle_shortcuts(axis_lock, sides)
 	return text + into_visgroup(drawing, str(ctx.get("current_visgroup", "")))
+
+
+## The Ctrl+wheel line, for a shape with Sides only: `sides` is 0 for one
+## without (#1891).
+static func _wheel_sides_line(lines: PackedStringArray, sides: int) -> void:
+	if sides > 0:
+		lines.append("Ctrl+Scroll: Sides (%d)" % sides)
 
 
 ## Name the visgroup a new brush joins on the row's first line, so nobody fills
@@ -400,36 +408,38 @@ static func into_visgroup(text: String, visgroup: String) -> String:
 	return "\n".join(lines)
 
 
-func _draw_idle_shortcuts(axis_lock: int) -> String:
+func _draw_idle_shortcuts(axis_lock: int, sides := 0) -> String:
 	var lines := PackedStringArray()
 	lines.append("Click + Drag: Draw Base")
 	lines.append("Manage > Create Floor: Stable Surface")
 	lines.append("Shift: Square | Alt+Shift: Cube")
 	lines.append(_chords("{axis_x} / {axis_y} / {axis_z}: Lock Axis%s" % _axis_suffix(axis_lock)))
 	lines.append(_chords("{toggle_draw_on_face}: Draw on Face"))
-	lines.append("Ctrl+Scroll: Brush Size")
+	_wheel_sides_line(lines, sides)
 	lines.append("[ / ]: Grid Size Down/Up")
 	lines.append(_chords("{duplicate}: Duplicate | {delete}: Remove"))
 	return "\n".join(lines)
 
 
-func _draw_base_shortcuts(axis_lock: int) -> String:
+func _draw_base_shortcuts(axis_lock: int, sides := 0) -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Dragging Base%s --" % _axis_suffix(axis_lock))
 	lines.append("Shift: Square | Alt+Shift: Cube")
 	lines.append(_chords("Hold {snap_invert_hold}: Grid Snap Off/On"))
 	lines.append("Type number: Set exact size")
+	_wheel_sides_line(lines, sides)
 	lines.append("Click: Set Height Stage")
 	lines.append("Right-click: Cancel")
 	return "\n".join(lines)
 
 
-func _draw_height_shortcuts() -> String:
+func _draw_height_shortcuts(sides := 0) -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Adjusting Height --")
 	lines.append("Move Mouse: Change Height")
 	lines.append(_chords("Hold {snap_invert_hold}: Grid Snap Off/On"))
 	lines.append("Type number + Enter: Exact height")
+	_wheel_sides_line(lines, sides)
 	lines.append("Click: Confirm Placement")
 	lines.append("Right-click: Cancel")
 	return "\n".join(lines)

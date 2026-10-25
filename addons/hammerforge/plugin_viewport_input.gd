@@ -326,6 +326,10 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 		if tool_id != 1:
 			root.set_shift_pressed(event.shift_pressed)
 			root.set_alt_pressed(event.alt_pressed)
+		if tool_id == 0:
+			var wheel := HFPluginPointerTools.handle_draw_wheel(plugin, event, root)
+			if wheel != EditorPlugin.AFTER_GUI_INPUT_PASS:
+				return wheel
 		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 			return plugin._handle_rmb_cancel(root, tool_id, event)
 		if event.button_index == MOUSE_BUTTON_LEFT:

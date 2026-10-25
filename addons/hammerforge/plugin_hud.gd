@@ -84,6 +84,8 @@ static func update_hud_context(plugin: Object) -> void:
 	ctx["current_visgroup"] = (
 		root.visgroup_system.get_current_visgroup() if root and root.get("visgroup_system") else ""
 	)
+	# The count Ctrl+wheel steps, for a shape with Sides (#1891).
+	ctx["draw_sides"] = dock.wheel_sides() if dock else 0
 	# Update dock mode indicator banner
 	if dock:
 		var mode_name := "Draw"

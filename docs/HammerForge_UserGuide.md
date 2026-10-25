@@ -1990,7 +1990,7 @@ The contexts and what their full lists cover:
 
 | Context | Shortcuts Shown |
 |---------|----------------|
-| Draw (idle) | Click+Drag, Shift/Alt modifiers, X/Y/Z axis lock, Ctrl+Scroll size, Ctrl+D, Delete |
+| Draw (idle) | Click+Drag, Shift/Alt modifiers, X/Y/Z axis lock, Ctrl+Scroll: Sides (N) for a pyramid or a round shape, Ctrl+D, Delete |
 | Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Hold Ctrl: Grid Snap Off/On, Click: Height stage, Right-click: Cancel. Live dimensions shown in banner |
 | Draw (adjusting height) | Mouse: Change height, Hold Ctrl: Grid Snap Off/On, Click: Confirm, Right-click: Cancel. Live dimensions shown in banner |
 | Select | Native click/Shift object selection; Face Select Shift-add/Ctrl-toggle; Escape, Delete, Ctrl+D, Arrow nudge, Ctrl+H Hollow, Shift+X Clip, Ctrl+Shift+F/C Floor/Ceiling |
@@ -2280,7 +2280,7 @@ General keyboard shortcuts
 - Shift+Arrow: duplicate the selection and move the copy one step that way, as one undo step. The copy is the selection after, so pressing it again makes the next copy from that one, and a row of columns is a key a column. Shift used to make no difference to an arrow.
 - Alt+Arrow, and Alt+Shift+PageUp/PageDown: nudge by a tenth of the grid step, for fitting the grid cannot reach. A tenth step is not put back on the grid. Alt+Shift+Arrow duplicates and moves a tenth. Alt+PageUp/PageDown alone moves the drawing plane (Grid Up / Grid Down).
 - Escape: clear selection.
-- Ctrl+Scroll: adjust brush size.
+- Ctrl+Scroll: one more or one fewer **Sides** a notch, for a pyramid or a round shape, with Draw idle or partway through a draw. The brush being drawn takes the new count. On any other shape, and outside Draw, the wheel is Godot's ([#1891](https://github.com/saworbit/hammerforge/issues/1891)).
 - `[` / `]`: halve / double grid snap size.
 
 Extrude shortcuts
