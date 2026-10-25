@@ -181,6 +181,14 @@ msgstr ""
 msgid "Any material in the palette"
 msgstr ""
 
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "Applied material #{slot} to face"
+msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "Applied material #{slot} to {count} faces"
+msgstr ""
+
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "Applied preset '{preset}' ({count} connection)"
 msgid_plural "Applied preset '{preset}' ({count} connections)"
@@ -289,6 +297,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_material_browser.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Apply to Whole Brush"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Apply: {material} ({keys})"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -2239,6 +2251,14 @@ msgstr ""
 
 #: addons/hammerforge/dock.tscn
 msgid "Material"
+msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "Material #{slot} is no longer in the palette"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Material {number}"
 msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
@@ -4579,6 +4599,10 @@ msgstr ""
 msgid "Z offset per copy"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "and {count} more"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_prefab_library.gd
 msgid "e.g. wooden, metal, ornate"
 msgstr ""
@@ -4635,17 +4659,83 @@ msgstr ""
 msgid "{action}: select a visgroup first"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{brushes} + {entities}"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{brushes} selected"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{count} brush"
+msgid_plural "{count} brushes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{count} copy of {prefab} in the level"
+msgid_plural "{count} copies of {prefab} in the level"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{count} entity"
+msgid_plural "{count} entities"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "{count} entity. A value goes on each one that has it."
 msgid_plural "{count} entities. A value goes on each one that has it."
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{count} face"
+msgid_plural "{count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "{count} face made Hidden"
+msgid_plural "{count} faces made Hidden"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{count} pending"
+msgstr ""
+
 #: addons/hammerforge/plugin_face_sweep.gd
 msgid "{count} piece"
 msgid_plural "{count} pieces"
 msgstr[0] ""
 msgstr[1] ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{entities} selected"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{faces} on {brushes}"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{faces} selected"
+msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "{file} could not be loaded as a material"
+msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "{file} is not a prefab this build can read"
+msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "{file}: {problem}"
+msgstr ""
 
 #: addons/hammerforge/plugin_face_sweep.gd
 msgid "{folded} of {count} pieces fold back on themselves: widen the radius or cut more segments"
