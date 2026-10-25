@@ -1,1 +1,0 @@
-- Ctrl+wheel in Draw steps Sides by one for a pyramid or a round shape, before or during a draw; the shortcut row promised Ctrl+Scroll and nothing read the wheel. (issue [#1891](https://github.com/saworbit/hammerforge/issues/1891))

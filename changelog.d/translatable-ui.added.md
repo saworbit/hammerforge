@@ -1,1 +1,0 @@
-- HammerForge's words have a translation domain of their own: a .po in translations/ shows the dock, Console and palette in the editor's language. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

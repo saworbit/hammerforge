@@ -1,1 +1,0 @@
-- A test counts, per script, the text shown without going through the translation catalogs, and fails when a count goes up. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

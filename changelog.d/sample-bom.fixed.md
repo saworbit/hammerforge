@@ -1,1 +1,0 @@
-- Every import scan printed a parse error for the two sample scenes, which started with a byte order mark. (issue [#1917](https://github.com/saworbit/hammerforge/issues/1917))

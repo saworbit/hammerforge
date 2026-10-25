@@ -1,1 +1,0 @@
-- The floor grid can turn to a picked edge, a turned brush or a typed Angle, and draws, resizes, snaps and nudges follow it. (issue [#1893](https://github.com/saworbit/hammerforge/issues/1893))
