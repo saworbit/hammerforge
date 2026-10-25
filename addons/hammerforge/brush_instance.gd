@@ -519,6 +519,9 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 			if uvs.size() > i:
 				st.set_uv(uvs[i])
 			st.add_vertex(verts[i])
+		# As the bake does, so a normal map looks the same here and baked (#1883).
+		if not uvs.is_empty() and not normals.is_empty():
+			st.generate_tangents()
 		st.commit(mesh)
 		surface_count += 1
 	mesh_instance.mesh = mesh if surface_count > 0 else base_mesh
