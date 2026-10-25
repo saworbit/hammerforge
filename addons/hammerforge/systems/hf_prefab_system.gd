@@ -1426,6 +1426,7 @@ func capture_state() -> Dictionary:
 
 
 func restore_state(data: Dictionary) -> void:
+	var had_instances := not _instances.is_empty()
 	_instances.clear()
 	_next_instance_id = data.get("next_instance_id", 1)
 	_next_entity_uid = data.get("next_entity_uid", 1)
@@ -1466,5 +1467,9 @@ func restore_state(data: Dictionary) -> void:
 	# A link the restored records do not give a node comes off it. A brush an undo
 	# kept rather than rebuilt still carried the link of a copy that was gone, and
 	# so still read as a linked copy after the link was taken back (#1276); one a
-	# kept copy no longer listed kept that copy's link all the same (#1338).
-	root.clear_stale_membership(LINK_META, written)
+	# kept copy no longer listed kept that copy's link all the same (#1338). With
+	# no copy before and none now, no node can hold a link: a rebuilt node carries
+	# none and a kept one lost its own when the last copy went, so the walk of
+	# every node is skipped (#1866).
+	if had_instances or not _instances.is_empty():
+		root.clear_stale_membership(LINK_META, written)

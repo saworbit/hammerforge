@@ -72,6 +72,9 @@ const CARRIED := [
 
 var root: Node3D
 var generators: Dictionary = {}  # generator_id -> HFGenerator
+## Whether a node may still carry a structure's tag that no record gives it:
+## `clear()` emptied the records, and no restore has walked the nodes since.
+var _tags_may_remain := false
 
 
 func _init(level_root: Node3D = null) -> void:
@@ -913,6 +916,7 @@ func capture() -> Array:
 ## Restore records and put the meta back on the brushes that belong to them, and
 ## take it off the brushes that no longer do.
 func restore(records: Array) -> void:
+	var had_structures := _tags_may_remain or not generators.is_empty()
 	generators.clear()
 	var restored: Dictionary = {}
 	for entry in records:
@@ -931,9 +935,12 @@ func restore(records: Array) -> void:
 	# A restore that reuses a brush's node keeps its metadata. Undo a Detach and
 	# redo it, and the old pieces went on saying they belonged to a structure that
 	# was gone, in the scene file as well (#1306). Every reader asks the record, so
-	# nothing acted on it, but the next one to trust the tag would have.
-	if root != null:
+	# nothing acted on it, but the next one to trust the tag would have. With no
+	# structure before and none now no node holds a tag, so the walk of every node
+	# is skipped (#1866).
+	if root != null and (had_structures or not generators.is_empty()):
 		root.clear_stale_membership([GENERATOR_META], restored)
+		_tags_may_remain = false
 
 
 ## A step saved before #879 lists its faces the way the stairs builder made them,
@@ -961,6 +968,10 @@ func _take_old_signatures_again(record: HFGenerator) -> void:
 
 
 func clear() -> void:
+	# A restore empties the records here before it reads its own, with the tags
+	# still on the nodes it keeps, so its walk must not be skipped (#1866).
+	if not generators.is_empty():
+		_tags_may_remain = true
 	generators.clear()
 
 

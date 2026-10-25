@@ -19,15 +19,17 @@ and the shape is what carries over.
 
 - **Nothing caps the number of brushes in a level.** The Status board's
   **Geometry budget** and the dock's health label are advice. They turn amber
-  above 100 brushes and entities, past which placing a brush took longer than a
-  frame, and red above 1,000, where undoing one took over a tenth of a second.
+  above 100 brushes and entities, and red above 1,000, where placing or undoing
+  a brush, with the check after it, takes a little more than a frame.
 - **What grows with brush count is the pause after placing or undoing.** Resizing
-  one brush took 0.40 ms at 100 brushes and 4.87 ms at 3,000, and the check after
-  it 1.62 ms at 3,000: it looks at the brushes the step touched, where it used to
+  one brush took 0.36 ms at 100 brushes and 0.61 ms at 3,000, and the check after
+  it 1.65 ms at 3,000: it looks at the brushes the step touched, where it used to
   walk every brush, 296 ms at 3,000
   ([#1619](https://github.com/saworbit/hammerforge/issues/1619)). Placing a brush
-  and undoing one record the whole level: 163 ms and 199 ms at 3,000, and the
-  undo's check still walks every brush, because that undo rebuilds them all.
+  and undoing one record the whole level: 26.0 ms and 45.0 ms at 3,000, with
+  28.5 ms and 19.1 ms for the checks after them, where on 23 October they were
+  163 ms and 199 ms with 212 ms for the check after the undo
+  ([#1866](https://github.com/saworbit/hammerforge/issues/1866)).
 - **Picking stays cheap.** A hover pick took 2.58 ms a mouse move at 3,000 brushes.
 - **A full bake took 237 ms at 1,000 brushes and 848 ms at 3,000**, headless. In
   the editor the default bake also waits for one editor frame every 8 brushes:
@@ -95,22 +97,23 @@ over a brush.
 
 ## Editing
 
-Measured again on 25 October 2026 with `--only=edits --repeats=3`, on the same
-machine, after a whole level undo step began keeping each brush's faces record
-between steps and the check after an undo stopped walking every brush for a
-brush the step took away ([#1866](https://github.com/saworbit/hammerforge/issues/1866)).
+Measured again on 26 October 2026 with `--only=edits --repeats=3`, on the same
+machine, after an undo stopped walking every node for things nothing could have
+changed ([#1866](https://github.com/saworbit/hammerforge/issues/1866)).
 
 | Brushes | 100 | 300 | 1,000 | 3,000 |
 |---|--:|--:|--:|--:|
-| Resize one brush, with its undo step (ms) | 0.35 | 0.37 | 0.41 | 0.60 |
-| Place one brush, with its undo step (ms) | 1.35 | 2.97 | 10.4 | 32.6 |
-| Undo that placement (ms) | 2.38 | 6.63 | 23.3 | 73.8 |
-| Change check after the resize (ms) | 1.21 | 1.29 | 1.34 | 1.64 |
-| Change check after the placement (ms) | 1.89 | 3.55 | 9.41 | 28.1 |
-| Change check after its undo (ms) | 1.57 | 2.65 | 6.85 | 19.5 |
+| Resize one brush, with its undo step (ms) | 0.36 | 0.37 | 0.41 | 0.61 |
+| Place one brush, with its undo step (ms) | 0.98 | 2.26 | 7.97 | 26.0 |
+| Undo that placement (ms) | 1.42 | 3.73 | 12.9 | 45.0 |
+| Change check after the resize (ms) | 1.20 | 1.24 | 1.36 | 1.65 |
+| Change check after the placement (ms) | 1.88 | 3.47 | 9.19 | 28.5 |
+| Change check after its undo (ms) | 1.59 | 2.61 | 6.47 | 19.1 |
 
-On main the same day, before #1866, the same run measured 173 ms to place a
-brush at 3,000, 233 ms to undo it and 228 ms for the check after the undo.
+Before #1866 the same run measured 173 ms to place a brush at 3,000, 233 ms to
+undo it and 228 ms for the check after the undo (25 October). Keeping each
+brush's faces record between steps brought the undo to 73.8 ms, and walking less
+brought it to 45.0 ms.
 
 - **Resize one brush** is a handle drag as it commits: one undo step that records
   only that brush.
@@ -120,9 +123,13 @@ brush at 3,000, 233 ms to undo it and 228 ms for the check after the undo.
   the record of its faces until one can have changed, and every step taken
   meanwhile shares it, so a step costs time for the brushes that changed. An
   undo keeps a brush whose record shares those faces without comparing it face
-  by face. What is left of an undo at 3,000 is the rest of each kept brush's
-  record, about 36 ms, and putting the visgroups back, about 12 ms, which walks
-  every node.
+  by face. What is left of an undo at 3,000 is building the rest of each kept
+  brush's record to compare it, about 25 ms, and putting every kept brush back
+  in the registries, about 6 ms. The visgroups are drawn again for the brushes
+  and entities the undo built, and for every node only when the visgroups, the
+  view or its filters changed. The walks that take stale structure, array and
+  prefab tags off are skipped when the level has none before or after, and the
+  brushes are reordered only when they are out of order.
 - **Change check** is the pass the plugin runs after every step that lands in the
   undo history, Undo and Redo included (`HFBrushChangeTracker.reconcile_step()`),
   so that a change Godot's own gizmo, Inspector or undo made reaches Bake Changed
@@ -138,13 +145,13 @@ The pause after an edit is the edit and the check together. Adding the two rows:
 
 | Brushes | 100 | 300 | 1,000 | 3,000 |
 |---|--:|--:|--:|--:|
-| Resize, then the check (ms) | 1.56 | 1.66 | 1.75 | 2.24 |
-| Place, then the check (ms) | 3.24 | 6.52 | 19.8 | 60.7 |
-| Undo a placement, then the check (ms) | 3.95 | 9.28 | 30.2 | 93.3 |
+| Resize, then the check (ms) | 1.56 | 1.61 | 1.77 | 2.26 |
+| Place, then the check (ms) | 2.86 | 5.73 | 17.2 | 54.5 |
+| Undo a placement, then the check (ms) | 3.01 | 6.34 | 19.4 | 64.1 |
 
 A resize and its check fit in one frame at 60 frames a second, 16.7 ms, at every
-size measured. Placing a brush and undoing it fit at 100 and 300 brushes and not
-at 1,000, where each takes two frames or so. Those are the thresholds the Status
+size measured. Placing a brush and undoing it fit at 100 and 300 brushes, and
+take a little more than one frame at 1,000. Those are the thresholds the Status
 board's **Geometry budget**, the dock's health label and its brush count use:
 amber above 100 brushes and entities, red above 1,000.
 They were 50 and 100, which turned the count red at a size where nothing measured
