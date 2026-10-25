@@ -89,6 +89,16 @@ rules:
 HFTranslation.tn("{count} brush", "{count} brushes", n).format({"count": n})
 ```
 
+About a thousand strings were put together the old way before this was
+possible. `tests/test_untranslated_text_ratchet.gd` counts, for each script,
+the formatted strings handed straight to a label, a tooltip, a title or a
+toast without `HFTranslation.t()` or `tn()`, and keeps the counts in
+`tests/fixtures/untranslated_interface_text.json`. It fails when a script's
+count goes up, so new text goes through the catalogs. It also fails when a
+count goes down, until that script's line in the file is lowered to match, so
+the counts only move one way. Run it with `HF_RATCHET_WRITE=1` set to write the
+counts as they are.
+
 A new surface the plugin puts in the editor's own tree, outside the dock, is
 given the domain with `HFTranslation.adopt(node)` before it goes in. A dialog
 added with the plugin's `_add_confirmable_dialog()` and an overlay attached

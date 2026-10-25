@@ -264,6 +264,31 @@ func test_faces_not_in_one_plane_are_refused():
 	await rig.leave_level(level)
 
 
+func test_the_dialog_counts_its_pieces_in_words_a_catalog_can_translate():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _picked_face()
+	var level = made[0]
+	assert_true(HFPluginFaceSweep.open(rig.plugin, level))
+	var dialogs: Array = rig.open_dialogs()
+	assert_eq(dialogs.size(), 1, "it asks")
+	if dialogs.size() == 1:
+		var status: Label = null
+		for label in dialogs[0].find_children("*", "Label", true, false):
+			if (label as Label).text.ends_with("pieces"):
+				status = label
+		assert_not_null(status, "fixture: the count")
+		assert_eq(status.text, "8 pieces")
+		for spin in dialogs[0].find_children("*", "SpinBox", true, false):
+			if (spin as SpinBox).accessibility_name == "Segments":
+				(spin as SpinBox).value = 1
+		assert_eq(status.text, "1 piece", "one, not 1 pieces")
+		dialogs[0].get_cancel_button().pressed.emit()
+		await rig.frame()
+	await rig.leave_level(level)
+
+
 func test_the_dialog_outlines_the_pieces_and_ok_makes_them():
 	if rig.plugin == null:
 		fail_test(rig.error())
