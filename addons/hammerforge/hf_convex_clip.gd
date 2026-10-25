@@ -24,6 +24,7 @@ class_name HFConvexClip
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("face_data.gd")
+const HFDisplacementData = preload("displacement_data.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## Points closer than this to the plane count as lying on it. Brush coordinates
@@ -433,6 +434,8 @@ static func progressive_remainder(
 ## `origins` maps each face to the input face it came from, for
 ## `carry_onto_union()`: the largest input face lying on it, the first listed on a
 ## tie. A face that is that input face whole keeps its corners as they were.
+## `parts` maps each face that grew to every input face lying on it, for the
+## sculpts they carry (#1906).
 static func union_of(
 	face_sets: Array, gap: float = 0.0, epsilon: float = DEFAULT_EPSILON
 ) -> Dictionary:
@@ -506,6 +509,7 @@ static func union_of(
 	var on_plane := maxf(gap, epsilon)
 	var faces: Array = []
 	var origins := {}
+	var parts := {}
 	var rank := {}
 	for face in joined:
 		var hull_face: FaceData = face as FaceData
@@ -517,12 +521,13 @@ static func union_of(
 			built = _piece_of(source, source.local_verts, source.custom_uvs, origins)
 		else:
 			built = _piece_of(source, hull_face.local_verts, PackedVector2Array(), origins)
+			parts[built] = _all_on_face(sources, hull_face, on_plane)
 		rank[built] = sources.find(source)
 		faces.append(built)
 	# In the order of the faces they came from, so the merged brush lists the first
 	# brush's faces first, as the brushes were selected.
 	faces.sort_custom(func(a, b): return rank[a] < rank[b])
-	return {"faces": faces, "convex": true, "origins": origins}
+	return {"faces": faces, "convex": true, "origins": origins, "parts": parts}
 
 
 ## Hand each face of a union from `union_of()` what is laid on the face it came
@@ -533,9 +538,11 @@ static func union_of(
 ## the texture where it was. Custom or Cylindrical UVs are read off the input face
 ## and carried on across the new corners, and Planar and Box UVs are taken in
 ## world space and carry on by themselves. Its paint goes with it, as it does onto
-## a piece of a cut. A sculpt is laid against the four corners of its face and
-## these are not them, so it cannot.
-static func carry_onto_union(faces: Array, origins: Dictionary) -> int:
+## a piece of a cut. A sculpt is laid against the four corners of its face, so a
+## face that grew takes a sculpt only when `parts`, as `union_of()` gives it,
+## names the faces it grew from, and it and they are quads: one sculpt over all
+## of them, a power finer so their grid points are its own (#1906).
+static func carry_onto_union(faces: Array, origins: Dictionary, parts: Dictionary = {}) -> int:
 	var dropped := 0
 	for face in faces:
 		var built: FaceData = face as FaceData
@@ -555,9 +562,44 @@ static func carry_onto_union(faces: Array, origins: Dictionary) -> int:
 			or source.uv_projection == FaceData.UVProjection.CYLINDRICAL
 		):
 			built.custom_uvs = source.shown_uvs_at(built.local_verts)
-		if source.displacement != null:
-			dropped += 1
+		var on_it: Array = parts.get(built, [source])
+		var sculpted := 0
+		var finest := 0
+		var laid: Array = []
+		for part in on_it:
+			var data: FaceData = part as FaceData
+			if data.displacement != null:
+				sculpted += 1
+				finest = maxi(finest, data.displacement.power)
+			laid.append([data.displacement, data.local_verts])
+		if sculpted == 0:
+			continue
+		var merged: HFDisplacementData = null
+		if parts.has(built):
+			var power := mini(finest + 1, 4) if on_it.size() > 1 else finest
+			merged = HFDisplacementData.merged_onto(laid, built.local_verts, power)
+		built.displacement = merged
+		if merged == null:
+			dropped += sculpted
 	return dropped
+
+
+## Every face of `sources` lying on `face`'s plane and facing its way.
+static func _all_on_face(sources: Array, face: FaceData, tolerance: float) -> Array:
+	var plane := face_plane(face)
+	var out: Array = []
+	for source in sources:
+		var data: FaceData = source as FaceData
+		if _face_normal(data).dot(plane.normal) < 0.999:
+			continue
+		var on_it := true
+		for vertex in data.local_verts:
+			if absf(plane.distance_to(vertex)) > tolerance:
+				on_it = false
+				break
+		if on_it:
+			out.append(data)
+	return out
 
 
 ## Hand each face of the kept pieces the paint and the sculpt of the face it is a
@@ -632,6 +674,30 @@ static func sculpts_a_cut_would_drop(face_sets: Array, origins: Dictionary) -> i
 			if piece.local_verts.size() != 4:
 				dropped[source] = true
 	return dropped.size()
+
+
+## How many sculpts a union would drop: those on the faces a face grew from when
+## it or one of them is not four-cornered, which `carry_onto_union()` cannot lay
+## one sculpt over. Corner counts only, as for a cut (#1906).
+static func sculpts_a_union_would_drop(faces: Array, origins: Dictionary, parts: Dictionary) -> int:
+	var dropped := 0
+	for face in faces:
+		var built: FaceData = face as FaceData
+		if built == null or not origins.has(built):
+			continue
+		var source: FaceData = origins[built]
+		if built.local_verts == source.local_verts:
+			continue
+		var holds := built.local_verts.size() == 4 and parts.has(built)
+		var sculpted := 0
+		for part in parts.get(built, [source]):
+			if (part as FaceData).displacement != null:
+				sculpted += 1
+			if (part as FaceData).local_verts.size() != 4:
+				holds = false
+		if not holds:
+			dropped += sculpted
+	return dropped
 
 
 ## Whether a solid has few enough distinct planes to run a boolean against.
