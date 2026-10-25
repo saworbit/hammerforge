@@ -10,6 +10,7 @@ extends GutTest
 
 const HFPrefabSystemScript = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 const HFUserPrefsScript = preload("res://addons/hammerforge/hf_user_prefs.gd")
+const HFTextureFolderScript = preload("res://addons/hammerforge/hf_texture_folder.gd")
 const GutPreRun = preload("res://tests/support/gut_pre_run.gd")
 const RealPrefsGuard = preload("res://tests/support/real_prefs_guard.gd")
 
@@ -34,6 +35,12 @@ func test_the_prefab_folder_is_this_runs_own():
 	)
 	assert_true(dir.begins_with(GutPreRun.folder() + "/"), "%s is this run's" % dir)
 	assert_false(dir.begins_with("res://"), "nothing a test saves lands in the project")
+
+
+func test_texture_folder_materials_go_into_this_runs_folder():
+	# Beside their textures they would be written into the project (#1884).
+	var dir: String = HFTextureFolderScript.write_dir
+	assert_true(dir.begins_with(GutPreRun.folder() + "/"), "%s is this run's" % dir)
 
 
 func test_the_folder_is_named_for_this_process():

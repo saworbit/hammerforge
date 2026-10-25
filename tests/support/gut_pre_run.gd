@@ -16,6 +16,7 @@ extends GutHookScript
 
 const HFPrefabSystemScript = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 const HFUserPrefsScript = preload("res://addons/hammerforge/hf_user_prefs.gd")
+const HFTextureFolderScript = preload("res://addons/hammerforge/hf_texture_folder.gd")
 const RealPrefsGuard = preload("res://tests/support/real_prefs_guard.gd")
 
 ## `RealPrefsGuard.fingerprint()` of the developer's preferences before the first
@@ -38,6 +39,8 @@ func run() -> void:
 	HFPrefabSystemScript.prefab_dir = dir.path_join("prefabs")
 	HFPrefabSystemScript.clipboard_path = dir.path_join("clipboard.hfprefab")
 	HFUserPrefsScript.prefs_path = dir.path_join("hammerforge_prefs.json")
+	# And the materials Add Texture Folder and an image drop write (#1884).
+	HFTextureFolderScript.write_dir = dir.path_join("texture_folder")
 
 
 ## Take `path` away with everything in it.

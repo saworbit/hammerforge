@@ -142,6 +142,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 - **Visual material browser** -- thumbnail grid with search, pattern/color filters, and Prototypes/Palette/Favorites views; marks what the level uses with a face count, an In Use view with the most used first, a search that takes every word, Select Faces and Select Brushes Using This, and a thumbnail size slider (#1725)
 - **150 built-in prototype textures** (15 patterns x 10 colors) -- click **Refresh Prototypes** for instant greyboxing with visual browsing
+- **Add Texture Folder** -- a folder of images becomes palette materials in one step, `brick_albedo`, `brick_normal` and `brick_roughness` one brick with all three maps; an image dropped on a face paints it with its set's material
 - **Texture Picker** (T key) -- eyedropper tool samples material from any face
 - **Apply Picked Look** (Alt+T) -- gives the selected faces the picked face's material, projection, scale, offset and rotation in one undo step, so faces on separate brushes line up
 - **Hover preview** -- hovering a thumbnail temporarily previews it on selected faces

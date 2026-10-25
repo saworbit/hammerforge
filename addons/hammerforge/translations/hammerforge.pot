@@ -53,6 +53,10 @@ msgstr ""
 msgid "Add Sel"
 msgstr ""
 
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Add Texture Folder"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_prefab_library.gd
 msgid "Add Variant"
 msgstr ""

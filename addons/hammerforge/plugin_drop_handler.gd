@@ -11,6 +11,7 @@ const HFBrushSystemType = preload("systems/hf_brush_system.gd")
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
+const HFTextureFolder = preload("hf_texture_folder.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -282,16 +283,34 @@ static func _godot_places_any(files: Array) -> bool:
 ## face selection that face is in. The palette slot already holding the file is
 ## reused, and the material is added when there is none, in the same undo step as
 ## the paint (#1417).
+##
+## An image goes on as the material of its set, as Add Texture Folder makes it:
+## its normal and roughness maps found by name beside it, written once and used
+## again after (#1884).
 static func handle_files_drop(plugin: Object, position: Vector2, data: Variant) -> void:
 	var root = plugin.active_root if plugin.active_root else plugin._get_level_root()
 	if not root:
 		return
 	var files := files_of(data)
 	var path := material_path_in(files)
+	var material: Material = null
 	if path == "":
-		_toast(plugin, _refusal_text(files))
-		return
-	var material := ResourceLoader.load(path) as Material
+		var image := image_path_in(files)
+		if image == "":
+			_toast(plugin, _refusal_text(files))
+			return
+		var built := HFTextureFolder.build_for_image(image)
+		if (built["materials"] as Array).is_empty():
+			_toast(plugin, "%s: %s" % [image.get_file(), HFTextureFolder.report(built)])
+			return
+		material = built["materials"][0]
+		path = material.resource_path
+		if Engine.is_editor_hint() and int(built["made"]) > 0:
+			var file_system := EditorInterface.get_resource_filesystem()
+			if file_system:
+				file_system.scan()
+	else:
+		material = ResourceLoader.load(path) as Material
 	if material == null:
 		_toast(plugin, "%s could not be loaded as a material" % path.get_file())
 		return
@@ -301,16 +320,18 @@ static func handle_files_drop(plugin: Object, position: Vector2, data: Variant) 
 	_paint_dropped(plugin, root, position, slot, material)
 
 
-## Why a drop of `files` paints nothing. An image says so in its own words: there
-## is no step that makes a palette material from a picture.
+## The first image among `files`, or "".
+static func image_path_in(files: Array) -> String:
+	for path in files:
+		var kind := resource_kind(str(path))
+		if ClassDB.is_parent_class(kind, "Texture") or ClassDB.is_parent_class(kind, "Image"):
+			return str(path)
+	return ""
+
+
+## Why a drop of `files` paints nothing.
 static func _refusal_text(files: Array) -> String:
 	var first := str(files[0]) if not files.is_empty() else ""
-	var kind := resource_kind(first)
-	if ClassDB.is_parent_class(kind, "Texture") or ClassDB.is_parent_class(kind, "Image"):
-		return (
-			"%s is an image, not a material. Make a material that uses it, then drop that"
-			% first.get_file()
-		)
 	return "%s is not a material a face can wear" % first.get_file()
 
 

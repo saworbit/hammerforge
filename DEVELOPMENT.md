@@ -394,6 +394,7 @@ addons/hammerforge/
   material_manager.gd    Shared materials palette (+ library persistence, usage tracking)
   hf_material_use.gd     Which materials the open level uses and on which faces, for the material browser
   hf_prototype_textures.gd  HFPrototypeTextures: 150 built-in SVG textures (15 patterns x 10 colors)
+  hf_texture_folder.gd   HFTextureFolder: Add Texture Folder, image sets by name as palette materials (#1884)
   face_selector.gd       Raycast face selection
   hf_extrude_tool.gd     Extrude Up/Down tool (face click + drag to extend brushes)
   hf_entity_def.gd       Data-driven entity definition system (JSON + built-in defaults)

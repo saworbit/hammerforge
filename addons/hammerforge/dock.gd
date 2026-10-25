@@ -95,6 +95,7 @@ const HFDockToolMemory = preload("dock_tool_memory.gd")
 const HFViewFiltersType = preload("hf_view_filters.gd")
 const HFUVMulti = preload("hf_uv_multi.gd")
 const HFQuickSelectType = preload("hf_quick_select.gd")
+const HFTextureFolder = preload("hf_texture_folder.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const PRESET_MENU_RENAME := 0
@@ -394,6 +395,8 @@ var perf_brush_bar: ProgressBar = null
 var material_browser: HFMaterialBrowser = null
 var materials_list: ItemList = null
 var material_add: Button = null
+var material_add_texture_folder: Button = null
+var _texture_folder_dialog: FileDialog = null
 var material_remove: Button = null
 var material_load_prototypes: Button = null
 var material_remove_unused: Button = null
@@ -5488,6 +5491,40 @@ func _on_material_selected(index: int) -> void:
 func _on_material_add() -> void:
 	if material_palette_dialog:
 		material_palette_dialog.popup_centered_ratio(0.6)
+
+
+## Ask for a folder of textures, and add it (#1884).
+func _on_material_add_texture_folder() -> void:
+	if _texture_folder_dialog == null:
+		_texture_folder_dialog = FileDialog.new()
+		_texture_folder_dialog.access = FileDialog.ACCESS_RESOURCES
+		_texture_folder_dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
+		_texture_folder_dialog.title = "Add Texture Folder"
+		_texture_folder_dialog.dir_selected.connect(add_texture_folder)
+		add_child(_texture_folder_dialog)
+	_texture_folder_dialog.popup_centered_ratio(0.6)
+
+
+## Add Texture Folder (#1884): every set of images in `folder` as a palette
+## material, its normal, roughness, metallic and occlusion maps found by name,
+## as one undo step, and a toast saying what came of it. A material written
+## before is used again, so a second run adds only the new sets. What
+## `HFTextureFolder.build()` returned.
+func add_texture_folder(folder: String) -> Dictionary:
+	if not level_root:
+		return {}
+	var built := HFTextureFolder.build(folder)
+	if Engine.is_editor_hint() and int(built["made"]) > 0:
+		var file_system := EditorInterface.get_resource_filesystem()
+		if file_system:
+			file_system.scan()
+	_commit_state_action_if_changed(
+		"Add Texture Folder", "add_materials_to_palette", [built["materials"]]
+	)
+	_sync_materials_from_root()
+	var trouble := str(built["error"]) != "" or not (built["unplaced"] as Array).is_empty()
+	show_toast(HFTextureFolder.report(built), 1 if trouble else 0)
+	return built
 
 
 func _on_material_palette_selected(path: String) -> void:

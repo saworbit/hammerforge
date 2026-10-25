@@ -110,6 +110,8 @@ const TEXTS := {
 	"face_select_mode":
 	"Enable per-face texturing\nClick faces in the viewport to select them\nShift+Click adds more faces\nRequired for per-face assign, UV edit, and surface paint",
 	"material_add": "Add a material to the palette",
+	"material_add_texture_folder":
+	"Add every image in a folder as a material, one undo step\nbrick_albedo, brick_normal and brick_roughness make one brick with all three maps",
 	"material_remove": "Remove selected material from palette",
 	"material_load_prototypes":
 	"Load built-in prototype textures into the palette\nUse this first if the browser looks empty",
