@@ -125,14 +125,31 @@ func test_every_chord_token_in_the_surfaces_names_a_real_action():
 		"res://addons/hammerforge/ui/hf_tooltip_text.gd",
 		"res://addons/hammerforge/ui/hf_context_toolbar.gd",
 	]:
-		for line in FileAccess.get_file_as_string(path).split("\n"):
+		var source := FileAccess.get_file_as_string(path)
+		var filled := _format_keys(source)
+		for line in source.split("\n"):
 			if line.strip_edges().begins_with("#"):
 				continue
 			for hit in regex.search_all(line):
 				var action := hit.get_string(1)
+				if filled.has(action):
+					continue
 				if not keymap.has_action(action) and not unresolved.has(action):
 					unresolved.append(action)
 	assert_eq(unresolved, [], "A token naming no action is rendered on screen in braces")
+
+
+## The names `source` fills with `.format({...})`, the placeholders of words put
+## through the catalogs (#1702). They share the braces with a chord token, and
+## `.format()` replaces them before anything is shown.
+static func _format_keys(source: String) -> Dictionary:
+	var calls := RegEx.create_from_string("(?s)\\.format\\(\\s*\\{(.*?)\\}\\s*\\)")
+	var key := RegEx.create_from_string('"([a-z_0-9]+)"\\s*:')
+	var out := {}
+	for each_call in calls.search_all(source):
+		for found in key.search_all(each_call.get_string(1)):
+			out[found.get_string(1)] = true
+	return out
 
 
 func test_the_surfaces_hold_no_chord_literal():
