@@ -26,6 +26,8 @@ const KIND_LINE := "line"
 ## (#1692).
 const KIND_GUIDE := "guide"
 const KIND_GUIDE_CROSS := "guides"
+## Where a guide meets a brush's edge.
+const KIND_GUIDE_EDGE := "guide edge"
 ## What the viewport calls each kind beside its marker.
 const KIND_LABELS := {
 	KIND_GRID: "Grid",
@@ -36,6 +38,7 @@ const KIND_LABELS := {
 	KIND_LINE: "Line",
 	KIND_GUIDE: "Guide",
 	KIND_GUIDE_CROSS: "Guides",
+	KIND_GUIDE_EDGE: "Guide on edge",
 }
 ## How many points guides run from at once. A new one past this lets the oldest
 ## go.
@@ -46,6 +49,7 @@ const TRACKABLE := [KIND_VERTEX, KIND_MIDPOINT, KIND_CENTRE, KIND_PERPENDICULAR]
 ## How much nearer than it is a guide counts, and a crossing more so, so a guide
 ## in reach beats the grid and a crossing beats a guide (#1692).
 const GUIDE_WEIGHT := 0.5
+const EDGE_WEIGHT := 0.35
 const CROSS_WEIGHT := 0.25
 const AXIS_NAMES := ["X", "Y", "Z"]
 ## Closer than this to a guide is on it already.
@@ -328,6 +332,8 @@ static func _weighed(choice: Dictionary) -> float:
 	match str(choice["kind"]):
 		KIND_GUIDE_CROSS:
 			return float(choice["distance"]) * CROSS_WEIGHT
+		KIND_GUIDE_EDGE:
+			return float(choice["distance"]) * EDGE_WEIGHT
 		KIND_GUIDE:
 			return float(choice["distance"]) * GUIDE_WEIGHT
 	return float(choice["distance"])
@@ -453,7 +459,64 @@ func guide_choices(point: Vector3) -> Array:
 		out.append(best_guide)
 	if not best_cross.is_empty():
 		out.append(best_cross)
+	var best_edge := _guide_on_edge(point, near)
+	if not best_edge.is_empty():
+		out.append(best_edge)
 	return out
+
+
+## Where a guide meets an edge of a brush in reach: the point on the edge level
+## with a tracked point one way. Ranked between a crossing and a guide alone.
+func _guide_on_edge(point: Vector3, near: Dictionary) -> Dictionary:
+	var best := {}
+	if root == null or not root.has_method("_iter_pick_nodes"):
+		return best
+	var edges: Array = []
+	for node in root._iter_pick_nodes():
+		if not (node is DraftBrush) or node == root.get("preview_brush"):
+			continue
+		var brush := node as DraftBrush
+		var xform := brush.global_transform
+		var reach := _world_reach(xform.basis, _snap_half_extent(brush))
+		if point.distance_to(brush.global_position) > snap_threshold + reach:
+			continue
+		var geometry := _snap_geometry_local(brush)
+		var local_verts: PackedVector3Array = geometry["verts"]
+		for edge in geometry["edges"]:
+			edges.append([xform * local_verts[edge[0]], xform * local_verts[edge[1]]])
+	for i in tracked.size():
+		if near.get(i, false):
+			continue
+		var tracked_point: Vector3 = tracked[i]["point"]
+		for held in 3:
+			for edge in edges:
+				var a: Vector3 = edge[0]
+				var b: Vector3 = edge[1]
+				var run := b[held] - a[held]
+				if absf(run) < GUIDE_EPSILON:
+					continue
+				var t := (tracked_point[held] - a[held]) / run
+				if t < 0.0 or t > 1.0:
+					continue
+				var meet := a.lerp(b, t)
+				var d := point.distance_to(meet)
+				if d < GUIDE_EPSILON or d >= snap_threshold:
+					continue
+				if best.is_empty() or d < best["distance"]:
+					best = {
+						"point": meet,
+						"kind": KIND_GUIDE_EDGE,
+						"distance": d,
+						"label":
+						(
+							"Edge, level with the %s on %s"
+							% [
+								str(KIND_LABELS.get(tracked[i]["kind"], "point")).to_lower(),
+								AXIS_NAMES[held]
+							]
+						),
+					}
+	return best
 
 
 ## The axis a guide holding `held` runs along, for a label and a typed distance:

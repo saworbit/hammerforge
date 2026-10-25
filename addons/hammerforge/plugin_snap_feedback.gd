@@ -32,6 +32,7 @@ const SHAPES := {
 	HFSnapSystemType.KIND_LINE: "diamond",
 	HFSnapSystemType.KIND_GUIDE: "diamond",
 	HFSnapSystemType.KIND_GUIDE_CROSS: "cross",
+	HFSnapSystemType.KIND_GUIDE_EDGE: "triangle",
 }
 ## How long the pointer rests on a snap point before guides run from it (#1692).
 const REST_SECONDS := 0.5

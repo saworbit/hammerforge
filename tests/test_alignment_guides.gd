@@ -178,3 +178,17 @@ func test_eight_points_keep_the_newest_seven():
 		snap.toggle_tracked(Vector3(i, 0, 0), HFSnapSystemScript.KIND_VERTEX)
 	assert_eq(snap.tracked.size(), HFSnapSystemScript.TRACK_MAX)
 	assert_eq(snap.tracked[0]["point"], Vector3(1, 0, 0), "the oldest went")
+
+
+func test_where_a_guide_meets_a_brush_edge_beats_the_guide_alone():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await _level()
+	rig.box(level, "slope", Vector3(10, 1, 0), Vector3(4, 2, 4))
+	var snap = level.snap_system
+	snap.toggle_tracked(Vector3(9.3, 7, -6), HFSnapSystemScript.KIND_VERTEX)
+	var landed: Vector3 = _hover(level, Vector3(9.4, 2.0, 2.05))
+	assert_eq(landed, Vector3(9.3, 2, 2), "on the box's top edge, level with the vertex in X")
+	assert_eq(snap.shown_pick["kind"], HFSnapSystemScript.KIND_GUIDE_EDGE)
+	await rig.leave_level(level)
