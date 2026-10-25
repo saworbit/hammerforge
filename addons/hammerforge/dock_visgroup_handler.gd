@@ -56,6 +56,12 @@ static func setup_view_filters_ui(dock: Object) -> void:
 	refresh_view_filters(dock)
 
 
+## Whether a View Filters row's own tick is being answered. That rebuilds the
+## list from inside the row's signal, so a row taken away then is queued: freed
+## at once, it would be gone before its signal is done (#1901).
+static var _answering_tick := false
+
+
 ## Rebuild the View Filters rows from the level: the kinds, then the classes in
 ## it, each ticked unless it is hidden. A hidden class with none left in the
 ## level keeps its row, so it can be shown again.
@@ -63,13 +69,13 @@ static func refresh_view_filters(dock: Object) -> void:
 	var box: VBoxContainer = dock.get("view_filters_box")
 	if box == null or not is_instance_valid(box):
 		return
-	for child in box.get_children():
-		box.remove_child(child)
-		child.queue_free()
 	var root = dock.level_root
 	var hidden: Dictionary = root.view_filters if root else {}
+	# Each row as [node name, key, text]; a heading has no key, and its kind for
+	# its text.
+	var rows: Array = []
 	for kind in HFViewFiltersType.KINDS:
-		_view_filter_row(dock, box, kind, HFViewFiltersType.LABELS[kind], hidden)
+		rows.append([kind.replace(":", "_"), kind, HFViewFiltersType.LABELS[kind]])
 	var classes: Dictionary = (
 		HFViewFiltersType.classes_in(root) if root else {"brush_entity": [], "entity": []}
 	)
@@ -82,15 +88,42 @@ static func refresh_view_filters(dock: Object) -> void:
 		names.sort()
 		if names.is_empty():
 			continue
-		var head := Label.new()
-		head.text = "Brush entity classes" if kind == "brush_entity" else "Point entity classes"
-		head.add_theme_font_size_override("font_size", 11)
-		head.modulate = Color(1, 1, 1, 0.7)
-		box.add_child(head)
+		rows.append(["Heading_" + kind, "", kind])
 		for class_name_shown in names:
-			_view_filter_row(
-				dock, box, "%s:%s" % [kind, class_name_shown], "  " + class_name_shown, hidden
-			)
+			var key := "%s:%s" % [kind, class_name_shown]
+			rows.append([key.replace(":", "_"), key, "  " + class_name_shown])
+	# The same rows as before are only ticked again. Taken out and queued every
+	# time, they were 53 of a run's 90 orphan reports (#1901).
+	var have: Array = []
+	for child in box.get_children():
+		have.append(str(child.name))
+	if have == rows.map(func(row): return row[0]):
+		for row in rows:
+			var check := box.get_node_or_null(NodePath(row[0])) as CheckBox
+			if check:
+				check.set_pressed_no_signal(not hidden.has(row[1]))
+	else:
+		for child in box.get_children():
+			box.remove_child(child)
+			if _answering_tick:
+				child.queue_free()
+			else:
+				child.free()
+		for row in rows:
+			if row[1] == "":
+				var head := Label.new()
+				head.name = row[0]
+				# Each a literal straight after `text =`, which is what
+				# `tools/gen_pot.gd` reads, so the POT keeps both.
+				if row[2] == "brush_entity":
+					head.text = "Brush entity classes"
+				else:
+					head.text = "Point entity classes"
+				head.add_theme_font_size_override("font_size", 11)
+				head.modulate = Color(1, 1, 1, 0.7)
+				box.add_child(head)
+			else:
+				_view_filter_row(dock, box, row[1], row[2], hidden)
 	dock.set("_view_filter_classes", classes)
 	var chip: Button = dock.get("_view_filter_chip")
 	if chip != null and is_instance_valid(chip):
@@ -107,8 +140,14 @@ static func _view_filter_row(
 	check.button_pressed = not hidden.has(key)
 	check.tooltip_text = "Untick to hide every one in the editor"
 	check.add_theme_font_size_override("font_size", 11)
-	check.toggled.connect(dock._on_view_filter_toggled.bind(key))
+	check.toggled.connect(_on_row_ticked.bind(dock, key))
 	box.add_child(check)
+
+
+static func _on_row_ticked(shown: bool, dock: Object, key: String) -> void:
+	_answering_tick = true
+	dock._on_view_filter_toggled(shown, key)
+	_answering_tick = false
 
 
 static func setup_visgroup_ui(dock: Object) -> void:
