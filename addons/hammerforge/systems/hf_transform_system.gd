@@ -529,27 +529,43 @@ func mirror_copy(brush_ids: Array, entity_paths: Array, axes: int, pivot: Vector
 ## One copy of each brush and entity, standing where its original stands:
 ## Duplicate's records with no offset and fresh identities, built at once. Built
 ## one combination at a time, so the names a copy is given are free of the
-## copies made before it.
+## copies made before it. A group copied whole is a group of its own, "<name>
+## copy", as Duplicate makes one: the copies used to join the original's group,
+## so a click on the original took both halves (#1897).
 func _copy_in_place(brush_ids: Array, entity_paths: Array) -> Dictionary:
+	var originals: Array = []
 	var infos: Array = []
 	for brush_id in brush_ids:
 		var draft := _brush_at_id(str(brush_id))
 		if draft == null:
 			continue
+		originals.append(draft)
 		var info: Dictionary = root.build_duplicate_info(draft, Vector3.ZERO)
 		if not info.is_empty():
 			infos.append(info)
+	var entities: Array = []
+	for entity_path in entity_paths:
+		var entity := _entity_at_path(entity_path)
+		if entity != null:
+			entities.append(entity)
 	HFBrushEntity.fresh_identities(infos, [], root.entity_system)
+	var renamed: Dictionary = {}
+	var visgroups = root.get("visgroup_system")
+	if visgroups:
+		var whole: Array = visgroups.whole_groups(originals + entities)
+		visgroups.add_groups(
+			visgroups.place_copied_groups(whole, " copy", true, infos, [], renamed)
+		)
 	var copy_ids: Array = []
 	for info in infos:
 		if root.create_brush_from_info(info) != null:
 			copy_ids.append(str(info["brush_id"]))
 	var copy_paths: Array = []
-	for entity_path in entity_paths:
-		var entity := _entity_at_path(entity_path)
-		if entity == null:
-			continue
+	for entity in entities:
 		var info: Dictionary = root.build_duplicate_entity_info(entity, Vector3.ZERO)
+		var group_id := str(info.get("group_id", ""))
+		if renamed.has(group_id):
+			info["group_id"] = renamed[group_id]
 		var copied: Node = root.entity_system.restore_entity_from_info(info)
 		if copied != null:
 			copy_paths.append(root.get_path_to(copied))

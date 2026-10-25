@@ -62,13 +62,28 @@ static var _session_writes: Dictionary = {}
 ## editor in this lineage (#703). A prefab placed from the library ignores it.
 var source_centroid: Vector3 = Vector3.ZERO
 
+## The groups the capture took whole, as `HFVisgroupSystem.whole_groups()` gives
+## them: `{"name", "parent"}`, outer ones first (#1897). A placed copy makes a
+## group of its own for each, nested as they were, and its members' infos name
+## them by `group_id`. Only a group taken whole is named, so a prefab never puts
+## a piece in a group of the level it is placed into.
+var groups: Array = []
+
+## The `level_uid` of the level the clipboard was copied from, or "". The
+## clipboard alone keeps a group it took only part of on its members, and a
+## paste back into that level puts them in it again, as Duplicate's copy is
+## (#1897). Pasted anywhere else they are in no group but their own.
+var source_level: String = ""
+
 
 ## Capture a prefab from the current selection.
 ## brush_nodes: Array of DraftBrush nodes
 ## entity_nodes: Array of DraftEntity nodes
 ## brush_system / entity_system: subsystem references (untyped to avoid circular preload)
+## keep_outer_groups: the clipboard's capture, which also keeps the groups it took
+## only part of, for a paste into the same level.
 static func capture_from_selection(
-	brush_system, entity_system, brush_nodes: Array, entity_nodes: Array
+	brush_system, entity_system, brush_nodes: Array, entity_nodes: Array, keep_outer_groups := false
 ) -> HFPrefab:
 	var prefab = HFPrefab.new()
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
@@ -76,6 +91,16 @@ static func capture_from_selection(
 
 	var centroid := compute_selection_centroid(brush_nodes, entity_nodes)
 	prefab.source_centroid = centroid
+	var visgroup_system = _visgroups_of(brush_system)
+	if visgroup_system:
+		prefab.groups = visgroup_system.whole_groups(brush_nodes + entity_nodes)
+	var whole: Dictionary = {}
+	for record in prefab.groups:
+		whole[str(record["name"])] = true
+	if not keep_outer_groups:
+		for record in prefab.groups:
+			if not whole.has(str(record["parent"])):
+				record["parent"] = ""
 
 	# Capture brushes
 	for brush in brush_nodes:
@@ -89,9 +114,10 @@ static func capture_from_selection(
 			info["transform"] = t
 		# Clear brush_id so new ones are assigned on instantiation
 		info.erase("brush_id")
-		# Clear group memberships (prefab instances get their own)
-		info.erase("group_id")
-		# And visgroup membership, for the same reason. A visgroup is a list of
+		# A group taken whole stays named, for the copy's own group to take its
+		# place; one taken in part is the level's, kept by the clipboard only.
+		_keep_group(info, whole, keep_outer_groups)
+		# Visgroup membership is the level's. A visgroup is a list of
 		# names registered per level, so a prefab placed into a level that has
 		# never had "Lighting" put brushes in a group with no row in the visgroup
 		# panel: it cannot be shown, hidden, renamed or deleted, it is skipped by
@@ -111,7 +137,7 @@ static func capture_from_selection(
 			t.origin -= centroid
 			info["transform"] = t
 		# The same two, for the same reasons as the brush half above.
-		info.erase("group_id")
+		_keep_group(info, whole, keep_outer_groups)
 		info.erase("visgroups")
 		# Which copy in which level this entity belonged to is the level's to know.
 		# Carried in the prefab, every copy placed from it would share one uid.
@@ -120,6 +146,23 @@ static func capture_from_selection(
 
 	prefab.material_slots = _record_material_slots(prefab.brush_infos, _palette_of(brush_system))
 	return prefab
+
+
+## Leave `info`'s group on it when the capture took that group whole, or when
+## `keep_outer` keeps every group for a paste back into the same level.
+static func _keep_group(info: Dictionary, whole: Dictionary, keep_outer: bool) -> void:
+	if not keep_outer and not whole.has(str(info.get("group_id", ""))):
+		info.erase("group_id")
+
+
+## The level's groups, reached through whatever was handed in, or null.
+static func _visgroups_of(brush_system) -> Object:
+	if brush_system == null:
+		return null
+	var root = brush_system.get("root")
+	if root == null:
+		return null
+	return root.get("visgroup_system")
 
 
 ## The level's material palette, reached through whatever was handed in, or null.
@@ -208,6 +251,8 @@ static func _visual_aabb(node: Node3D) -> AABB:
 ## record, `Transform3D(turn, placement_pos) * record`, which is the frame
 ## `HFPrefabSystem._instance_frame()` reads back off the nodes, so a variant switch
 ## or a propagate rebuilds a turned copy where and as it stands.
+## `group_suffix` goes on the names of the groups the copy makes: Paste's " copy",
+## as Duplicate names them, and nothing for a prefab placed from the library.
 ## Returns a dictionary: {"brush_ids": Array, "entity_count": int, "entity_names": Array, "entity_nodes": Array}.
 func instantiate(
 	brush_system,
@@ -215,7 +260,8 @@ func instantiate(
 	root,
 	placement_pos: Vector3,
 	variant_name: String = "",
-	turn: Basis = Basis.IDENTITY
+	turn: Basis = Basis.IDENTITY,
+	group_suffix: String = ""
 ) -> Dictionary:
 	var result := {
 		"brush_ids": [] as Array,
@@ -227,10 +273,12 @@ func instantiate(
 	# Resolve variant data
 	var b_infos: Array = brush_infos
 	var e_infos: Array = entity_infos
+	var g_records: Array = groups
 	if variant_name != "" and variant_name != "base" and variants.has(variant_name):
 		var vdata: Dictionary = variants[variant_name]
 		b_infos = vdata.get("brush_infos", [])
 		e_infos = vdata.get("entity_infos", [])
+		g_records = vdata.get("groups", [])
 
 	if b_infos.is_empty() and e_infos.is_empty():
 		return result
@@ -267,6 +315,20 @@ func instantiate(
 		if placed_info.has("transform"):
 			placed_info["transform"] = _placed(placed_info["transform"], placement_pos, turn)
 		placed_entities.append(placed_info)
+	# Each group it took whole is a group of its own, nested as it was (#1897). A
+	# paste back into the level it was copied from keeps the groups it took only
+	# part of, as Duplicate does.
+	var visgroup_system = root.get("visgroup_system")
+	var made_groups: Dictionary = {}
+	if visgroup_system:
+		var same_level := source_level != "" and source_level == str(root.get("level_uid"))
+		made_groups = visgroup_system.place_copied_groups(
+			g_records, group_suffix, same_level, placed_brushes, placed_entities
+		)
+		visgroup_system.add_groups(made_groups)
+	else:
+		for placed_info in placed_brushes + placed_entities:
+			placed_info.erase("group_id")
 	var addresses := HFBrushEntity.fresh_identities(placed_brushes, placed_entities, entity_system)
 
 	# Instantiate brushes
@@ -300,6 +362,10 @@ func instantiate(
 	if not addresses.is_empty() and entity_system.has_method("remap_io_connections"):
 		for node in new_brushes + new_entity_nodes:
 			entity_system.remap_io_connections(node, addresses)
+
+	# A group none of whose pieces could be built is not left behind.
+	if visgroup_system:
+		visgroup_system.drop_empty_groups(made_groups)
 
 	if root.has_method("end_signal_batch"):
 		root.end_signal_batch()
@@ -474,24 +540,29 @@ func has_variant(variant_name: String) -> bool:
 	return variants.has(variant_name)
 
 
-## Get brush_infos and entity_infos for a variant.
+## Get brush_infos, entity_infos and groups for a variant.
 func get_variant_data(variant_name: String) -> Dictionary:
+	var base := {"brush_infos": brush_infos, "entity_infos": entity_infos, "groups": groups}
 	if variant_name == "base" or variant_name == "":
-		return {"brush_infos": brush_infos, "entity_infos": entity_infos}
+		return base
 	if variants.has(variant_name):
 		return variants[variant_name]
-	return {"brush_infos": brush_infos, "entity_infos": entity_infos}
+	return base
 
 
-## Set/create a variant's data.
-func set_variant_data(variant_name: String, p_brush_infos: Array, p_entity_infos: Array) -> void:
+## Set/create a variant's data. `p_groups` as `groups` holds them (#1897).
+func set_variant_data(
+	variant_name: String, p_brush_infos: Array, p_entity_infos: Array, p_groups: Array = []
+) -> void:
 	if variant_name == "base" or variant_name == "":
 		brush_infos = p_brush_infos
 		entity_infos = p_entity_infos
+		groups = p_groups
 		return
 	variants[variant_name] = {
 		"brush_infos": p_brush_infos,
 		"entity_infos": p_entity_infos,
+		"groups": p_groups,
 	}
 
 
@@ -509,7 +580,7 @@ func add_variant_from_selection(
 	var captured = HFPrefab.capture_from_selection(
 		brush_system, entity_system, brush_nodes, entity_nodes
 	)
-	set_variant_data(variant_name, captured.brush_infos, captured.entity_infos)
+	set_variant_data(variant_name, captured.brush_infos, captured.entity_infos, captured.groups)
 	# Every variant indexes the same palette, so one record covers them all.
 	for slot in captured.material_slots:
 		if not material_slots.has(slot):
@@ -553,6 +624,13 @@ func to_dict() -> Dictionary:
 	if not tags.is_empty():
 		data["tags"] = Array(tags)
 
+	# The groups it took whole (#1897), and for the clipboard the level it came
+	# from. Only when there are any, as above.
+	if not groups.is_empty():
+		data["groups"] = groups.duplicate(true)
+	if source_level != "":
+		data["source_level"] = source_level
+
 	# Variants (skip "base" — it's the top-level data)
 	if not variants.is_empty():
 		var v_data: Dictionary = {}
@@ -562,9 +640,22 @@ func to_dict() -> Dictionary:
 				"brush_infos": HFLevelIO.encode_variant(vd.get("brush_infos", [])),
 				"entity_infos": HFLevelIO.encode_variant(vd.get("entity_infos", [])),
 			}
+			if not (vd.get("groups", []) as Array).is_empty():
+				v_data[vname]["groups"] = (vd["groups"] as Array).duplicate(true)
 		data["variants"] = v_data
 
 	return data
+
+
+## The group records in `raw`, as `groups` holds them: a hand edit or a merge
+## that left something else there is read past.
+static func _group_records(raw) -> Array:
+	var out: Array = []
+	for record in _dictionary_entries(raw, "groups"):
+		var group_name := str(record.get("name", "")).strip_edges()
+		if group_name != "":
+			out.append({"name": group_name, "parent": str(record.get("parent", ""))})
+	return out
 
 
 ## Deserialize from a dictionary.
@@ -623,6 +714,10 @@ static func from_dict(data: Dictionary) -> HFPrefab:
 		for t in raw_tags:
 			prefab.tags.append(str(t))
 
+	# A file written before these keys existed has no groups, as it had none.
+	prefab.groups = _group_records(data.get("groups", []))
+	prefab.source_level = str(data.get("source_level", ""))
+
 	# Variants
 	var raw_variants = data.get("variants", {})
 	if raw_variants is Dictionary:
@@ -634,6 +729,7 @@ static func from_dict(data: Dictionary) -> HFPrefab:
 				prefab.variants[str(vname)] = {
 					"brush_infos": _dictionary_entries(vb, "variant brush_infos"),
 					"entity_infos": _dictionary_entries(ve, "variant entity_infos"),
+					"groups": _group_records(vd.get("groups", [])),
 				}
 
 	return prefab
