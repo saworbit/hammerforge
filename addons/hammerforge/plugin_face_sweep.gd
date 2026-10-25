@@ -176,10 +176,10 @@ static func run(plugin: Object, root: Node, values: Dictionary) -> bool:
 ## of the source brush that meets the swept face along that edge, so a wall's
 ## brick sides stay brick down the run, and an end the swept face's own (#1899).
 static func _take_looks(piece: Dictionary, cut: Dictionary) -> void:
-	var section := int(piece["section"])
-	var swept: FaceData = cut["sources"][section]
+	var ring_index := int(piece["section"])
+	var swept: FaceData = cut["sources"][ring_index]
 	var all_sides: Array = cut.get("sides", [])
-	var sides: Array = all_sides[section] if section < all_sides.size() else []
+	var sides: Array = all_sides[ring_index] if ring_index < all_sides.size() else []
 	var edges: PackedInt32Array = piece.get("edges", PackedInt32Array())
 	var faces: Array = piece["faces"]
 	for i in faces.size():
