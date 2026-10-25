@@ -4,6 +4,7 @@ const DropHandler = preload("res://addons/hammerforge/plugin_drop_handler.gd")
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const BrushPresetScript = preload("res://addons/hammerforge/brush_preset.gd")
 const HFPrefabScript = preload("res://addons/hammerforge/hf_prefab.gd")
+const HFTextureFolderScript = preload("res://addons/hammerforge/hf_texture_folder.gd")
 ## Written by the brush preset and prefab drops below, and taken away again.
 const PRESET_PATH := "user://hf_drop_test_preset.tres"
 const PREFAB_PATH := "user://hf_drop_test.hfprefab"
@@ -15,6 +16,8 @@ const AIM := Vector2(400, 300)
 const SKY := Vector2(5, 5)
 ## An image the project imports, as the FileSystem dock would drag one.
 const IMAGE_PATH := "res://icon.svg"
+const BRICK_ALBEDO_PATH := "res://tests/fixtures/texture_folder/brick_albedo.png"
+const BRICK_NORMAL_PATH := "res://tests/fixtures/texture_folder/brick_normal.png"
 
 var rig := PluginRig.new()
 ## A material saved to a file for the FileSystem drops, and taken away again.
@@ -408,26 +411,58 @@ func test_a_drop_on_a_selected_face_paints_every_selected_face() -> void:
 	await rig.leave_level(level)
 
 
-## An image is not a material, and nothing makes a palette material from one, so
-## the drop says so and changes nothing. Neither does any other file.
-func test_a_dropped_image_or_other_file_is_refused_with_a_toast() -> void:
+## An image goes on as the material of its set (#1884): the one Add Texture
+## Folder makes, its normal and roughness maps found by name beside it, written
+## once, added to the palette and painted in one step. A second drop of any
+## file of that set uses the same slot. A file that is no image and no material
+## is refused, and changes nothing.
+func test_a_dropped_image_paints_the_face_with_its_sets_material() -> void:
+	_empty_texture_folder_output()
 	var level = await rig.make_level()
 	level.set_materials([StandardMaterial3D.new()])
 	var brush = rig.box(level, "target", Vector3.ZERO, Vector3(8, 8, 8))
 	var front := _face_idx(brush, Vector3.BACK)
 	var undo = rig.undo()
 	undo.clear()
-	_drop(_files([IMAGE_PATH]))
-	assert_has(
-		rig.toasts(),
-		"icon.svg is an image, not a material. Make a material that uses it, then drop that"
-	)
+	_drop(_files([BRICK_NORMAL_PATH]))
+	assert_eq(level.get_materials().size(), 2, "the brick joins the palette")
+	var brick = level.get_materials()[1] as StandardMaterial3D
+	assert_eq(brick.resource_name, "brick")
+	assert_not_null(brick.albedo_texture, "with its albedo")
+	assert_true(brick.normal_enabled and brick.normal_texture != null, "its normal map")
+	assert_not_null(brick.roughness_texture, "and its roughness map")
+	assert_eq(_brush(level, "target").faces[front].material_idx, 1, "and the face wears it")
+	assert_eq(undo.step_count(), 1, "one step")
+	undo.press_undo()
+	assert_eq(level.get_materials().size(), 1, "undo takes the slot back")
+	assert_eq(_brush(level, "target").faces[front].material_idx, -1, "and the paint")
+	undo.press_redo()
+	_drop(_files([BRICK_ALBEDO_PATH]))
+	assert_eq(level.get_materials().size(), 2, "another file of the set uses the same slot")
+	assert_eq(_brush(level, "target").faces[front].material_idx, 1)
+	await rig.leave_level(level)
+
+
+func test_a_dropped_file_that_is_no_material_or_image_is_refused_with_a_toast() -> void:
+	var level = await rig.make_level()
+	level.set_materials([StandardMaterial3D.new()])
+	var brush = rig.box(level, "target", Vector3.ZERO, Vector3(8, 8, 8))
+	var front := _face_idx(brush, Vector3.BACK)
+	var undo = rig.undo()
+	undo.clear()
 	_drop(_files(["res://project.godot"]))
 	assert_has(rig.toasts(), "project.godot is not a material a face can wear")
 	assert_eq(level.get_materials().size(), 1, "the palette is as it was")
 	assert_eq(brush.faces[front].material_idx, -1, "and so is the face")
 	assert_eq(undo.step_count(), 0, "and nothing went into the history")
 	await rig.leave_level(level)
+
+
+func _empty_texture_folder_output() -> void:
+	var dir: String = HFTextureFolderScript.write_dir
+	if DirAccess.dir_exists_absolute(dir):
+		for file_name in DirAccess.get_files_at(dir):
+			DirAccess.remove_absolute(dir.path_join(file_name))
 
 
 ## What Godot's own viewport drop places stays Godot's, and so does anything let go

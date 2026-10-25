@@ -4704,6 +4704,27 @@ func add_prototype_materials() -> int:
 	return count
 
 
+## Add Texture Folder (#1884): each of `materials` the palette does not hold
+## already, by itself or by its file, in a slot of its own. Returns how many went
+## in, so a folder added twice adds nothing the second time.
+func add_materials_to_palette(materials: Array) -> int:
+	if not material_manager:
+		_setup_material_manager()
+	var count := 0
+	for material in materials:
+		if not (material is Material) or material_manager.materials.has(material):
+			continue
+		var path := (material as Material).resource_path
+		if path != "" and material_manager.slot_of_path(path) >= 0:
+			continue
+		material_manager.add_material(material)
+		count += 1
+	if count > 0:
+		_refresh_brush_previews()
+		material_list_changed.emit()
+	return count
+
+
 ## Replace the palette with the one saved at `path`.
 ##
 ## Named here rather than reached through `material_manager` so the dock can

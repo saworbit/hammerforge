@@ -358,6 +358,9 @@ func build(parent: Control) -> void:
 	dock.material_add = Button.new()
 	dock.material_add.text = "Add"
 	mat_btn_row.add_child(dock.material_add)
+	dock.material_add_texture_folder = Button.new()
+	dock.material_add_texture_folder.text = "Add Texture Folder"
+	mat_btn_row.add_child(dock.material_add_texture_folder)
 	dock.material_remove = Button.new()
 	dock.material_remove.text = "Remove"
 	mat_btn_row.add_child(dock.material_remove)
@@ -813,6 +816,8 @@ func connect_signals() -> void:
 		dock.materials_list.item_selected.connect(dock._on_material_selected)
 	if dock.material_add:
 		dock.material_add.pressed.connect(dock._on_material_add)
+	if dock.material_add_texture_folder:
+		dock.material_add_texture_folder.pressed.connect(dock._on_material_add_texture_folder)
 	if dock.material_remove:
 		dock.material_remove.pressed.connect(dock._on_material_remove)
 	if dock.material_load_prototypes:
