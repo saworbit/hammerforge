@@ -346,18 +346,22 @@ func _step_scope(root: Node, selected: Array) -> Variant:
 
 ## Reconcile only the brushes and entities `scope` names, as `reconcile()` does
 ## each brush, and leave the rest as they were last seen. A brush a command made
-## and tagged is taken in as the full walk takes in a new one. Null, having
+## and tagged is taken in as the full walk takes in a new one, and one the scope
+## names that has gone is let go as the full walk lets it go: the undo of a
+## placement takes away the brush its step's record names (#1866). Null, having
 ## changed nothing, when the level's structure moved any other way since: a brush
 ## or entity came, went or changed folder or id, or a node became an entity or
 ## stopped being one. Each of those is the full walk's to repair.
 func _reconcile_scope(root: Node, scope: Dictionary) -> Variant:
-	var arrived: Variant = _arrived_brushes(root, scope["brush_ids"])
-	if arrived == null:
+	var moved: Variant = _scope_arrivals(root, scope["brush_ids"])
+	if moved == null:
 		return null
+	var arrived: Dictionary = moved["arrived"]
+	var departed: Dictionary = moved["departed"]
 	var nodes: Dictionary = {}
 	for brush_id in scope["brush_ids"]:
-		# Taken in below, or gone and never tracked since.
-		if arrived.has(brush_id) or not _instances_by_id.has(brush_id):
+		# Taken in or let go below, or gone and never tracked since.
+		if arrived.has(brush_id) or departed.has(brush_id) or not _instances_by_id.has(brush_id):
 			continue
 		var brush := _tracked_brush(root, str(brush_id))
 		if brush == null or not _entity_name_is_known(root, brush):
@@ -408,8 +412,14 @@ func _reconcile_scope(root: Node, scope: Dictionary) -> Variant:
 		_instances_by_id[brush_id] = brush.get_instance_id()
 		_containers_by_id[brush_id] = _container_role(brush)
 		_parents_by_id[brush_id] = weakref(brush.get_parent())
-	if not arrived.is_empty():
-		# What the full walk does on a new brush, so the level's records agree.
+	for brush_id in departed:
+		_signatures.erase(brush_id)
+		_instances_by_id.erase(brush_id)
+		_containers_by_id.erase(brush_id)
+		_parents_by_id.erase(brush_id)
+	if not arrived.is_empty() or not departed.is_empty():
+		# What the full walk does on a brush that came or went, so the level's
+		# records agree.
 		_tag_structural_change(root)
 		_folder_counts = _folder_counts_of(root)
 	_bake_configuration = current_bake_configuration
@@ -420,18 +430,29 @@ func _reconcile_scope(root: Node, scope: Dictionary) -> Variant:
 	return changed
 
 
-## The brushes made since the last reconcile, by id, when every one of them is a
-## plain brush a command tagged in `brush_ids` and nothing else changed how many
-## brushes or entities each folder holds. Empty when none were made. Null when
-## the level's brushes changed any other way, such as a copy Godot made, which
-## carries its original's id and no tag. An id in `brush_ids` that no brush has
-## any more is passed over.
-func _arrived_brushes(root: Node, brush_ids: Dictionary) -> Variant:
-	var grown := _brushes(root).size() - _instances_by_id.size()
+## The brushes made and the brushes gone since the last reconcile, as
+## `{arrived, departed}` by id, when every one of them is a plain brush in
+## `brush_ids`, made by a command that tagged it or taken away by a step whose
+## record names it, and nothing else changed how many brushes or entities each
+## folder holds. Null when the level's brushes changed any other way, such as a
+## copy Godot made, which carries its original's id and no tag. An id in
+## `brush_ids` that no brush has and was not tracked is passed over.
+func _scope_arrivals(root: Node, brush_ids: Dictionary) -> Variant:
+	var departed: Variant = _departed_brushes(root, brush_ids)
+	if departed == null:
+		return null
+	var grown := _brushes(root).size() - (_instances_by_id.size() - (departed as Dictionary).size())
 	if grown < 0:
 		return null
 	var arrived: Dictionary = {}
 	var expected: Array = _folder_counts.duplicate()
+	for brush_id in departed:
+		var gone_from := ["draft", "pending", "committed"].find(
+			str(_containers_by_id.get(brush_id, ""))
+		)
+		if gone_from < 0 or expected.size() <= gone_from:
+			return null
+		expected[gone_from] = int(expected[gone_from]) - 1
 	if grown > 0:
 		for brush_id in brush_ids:
 			if _instances_by_id.has(brush_id):
@@ -453,7 +474,32 @@ func _arrived_brushes(root: Node, brush_ids: Dictionary) -> Variant:
 			arrived[brush_id] = brush
 	if arrived.size() != grown or _folder_counts_of(root) != expected:
 		return null
-	return arrived
+	return {"arrived": arrived, "departed": departed}
+
+
+## The tracked brushes among `brush_ids` that have gone from the level: their
+## node freed or out of it, and no brush answering to the id. Null when one of
+## them carried an entity name, whose going the full walk reconciles.
+func _departed_brushes(root: Node, brush_ids: Dictionary) -> Variant:
+	var departed: Dictionary = {}
+	for brush_id in brush_ids:
+		if not _instances_by_id.has(brush_id):
+			continue
+		var instance_id := int(_instances_by_id[brush_id])
+		var found := instance_from_id(instance_id)
+		if (
+			found is Node
+			and is_instance_valid(found)
+			and not (found as Node).is_queued_for_deletion()
+			and root.is_ancestor_of(found)
+		):
+			continue
+		if root.call("find_brush_by_id", str(brush_id)) != null:
+			continue
+		if _entity_names_by_instance.has(instance_id):
+			return null
+		departed[brush_id] = true
+	return departed
 
 
 ## The brush tracked as `brush_id`, when it is still that brush where it was last

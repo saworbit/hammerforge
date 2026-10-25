@@ -89,7 +89,7 @@ static func commit(
 		root.callv(method_name, args)
 		# Still maintain collation tracking + history even without undo_redo,
 		# so history UI stays consistent in edge cases.
-		var after: Dictionary = root.capture_full_state() if full_state else root.capture_state()
+		var after: Dictionary = root.capture_full_state() if full_state else _undo_state(root)
 		_update_collation(collation_tag, can_collate, full_state, false, now, after)
 		_fire_history_cb(history_cb, action_name, can_collate)
 		return
@@ -110,7 +110,7 @@ static func commit(
 				state = root.capture_brush_scope(scope_brush_ids, scope_entity_paths)
 				scoped = not state.is_empty()
 		if not scoped:
-			state = root.capture_full_state() if full_state else root.capture_state()
+			state = root.capture_full_state() if full_state else _undo_state(root)
 
 	# merge_mode: 0 = MERGE_DISABLE, 1 = MERGE_ENDS (merges consecutive same-name actions)
 	register_action(
@@ -129,6 +129,14 @@ static func commit(
 
 	_update_collation(collation_tag, can_collate, full_state, scoped, now, state)
 	_fire_history_cb(history_cb, action_name, can_collate)
+
+
+## The whole level as an undo step records it, with each brush's kept faces
+## record where the level offers one (#1866).
+static func _undo_state(root: Node) -> Dictionary:
+	if root.has_method("capture_undo_state"):
+		return root.capture_undo_state()
+	return root.capture_state()
 
 
 ## The "before" half of a `commit_completed()` step: a brush scope if those ids
@@ -152,7 +160,7 @@ static func capture_scope_or_state(root: Node, scope_brush_ids: Array) -> Dictio
 		if not scope.is_empty():
 			return {"state": scope, "scope_ids": scope_brush_ids}
 	if root.has_method("capture_state"):
-		return {"state": root.capture_state(), "scope_ids": []}
+		return {"state": _undo_state(root), "scope_ids": []}
 	return {"state": {}, "scope_ids": []}
 
 
@@ -480,7 +488,7 @@ static func _after_state(
 		)
 	return {
 		"restore": "restore_full_state" if full_state else "restore_state",
-		"state": root.capture_full_state() if full_state else root.capture_state(),
+		"state": root.capture_full_state() if full_state else _undo_state(root),
 	}
 
 

@@ -790,6 +790,11 @@ var _full_reconcile_needed := false
 ## Mark a specific brush as needing reconciliation.
 func tag_brush_dirty(brush_id: String) -> void:
 	_dirty_brush_ids[brush_id] = true
+	# A command tags what it changed, so the record the next whole level step
+	# takes of it is taken again (#1866).
+	var brush := brush_system.find_brush_by_id(brush_id) as DraftBrush if brush_system else null
+	if brush:
+		brush.forget_faces_record()
 	# This is the one call every transform, material, UV, paint and vertex
 	# mutation already makes, so it is where brush_changed belongs. Emit on
 	# every tag rather than only the first: the dirty set is not cleared until
@@ -3850,6 +3855,13 @@ func get_loaded_regions() -> Array:
 
 func capture_state(include_transient: bool = true) -> Dictionary:
 	return state_system.capture_state(include_transient)
+
+
+## The level as a whole level undo step records it: `capture_state()` with each
+## brush's kept faces record, so a step costs time for the brushes that changed
+## since the last one and not for every brush (#1866).
+func capture_undo_state() -> Dictionary:
+	return state_system.capture_state(true, true)
 
 
 func restore_state(state: Dictionary) -> void:

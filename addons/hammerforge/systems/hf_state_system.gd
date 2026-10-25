@@ -23,7 +23,12 @@ func _init(level_root: Node3D) -> void:
 	root = level_root
 
 
-func capture_state(include_transient: bool = true) -> Dictionary:
+## The level, every brush and registry. With `kept_faces` each brush's faces are
+## its kept record (`DraftBrush.faces_record()`), shared and read-only, which
+## only an undo step takes (#1866): a save, a compare and every other reader take
+## the faces as they are now, so a face a script changed without a tag is never
+## written from a kept record.
+func capture_state(include_transient: bool = true, kept_faces: bool = false) -> Dictionary:
 	var state: Dictionary = {}
 	state["brushes"] = []
 	state["pending"] = []
@@ -55,7 +60,7 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 		# writes straight into the snapshot that was taken to protect it.
 		state["materials"] = root.material_manager.materials.duplicate()
 	for node in root._iter_pick_nodes():
-		var info = root.get_brush_info_from_node(node)
+		var info: Dictionary = root.brush_system.get_brush_info_from_node(node, kept_faces)
 		if info.is_empty():
 			continue
 		if info.get("pending", false):
@@ -65,7 +70,7 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	if root.committed_node:
 		for child in root.committed_node.get_children():
 			if child is DraftBrush:
-				var info = root.get_brush_info_from_node(child)
+				var info: Dictionary = root.brush_system.get_brush_info_from_node(child, kept_faces)
 				if info.is_empty():
 					continue
 				info["committed"] = true

@@ -95,24 +95,34 @@ over a brush.
 
 ## Editing
 
-Measured again on 23 October 2026 with `--only=edits --repeats=5`, on the same
-machine, after the change check stopped walking every brush
-([#1619](https://github.com/saworbit/hammerforge/issues/1619)).
+Measured again on 25 October 2026 with `--only=edits --repeats=3`, on the same
+machine, after a whole level undo step began keeping each brush's faces record
+between steps and the check after an undo stopped walking every brush for a
+brush the step took away ([#1866](https://github.com/saworbit/hammerforge/issues/1866)).
 
 | Brushes | 100 | 300 | 1,000 | 3,000 |
 |---|--:|--:|--:|--:|
-| Resize one brush, with its undo step (ms) | 0.40 | 0.62 | 1.80 | 4.87 |
-| Place one brush, with its undo step (ms) | 4.32 | 14.1 | 53.3 | 163 |
-| Undo that placement (ms) | 5.41 | 16.9 | 64.5 | 199 |
-| Change check after the resize (ms) | 1.17 | 1.18 | 1.32 | 1.62 |
-| Change check after the placement (ms) | 1.84 | 3.51 | 9.61 | 26.9 |
-| Change check after its undo (ms) | 6.30 | 19.2 | 69.1 | 212 |
+| Resize one brush, with its undo step (ms) | 0.35 | 0.37 | 0.41 | 0.60 |
+| Place one brush, with its undo step (ms) | 1.35 | 2.97 | 10.4 | 32.6 |
+| Undo that placement (ms) | 2.38 | 6.63 | 23.3 | 73.8 |
+| Change check after the resize (ms) | 1.21 | 1.29 | 1.34 | 1.64 |
+| Change check after the placement (ms) | 1.89 | 3.55 | 9.41 | 28.1 |
+| Change check after its undo (ms) | 1.57 | 2.65 | 6.85 | 19.5 |
+
+On main the same day, before #1866, the same run measured 173 ms to place a
+brush at 3,000, 233 ms to undo it and 228 ms for the check after the undo.
 
 - **Resize one brush** is a handle drag as it commits: one undo step that records
   only that brush.
 - **Place one brush** is drawing a box. Its undo step records the whole level,
   because a new brush changes which brushes exist, and **Undo** puts the whole
-  level back. Deleting records the whole level in the same way.
+  level back. Deleting records the whole level in the same way. Each brush keeps
+  the record of its faces until one can have changed, and every step taken
+  meanwhile shares it, so a step costs time for the brushes that changed. An
+  undo keeps a brush whose record shares those faces without comparing it face
+  by face. What is left of an undo at 3,000 is the rest of each kept brush's
+  record, about 36 ms, and putting the visgroups back, about 12 ms, which walks
+  every node.
 - **Change check** is the pass the plugin runs after every step that lands in the
   undo history, Undo and Redo included (`HFBrushChangeTracker.reconcile_step()`),
   so that a change Godot's own gizmo, Inspector or undo made reaches Bake Changed
@@ -128,13 +138,13 @@ The pause after an edit is the edit and the check together. Adding the two rows:
 
 | Brushes | 100 | 300 | 1,000 | 3,000 |
 |---|--:|--:|--:|--:|
-| Resize, then the check (ms) | 1.57 | 1.80 | 3.12 | 6.49 |
-| Place, then the check (ms) | 6.16 | 17.6 | 62.9 | 190 |
-| Undo a placement, then the check (ms) | 11.7 | 36.1 | 134 | 411 |
+| Resize, then the check (ms) | 1.56 | 1.66 | 1.75 | 2.24 |
+| Place, then the check (ms) | 3.24 | 6.52 | 19.8 | 60.7 |
+| Undo a placement, then the check (ms) | 3.95 | 9.28 | 30.2 | 93.3 |
 
 A resize and its check fit in one frame at 60 frames a second, 16.7 ms, at every
-size measured. Placing a brush fits at 100 brushes and not at 300, and undoing
-one is about a tenth of a second at 1,000. Those are the thresholds the Status
+size measured. Placing a brush and undoing it fit at 100 and 300 brushes and not
+at 1,000, where each takes two frames or so. Those are the thresholds the Status
 board's **Geometry budget**, the dock's health label and its brush count use:
 amber above 100 brushes and entities, red above 1,000.
 They were 50 and 100, which turned the count red at a size where nothing measured
