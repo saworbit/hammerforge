@@ -27,6 +27,7 @@ const HFRebuildCarry = preload("../hf_rebuild_carry.gd")
 const HFRingBuilder = preload("../hf_ring_builder.gd")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFTrimRunBuilder = preload("../hf_trim_run_builder.gd")
+const HFSweepBuilder = preload("../hf_sweep_builder.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const GENERATOR_META := &"hf_generator_id"
@@ -44,6 +45,8 @@ const TYPE_DOOR_FRAME := "door_frame"
 ## Built along wall faces rather than about its own origin (#1414), so it is not
 ## one of `known_types()`: see `structure_types()`.
 const TYPE_TRIM_RUN := "trim_run"
+## Sweep Faces kept as a structure, built along the faces it swept (#1885).
+const TYPE_SWEEP := "sweep"
 
 ## How far two pieces can disagree about how far they have moved and still count
 ## as having moved together. A user dragging a structure moves every piece by
@@ -95,6 +98,7 @@ static func known_types() -> PackedStringArray:
 static func structure_types() -> PackedStringArray:
 	var out := known_types()
 	out.append(TYPE_TRIM_RUN)
+	out.append(TYPE_SWEEP)
 	return out
 
 
@@ -122,6 +126,8 @@ static func builder_for(type: String):
 			return HFDoorFrameBuilder
 		TYPE_TRIM_RUN:
 			return HFTrimRunBuilder
+		TYPE_SWEEP:
+			return HFSweepBuilder
 		_:
 			return null
 
@@ -733,6 +739,51 @@ func ramp_collision(generator_id: String) -> Dictionary:
 # ---------------------------------------------------------------------------
 # A run read from the level
 # ---------------------------------------------------------------------------
+
+
+## The run a type that `follows_run()` is built along, read from the faces
+## picked in Face Select: what Create and Re-pick both ask. `{"run",
+## "placement"}` or `{"refused", "hint"}`.
+func run_from_faces(type: String, face_selection: Dictionary) -> Dictionary:
+	if type == TYPE_SWEEP:
+		return sweep_run_from_faces(face_selection)
+	return trim_run_from_faces(face_selection)
+
+
+## A sweep's run from the faces picked in Face Select (#1885): each face's corners
+## and outward normal in world space, its look, and the look of its brush's face
+## along each edge. See `HFSweepBuilder.read()`.
+func sweep_run_from_faces(face_selection: Dictionary) -> Dictionary:
+	if root == null or root.get("brush_system") == null:
+		return {"refused": "Sweep: there is no level to read faces from", "hint": ""}
+	var picked: Array = []
+	for key in face_selection:
+		var brush = root._find_brush_by_key(str(key))
+		if brush == null or not (face_selection[key] is Array):
+			continue
+		var xform: Transform3D = (brush as Node3D).global_transform
+		for index in face_selection[key]:
+			var face_index := int(index)
+			if face_index < 0 or face_index >= brush.faces.size():
+				continue
+			var face = brush.faces[face_index]
+			if face == null or face.local_verts.size() < 3:
+				continue
+			var ring := PackedVector3Array()
+			for corner in face.local_verts:
+				ring.append(xform * corner)
+			(
+				picked
+				. append(
+					{
+						"verts": ring,
+						"normal": (xform.basis.inverse().transposed() * face.normal).normalized(),
+						"look": HFSweepBuilder.look_of(face),
+						"sides": HFSweepBuilder.side_looks(brush.faces, face),
+					}
+				)
+			)
+	return HFSweepBuilder.read(picked)
 
 
 ## The run a Trim Run would follow along the faces picked in `face_selection`

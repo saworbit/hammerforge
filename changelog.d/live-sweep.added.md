@@ -1,0 +1,1 @@
+- A sweep stays a structure whose values can be changed after, and an Arc's pivot and end are handles in the viewport. (issue [#1885](https://github.com/saworbit/hammerforge/issues/1885))

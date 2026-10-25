@@ -6,6 +6,7 @@ const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const HFFaceSweep = preload("res://addons/hammerforge/hf_face_sweep.gd")
 const HFPluginFaceSweep = preload("res://addons/hammerforge/plugin_face_sweep.gd")
 const HFSolidMeasure = preload("res://addons/hammerforge/hf_solid_measure.gd")
+const HFGeneratorSystemScript = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
 
 var rig := PluginRig.new()
 
@@ -281,3 +282,136 @@ func test_the_dialog_outlines_the_pieces_and_ok_makes_them():
 	assert_eq(level._iter_managed_brush_nodes().size(), before + 8, "OK makes the eight")
 	assert_null(level.find_child("SweepPreview", true, false), "and the outline goes")
 	await rig.leave_level(level)
+
+
+# ===========================================================================
+# A sweep kept as a structure (#1885)
+# ===========================================================================
+
+const SAVE_PATH := "user://test_face_sweep_live.hflevel"
+
+
+func _sweeps(level) -> Array:
+	return level.generator_system.generators.values().filter(
+		func(record): return record.type == HFGeneratorSystemScript.TYPE_SWEEP
+	)
+
+
+func _pieces_of(level, record) -> Array:
+	var out: Array = []
+	for brush_id in record.brush_ids:
+		var brush = level.find_brush_by_id(str(brush_id))
+		if brush:
+			out.append(brush)
+	return out
+
+
+func _swept(changes: Dictionary) -> Array:
+	var made: Array = await _picked_face()
+	var level = made[0]
+	assert_true(HFPluginFaceSweep.run(rig.plugin, level, _values(changes)), "fixture: swept")
+	var records := _sweeps(level)
+	assert_eq(records.size(), 1, "fixture: one sweep structure")
+	return [level, records[0]]
+
+
+func test_ok_keeps_the_sweep_and_a_piece_shows_it_in_the_structure_section():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _swept({"segments": 8})
+	var level = made[0]
+	var record = made[1]
+	assert_eq(_pieces_of(level, record).size(), 8, "eight pieces")
+	assert_eq(int(record.settings["segments"]), 8, "with the values it was made with")
+	rig.select([_pieces_of(level, record)[3]])
+	await rig.frame()
+	var dock = rig.plugin.dock
+	dock.refresh_structure_section()
+	assert_eq(str(dock._active_generator_id), str(record.generator_id), "the section edits it")
+	assert_eq(HFDockBrushHandler.structure_type(dock), HFGeneratorSystemScript.TYPE_SWEEP)
+	assert_eq(int((dock.structure_fields["segments"] as SpinBox).value), 8, "showing its values")
+	rig.select([])
+	await rig.leave_level(level)
+
+
+func test_more_segments_rebuild_it_in_place_as_one_step():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _swept({"segments": 8})
+	var level = made[0]
+	var record = made[1]
+	var group := str(_pieces_of(level, record)[0].get_meta("group_id", ""))
+	rig.select([_pieces_of(level, record)[0]])
+	await rig.frame()
+	var dock = rig.plugin.dock
+	dock.refresh_structure_section()
+	(dock.structure_fields["segments"] as SpinBox).value = 12
+	var steps: int = rig.undo().step_count()
+	HFDockBrushHandler.on_update_structure(dock)
+	assert_eq(_pieces_of(level, record).size(), 12, "twelve pieces")
+	assert_eq(rig.undo().step_count(), steps + 1, "in one undo step")
+	assert_eq(
+		str(_pieces_of(level, record)[0].get_meta("group_id", "")), group, "in the group it was in"
+	)
+	rig.undo().press_undo()
+	await rig.frame()
+	# The undo puts the level's records back, this one among them.
+	assert_eq(_pieces_of(level, _sweeps(level)[0]).size(), 8, "Ctrl+Z gives the eight back")
+	rig.select([])
+	await rig.leave_level(level)
+
+
+func test_a_rebuild_that_folds_a_piece_is_refused_and_changes_nothing():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _swept({"segments": 8})
+	var level = made[0]
+	var record = made[1]
+	var before: Array = Array(record.brush_ids)
+	var settings: Dictionary = record.settings.duplicate()
+	settings["radius"] = 0.1
+	var result: HFOpResult = level.regenerate_generator(str(record.generator_id), settings)
+	assert_false(result.ok, "refused")
+	assert_string_contains(result.message, "fold back on themselves")
+	assert_eq(Array(record.brush_ids), before, "and the pieces are the ones it had")
+	await rig.leave_level(level)
+
+
+func test_detach_leaves_plain_brushes():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _swept({"segments": 4})
+	var level = made[0]
+	var record = made[1]
+	var pieces := _pieces_of(level, record)
+	assert_true(level.detach_generator(str(record.generator_id)))
+	assert_eq(_sweeps(level).size(), 0, "no sweep is kept")
+	for piece in pieces:
+		assert_true(is_instance_valid(piece), "every piece stays")
+		assert_null(level.generator_for_selection([str(piece.brush_id)]), "as a plain brush")
+	await rig.leave_level(level)
+
+
+func test_a_saved_and_reopened_sweep_is_still_editable():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _swept({"segments": 6})
+	var level = made[0]
+	assert_eq(level.save_hflevel(SAVE_PATH, true), OK)
+	await rig.leave_level(level)
+	var other = await rig.make_level()
+	assert_true(other.load_hflevel(SAVE_PATH))
+	var records := _sweeps(other)
+	assert_eq(records.size(), 1, "the sweep comes back")
+	var settings: Dictionary = records[0].settings.duplicate()
+	settings["segments"] = 3
+	var result: HFOpResult = other.regenerate_generator(str(records[0].generator_id), settings)
+	assert_true(result.ok, "and rebuilds: %s" % result.message)
+	assert_eq(_pieces_of(other, records[0]).size(), 3)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	await rig.leave_level(other)

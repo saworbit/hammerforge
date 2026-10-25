@@ -40,6 +40,9 @@ var input_state: HFInputStateType = HFInputStateType.new()
 ## `operation`, and its `sides` and `material` when it had them. Empty until a
 ## Draw places one.
 var last_drawn: Dictionary = {}
+## Whether the draw under way builds in a turned grid's frame rather than a
+## face's (#1893), so a Cutout grows from the floor as a plain draw's does.
+var _frame_from_grid := false
 
 
 func _init(level_root: Node3D) -> void:
@@ -69,6 +72,7 @@ func begin_drag(
 		return false
 	var snapped_origin: Vector3 = start["point"]
 	var frame: Variant = start.get("frame", null)
+	_frame_from_grid = bool(start.get("grid_frame", false))
 	if frame is Transform3D:
 		# The base is laid out in the face's frame, which starts at this point.
 		snapped_origin = Vector3.ZERO
@@ -249,7 +253,9 @@ func draw_start(camera: Camera3D, mouse_pos: Vector2, on_face: bool = false) -> 
 ## - `brush`, `face_idx`: the draft face under the cursor, or null and -1. A
 ##   physics hit has a normal and no face.
 ## - `frame`: with `on_face`, the face's frame from `face_frame()`, through the
-##   start point. Absent for a draw that builds flat.
+##   start point. On a turned grid, a flat start's frame turned as the grid is,
+##   with `grid_frame` true when no face asked for it (#1893). Absent for a draw
+##   that builds flat on the world's grid.
 func describe_start(hit: Dictionary, point: Vector3, on_face: bool = false) -> Dictionary:
 	var start := {
 		"point": point,
@@ -259,9 +265,11 @@ func describe_start(hit: Dictionary, point: Vector3, on_face: bool = false) -> D
 		"face_idx": -1,
 	}
 	if hit.get(root.CONSTRUCTION_PLANE_HIT, false):
+		_turn_with_grid(start)
 		return start
 	var normal := surface_normal(hit)
 	if normal == Vector3.ZERO:
+		_turn_with_grid(start)
 		return start
 	start["normal"] = normal
 	if hit.get("brush", null) is DraftBrush:
@@ -280,7 +288,26 @@ func describe_start(hit: Dictionary, point: Vector3, on_face: bool = false) -> D
 		start["kind"] = StartKind.LEVEL
 	else:
 		start["kind"] = StartKind.RAISED
+	if start["kind"] != StartKind.SLOPED:
+		_turn_with_grid(start)
 	return start
+
+
+## On a turned floor grid (#1893) a draw that starts flat builds square to it, in
+## a frame turned as the grid is through the start point, the way a Draw on Face
+## builds in the face's frame. A Draw on Face on a floor turns its frame the
+## same way. The world's grid leaves `start` as it was.
+func _turn_with_grid(start: Dictionary) -> void:
+	var grid = root.get("grid_system")
+	if grid == null or not grid.is_turned():
+		return
+	var turn := Basis(Vector3.UP, deg_to_rad(float(grid.turn_degrees)))
+	var frame: Variant = start.get("frame", null)
+	if frame is Transform3D:
+		start["frame"] = Transform3D(turn * (frame as Transform3D).basis, frame.origin)
+		return
+	start["frame"] = Transform3D(turn, start["point"])
+	start["grid_frame"] = true
 
 
 ## The world normal of the surface `hit` is on: a physics hit's own, or a draft
@@ -440,7 +467,7 @@ func _snap_on_face(world: Vector3) -> Vector3:
 ## wall and pulled to the wall's depth.
 func _face_transform(computed: Dictionary) -> Transform3D:
 	var center: Vector3 = computed.center
-	if input_state.drag_operation == CSGShape3D.OPERATION_SUBTRACTION:
+	if input_state.drag_operation == CSGShape3D.OPERATION_SUBTRACTION and not _frame_from_grid:
 		center.y -= (computed.size as Vector3).y
 	var frame := input_state.drag_frame
 	return Transform3D(frame.basis, frame * center)

@@ -220,6 +220,15 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 	if pick_result != EditorPlugin.AFTER_GUI_INPUT_PASS:
 		return pick_result
 
+	# The Sweep dialog's handles take a press on one of them, and the drag (#1885).
+	var sweep_handles = plugin.get("_sweep_handles")
+	if sweep_handles != null and sweep_handles.active:
+		var handle_result: int = sweep_handles.handle_input(
+			plugin, event, root, target_camera, target_pos
+		)
+		if handle_result != EditorPlugin.AFTER_GUI_INPUT_PASS:
+			return handle_result
+
 	# A sweep select has the pointer from its press to its release (#1886).
 	var sweep = plugin.get("_sweep_select")
 	if sweep != null and sweep.active:

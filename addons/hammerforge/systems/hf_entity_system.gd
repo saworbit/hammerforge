@@ -496,7 +496,11 @@ func snap_entities_to_grid(entity_paths: Array, step: float) -> void:
 		var entity := _entity_at_path(entity_path)
 		if entity == null:
 			continue
-		var target := HFGridSystem.nearest_grid_point(entity.global_position, step)
+		var target: Vector3 = (
+			root.grid_system.grid_point(entity.global_position, step)
+			if root.get("grid_system")
+			else HFGridSystem.nearest_grid_point(entity.global_position, step)
+		)
 		if not target.is_equal_approx(entity.global_position):
 			entity.global_position = target
 

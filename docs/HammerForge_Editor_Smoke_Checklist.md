@@ -538,6 +538,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - In Face Select, pick one face of a box and run **Sweep Faces** from the palette. Choose **Arc**, 90 degrees, Radius 3 and 8 Segments. Confirm the pieces are outlined in cyan as the values change, OK makes 8 brushes that meet face to face in one group, and one Ctrl+Z takes them all away (#1714).
 - Lower the Radius until the bend is tighter than the face is wide. Confirm the outline turns red, OK is greyed out and nothing is made.
 - Pick two faces that are not in one plane and run it. Confirm it is refused with the reason.
+- Open it again on **Arc**. Drag the orange pivot handle along the face and confirm Radius and Toward follow it in grid steps and the outline follows. Drag the yellow end handle round the pivot and confirm Angle moves in 15 degree steps. Type a Radius and confirm the handle moves. Start a drag and right click: the values go back (#1885).
+- Press OK, select one of the pieces, raise Segments in the Structure section and press **Update Sweep**. Confirm the bend rebuilds smoother in one undo step, still one group (#1885).
 
 ### 7d. Face Winding Migration (Old Saves)
 - Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).
@@ -1004,6 +1006,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Use Grid Up/Down on a 0.5 snap. Confirm each moves the plane 0.5 m along its active axis, and later draws leave it held there. Reset Grid returns to the LevelRoot origin on Y and clears the axis lock.
 - Select vertices and Align Grid. Confirm their average sets the coordinate on the current axis. With no vertices selected, align a face; confirm its dominant world axis and center set an axis-aligned plane, including an off-grid coordinate. An angled face does not tilt the plane.
 - Align a brush selection and confirm the grid uses the combined bounds' top. With no selection, Align Grid resets it. None of these commands adds an undo step.
+- Turn a box 30 degrees about up. In Vertex mode pick one of its bottom edges and press Align Grid. Confirm the grid's lines turn to run along that edge, the Angle field reads 30 and the HUD says `@ 30°`. Draw a box beside it and confirm it is square to the turned box with its corners on the turned lines; drag a resize handle and confirm its face stays on a line. Press an arrow key and confirm it moves along the turned grid. Reset Grid and confirm the grid and the next draw are square to the world (#1893).
 - In separate draws, press Ctrl+Z during the base stage and during the height stage. Confirm only the preview and typed dimension disappear; the previous brush stays. Press Ctrl+Z again while idle and confirm the preceding action is undone.
 - Repeat with an unfinished Extrude. Confirm the preview is removed and its source brush stays. With a text field focused, confirm its own undo does not cancel the draw.
 - In Draw, move over the floor, a raised box top and a wedge's slope without clicking. Confirm the face under the cursor is tinted and a cross marks the snapped start point, and that both clear when a drag starts. Turn off **Draw hover preview** in Test → Settings: they go (#1400).

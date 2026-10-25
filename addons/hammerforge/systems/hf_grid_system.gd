@@ -2,9 +2,19 @@
 extends RefCounted
 class_name HFGridSystem
 
+## A turn smaller than this, in degrees, is the world's grid.
+const TURN_EPSILON := 0.001
+
 var root: Node3D
 ## View state only. A manual plane stays put until Reset Grid.
 var _position_held := false
+## The floor grid's turn about up, in degrees, and a point its lines run through
+## (#1893), for a part of a level set at an angle. A wall grid stays the world's.
+## View state, as the held plane is: never saved in the level. Kept between -45
+## and 45, since a square grid looks the same every quarter turn, and 0 is the
+## world's grid.
+var turn_degrees := 0.0
+var turn_origin := Vector3.ZERO
 
 
 func _init(level_root: Node3D) -> void:
@@ -81,7 +91,81 @@ func update_grid_transform(axis: int, origin: Vector3) -> void:
 		_:
 			rot = Vector3.ZERO
 	root.grid_mesh.rotation_degrees = rot
+	if is_turned() and axis == root.AxisLock.Y:
+		# The lines are drawn from the mesh's own origin, so it stands on a point of
+		# the turned grid, at the plane's height.
+		var on_grid := grid_point(origin, maxf(root.grid_snap, 0.001))
+		on_grid.y = origin.y
+		root.grid_mesh.rotation_degrees = Vector3(0.0, turn_degrees, 0.0)
+		root.grid_mesh.global_position = on_grid
+		return
 	root.grid_mesh.global_position = origin
+
+
+## The world axis the grid's plane faces along.
+func grid_normal() -> Vector3:
+	var normal := Vector3.ZERO
+	normal[effective_grid_axis() - 1] = 1.0
+	return normal
+
+
+## Whether the grid is turned: the floor grid is, while a turn is set.
+func is_turned() -> bool:
+	return turn_degrees != 0.0 and effective_grid_axis() == root.AxisLock.Y
+
+
+## Turn the floor grid `degrees` about up, its lines through `origin` (#1893).
+## Heights stay whole steps from the world origin: only where the lines run
+## across the floor moves. A quarter turn, or none, is the world's grid.
+func set_turn(degrees: float, origin: Vector3 = turn_origin) -> void:
+	var turn := fposmod(degrees + 45.0, 90.0) - 45.0
+	if absf(turn) < TURN_EPSILON:
+		turn = 0.0
+	turn_degrees = snappedf(turn, 0.0001)
+	turn_origin = Vector3(origin.x, 0.0, origin.z) if turn_degrees != 0.0 else Vector3.ZERO
+	refresh_grid_plane()
+	if root.has_signal("grid_turn_changed"):
+		root.emit_signal("grid_turn_changed", turn_degrees)
+
+
+## The turn about up that lays the grid's X along `direction` in the floor's
+## plane, in degrees, or null for a direction straight up or down.
+static func turn_along(direction: Vector3) -> Variant:
+	var flat := Vector2(direction.x, direction.z)
+	if flat.length() < 0.0001:
+		return null
+	return rad_to_deg(atan2(-flat.y, flat.x))
+
+
+## The grid's own frame: its turn about up, through where its lines run. The
+## world's frame when it is not turned.
+func grid_frame() -> Transform3D:
+	if not is_turned():
+		return Transform3D.IDENTITY
+	return Transform3D(Basis(Vector3.UP, deg_to_rad(turn_degrees)), turn_origin)
+
+
+## The grid point nearest `point`: a whole number of `step`s along each of the
+## grid's own axes from where its lines run, the world's points when it is not
+## turned. Every snap that reads the grid asks here (#1893).
+func grid_point(point: Vector3, step: float) -> Vector3:
+	if not is_turned():
+		return nearest_grid_point(point, step)
+	if not (step > 0.0):
+		return point
+	var frame := grid_frame()
+	return frame * (frame.affine_inverse() * point).snapped(Vector3.ONE * step)
+
+
+## `offset` in whole `step`s along the grid's own axes, for a drag that moves by
+## steps rather than to points.
+func grid_offset(offset: Vector3, step: float) -> Vector3:
+	if not (step > 0.0):
+		return offset
+	if not is_turned():
+		return offset.snapped(Vector3.ONE * step)
+	var basis := grid_frame().basis
+	return basis * (basis.inverse() * offset).snapped(Vector3.ONE * step)
 
 
 func effective_grid_axis() -> int:
@@ -129,6 +213,10 @@ func run_command(action: String, nodes: Array = []) -> void:
 			_hold_plane(point, axis)
 		"grid_reset":
 			_position_held = false
+			turn_degrees = 0.0
+			turn_origin = Vector3.ZERO
+			if root.has_signal("grid_turn_changed"):
+				root.emit_signal("grid_turn_changed", 0.0)
 			root.grid_axis_preference = root.AxisLock.Y
 			root.manual_axis_lock = false
 			root.axis_lock = root.AxisLock.NONE
@@ -163,7 +251,7 @@ func _hold_plane(point: Vector3, axis: int) -> void:
 	if root.manual_axis_lock:
 		root.axis_lock = axis
 	var snap: float = maxf(root.grid_snap, 0.001)
-	var origin := point.snapped(Vector3.ONE * snap)
+	var origin := grid_point(point, snap)
 	origin[axis - 1] = point[axis - 1]
 	set_grid_plane_origin(origin, axis)
 
@@ -171,6 +259,13 @@ func _hold_plane(point: Vector3, axis: int) -> void:
 func _align_to_selection(nodes: Array) -> void:
 	var points: PackedVector3Array = root.vertex_system.get_selected_world_positions()
 	var axis := effective_grid_axis()
+	# One edge picked in Vertex mode turns the floor grid to run along it, through
+	# its first end (#1893).
+	var edge := _picked_edge()
+	if edge.size() == 2:
+		var along: Variant = turn_along(edge[1] - edge[0])
+		if along != null:
+			set_turn(float(along), edge[0])
 	if points.is_empty():
 		var picked: Dictionary = root.get_primary_selected_face()
 		if not picked.is_empty():
@@ -184,6 +279,9 @@ func _align_to_selection(nodes: Array) -> void:
 				axis = normal.abs().max_axis_index() + 1
 				for vertex in face.local_verts:
 					points.append(brush.global_transform * vertex)
+				# A floor or a ceiling takes its brush's turn.
+				if axis == root.AxisLock.Y:
+					_turn_with(brush)
 	if not points.is_empty():
 		var middle := Vector3.ZERO
 		for point in points:
@@ -196,6 +294,9 @@ func _align_to_selection(nodes: Array) -> void:
 		if not is_instance_valid(node) or not root.is_brush_node(node):
 			continue
 		var box: AABB = root.brush_system.world_bounds_of(node)
+		if not found:
+			# The grid takes the first brush's turn, square or not.
+			_turn_with(node)
 		bounds = bounds.merge(box) if found else box
 		found = true
 	if found:
@@ -204,6 +305,44 @@ func _align_to_selection(nodes: Array) -> void:
 		_hold_plane(point, root.AxisLock.Y)
 	else:
 		run_command("grid_reset")
+
+
+## The two ends of the one edge picked in Vertex mode, in the world, or nothing
+## when no edge or more than one is picked.
+func _picked_edge() -> PackedVector3Array:
+	var vertex_system = root.get("vertex_system")
+	if vertex_system == null:
+		return PackedVector3Array()
+	var picked: Array = []
+	for brush_id in vertex_system.selected_edges:
+		for pair in vertex_system.selected_edges[brush_id]:
+			picked.append([str(brush_id), pair])
+	if picked.size() != 1:
+		return PackedVector3Array()
+	var brush = root.find_brush_by_id(picked[0][0])
+	if brush == null:
+		return PackedVector3Array()
+	var corners: PackedVector3Array = vertex_system.get_brush_vertices(brush)
+	var pair: Array = picked[0][1]
+	if int(pair[0]) >= corners.size() or int(pair[1]) >= corners.size():
+		return PackedVector3Array()
+	var xform: Transform3D = brush.global_transform
+	return PackedVector3Array([xform * corners[int(pair[0])], xform * corners[int(pair[1])]])
+
+
+## Turn the floor grid as `brush` is turned about up, its lines along the brush's
+## sides through its lowest corner, so a box drawn beside it lines up with it.
+func _turn_with(brush: Node3D) -> void:
+	var along: Variant = turn_along(brush.global_basis.x)
+	if along == null:
+		return
+	var corner := Vector3.INF
+	for face in brush.get_faces():
+		if face == null:
+			continue
+		for vertex in (face as FaceData).local_verts:
+			corner = corner.min(vertex)
+	set_turn(float(along), brush.global_transform * corner if corner.is_finite() else Vector3.ZERO)
 
 
 ## Snap the other axes without rounding an explicitly aligned plane away. Only a
@@ -225,7 +364,7 @@ func follow_cursor(camera: Camera3D, mouse_pos: Vector2) -> void:
 	var axis := effective_grid_axis()
 	var hit = intersect_axis_plane(camera, mouse_pos, axis, root.grid_plane_origin)
 	if hit is Vector3:
-		var point: Vector3 = hit.snapped(Vector3.ONE * maxf(root.grid_snap, 0.001))
+		var point: Vector3 = grid_point(hit, maxf(root.grid_snap, 0.001))
 		point[axis - 1] = root.grid_plane_origin[axis - 1]
 		set_grid_plane_origin(point, axis)
 
