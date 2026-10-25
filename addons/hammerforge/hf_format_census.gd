@@ -78,7 +78,7 @@ const LOSES := {
 		"notes",
 	],
 	".glb": ["entities", "entity_properties", "wires", "notes"],
-	".hfprefab": ["visgroups", "groups", "structures", "prefab_links"],
+	".hfprefab": ["visgroups", "structures", "prefab_links"],
 }
 
 

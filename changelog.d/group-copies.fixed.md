@@ -1,0 +1,1 @@
+- Paste, Paste at Cursor, Mirror Copy and prefabs copy a group the way Duplicate does: a whole group comes in as a group of its own, nested as it was. (issue [#1897](https://github.com/saworbit/hammerforge/issues/1897))
