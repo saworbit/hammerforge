@@ -1,1 +1,0 @@
-- Compare with File no longer reports changes between a level an older build saved and the same level open. (issue [#1870](https://github.com/saworbit/hammerforge/issues/1870))

@@ -1,1 +1,0 @@
-- Groups take a name, hold groups, show in a Groups list and open to change one member; a copy of a whole group is a new group. (issue [#1723](https://github.com/saworbit/hammerforge/issues/1723))

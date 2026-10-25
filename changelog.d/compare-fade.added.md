@@ -1,1 +1,0 @@
-- A compare fades the brushes that did not change, by how far Settings > Colours says. (issue [#1864](https://github.com/saworbit/hammerforge/issues/1864))

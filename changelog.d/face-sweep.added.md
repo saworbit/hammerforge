@@ -1,1 +1,0 @@
-- Sweep Faces carries the faces picked in Face Select along a straight run, an arc or an S bend as convex brushes that meet face to face. (issue [#1714](https://github.com/saworbit/hammerforge/issues/1714))
