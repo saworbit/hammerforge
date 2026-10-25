@@ -1,0 +1,1 @@
+- A dimension's ends stay on their corners when a brush is resized, and read the new length; they used to come loose. (issue [#1898](https://github.com/saworbit/hammerforge/issues/1898))
