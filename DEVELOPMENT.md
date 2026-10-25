@@ -325,6 +325,7 @@ addons/hammerforge/
   level_root.gd          Public level facade and coordinator
   input_state.gd         Drag/paint/extrude/vertex state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
+  hf_sweep_select.gd     Sweep select: hold I and drag to add or remove each brush or face passed over (#1886)
   dock.gd + dock.tscn    UI dock (displayed as Build, Paint, Objects, Test), collapsible sections with persisted state
   dock_brush_handler.gd  Build-tab displacement/bevel/hollow/clip/tie handlers
   dock_entity_handler.gd Objects-tab property/create/I/O handlers

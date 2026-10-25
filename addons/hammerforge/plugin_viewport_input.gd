@@ -229,6 +229,18 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 		if handle_result != EditorPlugin.AFTER_GUI_INPUT_PASS:
 			return handle_result
 
+	# A sweep select has the pointer from its press to its release (#1886).
+	var sweep = plugin.get("_sweep_select")
+	if sweep != null and sweep.active:
+		if tool_id != 1:
+			sweep.cancel(plugin, root)
+		else:
+			var swept := HFPluginSelectionInput.handle_sweep(
+				plugin, event, root, target_camera, target_pos
+			)
+			if swept != SELECT_INPUT_CONTINUE:
+				return swept
+
 	if plugin._selection_gesture and plugin._selection_gesture.is_active():
 		if tool_id != 1:
 			plugin._cancel_selection_gesture()
