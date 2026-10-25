@@ -196,6 +196,8 @@ static func _run_again(
 	run["settings"] = settings
 	run["version"] = history.get_version()
 	plugin.set("last_run", run)
+	if plugin.has_method("_note_run_adjusted"):
+		plugin.call("_note_run_adjusted", str(run["id"]), settings, int(run["version"]))
 	plugin.set("_adjusting_last", false)
 	var panel = plugin.get("_adjust_last_panel")
 	if panel is Control and is_instance_valid(panel):
