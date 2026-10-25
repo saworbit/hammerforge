@@ -140,3 +140,39 @@ func test_bake_visible_only_ignores_a_view_filter():
 	assert_false(level.bake_system.brush_bakes(hidden_one), "a hidden visgroup still leaves out")
 	level.bake_visible_only = false
 	await _leave(level)
+
+
+func test_a_tick_that_changes_no_row_keeps_the_same_rows():
+	var level = await rig.make_level()
+	_trigger(level, "t1", Vector3(6, 1, 0))
+	rig.plugin.dock._on_root_view_filters_changed()
+	var row := _row("trigger")
+	var class_row := _row("brush_entity:trigger_once")
+	row.button_pressed = false
+	assert_same(_row("trigger"), row, "the row ticked is the row still there")
+	assert_same(_row("brush_entity:trigger_once"), class_row, "and so is every other")
+	assert_false(_row("trigger").button_pressed, "showing what was ticked")
+	level.set_view_filter("trigger", false)
+	assert_true(row.button_pressed, "a filter set elsewhere ticks the same row")
+	assert_no_new_orphans("no rows queued for freeing (#1901)")
+	await _leave(level)
+
+
+func test_ticking_back_a_class_with_none_left_takes_its_row_away_from_inside_its_own_tick():
+	var level = await rig.make_level()
+	var trigger = _trigger(level, "t1", Vector3(6, 1, 0))
+	rig.plugin.dock._on_root_view_filters_changed()
+	_row("brush_entity:trigger_once").button_pressed = false
+	level.delete_brushes_by_id(["t1"])
+	await rig.frame()
+	assert_false(is_instance_valid(trigger), "fixture: the trigger is gone")
+	rig.plugin.dock._on_root_view_filters_changed()
+	var row := _row("brush_entity:trigger_once")
+	assert_not_null(row, "a hidden class with none left keeps its row")
+	row.button_pressed = true
+	assert_null(_row("brush_entity:trigger_once"), "shown again, its row goes")
+	assert_true(row.is_queued_for_deletion(), "queued, since its own signal was running")
+	await rig.frame()
+	assert_false(is_instance_valid(row), "and freed when the frame ends")
+	assert_false(level.is_view_filtered("brush_entity:trigger_once"))
+	await _leave(level)
