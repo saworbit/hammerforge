@@ -1,1 +1,0 @@
-- Two brush entities: func_physbox bakes a rigid body the player can push in Quick Play, and func_illusionary a mesh with no collision. (issue [#1892](https://github.com/saworbit/hammerforge/issues/1892))

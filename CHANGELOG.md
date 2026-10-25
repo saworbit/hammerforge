@@ -41,10 +41,34 @@ Unreleased work is counted when it ships. For the numbers so far, run
 - The Console takes typed commands, compares the level with another version, counts entities by class, lists notes left in the level and reports a crash from the last session (#1696, #1701, #1709, #1700, #1654).
 - One table says what each file format keeps, entity classes come from an FGD, agents get hf_measure, hf_plan and recorded sessions, and a full bake of 1,000 brushes is 12 times faster (#1706, #1721, #1649, #1705, #1645, #1589).
 
+### Week of 26 Oct 2026
+
+#### Added
+
+- **26 Oct** The floor grid can turn to a picked edge, a turned brush or a typed Angle, and draws, resizes, snaps and nudges follow it. (issue [#1893](https://github.com/saworbit/hammerforge/issues/1893), PR [#1919](https://github.com/saworbit/hammerforge/pull/1919))
+- **26 Oct** A sweep stays a structure whose values can be changed after, and an Arc's pivot and end are handles in the viewport. (issue [#1885](https://github.com/saworbit/hammerforge/issues/1885), PR [#1916](https://github.com/saworbit/hammerforge/pull/1916))
+
+#### Changed
+
+- **26 Oct** An undo at 3,000 brushes takes 45 ms, from 74: it walks only the nodes it changed when nothing else can have changed. (issue [#1866](https://github.com/saworbit/hammerforge/issues/1866), PR [#1921](https://github.com/saworbit/hammerforge/pull/1921))
+
+#### Fixed
+
+- **26 Oct** Every import scan printed a parse error for the two sample scenes, which started with a byte order mark. (issue [#1917](https://github.com/saworbit/hammerforge/issues/1917), PR [#1918](https://github.com/saworbit/hammerforge/pull/1918))
+
+#### Behind the scenes
+
+- **26 Oct** A test counts, per script, the text shown without going through the translation catalogs, and fails when a count goes up. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#1920](https://github.com/saworbit/hammerforge/pull/1920))
+
 ### Week of 19 Oct 2026
 
 #### Added
 
+- **25 Oct** Sweep select: hold I and drag in the Select tool to add each brush passed over, or take them out when the first was selected. (issue [#1886](https://github.com/saworbit/hammerforge/issues/1886), PR [#1915](https://github.com/saworbit/hammerforge/pull/1915))
+- **25 Oct** Two brush entities: func_physbox bakes a rigid body the player can push in Quick Play, and func_illusionary a mesh with no collision. (issue [#1892](https://github.com/saworbit/hammerforge/issues/1892), PR [#1914](https://github.com/saworbit/hammerforge/pull/1914))
+- **25 Oct** Sweep Faces can narrow or widen to an End scale, and each side takes the material of the face it ran along. (issue [#1899](https://github.com/saworbit/hammerforge/issues/1899), PR [#1913](https://github.com/saworbit/hammerforge/pull/1913))
+- **25 Oct** Add Texture Folder turns a folder of images into palette materials in one step, with normal and roughness maps found by name. (issue [#1884](https://github.com/saworbit/hammerforge/issues/1884), PR [#1908](https://github.com/saworbit/hammerforge/pull/1908))
+- **25 Oct** HammerForge's words have a translation domain of their own: a .po in translations/ shows the dock, Console and palette in the editor's language. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#1890](https://github.com/saworbit/hammerforge/pull/1890))
 - **25 Oct** K in the Measure tool keeps a ruler as a dimension that follows the brushes it ends on, held to the player's sizes or a length, and Validate names one that fails. (issue [#1699](https://github.com/saworbit/hammerforge/issues/1699), PR [#1889](https://github.com/saworbit/hammerforge/pull/1889))
 - **25 Oct** Sweep Faces carries the faces picked in Face Select along a straight run, an arc or an S bend as convex brushes that meet face to face. (issue [#1714](https://github.com/saworbit/hammerforge/issues/1714), PR [#1888](https://github.com/saworbit/hammerforge/pull/1888))
 - **25 Oct** Resting on a snap point runs guides from it: a point lands on one or where two cross, a typed number puts it that far along, and a point can take X and Z from another. (issue [#1692](https://github.com/saworbit/hammerforge/issues/1692), PR [#1887](https://github.com/saworbit/hammerforge/pull/1887))
@@ -158,6 +182,8 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Changed
 
+- **25 Oct** Clip to Face Plane and Replace Material show what they ran with in the Adjust panel, and Repeat Run holds them. (issue [#1896](https://github.com/saworbit/hammerforge/issues/1896), PR [#1911](https://github.com/saworbit/hammerforge/pull/1911))
+- **25 Oct** Repeat Run holds the Duplicate, Radial and Grid Arrays, and a change in Adjust Last goes into the dock, so Repeat Last Command runs it too. (issue [#1896](https://github.com/saworbit/hammerforge/issues/1896), PR [#1910](https://github.com/saworbit/hammerforge/pull/1910))
 - **25 Oct** Placing or deleting a brush and the check after its undo no longer walk every brush, and the undo itself takes a third of the time. (issue [#1866](https://github.com/saworbit/hammerforge/issues/1866), PR [#1878](https://github.com/saworbit/hammerforge/pull/1878))
 - **24 Oct** Every change to what a level saves raises the `.hflevel` format number, so an older build refuses a newer level instead of saving it back without what it lacks. (issue [#1638](https://github.com/saworbit/hammerforge/issues/1638), PR [#1833](https://github.com/saworbit/hammerforge/pull/1833))
 - **23 Oct** The timed autosave waits for a pause in editing, at most twice the interval, and skips a level that has not changed. (issue [#1736](https://github.com/saworbit/hammerforge/issues/1736), PR [#1807](https://github.com/saworbit/hammerforge/pull/1807))
@@ -174,6 +200,11 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Fixed
 
+- **25 Oct** A dimension's ends stay on their corners when a brush is resized, and read the new length; they used to come loose. (issue [#1898](https://github.com/saworbit/hammerforge/issues/1898), PR [#1912](https://github.com/saworbit/hammerforge/pull/1912))
+- **25 Oct** Merge keeps the sculpts of the displaced faces it joins into one; it used to drop them with a warning. (issue [#1906](https://github.com/saworbit/hammerforge/issues/1906), PR [#1909](https://github.com/saworbit/hammerforge/pull/1909))
+- **25 Oct** Paste, Paste at Cursor, Mirror Copy and prefabs copy a group the way Duplicate does: a whole group comes in as a group of its own, nested as it was. (issue [#1897](https://github.com/saworbit/hammerforge/issues/1897), PR [#1904](https://github.com/saworbit/hammerforge/pull/1904))
+- **25 Oct** Ctrl+wheel in Draw steps Sides by one for a pyramid or a round shape, before or during a draw; the shortcut row promised Ctrl+Scroll and nothing read the wheel. (issue [#1891](https://github.com/saworbit/hammerforge/issues/1891), PR [#1903](https://github.com/saworbit/hammerforge/pull/1903))
+- **25 Oct** A normal map on a face is lit the right way, in the editor and after a bake; face meshes had tangents made up from the normal. (issue [#1883](https://github.com/saworbit/hammerforge/issues/1883), PR [#1902](https://github.com/saworbit/hammerforge/pull/1902))
 - **25 Oct** Compare with File no longer reports changes between a level an older build saved and the same level open. (issue [#1870](https://github.com/saworbit/hammerforge/issues/1870), PR [#1873](https://github.com/saworbit/hammerforge/pull/1873))
 - **25 Oct** A point entity reopened from its scene keeps every property, including keys its class does not define, such as those a .map import brings. (issue [#1855](https://github.com/saworbit/hammerforge/issues/1855), PR [#1857](https://github.com/saworbit/hammerforge/pull/1857))
 - **25 Oct** A level reopened from its scene keeps its floor paint: the cells, heightmaps, terrain slots and wall heights of every layer. (issue [#1854](https://github.com/saworbit/hammerforge/issues/1854), PR [#1856](https://github.com/saworbit/hammerforge/pull/1856))
@@ -290,6 +321,8 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Behind the scenes
 
+- **25 Oct** A test run no longer reports the View Filters rows and the structure settings rows as orphans: the list updates in place and a rebuilt row is freed at once. (issue [#1901](https://github.com/saworbit/hammerforge/issues/1901), PR [#1905](https://github.com/saworbit/hammerforge/pull/1905))
+- **25 Oct** The action matrix tries every brush and face action on a displaced box and a neighbour sewn to it. (issue [#1900](https://github.com/saworbit/hammerforge/issues/1900), PR [#1907](https://github.com/saworbit/hammerforge/pull/1907))
 - **25 Oct** Every brush and face action is tried on every brush and face of the test levels, against a baseline that only ratchets. (issue [#1648](https://github.com/saworbit/hammerforge/issues/1648), PR [#1882](https://github.com/saworbit/hammerforge/pull/1882))
 - **25 Oct** CI edits, undoes and redoes the level each release saved, and checks a whole level undo keeps every brush from the file. (issue [#1870](https://github.com/saworbit/hammerforge/issues/1870), PR [#1873](https://github.com/saworbit/hammerforge/pull/1873))
 - **25 Oct** DEVELOPMENT.md's codebase map names every addon script again, and CI fails a pull request that adds a script without a line there. (issue [#1865](https://github.com/saworbit/hammerforge/issues/1865), PR [#1872](https://github.com/saworbit/hammerforge/pull/1872))

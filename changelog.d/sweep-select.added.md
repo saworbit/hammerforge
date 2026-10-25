@@ -1,1 +1,0 @@
-- Sweep select: hold I and drag in the Select tool to add each brush passed over, or take them out when the first was selected. (issue [#1886](https://github.com/saworbit/hammerforge/issues/1886))

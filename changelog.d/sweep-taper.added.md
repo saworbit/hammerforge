@@ -1,1 +1,0 @@
-- Sweep Faces can narrow or widen to an End scale, and each side takes the material of the face it ran along. (issue [#1899](https://github.com/saworbit/hammerforge/issues/1899))

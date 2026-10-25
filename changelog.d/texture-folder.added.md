@@ -1,1 +1,0 @@
-- Add Texture Folder turns a folder of images into palette materials in one step, with normal and roughness maps found by name. (issue [#1884](https://github.com/saworbit/hammerforge/issues/1884))

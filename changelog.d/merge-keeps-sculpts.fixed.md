@@ -1,1 +1,0 @@
-- Merge keeps the sculpts of the displaced faces it joins into one; it used to drop them with a warning. (issue [#1906](https://github.com/saworbit/hammerforge/issues/1906))

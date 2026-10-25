@@ -1,1 +1,0 @@
-- A test run no longer reports the View Filters rows and the structure settings rows as orphans: the list updates in place and a rebuilt row is freed at once. (issue [#1901](https://github.com/saworbit/hammerforge/issues/1901))

@@ -1,1 +1,0 @@
-- Repeat Run holds the Duplicate, Radial and Grid Arrays, and a change in Adjust Last goes into the dock, so Repeat Last Command runs it too. (issue [#1896](https://github.com/saworbit/hammerforge/issues/1896))

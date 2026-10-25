@@ -1,1 +1,0 @@
-- An undo at 3,000 brushes takes 45 ms, from 74: it walks only the nodes it changed when nothing else can have changed. (issue [#1866](https://github.com/saworbit/hammerforge/issues/1866))
