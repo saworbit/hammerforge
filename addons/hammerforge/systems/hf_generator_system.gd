@@ -862,6 +862,7 @@ func capture() -> Array:
 ## Restore records and put the meta back on the brushes that belong to them, and
 ## take it off the brushes that no longer do.
 func restore(records: Array) -> void:
+	var had_structures := not generators.is_empty()
 	generators.clear()
 	var restored: Dictionary = {}
 	for entry in records:
@@ -880,8 +881,10 @@ func restore(records: Array) -> void:
 	# A restore that reuses a brush's node keeps its metadata. Undo a Detach and
 	# redo it, and the old pieces went on saying they belonged to a structure that
 	# was gone, in the scene file as well (#1306). Every reader asks the record, so
-	# nothing acted on it, but the next one to trust the tag would have.
-	if root != null:
+	# nothing acted on it, but the next one to trust the tag would have. With no
+	# structure before and none now no node holds a tag, so the walk of every node
+	# is skipped (#1866).
+	if root != null and (had_structures or not generators.is_empty()):
 		root.clear_stale_membership([GENERATOR_META], restored)
 
 

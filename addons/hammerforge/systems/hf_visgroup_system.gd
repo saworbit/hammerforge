@@ -47,6 +47,9 @@ var _view_history: Array = []
 ## What an isolate started from, which End Isolate puts back; empty when there
 ## is no isolate.
 var _isolated_from: Dictionary = {}
+## What `refresh_visibility()` read besides each node itself when it last walked
+## every node: `_visibility_inputs()`, or null before the first walk (#1866).
+var _walked_with: Variant = null
 
 
 func _init(level_root: Node3D) -> void:
@@ -356,13 +359,30 @@ func get_members_of(vg_name: String) -> Array:
 # ===========================================================================
 
 
-func refresh_visibility() -> void:
+## Show and fade every node as its visgroups, the view, the view filters and the
+## open group say.
+##
+## `only`, an array, is the nodes an undo or a redo built. When nothing else the
+## walk reads has changed since it last walked every node, those are the only
+## nodes that can be shown wrongly: a node the restore kept has the record it had,
+## memberships included, so the walk would draw it as it is. At 3,000 brushes the
+## walk was 12 ms of every undo (#1866).
+func refresh_visibility(only: Variant = null) -> void:
+	var inputs := _visibility_inputs()
+	var nodes: Array
+	if only is Array and _walked_with is Dictionary and inputs.recursive_equal(_walked_with, 8):
+		nodes = only
+	else:
+		nodes = _all_managed_nodes()
+		_walked_with = inputs
 	# A node in no visgroup is a node nothing is hiding, so it is shown. Skipping
 	# it left a deleted visgroup's members with the visible = false they were
 	# given when it was hidden, and no visgroup left to un-hide them with.
 	# Committed cutters are hidden by the cut, not by a visgroup, and
 	# _all_managed_nodes() does not reach them.
-	for node in _all_managed_nodes():
+	for node in nodes:
+		if not is_instance_valid(node):
+			continue
 		node.visible = shown_ignoring_view_filters(node) and not view_filter_hides(node)
 		# A locked brush is drawn faded, and so is one outside an open group
 		# (#1723). Its own mesh, which no bake copies.
@@ -370,6 +390,24 @@ func refresh_visibility() -> void:
 		if mesh is GeometryInstance3D:
 			var faded := is_locked(node) or not inside_open_group(node)
 			(mesh as GeometryInstance3D).transparency = LOCKED_FADE if faded else 0.0
+
+
+## Everything `refresh_visibility()` reads that is not on a node: the visgroups,
+## the view filters, what the view hides, and the open group and its nesting.
+func _visibility_inputs() -> Dictionary:
+	var hidden: Array = []
+	for node in _view_hidden:
+		if is_instance_valid(node):
+			hidden.append(node.get_instance_id())
+	hidden.sort()
+	var filters: Variant = root.get("view_filters") if root else null
+	return {
+		"visgroups": visgroups.duplicate(true),
+		"filters": (filters as Dictionary).duplicate(true) if filters is Dictionary else {},
+		"hidden": hidden,
+		"open": open_group,
+		"parents": group_parents.duplicate(),
+	}
 
 
 # ===========================================================================
@@ -1081,7 +1119,8 @@ func capture_order(registry: Dictionary) -> Array:
 	return order
 
 
-func restore_visgroups(data: Dictionary, order: Array = []) -> void:
+## With `made`, the nodes a restore built, as `refresh_visibility()` takes them.
+func restore_visgroups(data: Dictionary, order: Array = [], made: Variant = null) -> void:
 	visgroups.clear()
 	if not data is Dictionary:
 		return
@@ -1090,7 +1129,7 @@ func restore_visgroups(data: Dictionary, order: Array = []) -> void:
 		if not entry is Dictionary:
 			continue
 		visgroups[str(key)] = record_from(entry)
-	refresh_visibility()
+	refresh_visibility(made)
 
 
 ## A visgroup's record as a file or a state holds it, with what it leaves out

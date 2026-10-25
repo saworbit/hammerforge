@@ -122,10 +122,18 @@ static func carried(brush: Node) -> Dictionary:
 ## the brush has, so a name or a wire on a brush with no class is kept as well.
 static func fields(brush: Node) -> Dictionary:
 	var out: Dictionary = {}
-	for key in FIELDS:
-		if brush.has_meta(key) and _holds_something(key, brush.get_meta(key)):
-			out[key] = _copied(brush.get_meta(key))
+	add_fields(brush, out)
 	return out
+
+
+## `fields()` written into `info`, for a record built in place (#1866).
+static func add_fields(brush: Node, info: Dictionary) -> void:
+	for key in FIELDS:
+		if not brush.has_meta(key):
+			continue
+		var value: Variant = brush.get_meta(key)
+		if _holds_something(key, value):
+			info[key] = _copied(value)
 
 
 ## Make `brush` part of the entity `carried()` read off another one. `entity` can

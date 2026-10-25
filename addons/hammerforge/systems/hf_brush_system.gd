@@ -27,6 +27,9 @@ const ROLE_COMMITTED := "committed"
 ## along an edge is not lost to rounding. The exact tests follow, so a looser
 ## box costs a test and never a wrong pick.
 const PICK_BOUNDS_SLACK := 0.01
+## `_shape_uses_sides()` as one lookup, made on first use, since every record of
+## every brush asks (#1866).
+static var _sided_shapes: Dictionary = {}
 
 var root: Node3D
 var _brush_cache: Dictionary = {}  # brush_id (String) -> Node
@@ -482,12 +485,12 @@ func get_brush_info_from_node(brush: Node, kept_faces := false) -> Dictionary:
 	info["brush_id"] = ensure_brush_id(draft)
 	if _shape_uses_sides(draft.shape):
 		info["sides"] = draft.sides
-	var pending = (
-		draft.get_parent() == root.pending_node
-		or bool(draft.get_meta(DraftBrush.PENDING_CUT_META, false))
+	var parent := draft.get_parent()
+	var pending: bool = (
+		parent == root.pending_node or bool(draft.get_meta(DraftBrush.PENDING_CUT_META, false))
 	)
-	var committed = (
-		draft.get_parent() == root.committed_node or bool(draft.get_meta("committed_cut", false))
+	var committed: bool = (
+		parent == root.committed_node or bool(draft.get_meta("committed_cut", false))
 	)
 	if committed:
 		pending = false
@@ -509,8 +512,8 @@ func get_brush_info_from_node(brush: Node, kept_faces := false) -> Dictionary:
 	var gid: String = str(draft.get_meta("group_id", ""))
 	if gid != "":
 		info["group_id"] = gid
-	info.merge(HFBrushEntity.fields(draft))
-	info.merge(HFBakeSplit.fields(draft))
+	HFBrushEntity.add_fields(draft, info)
+	HFBakeSplit.add_fields(draft, info)
 	# The node name. restore_state() clears every brush and rebuilds it from this
 	# info, so anything not captured here does not survive an undo - and a brush
 	# that comes back as @Node3D@27719 has lost what entity I/O outputs target,
@@ -880,7 +883,10 @@ func record_matches_node(brush: Node, record: Dictionary) -> bool:
 ##
 ## Its node was never touched, so there is no tree work here: this is the half of
 ## `create_brush_from_info()` that is bookkeeping.
-func reregister_draft_brush(brush: DraftBrush) -> void:
+##
+## `advance_counter` false leaves the id counter alone, for a restore that sets
+## it from its state once every brush is back (#1866).
+func reregister_draft_brush(brush: DraftBrush, advance_counter := true) -> void:
 	if not is_instance_valid(brush):
 		return
 	var brush_id := str(brush.brush_id)
@@ -888,7 +894,8 @@ func reregister_draft_brush(brush: DraftBrush) -> void:
 		return
 	_brush_cache[brush_id] = brush
 	_brush_count += 1
-	_advance_id_counter(brush_id)
+	if advance_counter:
+		_advance_id_counter(brush_id)
 	_legacy_manager_add(brush)
 
 
@@ -917,12 +924,15 @@ func _advance_id_counter(brush_id: String) -> void:
 ## or a sphere came back from a reopen or a duplicate at the default count, which
 ## its saved faces hid until the first resize built them again (#1085).
 func _shape_uses_sides(shape: int) -> bool:
-	return (
-		shape == root.BrushShape.PYRAMID
-		or shape == root.BrushShape.PRISM_TRI
-		or shape == root.BrushShape.PRISM_PENT
-		or shape in DraftBrush.ROUND_SHAPES
-	)
+	if _sided_shapes.is_empty():
+		var sided: Array = [
+			DraftBrush.BrushShape.PYRAMID,
+			DraftBrush.BrushShape.PRISM_TRI,
+			DraftBrush.BrushShape.PRISM_PENT,
+		]
+		for each in sided + DraftBrush.ROUND_SHAPES:
+			_sided_shapes[each] = true
+	return _sided_shapes.has(shape)
 
 
 # ---------------------------------------------------------------------------
@@ -3980,7 +3990,8 @@ func _take_old_wall_shapes_again(record: Dictionary) -> void:
 func forget_faces_as_loaded() -> void:
 	for brush in _brush_cache.values():
 		if brush is DraftBrush and is_instance_valid(brush):
-			(brush as DraftBrush).faces_as_loaded = []
+			if not (brush as DraftBrush).faces_as_loaded.is_empty():
+				(brush as DraftBrush).faces_as_loaded = []
 
 
 # ---------------------------------------------------------------------------
