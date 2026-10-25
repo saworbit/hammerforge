@@ -131,6 +131,7 @@ func finish(position: Vector2, threshold: float) -> Dictionary:
 	current = position
 	if owner == Owner.NATIVE_GIZMO or _selected_transform_changed():
 		result["decision"] = ReleaseDecision.NATIVE_GIZMO
+		result["moved"] = moved()
 	elif owner == Owner.MARQUEE or (marquee_allowed and origin.distance_to(position) >= threshold):
 		result["decision"] = ReleaseDecision.MARQUEE
 	elif click_allowed and (origin.distance_to(position) < threshold or not marquee_allowed):
@@ -146,6 +147,22 @@ func _capture_transforms(selected_nodes: Array) -> void:
 		_transform_snapshots.append(
 			{"node": weakref(node), "transform": (node as Node3D).global_transform}
 		)
+
+
+## The selected nodes the press moved, turned or scaled, each `{node, from}` with
+## `from` its global transform when the press began: for Repeat Run, which keeps
+## a drag of the gizmo as how far it went (#1735).
+func moved() -> Array:
+	var out: Array = []
+	for snapshot in _transform_snapshots:
+		var node_ref: WeakRef = snapshot.get("node")
+		var node = node_ref.get_ref() if node_ref else null
+		if not is_instance_valid(node) or not (node is Node3D):
+			continue
+		var original: Transform3D = snapshot.get("transform", Transform3D.IDENTITY)
+		if not (node as Node3D).global_transform.is_equal_approx(original):
+			out.append({"node": node, "from": original})
+	return out
 
 
 func _selected_transform_changed() -> bool:
