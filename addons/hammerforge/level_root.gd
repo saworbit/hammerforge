@@ -1536,6 +1536,32 @@ func group_selection(group_name: String, nodes: Array) -> void:
 		visgroup_system.group_selection(group_name, nodes)
 
 
+## Group Selection and Ungroup as the dock records them, by name (#1723).
+func group_units(group_name: String, nodes: Array) -> void:
+	if visgroup_system:
+		visgroup_system.group_units(group_name, nodes)
+
+
+func ungroup_units(nodes: Array) -> void:
+	if visgroup_system:
+		visgroup_system.ungroup_units(nodes)
+
+
+func add_units_to_group(nodes: Array, group_name: String) -> void:
+	if visgroup_system:
+		visgroup_system.add_units_to_group(nodes, group_name)
+
+
+func remove_units_from_group(nodes: Array, group_name: String) -> void:
+	if visgroup_system:
+		visgroup_system.remove_units_from_group(nodes, group_name)
+
+
+func rename_group(old_name: String, new_name: String) -> void:
+	if visgroup_system:
+		visgroup_system.rename_group(old_name, new_name)
+
+
 func ungroup_nodes(nodes: Array) -> void:
 	if visgroup_system:
 		visgroup_system.ungroup_nodes(nodes)
@@ -2098,7 +2124,13 @@ func delete_managed_nodes(brush_ids: Array, entity_paths: Array) -> void:
 	end_signal_batch()
 
 
-func create_managed_duplicates(brush_infos: Array, entity_infos: Array) -> void:
+## `groups` are the groups the copies make, name to parent, from
+## `HFVisgroupSystem.regroup_copies()` (#1723): made here so a redo makes them.
+func create_managed_duplicates(
+	brush_infos: Array, entity_infos: Array, groups: Dictionary = {}
+) -> void:
+	if visgroup_system and not groups.is_empty():
+		visgroup_system.add_groups(groups)
 	create_brushes_from_infos(brush_infos)
 	create_entities_from_infos(entity_infos)
 

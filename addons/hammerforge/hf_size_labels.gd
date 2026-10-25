@@ -24,6 +24,9 @@ const PIXEL_SIZE := 0.005
 ## the editor at 8 pixels, too small to read past the gizmo.
 const FIXED_PIXEL_SIZE := 0.0016
 const NODE_NAME := &"_SizeLabels"
+
+## What the labels' node is called, so two sets on one level are told apart.
+var container_name: StringName = NODE_NAME
 ## Where the 2D label sits from the pointer: below and to the right, clear of the
 ## corner being dragged, as a tooltip sits.
 const POINTER_OFFSET := Vector2(18, 20)
@@ -107,7 +110,7 @@ func _ensure_container(parent: Node) -> void:
 		return
 	clear()
 	_container = Node3D.new()
-	_container.name = NODE_NAME
+	_container.name = container_name
 	# The positions are world space, so the level's own transform must not move them.
 	_container.top_level = true
 	parent.add_child(_container, false, Node.INTERNAL_MODE_BACK)

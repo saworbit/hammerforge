@@ -40,6 +40,8 @@ signal overlay_colors_changed
 ## A command the dock ran with settings, for Adjust Last (#1867): its id, its
 ## settings, and how to make its step again (`HFPluginAdjustLast.note()`).
 signal command_ran(id: String, settings: Dictionary, recipe: Dictionary)
+## A row of the Groups list was clicked: select that group (#1723).
+signal group_selection_requested(group_name: String)
 @warning_ignore_restore("unused_signal")
 
 const LevelRootType = preload("level_root.gd")
@@ -621,6 +623,12 @@ var view_saved_opt: OptionButton = null
 var view_name_input: LineEdit = null
 var group_sel_btn: Button = null
 var ungroup_btn: Button = null
+## The Groups list and its buttons (#1723).
+var group_list: ItemList = null
+var group_rename_btn: Button = null
+var group_open_btn: Button = null
+var group_add_sel_btn: Button = null
+var group_remove_sel_btn: Button = null
 var cordon_enabled_check: CheckBox = null
 var cordon_region_opt: OptionButton = null
 var cordon_remove_btn: Button = null
@@ -7545,6 +7553,31 @@ func _on_visgroup_item_clicked(index: int, _at_position: Vector2, mouse_button_i
 
 func _on_visgroup_add_selection() -> void:
 	HFDockVisgroupHandler.on_visgroup_add_selection(self)
+
+
+func _on_group_item_clicked(index: int, _at_position: Vector2, mouse_button_index: int) -> void:
+	HFDockVisgroupHandler.on_group_item_clicked(self, index, mouse_button_index)
+
+
+func _on_group_rename() -> void:
+	HFDockVisgroupHandler.on_group_rename(self)
+
+
+## The group highlighted in the Groups list, or "" (#1723).
+func highlighted_group() -> String:
+	return HFDockVisgroupHandler.selected_group_name(self)
+
+
+func _on_group_open() -> void:
+	HFDockVisgroupHandler.on_group_open(self)
+
+
+func _on_group_add_selection() -> void:
+	HFDockVisgroupHandler.on_group_add_selection(self)
+
+
+func _on_group_remove_selection() -> void:
+	HFDockVisgroupHandler.on_group_remove_selection(self)
 
 
 func _on_visgroup_remove_selection() -> void:
