@@ -32,6 +32,7 @@ const IN_VERTEX := "Not while editing vertices: the key snaps the vertices inste
 const IN_SELECT := "Not with the Select tool"
 const BUSY := "Finish what the viewport is doing first"
 const NOTHING_TO_REPEAT := "Run a command first"
+const NO_FACES_PICKED := "Pick the faces to sweep in Face Select first"
 const NOTHING_IN_RUN := "Run commands on a selection first"
 const NO_GROUP_SELECTED := "Select a group first"
 const NO_GROUP_OPEN := "Open a group first"
@@ -103,6 +104,9 @@ static func _mode_rule(action: String, state: Dictionary) -> Variant:
 	# Repeat waits for something to repeat (#1694).
 	if action == "repeat_last_command":
 		return "" if str(state.get("repeat_command", "")) != "" else NOTHING_TO_REPEAT
+	# Sweep takes picked faces (#1714).
+	if action == "sweep_faces":
+		return "" if faces > 0 else NO_FACES_PICKED
 	# Repeat Run and Clear Run wait for a run (#1735).
 	if action == "repeat_run" or action == "clear_run":
 		return "" if str(state.get("run_text", "")) != "" else NOTHING_IN_RUN

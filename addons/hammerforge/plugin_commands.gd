@@ -39,6 +39,7 @@ const HFSettingsFile = preload("hf_settings_file.gd")
 const HFPluginCompare = preload("plugin_compare.gd")
 const HFPluginAdjustLast = preload("plugin_adjust_last.gd")
 const HFPluginCommandLine = preload("plugin_command_line.gd")
+const HFPluginFaceSweep = preload("plugin_face_sweep.gd")
 const HFPluginGroups = preload("plugin_groups.gd")
 const HFPluginRun = preload("plugin_run.gd")
 @warning_ignore_restore("shadowed_global_identifier")
@@ -324,6 +325,8 @@ static func execute(
 			plugin._clip_selected(root)
 		"clip_to_face":
 			plugin._clip_to_face_plane_selected(root)
+		"sweep_faces":
+			HFPluginFaceSweep.open(plugin, root)
 		"run_trim_along_faces":
 			HFPluginEditActions.run_trim_along_faces(plugin, root)
 		"repick_trim_run":
