@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: October 25, 2026
+Last reviewed: October 26, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 
@@ -21,9 +21,18 @@ panel included; it says nothing of how deep each one goes.
 
 The last list is done, below. What comes after it has not been chosen yet.
 
-Under way: a translatable interface ([#1702](https://github.com/saworbit/hammerforge/issues/1702)). Its first step, a translation domain of HammerForge's own and a POT kept current, landed in #1890.
+Under way: a translatable interface ([#1702](https://github.com/saworbit/hammerforge/issues/1702)). Its first step, a translation domain of HammerForge's own and a POT kept current, landed in #1890. Its second has begun: a test fails when a script gains text that skips the catalogs (#1920), and five scripts' messages go through them (#1922).
 
 What is done is below, newest first.
+
+## Done (Late October 2026)
+
+- Sweep Faces kept as a structure whose values change after, with a pivot and an end handle in the viewport for an arc, and a far end that narrows or widens ([#1885](https://github.com/saworbit/hammerforge/issues/1885), [#1899](https://github.com/saworbit/hammerforge/issues/1899)).
+- A floor grid that turns to a picked edge, a turned brush or a typed angle, with draws, resizes, snaps and nudges square to it ([#1893](https://github.com/saworbit/hammerforge/issues/1893)).
+- Sweep Select: hold I and drag to add or take out each brush or face passed over ([#1886](https://github.com/saworbit/hammerforge/issues/1886)).
+- A folder of textures added to the palette as materials in one step, its maps found by name ([#1884](https://github.com/saworbit/hammerforge/issues/1884)).
+- `func_physbox` for props the player pushes, and `func_illusionary` for geometry seen and walked through ([#1892](https://github.com/saworbit/hammerforge/issues/1892)).
+- An undo of a whole level step at 3,000 brushes in 45 ms, from 233 ([#1866](https://github.com/saworbit/hammerforge/issues/1866)).
 
 ## Done (From the Next List, October 2026)
 

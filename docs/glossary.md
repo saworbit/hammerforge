@@ -87,9 +87,28 @@ clicked with the Hull tool, whether they touch or not.
 
 ### Sweep
 A run of brushes made by carrying picked faces along a straight run, an arc or an
-S bend, one convex brush per piece, the pieces meeting face to face.
+S bend, one convex brush per piece, the pieces meeting face to face. A sweep is a
+structure: select a piece and **Update Sweep** builds it again with new values.
 
-- **In HammerForge:** Sweep Faces in the palette.
+- **In HammerForge:** Sweep Faces in the palette, its pivot and end handles in the
+  viewport, the Build tab's Structure section.
+- **Not to be confused with:** Sweep Select, which picks brushes and makes none.
+
+### Sweep Select
+Holding its key, I by default, and dragging in the Select tool: each brush or face
+the pointer passes over joins the selection, or leaves it when the first one passed
+was selected already.
+
+- **In HammerForge:** the Select tool and Face Select, the shortcut HUD.
+- **Code name:** `HFSweepSelect`, and `sweep_select_hold` in the keymap.
+
+### Grid angle
+How far the floor grid is turned about up, so a part of a level set at an angle is
+drawn square to it. 0 is the world's grid.
+
+- **In HammerForge:** the Angle field beside the grid size, Align Grid to Selection
+  with an edge or a turned brush, the HUD's grid label, Reset Grid.
+- **Code name:** `HFGridSystem.turn_degrees`.
 
 ### Face
 One flat side of a brush, with its own material and texture settings.
@@ -104,7 +123,7 @@ The faces picked in Face Select, which the Paint tab's buttons and boxes edit.
 
 ### Structure
 A shape built from settings and kept editable: stairs, a spiral stair, an arch,
-a dome, a ring or a door frame. Change its settings and the pieces are built again;
+a dome, a ring, a door frame, a trim run or a sweep. Change its settings and the pieces are built again;
 Detach makes them plain brushes.
 
 - **In HammerForge:** the Build tab's Structure section, the palette, the bridge's

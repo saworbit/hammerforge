@@ -229,6 +229,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Start the same native object marquee while holding **Shift** and confirm the new results are added using Godot's normal native behavior. Shift-click selected and unselected objects and confirm Godot's native additive/active-selection result is preserved after HammerForge owner/group normalization.
 - Group two brushes, then use the native object marquee to include one member. Confirm both group members appear selected after the native result is normalized. Repeat the relevant Shift selection/removal interaction and confirm normalization never leaves only half the group selected.
 - Hold Ctrl/Cmd during an Object Select click and drag. Confirm HammerForge neither performs a custom toggle nor consumes the modifier; Godot's configured transform/navigation behavior remains authoritative.
+- Stand five pillars in a row on a floor. Hold **I** and drag across three of them in Select. Confirm those three are selected and the floor is not. Start a second sweep on a selected pillar and confirm the ones it passes leave the selection. Start one more and press Escape mid drag: the selection goes back (#1886).
 - Begin in Draw or another Paint tool with Paint enabled, select two brushes, then enable Face Select. Confirm HammerForge switches to Select, turns Paint off, temporarily clears the object selection, and removes Godot's transform widget plus HammerForge's resize handles. Drag at least 6 pixels across several visible faces; confirm one HammerForge rectangle appears and only projected-center candidates whose canonical ray pick identifies that exact face as frontmost are selected. With X-ray off, put a face behind another brush and confirm the occluded/back-facing face is excluded. Shift adds and Ctrl/Cmd toggles.
 - Press Escape with faces selected; confirm only the face selection clears. Press Escape again and confirm Face Select exits and both still-valid brushes return to Godot's visible object selection. Re-enter with no face selected and confirm one Escape exits. Also confirm leaving Paint, choosing an incompatible built-in/external tool, or entering Vertex Edit exits through the same clean restore path. Re-enter once more, then select a different object in the Scene tree; confirm Face Select turns off and keeps that new object rather than restoring the old snapshot.
 - Select a box brush, then drag each HammerForge resize handle well beyond the normal marquee threshold, across empty space and another brush. Confirm the handle owns the full press/motion/release, the box resizes without any region rectangle or selection change, and each completed drag creates exactly one undo step. Repeat with Godot's move/rotate/scale widget. A click/no-op and a cancelled handle action must create no undo entry.
@@ -335,6 +336,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Move or resize either brush; confirm the preview updates.
 - Toggle `Subtract Preview` off; confirm the wireframe is removed.
 - Tie the solid brush as `func_detail`, then `func_wall`, then `func_clip`. Confirm the preview shows no cut through it each time. Untie it and tie the cutter as `func_detail` instead: confirm it cuts nothing (#1563).
+- Tie a crate brush as `func_physbox` and a thin sheet as `func_illusionary`. Bake and Quick Play: walking into the crate pushes it, and the sheet is seen and walked through. Confirm both are left out of the baked navmesh (#1892).
 
 ### 7b. Geometry Previews (Carve/Clip/Hollow)
 - Select a solid brush overlapping another. Press Ctrl+Shift+R (Carve).
@@ -538,6 +540,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - In Face Select, pick one face of a box and run **Sweep Faces** from the palette. Choose **Arc**, 90 degrees, Radius 3 and 8 Segments. Confirm the pieces are outlined in cyan as the values change, OK makes 8 brushes that meet face to face in one group, and one Ctrl+Z takes them all away (#1714).
 - Lower the Radius until the bend is tighter than the face is wide. Confirm the outline turns red, OK is greyed out and nothing is made.
 - Pick two faces that are not in one plane and run it. Confirm it is refused with the reason.
+- Give the source box a brick material on its sides and run it again with **End width scale** 0.5. Confirm the run narrows evenly to half its width, every piece is convex, and the pieces' sides are brick (#1899).
 - Open it again on **Arc**. Drag the orange pivot handle along the face and confirm Radius and Toward follow it in grid steps and the outline follows. Drag the yellow end handle round the pivot and confirm Angle moves in 15 degree steps. Type a Radius and confirm the handle moves. Start a drag and right click: the values go back (#1885).
 - Press OK, select one of the pieces, raise Segments in the Structure section and press **Update Sweep**. Confirm the bend rebuilds smoother in one undo step, still one group (#1885).
 
@@ -605,6 +608,7 @@ It writes one PNG per tab under `user://console_preview/`.
 ### 11. Material Browser + Texture Picker
 - Open the **Paint** tab → **Materials** section.
 - Open **Material Library** and click **Refresh Prototypes**; confirm the thumbnail grid populates with 150 texture previews.
+- Click **Add Texture Folder** and pick a folder holding `brick_albedo.png` and `brick_normal.png`. Confirm one brick material joins the palette with its normal map, in one undo step, and dragging `brick_albedo.png` from the FileSystem dock onto a face paints it with that same material (#1884).
 - Type "brick" in the search bar; confirm the grid filters to brick-pattern materials only.
 - Click a color swatch (e.g. red); confirm only red materials remain. Click "All" to reset.
 - Select the "Favorites" view toggle; confirm it is empty initially.
