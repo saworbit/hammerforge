@@ -31,6 +31,11 @@ const STATIC_BODY_MASK := 0
 ## Brush entity classes whose geometry moves, and so needs a node of its own to
 ## move with its collision.
 const MOVER_CLASSES := ["func_door", "door_basic"]
+## A brush entity the player can push or knock over, baked as a RigidBody3D, and
+## one that is seen and walked through, baked with no collision (#1892). Hammer's
+## names, so a `.map` round trip keeps them.
+const PHYSBOX_CLASS := "func_physbox"
+const ILLUSIONARY_CLASS := "func_illusionary"
 
 const BAKED_CONTAINER_NAME := &"BakedGeometry"
 const BAKED_CONTAINER_META := &"_hammerforge_baked_container"
@@ -2380,12 +2385,18 @@ func _append_nonstructural_brushes(container: Node3D, filter: Variant = null) ->
 	# where the structural path would have made one (#712).
 	var grouped: Array = []
 	var clips: Array = []
+	var physboxes: Array = []
 	var idx := 0
 	for draft in brushes:
+		var entity_class := HFBrushEntity.entity_class(draft)
 		if _is_trigger_brush(draft):
 			_append_trigger_volume(holder, draft, idx)
 		elif HFBrushEntity.is_clip(draft):
 			clips.append(draft)
+		elif entity_class == PHYSBOX_CLASS:
+			physboxes.append(draft)
+		elif entity_class == ILLUSIONARY_CLASS:
+			_append_illusionary_mesh(holder, draft, idx)
 		elif _needs_its_own_node(draft):
 			_append_detail_mesh(holder, draft, idx)
 		else:
@@ -2393,6 +2404,135 @@ func _append_nonstructural_brushes(container: Node3D, filter: Variant = null) ->
 		idx += 1
 	_append_grouped_detail(holder, grouped)
 	_append_clip_collision(holder, clips)
+	_append_physboxes(holder, physboxes)
+
+
+## The mesh a detail brush bakes to, as `_append_detail_mesh()` makes it, placed
+## in `holder`'s container: `{mesh, solid, transform, material}`, `solid` the mesh
+## with its hidden faces, for a hull. Null `mesh` when it draws nothing.
+func _detail_mesh_of(draft: DraftBrush, holder: Node3D, dynamic: bool) -> Dictionary:
+	var mesh: Mesh = null
+	var source: Node3D = draft
+	if draft.mesh_instance and draft.mesh_instance.mesh:
+		mesh = draft.mesh_instance.mesh
+		source = draft.mesh_instance
+	var fallback: Material = root.bake_material_override
+	mesh = _without_editor_looks(mesh, fallback)
+	var solid := mesh
+	mesh = HFHiddenFaces.without_hidden(mesh)
+	if mesh != null and root.baker and root.baker.has_method("postprocess_detail_mesh"):
+		var options := build_bake_options()
+		# A lightmap holds what does not move.
+		if dynamic:
+			options["unwrap_uv2"] = false
+		mesh = root.baker.postprocess_detail_mesh(mesh, options)
+	var material: Material = null
+	if source is MeshInstance3D:
+		material = _baked_material((source as MeshInstance3D).material_override, fallback)
+	return {
+		"mesh": mesh,
+		"solid": solid,
+		"material": material,
+		"transform": _source_transform_in_baked_container(source, holder.get_parent() as Node3D),
+	}
+
+
+## A `func_illusionary` brush: its mesh, with its own Cast Shadows and Lightmap
+## Scale, and no collision body, so the player walks through it and the navmesh,
+## which reads collision, leaves it out (#1892).
+func _append_illusionary_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
+	var made := _detail_mesh_of(draft, holder, false)
+	var authored := authored_entity_name(draft)
+	var mi := MeshInstance3D.new()
+	mi.name = authored if authored != "" else "Illusionary_%d" % idx
+	mi.mesh = made["mesh"]
+	mi.material_override = made["material"]
+	HFBakeSplit.apply(mi, _split_settings(draft))
+	mi.set_meta(HFBrushEntity.CLASS_META, ILLUSIONARY_CLASS)
+	if authored != "":
+		mi.set_meta("entity_name", authored)
+	_keep_brush_address(mi, draft)
+	_add_piece(holder, mi, draft)
+	mi.transform = made["transform"]
+
+
+## `func_physbox` brushes (#1892): one RigidBody3D for each set tied under one
+## name, and one for each brush on its own, holding every brush's mesh and convex
+## shape, so they move together. Mass, Start Asleep and Physics Layer are the
+## class's properties. Its mesh is dynamic for GI, and as a rigid body it is no
+## static collider, so the navmesh leaves it out.
+func _append_physboxes(holder: Node3D, drafts: Array) -> void:
+	if drafts.is_empty():
+		return
+	var sets: Dictionary = {}
+	var order: Array = []
+	for draft: DraftBrush in drafts:
+		# One entity: by its name when it has one, else by its tie, else the brush.
+		var key := "@" + str(draft.get_meta(HFBrushEntity.NAME_META, ""))
+		if key == "@":
+			key = "#" + str(draft.get_meta(HFBrushEntity.TIE_META, ""))
+		if key == "#":
+			key = "brush:%d" % draft.get_instance_id()
+		if not sets.has(key):
+			sets[key] = []
+			order.append(key)
+		(sets[key] as Array).append(draft)
+	var definition: Dictionary = root.get_entity_definition(PHYSBOX_CLASS)
+	var level_layer: int = root._layer_from_index(root.bake_collision_layer_index)
+	var idx := 0
+	for key in order:
+		var members: Array = sets[key]
+		var first: DraftBrush = members[0]
+		var data: Dictionary = HFBrushEntity.properties(definition, first)
+		var body := RigidBody3D.new()
+		var authored := authored_entity_name(first)
+		body.name = authored if authored != "" else "Physbox_%d" % idx
+		body.mass = maxf(0.001, float(data.get("mass", 10.0)))
+		body.sleeping = bool(data.get("start_asleep", false))
+		var layer := _physbox_layer(data, level_layer)
+		body.collision_layer = layer
+		# What it rests on and is pushed by: the level, the player on it, and
+		# anything on its own layer.
+		body.collision_mask = level_layer | layer
+		body.set_meta(HFBrushEntity.CLASS_META, PHYSBOX_CLASS)
+		if authored != "":
+			body.set_meta("entity_name", authored)
+		var tie := HFBrushEntity.tie_to_bake(first)
+		if tie != "":
+			body.set_meta(HFBrushEntity.TIE_META, tie)
+		if not data.is_empty():
+			body.set_meta("entity_data", data.duplicate())
+		_keep_brush_address(body, first)
+		_add_piece(holder, body, first)
+		var placed: Transform3D = _detail_mesh_of(first, holder, true)["transform"]
+		body.transform = Transform3D(Basis.IDENTITY, placed.origin)
+		for draft: DraftBrush in members:
+			var made := _detail_mesh_of(draft, holder, true)
+			var local: Transform3D = body.transform.affine_inverse() * made["transform"]
+			var mi := MeshInstance3D.new()
+			mi.name = "Mesh_%d" % body.get_child_count()
+			mi.mesh = made["mesh"]
+			mi.material_override = made["material"]
+			mi.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
+			HFBakeSplit.apply(mi, _split_settings(draft))
+			body.add_child(mi)
+			mi.transform = local
+			var col := CollisionShape3D.new()
+			col.name = "Shape_%d" % body.get_child_count()
+			col.shape = _shape_for_draft(draft, made["solid"])
+			body.add_child(col)
+			col.transform = local
+		idx += 1
+
+
+## The layer bit a physbox goes on: its Physics Layer, 1 to 32, or the level's
+## for 0 or a value out of range, as a clip's (#1409).
+func _physbox_layer(data: Dictionary, level_layer: int) -> int:
+	var text := str(data.get("layer", 0)).strip_edges()
+	var index := int(float(text)) if text.is_valid_float() else 0
+	if index < 1 or index > 32:
+		return level_layer
+	return root._layer_from_index(index)
 
 
 ## Whether this brush has to survive the bake as a node of its own.

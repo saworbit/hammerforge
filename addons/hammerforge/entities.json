@@ -610,6 +610,44 @@
       }
     ]
   },
+  "func_physbox": {
+    "is_brush_entity": true,
+    "description": "Geometry the player can push or knock over: a crate, a barrel, a plank across a gap. Bakes as a RigidBody3D holding its mesh and convex collision, so they move together.",
+    "color": "#cc8844",
+    "outputs": [],
+    "inputs": [],
+    "properties": [
+      {
+        "name": "mass",
+        "type": "float",
+        "label": "Mass (kg)",
+        "default": 10.0,
+        "tooltip": "How heavy it is. A light one is pushed further."
+      },
+      {
+        "name": "start_asleep",
+        "type": "bool",
+        "label": "Start Asleep",
+        "default": false,
+        "tooltip": "Stays where it was placed until something hits it, rather than settling when the game starts."
+      },
+      {
+        "name": "layer",
+        "type": "int",
+        "label": "Physics Layer",
+        "default": 0,
+        "tooltip": "The physics layer it collides on, 1 to 32. 0 puts it on the level's Physics Layer."
+      }
+    ]
+  },
+  "func_illusionary": {
+    "is_brush_entity": true,
+    "description": "Geometry that is seen and walked through: hanging cloth, a bead curtain, cobwebs, a light shaft. Bakes its mesh with no collision.",
+    "color": "#88bbcc",
+    "outputs": [],
+    "inputs": [],
+    "properties": []
+  },
   "dimension": {
     "class": "",
     "category": "Editor",
