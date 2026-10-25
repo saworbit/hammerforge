@@ -11,6 +11,7 @@ const HFCommandRegistryType = preload("res://addons/hammerforge/hf_command_regis
 const HFCommandAliasesType = preload("res://addons/hammerforge/hf_command_aliases.gd")
 const HFNameMatchType = preload("res://addons/hammerforge/hf_name_match.gd")
 const HFCommandAvailabilityType = preload("res://addons/hammerforge/hf_command_availability.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 signal action_invoked(action: String)
 
@@ -156,7 +157,7 @@ func populate(keymap) -> void:
 				keymap.get_display_string(action) if keymap.has_action(action) else ""
 			)
 			var entry = _create_entry(action, label_text, binding, cat)
-			entry["aliases"] = aliases.get(action, [])
+			entry["aliases"] = Array(aliases.get(action, [])) + entry["aliases"]
 			_entries.append(entry)
 			_rows.append(entry["button"])
 	_arrange_unsearched()
@@ -202,12 +203,15 @@ func _create_entry(
 	btn.add_theme_font_size_override("font_size", 12)
 	btn.custom_minimum_size = Vector2(0, 26)
 
+	# The label in the editor's language (#1702). A row's own text is looked up by
+	# the button; text put together here uses `shown`.
+	var shown := HFTranslationType.t(label_text)
 	# Use rich label effect via button text with binding right-aligned
 	btn.text = label_text + "    " + binding
-	btn.tooltip_text = label_text + " (" + binding + ")"
+	btn.tooltip_text = shown + " (" + binding + ")"
 	var help := HFCommandRegistryType.help(action)
 	if help != "":
-		btn.tooltip_text += "\n" + help
+		btn.tooltip_text += "\n" + HFTranslationType.t(help)
 	btn.pressed.connect(_on_entry_pressed.bind(action))
 	btn.mouse_entered.connect(_on_entry_hovered.bind(action, true))
 	btn.mouse_exited.connect(_on_entry_hovered.bind(action, false))
@@ -243,7 +247,10 @@ func _create_entry(
 		"action": action,
 		"tooltip": btn.tooltip_text,
 		"label": label_text,
-		"label_lower": label_text.to_lower(),
+		"shown": shown,
+		"label_lower": shown.to_lower(),
+		# Found by its English name too, shown as what matched.
+		"aliases": [label_text.to_lower()] if shown != label_text else [],
 		"binding": binding,
 		"binding_lower": binding.to_lower(),
 		"button": btn,
@@ -318,7 +325,7 @@ func _show_reason() -> void:
 	if entry.is_empty() and searching and not _shown.is_empty():
 		entry = _shown[0]
 	var reason := str(entry.get("reason", "")) if not entry.is_empty() else ""
-	_reason_label.text = "%s: %s" % [entry.get("label", ""), reason] if reason != "" else ""
+	_reason_label.text = "%s: %s" % [entry.get("shown", ""), reason] if reason != "" else ""
 	_reason_label.visible = reason != ""
 
 
@@ -363,10 +370,12 @@ func _on_search_changed(text: String) -> void:
 		_list.move_child(btn, i)
 		btn.visible = true
 		if ranked[i]["alias"] != "":
-			btn.text = "%s (%s)" % [entry["label"], ranked[i]["alias"]]
+			btn.text = "%s (%s)" % [entry["shown"], ranked[i]["alias"]]
 		_shown.append(entry)
 	if fuzzy and not ranked.is_empty():
-		_suggest_label.text = "Did you mean: %s?" % ranked[0]["entry"]["label"]
+		_suggest_label.text = (HFTranslationType.t("Did you mean: {command}?").format(
+			{"command": ranked[0]["entry"]["shown"]}
+		))
 		_suggest_label.visible = true
 	_show_reason()
 
@@ -384,7 +393,9 @@ func _arrange_unsearched() -> void:
 	if repeat != null:
 		repeat["button"].text = repeat["label"]
 		if repeat_text != "":
-			repeat["button"].text = "Repeat: %s" % repeat_text
+			repeat["button"].text = (HFTranslationType.t("Repeat: {command}").format(
+				{"command": HFTranslationType.t(repeat_text)}
+			))
 			top.append(repeat)
 	# What Repeat Run plays, so it is known before it is pressed (#1735). A run of
 	# one step is what Repeat already offers.
@@ -393,7 +404,9 @@ func _arrange_unsearched() -> void:
 	if run != null:
 		run["button"].text = run["label"]
 		if run_text != "" and int(_state.get("run_steps", 0)) > 1:
-			run["button"].text = "Repeat Run: %s" % run_text
+			run["button"].text = (HFTranslationType.t("Repeat Run: {commands}").format(
+				{"commands": HFTranslationType.t(run_text)}
+			))
 			top.append(run)
 	var recent: Array = []
 	for action in _state.get("recent_commands", []):

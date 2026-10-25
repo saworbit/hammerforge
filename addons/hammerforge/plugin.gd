@@ -202,6 +202,7 @@ var _last_tap_time := 0
 const _DOUBLE_TAP_MS := 350
 const LevelRootType = preload("level_root.gd")
 const HFDialogManagerType = preload("plugin_dialogs.gd")
+const HFTranslationType = preload("hf_translation.gd")
 const HFContextToolbar = preload("ui/hf_context_toolbar.gd")
 const HFHotkeyPalette = preload("ui/hf_hotkey_palette.gd")
 const HFSelectionFilter = preload("ui/hf_selection_filter.gd")
@@ -251,7 +252,11 @@ func _enter_tree():
 	add_custom_type("LevelRoot", "Node3D", LevelRootType, IconRes)
 	add_custom_type("DraftEntity", "Node3D", DraftEntityType, IconRes)
 	_dialog_manager = HFDialogManagerType.new()
+	# Before any control is built: a control looks its words up as it enters the
+	# tree, in the domain each surface is given below (#1702).
+	HFTranslationType.load_catalogs()
 	dock = preload("dock.tscn").instantiate()
+	HFTranslationType.adopt(dock)
 	undo_redo_manager = get_undo_redo()
 	brush_gizmo_plugin = preload("brush_gizmo_plugin.gd").new()
 	if brush_gizmo_plugin:
@@ -393,6 +398,7 @@ func _enter_tree():
 	call_deferred("_reapply_console_icons")
 
 	hud = preload("shortcut_hud.tscn").instantiate()
+	HFTranslationType.adopt(hud)
 	if base_control:
 		hud.theme = base_control.theme
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, hud)
@@ -422,6 +428,7 @@ func _enter_tree():
 	HFPluginOverlays.attach_viewport_overlay(self, _hotkey_palette)
 	# Selection filter popover (Window-based — not a Control, so managed manually)
 	_selection_filter = HFSelectionFilter.new()
+	HFTranslationType.adopt(_selection_filter)
 	_selection_filter.filter_applied.connect(_on_selection_filter_applied)
 	_selection_filter.filter_reported.connect(_on_selection_filter_reported)
 	EditorInterface.get_base_control().add_child(_selection_filter)
@@ -429,6 +436,7 @@ func _enter_tree():
 		_install_power_user_overlays()
 	# Space-key context menu (PopupMenu — added as child of base_control, not container)
 	_viewport_context_menu = HFViewportContextMenu.new()
+	HFTranslationType.adopt(_viewport_context_menu)
 	if base_control:
 		_viewport_context_menu.theme = base_control.theme
 	_viewport_context_menu.action_requested.connect(_on_viewport_action)
@@ -690,6 +698,7 @@ func _exit_tree():
 		_user_prefs.save()
 	_ensure_brush_stamp().disarm()
 	set_process(false)
+	HFTranslationType.unload()
 	# Last: a crash while closing leaves the journal too.
 	HFPluginCrashJournalType.teardown(self)
 

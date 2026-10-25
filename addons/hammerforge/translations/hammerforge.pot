@@ -1,0 +1,4510 @@
+# HammerForge's interface, for translators (#1702).
+# Written by tools/gen_pot.gd from the addon's scripts, scenes and command
+# registry. Do not edit it by hand: run godot --headless -s res://tools/gen_pot.gd --path .
+# docs/translating.md says how to start a language from it.
+msgid ""
+msgstr ""
+"Project-Id-Version: HammerForge\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8-bit\n"
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "(no visgroups)"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "0 KB"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "1x"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "A property, a test and a value: is, is not, >, <, or matches with * for any run.\nJoin more with and. An entity takes its own properties by name too."
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Accept"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Accept Finding"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn
+msgid "Active Material"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Add"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Add Material"
+msgstr ""
+
+#: addons/hammerforge/ui/entity_tab_builder.gd
+msgid "Add Output"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Add Sel"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Add Variant"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Add Variant..."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Add a cordon round the selected brushes"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Add a property to the rule"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Add from Selection"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Add selected brushes/entities to the highlighted visgroup"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Add the default of each property the class has and an entity is missing, leaving set ones alone"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Add the faces next to the selected faces, or the brushes touching the selected brushes."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Add the selected brushes and entities to a visgroup."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Add this output → target.input connection"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Add to Group"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Add to Visgroup"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Adjust Last"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Agent Climb / Slope"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Agent Size"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Align Grid to Selection"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Align Texture to Edge"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Align selected faces as a single unified surface"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Align to Edge"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Align to Face"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Align to Surface"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Align to World"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd addons/hammerforge/ui/hf_prefab_library.gd
+msgid "All"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "All Patterns"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "All wires"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_mcp_panel.gd
+msgid "Allow agent connections (MCP)"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_quick_property.gd
+msgid "Along the selection's own axes"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Amount"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Any material in the palette"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Apply"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Apply + Re-project (Box UV)"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Context Material"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Favorite 1"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Favorite 2"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Favorite 3"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Favorite 4"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Favorite 5"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Favorite 6"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Favorite 7"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Favorite 8"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Favorite 9"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Apply Last Texture"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Pending Cuts"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Apply Picked Look"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Apply Rotation and Scale"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Apply a preset"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Apply material"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Apply noise to displacement"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Apply selected preset to this entity"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Apply selected projection mode to selected face"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply the cuts waiting in Pending Cuts to the brushes they overlap."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply the pending cuts and bake."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply to Brush"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Apply to Selected Faces"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Apply to Whole Brush"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Arm a stamp of the brush the last Draw made; each click places one."
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Assign to Selected Faces"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Auto"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Auto mode builds stairs once the height difference reaches this, and a ramp below it"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Auto-cordon to selection, bake only that area, and play"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Auto-generate OccluderInstance3D nodes from large flat surfaces\nReduces draw calls via occlusion culling without manual placement"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Auto-generate ramps or stairs between height levels during bake\nRequires at least 2 paint layers at different heights"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Autosave failed!"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Autosave failed! Save manually."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Axis Lock"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Axis the ring turns about"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Axis:"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_tutorial_wizard.gd
+msgid "Back"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Back to World"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Bake"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Bake Preview Toggle"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Bake Preview — show wireframe of final mesh before committing"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Bake only brushes modified since last bake"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Bake only the currently selected brushes"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Bake the level and run it in one step"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Bake the level and run it to test."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Bake the level without starting play mode"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Bake the level."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Bake this cordon. Off keeps it for later"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Bake▷"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Bevel Edge"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Bevel radius (how far the bevel extends)"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Bevel the selected edge (vertex mode, edge sub-mode)"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/hf_command_registry.gd
+msgid "Blend"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Bottom"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Box"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Box UV"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Bring every linked copy of the selected prefab up to date with its file."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Bring the HammerForge dock forward — brushes, painting, entities."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Brush depth (Z)"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Brush entity classes"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Brush height (Y)"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Brush selected. Edit tools are now available above."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Brush width (X)"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Brushes"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Brushes: 0"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Bucket"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Bucket Fill"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Build"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Build a draw on the plane of the face it starts on."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Build the structure centred on the selection and facing the way it faces, or on the world origin"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "By Material"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "By Normal"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "By Visgroup"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "C"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Cancel"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Cancel Drag"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Cancel drag (Right-click)"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Carry the selected face's texture over an edge onto the next face you click."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Carve"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Cast Shadows:"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Cells along X, counting the original"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Cells along Y, counting the original"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Cells along Z, counting the original"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Cells:"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Center"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Center snap (brush centers)"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Centers"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Centre the texture on the selected faces."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Chain from selection"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Change the selected displacement to this power, keeping the sculpt"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Check the level for problems and list them."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Check the level without baking or running it"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Checking..."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Checks"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Choose a material to find and one to replace it with."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Choose a paint tool, then drag across the level."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Chunk Size"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Circle"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Classic Quake"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn addons/hammerforge/ui/hf_console_log_view.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Clear"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Clear Face Selection"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Clear Kept"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Clear Pending Cuts"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Clear Pivot"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Clear Run"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Clear rotation and keep position — Hollow, Clip and Carve need an unrotated brush"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Clear selection (Esc)"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_example_library.gd
+msgid "Clear the current level and load this example"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Click a brush vertex, edge or face to turn and flip about."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Click a change to select what it names. F frames it in the viewport."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Click a class to select every one of it."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Click a note to select it. F frames it in the viewport."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Clip"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd addons/hammerforge/plugin_edit_actions.gd
+msgid "Clip Brush"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Clip Selected (Shift+X)"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Clip Tool"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Clip to Convex"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Clip to Face Plane"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_example_library.gd addons/hammerforge/ui/hf_tutorial_wizard.gd
+msgid "Close"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_adjust_last_panel.gd
+msgid "Close Adjust Last"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Close Group"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Close the open group, one level, and select it."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_overlay_colors_panel.gd
+msgid "Colours"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_overlay_colors_panel.gd
+msgid "Colours that stay apart for the common kinds of colour blindness\nSolids and cuts differ in brightness as well as hue"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Comma-separated tags:"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Command Line"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_hotkey_palette.gd
+msgid "Command Palette"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Commit Cuts"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Compare With"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Compare with File"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_overlay_colors_panel.gd
+msgid "Compare: unchanged"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Cone"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Confirm Paint Connector"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Confirm the live ramp or stair ghost"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Connection Presets:"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Connector (Enter)"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Connector width in cells"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Context Menu"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Convert Entity Definitions to JSON"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Convert Selection → Heightmap"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Convert selected solid brushes into a sculptable heightmap layer\nUses mesh bounds (including displacements). Cut brushes are skipped."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Convert to Brushes"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Copies of the selected brushes in a line, each a step further on."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Copies of the selected brushes in rows, columns and layers."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Copies of the selected brushes turned in steps about an axis, rising as they go."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Copy"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Copy Name"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Copy the lines currently shown to the clipboard."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Copy the selected brushes and entities in place."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Cordon 1"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Corners"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Count in"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Count the whole level, what stands inside the active cordons, or one visgroup."
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Count:"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn
+msgid "Create"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Create Arch"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Create Array"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Create DraftEntity"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Create Starter Level"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Create Structure"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Create a duplicate array from the selected brushes, or update the one they belong to"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Create a new visgroup"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Create a ready-to-use level, or add an empty LevelRoot."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Create a starter level with floor, sun light, and player spawn"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Create displacement on selected quad face"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Create solid geometry"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Current"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Cut"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Cut the selected brush out of every brush it overlaps, after a preview."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Cut the selected brushes along the plane of the face picked in Face Select."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Cut the selected copy's link to its prefab, keeping what it is."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Cycle I/O Wires"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Cycle Prefab Variant"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Cylinder"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Cylindrical"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Debris/Prop (Layer 2) - the player falls through"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Decal Tool"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Degrees between copies"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Degrees per rotate press"
+msgstr ""
+
+#: addons/hammerforge/ui/entity_tab_builder.gd
+msgid "Delay:"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock_visgroup_handler.gd addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_io_wiring_panel.gd addons/hammerforge/ui/hf_prefab_library.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Delete"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Delete selected prefab file"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Delete the chosen preset from the project"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Delete the copies and the array they belong to"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Delete the cuts waiting in Pending Cuts."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Delete the highlighted visgroup"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Delete the later brush of each pair, as one undo step"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Delete the selected brushes and entities."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Delete the selected saved preset"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Descriptions"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Deselect All"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Destroy"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Detach"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Detach Structure"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_hotkey_palette.gd
+msgid "Did you mean: {command}?"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Discard Prefab Changes"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Displacement paint brush mode"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Displacement paint brush radius"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Displacement paint brush strength"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Distance to inset the face boundary"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_coach_marks.gd
+msgid "Don't show again"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_tutorial_wizard.gd
+msgid "Don't show at startup"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_tutorial_wizard.gd
+msgid "Done!"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Dots"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Double the grid step."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Down"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Drag an object into the viewport, then select it to edit."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Drag in the 3D viewport to create a solid brush."
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Drag vertically to set wall height for the last paint footprint"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Draw"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Draw (D)"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Draw - drag in the 3D viewport"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Draw Shape"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Draw a brush first, then return here to texture and paint it."
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Draw a volume that cuts through solid geometry"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Draw another brush, or choose Select to edit one."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Draw as Add"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Draw as Cut"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Draw boxes from now on."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Draw cones from now on."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Draw cylinders from now on."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Draw on Face"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Draw on Face: a draw that starts on a brush face builds on that face's plane.\nA Solid grows out of the face and a Cut into it."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Draw spheres from now on."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Draw the front of every brush face in one colour and the back in another, so a face pointing into its brush shows from outside. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Draw:"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Drawing"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Drop the selected faces or brushes on the edge of the selection."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Drop the selection onto the nearest surface below it."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Duplicate"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Duplicate Array"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "E"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Edge Mode"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Edge Sub-mode"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Edge Submode"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Edge snap (brush edge midpoints)"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Edges"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Edit HammerForge and Godot nodes separately"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Edit Properties"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Edit Tags"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Edit Tags..."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Edit the selected group's members one at a time, with the rest of the level faded. Escape closes it."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Editing"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Empty Root"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Empty the buffer and reset the session counts."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Enable Cordon"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Enable Face Select Mode and click a face to edit"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_console_panel.gd
+msgid "End Compare"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "End Isolate"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Enter variant name:"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Entities"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Entity I/O"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Entity Props"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/hf_command_registry.gd
+msgid "Erase"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Erase floor cells."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Est: — "
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Every HammerForge switch, grouped by what it affects."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_overlay_colors_panel.gd
+msgid "Every overlay colour back to its default"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Every wire; every wire reachable from the selected entities, outputs to their targets and inputs back to their sources, faded by hop; or only the selection's own"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Exit Vertex Mode"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Export .glb"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Export .map"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Export Entities"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Export Entities..."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Export Game Scene takes the level's own WorldEnvironment with it.\nOff, the game supplies its own. A playtest always uses the level's"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Export Plan"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Export Settings"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Extrude Down"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Extrude Down (J)\nClick face + drag to extrude downward"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Extrude Down (alt)"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Extrude Up"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Extrude Up (U)\nClick face + drag to extrude upward"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Extrude Up (alt)"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Extrude the inset face along its normal (0 = flat inset)"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Face"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Face Select Mode"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Faces: reach only faces in the plane of the one they border"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Faces: the most two neighbours' normals may differ by, in degrees"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Favorites"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Fill 360°"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Fill a connected area of floor cells."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Fill the settings from a preset saved for this type"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Filter shortcuts..."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Filter text..."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Filters by name and by description, so \"navmesh\" and \"pathfinding\" both find the same switch."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Find"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Find a setting..."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Find and Replace with are the same material."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Find any HammerForge action (Ctrl+K)"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Find the material the Texture Picker (T) last read"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Fire once"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Fit"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Fit Repeats"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Fit Strip"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Fit Texture Repeats"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Fit Trim Strip"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Fit U"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Fit V"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Fit one strip of a trim sheet, as the Paint tab's Strip sets it, to the selected faces."
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Fit that strip to each selected face, stretched along U"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Fit this cordon around the selected brushes"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Fix"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Flatten"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Flip"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Flip (Shift+M)"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Flip Selection"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Flip U"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Flip V"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Flip the texture left to right on the selected faces."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Flip the texture top to bottom on the selected faces."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Floor"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Floor Paint"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Fold rotation and scale into the brush's shape: nothing moves, and size reads in metres"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Fold the selected brushes' rotation and scale into their shape, so nothing moves."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Follow"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Forget the run Repeat Run plays, so the next command starts a new one."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Full"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Full: normal solid result (default). Wireframe: diagnostic topology view. Proxy: low-res solid."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "G"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Generate Noise"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give every face of the selected brushes the material selected in the browser."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected faces or brushes favorite 1 from the context toolbar."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected faces or brushes favorite 2 from the context toolbar."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected faces or brushes favorite 3 from the context toolbar."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected faces or brushes favorite 4 from the context toolbar."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected faces or brushes favorite 5 from the context toolbar."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected faces or brushes favorite 6 from the context toolbar."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected faces or brushes favorite 7 from the context toolbar."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected faces or brushes favorite 8 from the context toolbar."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected faces or brushes favorite 9 from the context toolbar."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected faces the picked face's material and alignment."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected faces their own texture mapping again."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selected group, or the open one, a new name."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selection the material clicked on the context toolbar."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Give the selection the material the Texture Picker last sampled."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Giz"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Go back to turning about the selection's centre."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Go back to what was shown before the last hide or isolate."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_coach_marks.gd
+msgid "Got it"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Grid"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Grid Array"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Grid Decrease"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Grid Down"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Grid Increase"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Grid Snap"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Grid Up"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Grid snap"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Group"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Group Sel (Ctrl+G)"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Group the current selection"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Group the selection under a name, so a click picks it all. Whole groups go in as groups."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Groups"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Grow / Shrink"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Grow Selection"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "HL"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Halve the grid step."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_status_strip.gd
+msgid "HammerForge"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "HammerForge — brush-based level editing for Godot."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Healthy"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Help"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Hidden: for a face nobody will see, such as the underside of a floor or the back of a wall against another. It keeps its collision, and the bake leaves it out of the mesh and the lightmap.\n\nClick: make the selected faces Hidden\nDrag onto a face: make it Hidden\nA material applied to a Hidden face shows it again"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_edit_actions.gd
+msgid "Hide Faces Against Solids"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_tutorial_wizard.gd
+msgid "Hide Guide"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide Selection"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide brush entities: doors, buttons, triggers and the rest in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide clip brushes, the collision the player cannot see in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide cut brushes, applied or waiting in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide decals in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide point entities: lights, sounds, props and logic in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide the I/O wires between entities in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide the brushes and entities of placed prefab copies in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Hide the checks that are already fine."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide the cordon boxes in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide the pieces of stairs, arches and the other structures in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide the selection until Show Hidden, without a visgroup."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide the striped Hidden faces in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide triggers, every brush entity whose class starts with trigger in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hide world brushes, the ones that are no cut, no clip brush and no brush entity in the editor, or show them again. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_overlay_colors_panel.gd
+msgid "High Contrast"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Highlight"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Highlight Connected"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Highlight Connected — pulse linked entities"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hold the next drag to the X axis."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hold the next drag to the Y axis."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hold the next drag to the Z axis."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Hollow"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Hollow (Ctrl+H)"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd addons/hammerforge/plugin_edit_actions.gd
+msgid "Hollow Brush"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_operation_replay.gd
+msgid "Hover an operation to see details"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "How baked meshes cast shadows. A brush in Selection Tools, or a visgroup, can choose its own; Shadows Only casts shadows without being seen"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "How far each copy climbs along the axis. Zero is a flat ring; anything else is a helix, and with a step box, a spiral stair."
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "How many equal strips the texture holds across V"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "How the highlighted visgroup's brushes cast shadows. A brush's own Cast Shadows beats it; between two visgroups, the one higher in this list wins"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "How these brushes cast shadows once baked. Level Default leaves it to their visgroups and then to Cast Shadows in Advanced Bake"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Hull Tool"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_edit_actions.gd
+msgid "Hull of Selection"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "I/O Connections"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "I/O Wiring"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Ignore the step and space the copies evenly around a closed ring"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Import .map"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Import Heightmap"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Import Settings"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Import..."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "In Use"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "In Vertex mode, pick corners."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "In Vertex mode, pick edges."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "In Vertex mode, switch between picking corners and edges."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "In selection"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "In:"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Input names the target entity class declares"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Inset Face"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Inset the selected face and create connecting side faces"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Intersect"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Invert Selection"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Isolate Selection"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Isolate Visgroups"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Its outputs stay as this copy has them through a Pull"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Join the selected brushes into one brush."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Justify Bottom"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Justify Center"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Justify Fit"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Justify Fit U"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Justify Fit V"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Justify Left"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Justify Right"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Justify Top"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Justify:"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Keep"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Keep First"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Keep nothing of this copy's own, and take the prefab's values again"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Keep only the volume the selected brushes share."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Keep texture alignment while moving, resizing, hollowing, or clipping brushes"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Keep the newest line in view. Turn this off to read back through the log\nwhile HammerForge is still writing to it."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Keep the ramp or stair ghost shown between painted layers."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Keep the selection and add copies mirrored across the ticked axes."
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Keep the selection and add mirrored copies across the ticked axes"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Keep these settings as a preset for this type, in the project"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_adjust_last_panel.gd
+msgid "Keep these settings under the name"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Keep this copy's value through a Pull. Push leaves it out of the prefab"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Keep which visgroups are shown now, under this name, with the level"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Keep wiring on this copy"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Kept in the project, so everyone on it has this profile"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Key already used"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Keyboard Shortcuts"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Label the selection's width, depth and height in the viewport."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Lay the selected trim run along the faces picked now in Face Select, keeping its settings"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Lay the texture along each selected face's own plane."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Lay the texture on the world's axes, so neighbouring faces line up."
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Layer"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Layer 0"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Layout:"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Lean the selection: one side moves along an axis and the opposite side stays put."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Leave Vertex mode."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Leave out of bake"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Left"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Let the face marquee take covered and back faces."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Level saved by a newer HammerForge"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Lift the selection to the nearest surface above it."
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Lightmap Scale:"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Lightmap detail on these brushes, against the level's Texel Size: 2 is twice as fine, 0.5 half. Takes effect with Lightmap UV2 on"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/hf_command_registry.gd
+msgid "Line"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Line the texture's bottom edge up with the faces' bottom edge."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Line the texture's left edge up with the faces' left edge."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Line the texture's right edge up with the faces' right edge."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Line the texture's top edge up with the faces' top edge."
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Linear: copies along an offset. Radial: copies around an axis. Grid: a 3D lattice of copies."
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Link"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Link Faces"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "List the findings accepted for this level, with Un-accept"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "List this finding again on every pass"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Live Brushes: 0"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_example_library.gd
+msgid "Load"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Load .hflevel"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Load Example Level"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Load Library"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Load Material Library"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_quick_property.gd
+msgid "Local"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Lock X"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Lock Y"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Lock Z"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Lock to X axis"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Lock to Y axis"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Lock to Z axis"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Locked"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Look only among what is selected now"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Lower"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Lower the drawing plane one grid step."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Make Brush Entity"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Make Faces Hidden"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Make Faces Normal"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Make Hidden every face of the selection that lies flat against another solid brush, after showing which."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Make a new visgroup holding the selected brushes and entities."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Make the selected convex mesh or CSG node a brush where it stands."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Make the selected faces one surface that shares one texture mapping."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Make the selected structure's pieces plain brushes, so an Update no longer rebuilds them."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Map export format"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Map targets:"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Mark the selected faces Hidden: they keep their collision, and the bake leaves them out of the mesh and the lightmap."
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Material"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Max (X, Y, Z):"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Max angle"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Measure"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Merge"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Merge Brushes"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Merge Vertices"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Merge the selected vertices into one at their middle."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Min (X, Y, Z):"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Min Area:"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Minimum coplanar face group area (world units²) to generate an occluder"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Mirror Copy"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Mirror Copy (Alt+M)"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Mirror Copy across X"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Mirror Copy across Y"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Mirror Copy across Z"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Mirror painting across the grid's X origin."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Mirror painting across the grid's Z origin."
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Mirror the selection across the locked axis, or X"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Mirror the selection in place across an axis."
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Mirror:"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Mixed selection: select only HammerForge objects to edit brushes."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Mode:"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "More"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Move the drawing plane to the selected face, vertices or brush top."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Move the selected trim run onto the wall faces picked in Face Select."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Move the selected vertices to their nearest grid points."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Move the selection a grid step with the arrow keys and Page Up and Page Down."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Move the selection, its vertices or its faces by a typed X, Y and Z."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Move to Ceiling"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Move to Floor"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Movement and drawing grid size, in metres"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_adjust_last_panel.gd addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Name"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Navmesh Cell"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Needs attention only"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "New"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "New Visgroup"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "New brushes, entities, structures and placed or pasted prefabs join the highlighted visgroup. Untick for none"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Next Pick: Centre Only"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Next Pick: Grid Only"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Next Pick: Midpoint Only"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Next Pick: Perpendicular Only"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Next Pick: Vertex Only"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "No Face"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "No LevelRoot in the scene — these switches turn on once a level is open."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "No connections"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "No face there wears that material."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "No lines match the current filter."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "No log attached."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "No materials loaded. Refresh Prototypes is under Material Library."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Noise"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Nothing compared. File > Compare With... in the dock compares the open level with a .hflevel."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Nothing logged yet."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Nothing logged yet. HammerForge writes here as you build."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Nudge"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Number of bevel segments (1 = chamfer)"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Number of copies to create"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "OK"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Objects"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Offset"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Offset..."
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Offset:"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "On Face"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "On: mirror across the far side of the selection's bounds on each axis, so each copy lands flush beside it. Off: mirror through the Pivot."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "OnTrigger"
+msgstr ""
+
+#: addons/hammerforge/ui/entity_tab_builder.gd
+msgid "Once"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Only bake geometry inside the cordons"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Open"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Open Editor Dock"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Open Group"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Open the Entities tab, where outputs and their targets are wired."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Open the Entities tab, where the selected entity's properties are edited."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Open the bug form in your browser, filled in with the versions, the level's\nstats and the latest log lines. Nothing is sent until you submit it there."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Open the context menu at the cursor."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Open the radial menu, when Power-user overlays are on."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Open the selection filters, which pick by kind, material and more."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Open the structure builder: stairs, arches, domes and the rest."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Operation Replay Timeline"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_operation_replay.gd
+msgid "Operation Timeline"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Opt-in one-cell cleanup: denoise, hole fill, gap bridge, corridor width"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Out:"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Output names this entity class declares"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Outputs:"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "P"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Pack material textures into a single atlas to reduce draw calls (requires Face Materials)"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn addons/hammerforge/hf_command_registry.gd
+msgid "Paint"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Paint Brush"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Paint Mode"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Paint a line of floor cells."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Paint a rectangle of floor cells."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Paint floor cells."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Paint the blend between ground materials."
+msgstr ""
+
+#: addons/hammerforge/dock.tscn addons/hammerforge/ui/hf_material_browser.gd
+msgid "Palette"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Paste"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Paste Here"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Paste at Cursor"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Path Tool"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Perp"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Perpendicular snap (drop onto brush edges)"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Physics Layer"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Pick Layer Texture"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Pick Material"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Pick Mesh..."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Pick Pivot"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Pivot:"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Place Entity Here"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Place Prefab"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Place an entity on the surface under the cursor, standing on it."
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Place foliage instances permanently"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Place the prefab chosen in the library at the cursor."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Place what is on the clipboard standing on the point under the cursor."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Place what is on the clipboard where it was copied from, or .map text copied since at the cursor."
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Planar X"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Planar Y"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Planar Z"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Play"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Play or stop it here. It stops when the selection changes"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Play the commands, moves and turns made since the selection last changed by hand again, on the current selection, as one undo step."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Point entity classes"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Polygon Tool"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Prefab name..."
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Preset name"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock_entity_handler.gd
+msgid "Preset:"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_hotkey_palette.gd
+msgid "Press Enter to execute, Esc to close  |  Ctrl+K"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Preview"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Previous Visibility"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Projection:"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Propagate Prefab"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Properties"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Property, such as energy"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Prototypes"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Proxy"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Pulse every entity wired to the selected one."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Push to Source"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Put back the last change undone."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Put each face's UV scale, offset and rotation back to none\nOff, the faces keep how their texture was laid"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Put each selected brush's corner, or entity's origin, on the grid."
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Put every property back to its class default"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Put the class default back"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Put the drawing plane back at the level's origin, flat."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Put the selection in the group picked in the Groups list, or the open one, groups as groups."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Put the selection on the clipboard."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Quick Bake"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Quick Play"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Quick Play — Spawn Warning"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Quick Save Linked Prefab"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Quick Select"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Quick Wire:"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "R"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Radial Array"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Radial Menu"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Raise"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Raise (Y)"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Raise Painted Walls"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Raise the drawing plane one grid step."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Raise walls round the last painted footprint."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Ramp"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Ramp / Rect"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Ramp: smooth slope; Stairs: stepped; Auto: stairs once the height difference reaches the Stair Threshold"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Random Rotation"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Re-check"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Re-hollow"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Re-pick"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Re-pick Trim Run"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Re-project UVs"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Re-run every check now, including the level scan, which is too slow to\nrun on the panel's own refresh."
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn
+msgid "Ready"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Rebuild each brush with vertices selected from its convex hull, when it is no longer convex."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Rebuild the selected linked copy from its prefab, dropping its changes."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Rebuild the selected structure from the settings in its section."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Recent"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Rect"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_history_browser.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Redo"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Refresh"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Refresh Prototypes"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Rem Sel"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Remove"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Remove Array"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Remove Favorite"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Remove Output"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Remove Unused"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Remove Variant"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Remove Variant..."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Remove displacement from selected face"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Remove from Group"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Remove scatter preview"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Remove selected brushes/entities from the highlighted visgroup"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Remove selected brushes/entities from their group"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Remove this cordon. The last one cannot go"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock_visgroup_handler.gd
+msgid "Rename"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Rename Group"
+msgstr ""
+
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "Rename Layer"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Rename Preset"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Rename Visgroup"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Rename the highlighted visgroup"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Repeat Last Brush"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Repeat Last Command"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Repeat Run"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_hotkey_palette.gd
+msgid "Repeat Run: {commands}"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Repeat the last rectangle as a floor with walls round it."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_hotkey_palette.gd
+msgid "Repeat: {command}"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Repeats"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Replace Material"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_material_browser.gd
+msgid "Replace Material..."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Replace Prefab"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Replace Structure Preset"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Replace the selected brushes with one brush around them all, touching or not."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Replace with"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Replace..."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_operation_replay.gd
+msgid "Replay"
+msgstr ""
+
+#: addons/hammerforge/plugin_problem_report.gd addons/hammerforge/ui/hf_console_panel.gd
+msgid "Report a Problem"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Rescan prefab directory"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd addons/hammerforge/ui/hf_overlay_colors_panel.gd
+msgid "Reset"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Reset Grid"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Reset Projected UVs"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Reset Rotation"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Reset Rotation (Alt+R)"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Reset UVs"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Reset to Default"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Restart the interactive getting-started guide"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Right"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Rise:"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Room (H)"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Rotate"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Rotate 90"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Rotate CCW"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Rotate CW"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Rotate clockwise about the locked axis, or Y"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Rotate counter-clockwise about the locked axis, or Y"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Rotate instances to match terrain normal"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_command_line.gd
+msgid "Run Command Script"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_command_line_view.gd
+msgid "Run Script..."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Run Trim Along Faces"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Run a skirting or cornice along the wall faces picked in Face Select."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_command_line_view.gd
+msgid "Run a text file of commands, one a line, each its own undo step."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Run the last command again on the current selection, with the same settings."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Same plane only"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Sample a face's material and its whole look, for Apply Last Texture and Apply Picked Look."
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_adjust_last_panel.gd addons/hammerforge/ui/hf_io_wiring_panel.gd addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Save"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Save .hflevel"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Save HammerForge log"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Save Library"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Save Linked"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Save Material Library"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Save Selection as Prefab"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Save View"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Save a .tscn the game loads: the same geometry and the same real lights,\ndoors and triggers as a playtest, with no debug player, sun or environment"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Save as live-linked prefab (edits propagate)"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Save current selection as prefab"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Save into the project, so the team has it"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Save the selected brushes and entities as a prefab."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Save the selection as a prefab and make it a linked copy of the file."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Save this entity's connections as a new preset"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Save..."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_adjust_last_panel.gd
+msgid "Saved settings"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Scale"
+msgstr ""
+
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Scale Vertices"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Scale Vertices..."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Scale multiplier for displacement heights"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Scale the selected vertices by typed factors, about their middle or the picked pivot."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Scan for bake problems: degenerate brushes, floating cuts, overlapping cuts"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Scatter"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Sculpt:"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_hotkey_palette.gd
+msgid "Search actions..."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_example_library.gd
+msgid "Search examples..."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Search prefabs..."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Search textures..."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Searchable keyboard shortcut reference"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn addons/hammerforge/dock_manage_handler.gd addons/hammerforge/hf_command_registry.gd
+msgid "Select"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Select (S)"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Select All"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Select Brushes Using This"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Select Column"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Select Faces Using This"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Select Group"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Select Inside"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select Inside, with the selected brush's footprint running from the bottom of the level to the top."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select Linked Copies"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select Linked Faces"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Select Partly Inside"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_selection_filter.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Select Similar"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Select Terrain Texture"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Select Touching"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Select With This Brush"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Select a brush to use these tools"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Select a mesh resource for scattering"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select brushes or entities by a typed rule, such as class is light_point and energy > 2."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select every brush and entity."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select every brush at least partly inside the selected brush."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select every brush that touches or overlaps the selected brush."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select every brush wholly inside the selected brush, and every entity in it."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select every copy linked to the selected copy's prefab."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select every face linked with the selected face."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select nothing: brushes, entities and faces."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Select only brushes to use brush editing tools."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select the faces, brushes or entities like the ones selected, on what Selection Filters ticks."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select the picked face's material in the material browser."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Select what is not selected, and drop what is."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Selected faces and brushes"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Selection"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Selection Edge"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Selection Filters"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Selection Filters..."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Selection only"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Selection: the centre of the selected objects. World Origin: (0, 0, 0). Active: the first selected object. Pick: a brush vertex, edge midpoint or face centre you click in the viewport, marked with a cross; Pick Pivot (Alt+P) picks again, Clear Pivot (Shift+Alt+P) goes back to Selection."
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Set Autosave Path"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Set Grid Snap"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Set as Active Material"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Set from Selection"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Set the grid step to a value."
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Set this entity's values from a named preset, as one undo step"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_adjust_last_panel.gd
+msgid "Settings saved under a name for this command"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Sew"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Sew adjacent displacements sharing a sew group"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Sew group ID (-1 = none)"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Shape"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Shape Box"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Shape Cone"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Shape Cylinder"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Shape Sphere"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_edit_actions.gd
+msgid "Shear"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Shear Tool"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Shell the selected brush into walls of the set thickness, after a preview."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Show All"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show Face Direction"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show Hidden"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Show Material in Browser"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show Selection Size"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Show accepted (0)"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_example_library.gd
+msgid "Show annotations explaining the design"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Show density preview at current selection"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Show every kind again"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Show exactly that many repeats, ending at both edges"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Show only lines containing this text."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show only the selection, whatever visgroups it is in."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show only the visgroups the selection is in."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide Brush Entities"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide Clip Brushes"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide Cordons"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide Cut Brushes"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide Decals"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide Hidden Faces"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide I/O Wires"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide Point Entities"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide Prefab Copies"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide Structures"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide Triggers"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or Hide World Brushes"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or hide the grid."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or hide the operation replay timeline, when Power-user overlays are on."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show or hide the texture gizmo, which slides, stretches and turns a face's texture by dragging."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show the Paint tab's count of whole repeats across the selected faces."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show the bake as a wireframe over the brushes, or stop showing it."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show the selected Hidden faces again, in the material they had."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show the settings the last command ran with, to change them and make its step again."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show what Hide Selection and an isolate hid."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show what an isolate hid."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Show what changed since another .hflevel, outlined in the viewport and listed in the Console."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Show what each switch does under its name. Turn off to fit more on\nscreen — the same text stays on the tooltips."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Shown brushes only"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Shown in the editor. The level and the bake are not changed."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Shrink Selection"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Sides"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Size"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_tutorial_wizard.gd
+msgid "Skip Step"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Skip hidden visgroups and invisible brushes during bake"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Slot B"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Slot C"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Slot D"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Smooth"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Smooth entire displacement surface"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Smoothing"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Smoothing group of the selected faces. 0 shades them flat; faces in the same group above 0 shade round where they meet, across brushes, in the bake"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Snap Vertices to Grid"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Snap presets, snap targets, axis locks, and collision layer."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Snap to Grid"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Snap to Grid (Ctrl+B)"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Snap:"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Solid"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Some kinds are hidden by View Filters. Click to show them all"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Spatial chunk size for bake grouping (0 = no chunking)\nThe status board recommends one once the level is big enough to want it"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Sphere"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Spline"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Split Edge"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Split the selected brush in two across its middle, after a preview."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Split the selected edge at its middle."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Square"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Stair Threshold:"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Stair step height (world units)"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Stairs"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Stamp Painted Room"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Stamp a room using the last Rect size"
+msgstr ""
+
+#: addons/hammerforge/dock.tscn
+msgid "Start building with HammerForge"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Start here: create the Starter Level above."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Start the Clip tool, which cuts the selected brushes along a plane you place."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Start the Decal tool, which places a decal on the surface you click."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Start the Hull tool: click points, or a face's corners, and Enter makes one brush around them."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Start the Measure tool, which draws rulers between points."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Start the Path tool, which builds a corridor of brushes along the points you click."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Start the Polygon tool: click an outline on the ground, then drag its height."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Start the Shear tool: drag a handle on a side of the selection's box to lean everything between."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Static World (Layer 1) - the player walks on it"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Step H:"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Step the I/O wires through none, all, the selection's chain and its own."
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Step:"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Step°:"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Stop the drag in progress and clear any typed number."
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Stop these walls being re-shelled, and keep them as ordinary brushes"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Stop this array being rebuilt, and keep its copies as ordinary brushes"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Stop this structure being rebuilt, and keep its brushes as ordinary geometry"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Stretch the texture across the selected faces' height only."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Stretch the texture across the selected faces' width only."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Stretch the texture to fit the selected faces."
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Strip"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_example_library.gd
+msgid "Study This"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Subdivision: 2=5x5, 3=9x9, 4=17x17\nUsed by Create, and by Apply for a face that already has a displacement"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Surface"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Surface Paint"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Swap"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Swap one material for another on every face that wears it."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Switch the next brush you draw between Solid and Cut."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Switch the selected prefab copy to its next variant."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Switch to Draw, which makes brushes with two clicks."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Switch to Extrude Down, outside Paint and Vertex modes."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Switch to Extrude Down: drag a face to push a cut into it."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Switch to Extrude Up: drag a face to grow a brush out of it."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Switch to Extrude, outside Paint and Vertex modes: up, or down when its Direction says so."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Switch to Select, which picks brushes and entities."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Tag:"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Take a compare's outlines off the viewport."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Take back the last change."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Take the compare's outlines off the viewport"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Take the selected groups apart one level."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Take the selection out of the group picked in the Groups list, or the open one, and leave the rest of it."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Teleport spawn to current editor camera position and play"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Test"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn
+msgid "Test Level  (Bake + Play)"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Texel Size"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Texture Gizmo"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Texture Gizmo: drag in the viewport to slide, stretch and turn the texture"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Texture Lock"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Texture Picker"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Texture..."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "The bake profile Export Game Scene bakes with. The level's own options\ncome back afterwards, with no undo step, so editing carries on as it was"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "The cordon the bounds below edit"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_tutorial_wizard.gd
+msgid "The core loop is Draw -> Test Level. Paint and Objects are optional; open Learn or Actions whenever you want more."
+msgstr ""
+
+#: addons/hammerforge/plugin_problem_report.gd
+msgid "The form opens in your browser. Nothing is sent until you submit it there."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "The highlighted visgroup stays visible and editable, and no bake or export takes it: guide brushes, a scale figure, a reference copy"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "The highlighted visgroup's brushes and entities are drawn faded, and nothing selects or changes them: no tool, command or agent. Godot's lock in the Scene dock does the same"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "The materials the level's faces wear, and how many faces wear each"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "The next click snaps only to a brush's centre, then every snap that was on returns."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "The next click snaps only to a vertex, whatever snaps are on, then they all return."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "The next click snaps only to the foot of a perpendicular on an edge, then every snap returns."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "The next click snaps only to the grid, even with Grid off, then every snap that was on returns."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "The next click snaps only to the middle of an edge, then every snap that was on returns."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "The property Property compares"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "The selected entities' colours differ"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "The steepest slope an agent can walk, in degrees. The same question for ramps."
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "The tallest step an agent can walk up. Below the stair height this level builds, and nothing in the game can use its stairs."
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "This cordon's name"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "This is meant: stop listing it until what it names changes"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "This prefab has no variants beyond its base."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Thumbnail size"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Tie"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Tie the selected brushes to a brush entity class, such as a trigger or a door."
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "To Ceiling (Ctrl+Shift+C)"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "To Floor (Ctrl+Shift+F)"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "To:"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Toggle Face X-ray"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Toggle Favorite"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Toggle Grid"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Toggle Highlight Connected — pulse linked entities"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Toggle Paint Mirror X"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Toggle Paint Mirror Z"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Toggle Paint Mode"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Toggle Solid / Cut"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Toggle Solid/Cut: click to switch"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Tools"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Top"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Transform"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Treat as One"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Trigger Only (Layer 3) - the player falls through"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Turn Vertex mode on or off, to move the selected brushes' corners and edges."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Turn floor Paint mode on or off."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Turn floor Paint mode on."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Turn the selection a step clockwise."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Turn the selection a step counterclockwise."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Turn the selection back to no rotation."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Turn the texture a quarter turn on the selected faces."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Turn the texture to run along an edge of each selected face, the next edge each time."
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Turn the texture to run along an edge of each selected face. Press again for the next edge"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_command_line_view.gd
+msgid "Type a command and its values, such as hollow 0.125"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Type a command and its values, such as hollow 0.125, on a line over the viewport."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_info.gd
+msgid "Type a place and press Enter, or leave the field, to move the vertex there"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Type number + Enter during drag for exact size"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Type:"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "UV Flip U"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "UV Flip V"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "UV Operations"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "UV Rotate 90"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "UV Transform:"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "UV offset X"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "UV offset Y"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "UV rotation in degrees"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "UV scale X"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "UV scale Y"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Un-accept"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_history_browser.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Undo"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Ungroup"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Ungroup (Ctrl+U)"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Unlink"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Unlink Faces"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Unlink Prefab Copy"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Untick to hide every one in the editor"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Untie"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Untie the selected brushes from their brush entity, so they are plain world brushes."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Up"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Update Structure"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Use Picked"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "V"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Validate Level"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Validate, bake optimized, and launch as playable scene"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Valve 220"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "Variant to remove:"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Vertex"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Vertex Clip Convex"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Vertex Edit"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Vertex Edit (V)\nSelect and drag brush vertices"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Vertex Exit"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Vertex Split"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Vertex Sub-mode"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Vertex Submode"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Vertex snap (brush corners)"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "View name"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Views:"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Visgroup name"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Visibility states saved with the level"
+msgstr ""
+
+#: addons/hammerforge/playtest_fps.gd
+msgid "WASD move\nShift sprint\nSpace jump\nCtrl crouch\nEsc capture mouse"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Wall:"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "What to build"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Where"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Whether toasts, the HUD and the context toolbar slide and fade\nFollow system does what the system's own setting asks"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Which kinds of check Validate runs. Kept for the whole project in hammerforge_presets/validation_checks.json"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Which physics layer the baked world is on. Godot's own bodies and rays default to layer 1, so anything else needs a game that looks there."
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Which strip of the trim sheet, counted down from the top"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Whole level"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Whole repeats across; 0 keeps the texture's aspect"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Whole repeats down; 0 keeps the texture's aspect"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Why this is fine, such as decorative, not walked"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Width:"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "Wire Connection"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Wireframe"
+msgstr ""
+
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Wires:"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Workflow"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_quick_property.gd
+msgid "World"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Wrap"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Wrap Texture"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Write Defaults"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Write every entity in this scope to a CSV, one row each, one column per property."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Write the entity classes the level reads from an FGD as an entities.json beside it, to edit them in that form."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Write the lines currently shown to a text file."
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Write the selected linked copy's changes back to its prefab file."
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/selection_tools_builder.gd
+msgid "X"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "X offset per copy"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "X-ray"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Y"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Y offset per copy"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_tutorial_wizard.gd
+msgid "You're ready"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Z"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "Z offset per copy"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_prefab_library.gd
+msgid "e.g. wooden, metal, ornate"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "entity_name"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "func_detail"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "func_wall"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "mixed"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "name (optional)"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "of"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "param"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "spacing = offset"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "trigger_multiple"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "trigger_once"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_adjust_last_panel.gd
+msgid "x"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "x2"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "↺ CCW (R)"
+msgstr ""
+
+#: addons/hammerforge/ui/selection_tools_builder.gd
+msgid "↻ CW (Shift+R)"
+msgstr ""

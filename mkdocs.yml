@@ -79,6 +79,7 @@ nav:
   - Reference:
       - Commands: commands.md
       - Glossary: glossary.md
+      - Translating HammerForge: translating.md
       - Parity with Classic Editors: parity.md
       - Design Constraints: HammerForge_Design_Constraints.md
       - Performance and Limits: HammerForge_Performance.md
