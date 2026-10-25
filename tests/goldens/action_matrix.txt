@@ -2542,6 +2542,20 @@ variety/brush:box 6.0,2.0,0.0 3.1x2.6x3.2/face:+z: extrude ~clip_to_face materia
 variety/brush:box 6.0,2.0,0.0 3.1x2.6x3.2/face:-x: extrude ~clip_to_face material wrap_texture justify
 variety/brush:box 6.0,2.0,0.0 3.1x2.6x3.2/face:-y: extrude ~clip_to_face material wrap_texture justify
 variety/brush:box 6.0,2.0,0.0 3.1x2.6x3.2/face:-z: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 70.0,0.5,0.0 4.0x1.0x4.0: hollow ~clip ~carve !merge flip ~move_to_floor ~reset_rotation mirror_copy
+variety/brush:box 70.0,0.5,0.0 4.0x1.0x4.0/face:+x: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 70.0,0.5,0.0 4.0x1.0x4.0/face:+y: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 70.0,0.5,0.0 4.0x1.0x4.0/face:+z: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 70.0,0.5,0.0 4.0x1.0x4.0/face:-x: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 70.0,0.5,0.0 4.0x1.0x4.0/face:-y: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 70.0,0.5,0.0 4.0x1.0x4.0/face:-z: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 74.0,0.5,0.0 4.0x1.0x4.0: hollow ~clip ~carve !merge flip ~move_to_floor ~reset_rotation mirror_copy
+variety/brush:box 74.0,0.5,0.0 4.0x1.0x4.0/face:+x: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 74.0,0.5,0.0 4.0x1.0x4.0/face:+y: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 74.0,0.5,0.0 4.0x1.0x4.0/face:+z: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 74.0,0.5,0.0 4.0x1.0x4.0/face:-x: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 74.0,0.5,0.0 4.0x1.0x4.0/face:-y: extrude ~clip_to_face material wrap_texture justify
+variety/brush:box 74.0,0.5,0.0 4.0x1.0x4.0/face:-z: extrude ~clip_to_face material wrap_texture justify
 variety/brush:cone 36.0,1.0,0.0 2.0x2.0x2.0: hollow ~clip ~carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 variety/brush:cone 36.0,1.0,0.0 2.0x2.0x2.0/face:+x: extrude ~clip_to_face material wrap_texture justify
 variety/brush:cone 36.0,1.0,0.0 2.0x2.0x2.0/face:+x#2: extrude ~clip_to_face material ~wrap_texture justify

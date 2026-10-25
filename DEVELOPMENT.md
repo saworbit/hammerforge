@@ -894,7 +894,8 @@ demand from the Actions tab, for the checks too slow for every pull request
   runs every brush action on every brush and every face action on every face of
   the levels in `tests/levels/`, and of a level it builds itself with what those
   lack, turned and tilted brushes, wedges, prisms, cylinders, a slanted cut, a
-  brush entity and a structure (`tests/support/matrix_variety_level.gd`): hollow,
+  brush entity, a structure and two displaced tops sewn together
+  (`tests/support/matrix_variety_level.gd`): hollow,
   clip, carve, merge with a neighbour, flip, move to floor, reset rotation and
   mirror copy; extrude, clip to face, material, Wrap Texture and justify. A try
   passes when it changes the level with no script error, leaves the brushes it
