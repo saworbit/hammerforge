@@ -800,8 +800,39 @@ static func _note_array(
 ) -> void:
 	if not dock.has_signal("command_ran"):
 		return
-	var recipe := {"action": action, "method": method, "args": args, "absolute_redo": false}
+	var recipe := {
+		"action": action,
+		"method": method,
+		"args": args,
+		"absolute_redo": false,
+		"dock": _array_to_dock.bind(dock, id),
+	}
 	dock.command_ran.emit(id, settings, recipe)
+
+
+## An array's settings changed in Adjust Last, on the dock's array controls too,
+## so the next press of the button and Repeat Last Command make it so (#1896).
+static func _array_to_dock(settings: Dictionary, dock: Object, id: String) -> void:
+	if not is_instance_valid(dock):
+		return
+	var spins := {
+		"count": dock.dup_count_spin,
+		"step": dock.dup_step_spin,
+		"rise": dock.dup_rise_spin,
+		"count_x": dock.dup_grid_x,
+		"count_y": dock.dup_grid_y,
+		"count_z": dock.dup_grid_z,
+	}
+	for key in spins:
+		if settings.has(key) and spins[key]:
+			(spins[key] as SpinBox).value = float(settings[key])
+	var along: Variant = settings.get("offset", settings.get("spacing"))
+	if along is Vector3 and dock.dup_offset_x:
+		dock.dup_offset_x.value = (along as Vector3).x
+		dock.dup_offset_y.value = (along as Vector3).y
+		dock.dup_offset_z.value = (along as Vector3).z
+	if id == "radial_array" and settings.has("axis") and dock.dup_axis_opt:
+		dock.dup_axis_opt.selected = maxi(0, AXES.find(str(settings["axis"])))
 
 
 ## Draw a ghost of the copies the button would make, before it makes them.
