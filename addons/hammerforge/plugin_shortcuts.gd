@@ -18,6 +18,7 @@ const HFPluginPaintInput = preload("plugin_paint_input.gd")
 const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
 const HFPluginSnapFeedbackType = preload("plugin_snap_feedback.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
+const HFPluginGroupsType = preload("plugin_groups.gd")
 const HFPluginVertexOpsType = preload("plugin_vertex_ops.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -245,6 +246,9 @@ static func cancel_escape_step(plugin: Object, root: Node) -> bool:
 	# second Escape (or the first when no face is selected) exits the mode and
 	# restores the object selection hidden on entry.
 	if plugin._close_face_select_mode("Face Select closed"):
+		return true
+	# An open group closes a level at a time, and selects what it closed (#1723).
+	if HFPluginGroupsType.close_group(plugin, root):
 		return true
 	if not plugin.hf_selection.is_empty():
 		plugin.hf_selection.clear()

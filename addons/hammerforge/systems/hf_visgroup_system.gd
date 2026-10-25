@@ -24,6 +24,12 @@ var visgroups: Dictionary = {}
 
 # Groups: name -> true (registry only; membership stored on nodes via meta)
 var groups: Dictionary = {}
+## Which group each nested group is inside, child name to parent name (#1723). A
+## group with no entry is at the top. A node's `group_id` is its innermost group.
+var group_parents: Dictionary = {}
+## The group open for editing its members one at a time, or "". The editor's
+## state, not the level's: never saved, and never an undo step.
+var open_group := ""
 
 ## Named visibility states, kept with the level: name -> {visgroup name: visible}
 ## (#1697).
@@ -358,10 +364,12 @@ func refresh_visibility() -> void:
 	# _all_managed_nodes() does not reach them.
 	for node in _all_managed_nodes():
 		node.visible = shown_ignoring_view_filters(node) and not view_filter_hides(node)
-		# A locked brush is drawn faded. Its own mesh, which no bake copies.
+		# A locked brush is drawn faded, and so is one outside an open group
+		# (#1723). Its own mesh, which no bake copies.
 		var mesh = node.get("mesh_instance")
 		if mesh is GeometryInstance3D:
-			(mesh as GeometryInstance3D).transparency = LOCKED_FADE if is_locked(node) else 0.0
+			var faded := is_locked(node) or not inside_open_group(node)
+			(mesh as GeometryInstance3D).transparency = LOCKED_FADE if faded else 0.0
 
 
 # ===========================================================================
@@ -583,10 +591,311 @@ func create_group(group_name: String) -> void:
 
 func remove_group(group_name: String) -> void:
 	group_name = group_name.strip_edges()
-	groups.erase(group_name)
+	_dissolve(group_name)
+
+
+## `base`, or `base` with the first number after it that no group has: "Group of
+## 6 brushes 2".
+func unique_group_name(base: String) -> String:
+	var stripped := base.strip_edges()
+	if stripped == "":
+		stripped = "Group"
+	if not groups.has(stripped):
+		return stripped
+	var n := 2
+	while groups.has("%s %d" % [stripped, n]):
+		n += 1
+	return "%s %d" % [stripped, n]
+
+
+## Rename a group, its place in the order, the groups inside it and its own
+## members (#1723). False when the new name is empty or another group's.
+func rename_group(old_name: String, new_name: String) -> bool:
+	var stripped := new_name.strip_edges()
+	if not groups.has(old_name) or stripped == "" or groups.has(stripped):
+		return false
+	var renamed: Dictionary = {}
+	for key in groups:
+		renamed[stripped if key == old_name else key] = groups[key]
+	groups = renamed
+	if group_parents.has(old_name):
+		group_parents[stripped] = group_parents[old_name]
+		group_parents.erase(old_name)
+	for child in group_parents:
+		if group_parents[child] == old_name:
+			group_parents[child] = stripped
+	for node in _all_managed_nodes():
+		if str(node.get_meta("group_id", "")) == old_name:
+			node.set_meta("group_id", stripped)
+	if open_group == old_name:
+		open_group = stripped
+	return true
+
+
+## The group `group_name` is inside, or "" at the top.
+func parent_of_group(group_name: String) -> String:
+	return str(group_parents.get(group_name, ""))
+
+
+## `group_name` and each group around it, out to the top.
+func group_path(group_name: String) -> Array:
+	var out: Array = []
+	var at := group_name
+	# A parent that names a group already passed is a loop a hand edit made; it
+	# ends the walk rather than going round it.
+	while at != "" and groups.has(at) and not out.has(at):
+		out.append(at)
+		at = parent_of_group(at)
+	return out
+
+
+## The groups `node` is in, its own first, out to the top.
+func group_chain_of(node: Node) -> Array:
+	return group_path(get_group_of(node)) if node else []
+
+
+## How many groups `group_name` is inside.
+func group_depth(group_name: String) -> int:
+	return maxi(0, group_path(group_name).size() - 1)
+
+
+## The groups directly inside `group_name`, in the groups' order.
+func child_groups(group_name: String) -> Array:
+	var out: Array = []
+	for key in groups:
+		if parent_of_group(str(key)) == group_name:
+			out.append(str(key))
+	return out
+
+
+## Every node in `group_name`, in a group inside it or in it directly.
+func group_members_deep(group_name: String) -> Array:
+	var out: Array = []
+	if group_name == "":
+		return out
+	for node in _all_managed_nodes():
+		if group_chain_of(node).has(group_name):
+			out.append(node)
+	return out
+
+
+## What a click on `node` selects: the outermost group it is in, or with a group
+## open, the group one level inside the open one. "" for the node alone: one in
+## no group, or one of the open group's own.
+func selection_unit_of(node: Node) -> String:
+	var chain := group_chain_of(node)
+	if chain.is_empty():
+		return ""
+	if open_group == "":
+		return str(chain.back())
+	var at := chain.find(open_group)
+	if at <= 0:
+		return ""
+	return str(chain[at - 1])
+
+
+## Whether `node` can be picked while a group is open: it is inside that group,
+## or none is open.
+func inside_open_group(node: Node) -> bool:
+	return open_group == "" or group_chain_of(node).has(open_group)
+
+
+## Open `group_name` so its members are picked one at a time and the rest of the
+## level is faded. "" closes it.
+func set_open_group(group_name: String) -> void:
+	open_group = group_name if groups.has(group_name) else ""
+	refresh_visibility()
+
+
+## Group Selection (#1723): a new group holding the selection, made inside the
+## open group when there is one. A whole group in the selection goes in as a
+## group, and a node on its own as a member.
+func group_units(group_name: String, nodes: Array) -> void:
+	var stripped := group_name.strip_edges()
+	if stripped == "":
+		return
+	var units := units_of(nodes)
+	create_group(stripped)
+	if open_group != "" and open_group != stripped:
+		group_parents[stripped] = open_group
+	for unit in units["groups"]:
+		if unit != stripped and not group_path(stripped).has(unit):
+			group_parents[unit] = stripped
+	for node in units["nodes"]:
+		node.set_meta("group_id", stripped)
+
+
+## Ungroup (#1723): the selected groups taken apart one level, their members and
+## the groups in them going to the group around them. With a group open, a node
+## of its own leaves it.
+func ungroup_units(nodes: Array) -> void:
+	var units := units_of(nodes)
+	for unit in units["groups"]:
+		_dissolve(unit)
+	if open_group != "":
+		var around := parent_of_group(open_group)
+		for node in units["nodes"]:
+			if get_group_of(node) == open_group:
+				node.set_meta("group_id", around)
+		_cleanup_empty_group(open_group)
+
+
+## Add to Group (#1723): the selection into `group_name`, groups as groups and
+## nodes as members. A group that holds `group_name` stays where it is.
+func add_units_to_group(nodes: Array, group_name: String) -> void:
+	if not groups.has(group_name):
+		return
+	var units := units_of(nodes)
+	for unit in units["groups"]:
+		if unit != group_name and not group_path(group_name).has(unit):
+			group_parents[unit] = group_name
+	for node in units["nodes"]:
+		node.set_meta("group_id", group_name)
+
+
+## Remove from Group (#1723): what of the selection is in `group_name`, out to
+## the group around it, without taking the rest apart.
+func remove_units_from_group(nodes: Array, group_name: String) -> void:
+	if not groups.has(group_name):
+		return
+	var around := parent_of_group(group_name)
+	var moved: Dictionary = {}
+	for node in nodes:
+		if not (node is Node) or not is_instance_valid(node):
+			continue
+		var chain := group_chain_of(node)
+		var at := chain.find(group_name)
+		if at < 0:
+			continue
+		if at == 0:
+			node.set_meta("group_id", around)
+		else:
+			moved[str(chain[at - 1])] = true
+	for unit in moved:
+		_set_parent(unit, around)
+	_cleanup_empty_group(group_name)
+
+
+## Duplicate (#1723): a group whose members are all among `originals` is copied
+## as a new group, "<name> copy", inside the copy of its parent when that is
+## copied too and otherwise beside it. The copies' infos are given the new names;
+## a copy of a node whose group is not all copied stays in it, as a copy made
+## inside an open group should. Returns the new groups, name to parent, outer
+## ones first, for `add_groups()` to make.
+func regroup_copies(originals: Array, brush_infos: Array, entity_infos: Array) -> Dictionary:
+	var copied: Dictionary = {}
+	var involved: Array = []
+	for node in originals:
+		if not (node is Node) or not is_instance_valid(node):
+			continue
+		copied[node] = true
+		for group_name in group_chain_of(node):
+			if not involved.has(group_name):
+				involved.append(group_name)
+	if involved.is_empty():
+		return {}
+	involved.sort_custom(func(a, b): return group_depth(a) < group_depth(b))
+	var renamed: Dictionary = {}
+	var made: Dictionary = {}
+	for group_name in involved:
+		var whole := true
+		for member in group_members_deep(group_name):
+			if not copied.has(member):
+				whole = false
+				break
+		if not whole:
+			continue
+		var copy_name := _unused_name("%s copy" % group_name, made)
+		renamed[group_name] = copy_name
+		var around := parent_of_group(group_name)
+		made[copy_name] = renamed.get(around, around)
+	for info in brush_infos + entity_infos:
+		if info is Dictionary and renamed.has(str(info.get("group_id", ""))):
+			info["group_id"] = renamed[str(info["group_id"])]
+	return made
+
+
+## Make `made`'s groups, name to parent, as `regroup_copies()` gave them.
+func add_groups(made: Dictionary) -> void:
+	for group_name in made:
+		create_group(str(group_name))
+		_set_parent(str(group_name), str(made[group_name]))
+
+
+func _unused_name(base: String, also_taken: Dictionary) -> String:
+	var candidate := unique_group_name(base)
+	var n := 2
+	while also_taken.has(candidate):
+		candidate = unique_group_name("%s %d" % [base, n])
+		n += 1
+	return candidate
+
+
+## A name for a group of `nodes`, from what they hold, that no group has yet:
+## "Group of 6 brushes", "Group of 2 groups and 1 entity".
+func default_group_name(nodes: Array) -> String:
+	var units := units_of(nodes)
+	var brushes := 0
+	var entities := 0
+	for node in units["nodes"]:
+		if root.is_brush_node(node):
+			brushes += 1
+		else:
+			entities += 1
+	var parts := PackedStringArray()
+	for pair in [
+		[(units["groups"] as Array).size(), "group", "groups"],
+		[brushes, "brush", "brushes"],
+		[entities, "entity", "entities"],
+	]:
+		if int(pair[0]) > 0:
+			parts.append("%d %s" % [pair[0], pair[1] if int(pair[0]) == 1 else pair[2]])
+	if parts.is_empty():
+		return unique_group_name("Group")
+	var text := parts[parts.size() - 1]
+	if parts.size() > 1:
+		text = "%s and %s" % [", ".join(parts.slice(0, parts.size() - 1)), text]
+	return unique_group_name("Group of " + text)
+
+
+## What `nodes` hold as a click would select them: the groups, each once, and the
+## nodes that are on their own.
+func units_of(nodes: Array) -> Dictionary:
+	var unit_groups: Array = []
+	var loose: Array = []
+	for node in nodes:
+		if not (node is Node) or not is_instance_valid(node):
+			continue
+		var unit := selection_unit_of(node)
+		if unit == "":
+			loose.append(node)
+		elif not unit_groups.has(unit):
+			unit_groups.append(unit)
+	return {"groups": unit_groups, "nodes": loose}
+
+
+func _set_parent(group_name: String, parent_name: String) -> void:
+	if parent_name == "":
+		group_parents.erase(group_name)
+	else:
+		group_parents[group_name] = parent_name
+
+
+## Take `group_name` apart: its members and the groups in it go to the group
+## around it.
+func _dissolve(group_name: String) -> void:
+	if group_name == "":
+		return
+	var around := parent_of_group(group_name)
 	for node in _all_managed_nodes():
 		if str(node.get_meta("group_id", "")) == group_name:
-			node.set_meta("group_id", "")
+			node.set_meta("group_id", around)
+	for child in child_groups(group_name):
+		_set_parent(child, around)
+	groups.erase(group_name)
+	group_parents.erase(group_name)
+	if open_group == group_name:
+		open_group = around
 
 
 func get_group_names() -> PackedStringArray:
@@ -810,6 +1119,25 @@ func restore_groups(data: Dictionary, order: Array = []) -> void:
 	if data is Dictionary:
 		for key in _ordered_keys(data, order):
 			groups[str(key)] = true
+	if not groups.has(open_group):
+		open_group = ""
+
+
+## Which group each nested group is inside (#1723).
+func capture_group_parents() -> Dictionary:
+	return group_parents.duplicate()
+
+
+## A parent no group has, or a child that is not one, is left out, so a hand
+## edit cannot leave a group inside nothing.
+func restore_group_parents(data: Variant) -> void:
+	group_parents.clear()
+	if not (data is Dictionary):
+		return
+	for child in data:
+		var parent_name := str(data[child])
+		if groups.has(str(child)) and groups.has(parent_name) and str(child) != parent_name:
+			group_parents[str(child)] = parent_name
 
 
 # ===========================================================================
@@ -864,6 +1192,11 @@ func _find_in_packed(arr: PackedStringArray, value: String) -> int:
 func _cleanup_empty_group(group_name: String) -> void:
 	if group_name == "" or not groups.has(group_name):
 		return
-	var members = get_group_members(group_name)
-	if members.is_empty():
+	# A group with groups in it is not empty (#1723).
+	if get_group_members(group_name).is_empty() and child_groups(group_name).is_empty():
+		var around := parent_of_group(group_name)
 		groups.erase(group_name)
+		group_parents.erase(group_name)
+		if open_group == group_name:
+			open_group = ""
+		_cleanup_empty_group(around)

@@ -127,6 +127,7 @@ static func level_state_problem(state: Dictionary) -> String:
 		"face_selection",
 		"visgroups",
 		"groups",
+		"group_parents",
 		"terrain_regions",
 		"floor",
 		"sun",

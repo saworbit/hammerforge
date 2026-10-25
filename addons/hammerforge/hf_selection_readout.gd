@@ -35,6 +35,8 @@ const HFSizeLabels = preload("hf_size_labels.gd")
 const AXIS_COLORS: Array[Color] = [
 	Color(0.96, 0.2, 0.32), Color(0.53, 0.84, 0.01), Color(0.16, 0.55, 0.96)
 ]
+## The group label's colour, apart from the three axes'.
+const GROUP_LABEL_COLOR := Color(1.0, 0.85, 0.4)
 ## An extent below this is a flat side, a single face seen edge on, with no
 ## width to label.
 const FLAT := 0.0005
@@ -44,6 +46,8 @@ var _watched_root: WeakRef = null
 var _source: Callable = Callable()
 var _show_size := false
 var _labels := HFSizeLabels.new()
+## The name of the group the selection is, above it (#1723).
+var _group_label := _make_group_label()
 var _summary: Dictionary = empty_summary()
 var _refresh_queued := false
 ## The ids of the brushes the summary was measured on, for `brush_changed`.
@@ -158,6 +162,8 @@ static func empty_summary() -> Dictionary:
 		"has_bounds": false,
 		"bounds": AABB(),
 		"vertex": {},
+		"group": "",
+		"open_group": "",
 	}
 
 
@@ -176,6 +182,8 @@ static func empty_summary() -> Dictionary:
 ## - `bounds` (world, with `has_bounds`): what the size labels go on, the
 ##   picked faces for a face selection and the selected brushes otherwise.
 ## - `vertex`: `brush_id` and `index` of the one vertex, for typing its place.
+## - `group`: the group the selection is, when it is one group and nothing else,
+##   and `open_group`, the group open now (#1723).
 ## - `brushes`: the brushes measured.
 static func summarize(root: Node, nodes: Array, vertex_mode: bool) -> Dictionary:
 	var summary := empty_summary()
@@ -205,6 +213,12 @@ static func summarize(root: Node, nodes: Array, vertex_mode: bool) -> Dictionary
 	for brush in brushes:
 		if not measured.has(brush):
 			measured.append(brush)
+	var groups = root.get("visgroup_system")
+	if groups != null:
+		summary["open_group"] = str(groups.open_group)
+		var units: Dictionary = groups.units_of(nodes)
+		if (units["groups"] as Array).size() == 1 and (units["nodes"] as Array).is_empty():
+			summary["group"] = str(units["groups"][0])
 	return summary
 
 
@@ -474,10 +488,41 @@ static func _mean(points: PackedVector3Array) -> Vector3:
 
 func _update_labels() -> void:
 	var root := _root()
+	_update_group_label(root)
 	if not _show_size or root == null or not bool(_summary.get("has_bounds", false)):
 		_labels.clear()
 		return
 	_labels.show_labels(root, label_entries(_summary["bounds"], float(_summary.get("step", 0.0))))
+
+
+## The group's name above the middle of its top, whether or not the sizes show.
+func _update_group_label(root: Node) -> void:
+	var group_name := str(_summary.get("group", ""))
+	if root == null or group_name == "" or not bool(_summary.get("has_bounds", false)):
+		_group_label.clear()
+		return
+	var bounds: AABB = _summary["bounds"]
+	var top := Vector3(bounds.get_center().x, bounds.end.y, bounds.get_center().z)
+	(
+		_group_label
+		. show_labels(
+			root,
+			[
+				{
+					"position": top,
+					"offset": Vector2(0, HFSizeLabels.FONT_SIZE),
+					"text": group_name,
+					"color": GROUP_LABEL_COLOR,
+				}
+			]
+		)
+	)
+
+
+static func _make_group_label() -> HFSizeLabels:
+	var made := HFSizeLabels.new()
+	made.container_name = &"_GroupLabel"
+	return made
 
 
 func _remember_measured(brushes: Array) -> void:
@@ -544,6 +589,7 @@ func _stop_watching() -> void:
 	_watched_root = null
 	_stop_polling()
 	_labels.clear()
+	_group_label.clear()
 	_measured_ids.clear()
 	_measured_poses.clear()
 	var had_summary: bool = _summary.get("kind", "") != ""

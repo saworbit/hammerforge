@@ -358,6 +358,8 @@ func _enter_tree():
 			dock.connect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
 		if dock.has_signal("command_ran"):
 			dock.connect("command_ran", Callable(self, "_note_last_run"))
+		if dock.has_signal("group_selection_requested"):
+			dock.connect("group_selection_requested", Callable(self, "_select_group"))
 		if dock.has_signal("selection_narrow_requested"):
 			dock.connect(
 				"selection_narrow_requested", Callable(self, "_on_selection_narrow_requested")
@@ -598,6 +600,8 @@ func _exit_tree():
 			dock.disconnect("overlay_colors_changed", Callable(self, "_on_overlay_colors_changed"))
 		if dock.is_connected("command_ran", Callable(self, "_note_last_run")):
 			dock.disconnect("command_ran", Callable(self, "_note_last_run"))
+		if dock.is_connected("group_selection_requested", Callable(self, "_select_group")):
+			dock.disconnect("group_selection_requested", Callable(self, "_select_group"))
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
 			dock.queue_free()
@@ -1801,6 +1805,15 @@ func _note_run_adjusted(id: String, settings: Dictionary, version: int) -> void:
 ## `HFPluginRun.note_moved()`.
 func _note_run_moved(moved: Array) -> void:
 	HFPluginRunType.note_moved(self, moved)
+
+
+## Select every member of `group_name`, for a row of the dock's Groups list
+## (#1723).
+func _select_group(group_name: String) -> void:
+	var root: Node = _get_level_root()
+	if root and root.visgroup_system:
+		hf_selection = root.visgroup_system.group_members_deep(group_name)
+		_apply_hf_selection(EditorInterface.get_selection())
 
 
 func _hollow_selected(root: Node) -> bool:

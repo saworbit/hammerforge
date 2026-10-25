@@ -7,6 +7,7 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
+const HFPluginGroups = preload("plugin_groups.gd")
 const HFOpResult = preload("hf_op_result.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
 const HFBrushConversion = preload("hf_brush_conversion.gd")
@@ -282,6 +283,7 @@ static func duplicate_selected(
 	var infos := duplicate_infos(plugin, root, nodes, shift)
 	var brush_infos: Array = infos[0]
 	var entity_infos: Array = infos[1]
+	var groups: Dictionary = infos[2]
 	if brush_infos.is_empty() and entity_infos.is_empty():
 		return false
 	var action_name := (
@@ -296,7 +298,7 @@ static func duplicate_selected(
 		root,
 		action_name,
 		"create_managed_duplicates",
-		[brush_infos, entity_infos],
+		[brush_infos, entity_infos, groups],
 		false,
 		Callable(plugin, "_record_history")
 	)
@@ -311,7 +313,8 @@ static func duplicate_shift(root: Node) -> Vector3:
 
 
 ## The copies of `nodes` `shift` along, as `create_managed_duplicates()` takes
-## them: `[brush_infos, entity_infos]`.
+## them: `[brush_infos, entity_infos, groups]`, `groups` the new groups a whole
+## group copied makes (#1723).
 static func duplicate_infos(plugin: Object, root: Node, nodes: Array, shift: Vector3) -> Array:
 	var brush_infos: Array = []
 	var entity_infos: Array = []
@@ -331,7 +334,13 @@ static func duplicate_infos(plugin: Object, root: Node, nodes: Array, shift: Vec
 	# (#1161). Its wires are left as they are, as a point entity's are.
 	if not brush_infos.is_empty():
 		HFBrushEntity.fresh_identities(brush_infos, [], root.entity_system)
-	return [brush_infos, entity_infos]
+	# A whole group copied is a new group of its own (#1723).
+	var groups: Dictionary = (
+		root.visgroup_system.regroup_copies(nodes, brush_infos, entity_infos)
+		if root.visgroup_system
+		else {}
+	)
+	return [brush_infos, entity_infos, groups]
 
 
 ## The copies `duplicate_infos()` described, once they are made.
@@ -364,7 +373,7 @@ static func make_duplicates(plugin: Object, root: Node, nodes: Array, shift: Vec
 	var infos := duplicate_infos(plugin, root, nodes, shift)
 	if (infos[0] as Array).is_empty() and (infos[1] as Array).is_empty():
 		return []
-	root.create_managed_duplicates(infos[0], infos[1])
+	root.create_managed_duplicates(infos[0], infos[1], infos[2])
 	return duplicates_made(root, infos[0], infos[1])
 
 
@@ -481,47 +490,13 @@ static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bo
 	return true
 
 
+## Group Selection and Ungroup, which `plugin_groups.gd` makes (#1723).
 static func group_selected(plugin: Object, root: Node) -> bool:
-	var nodes = plugin._hammerforge_selection_nodes(root)
-	if nodes.size() < 2 or not root or not root.visgroup_system:
-		return false
-	var group_name = "group_%d" % Time.get_ticks_usec()
-	var before: Dictionary = root.capture_state()
-	root.visgroup_system.group_selection(group_name, nodes)
-	HFUndoHelper.commit_completed(
-		plugin._get_undo_redo(),
-		root,
-		"Group Selection",
-		before,
-		Callable(plugin, "_record_history")
-	)
-	if plugin.dock:
-		plugin.dock.refresh_visgroup_ui()
-	return true
+	return HFPluginGroups.group_selected(plugin, root)
 
 
 static func ungroup_selected(plugin: Object, root: Node) -> bool:
-	var nodes = plugin._hammerforge_selection_nodes(root)
-	if nodes.is_empty() or not root or not root.visgroup_system:
-		return false
-	var grouped: Array = []
-	for node in nodes:
-		if str(root.visgroup_system.get_group_of(node)) != "":
-			grouped.append(node)
-	if grouped.is_empty():
-		return false
-	var before: Dictionary = root.capture_state()
-	root.visgroup_system.ungroup_nodes(grouped)
-	HFUndoHelper.commit_completed(
-		plugin._get_undo_redo(),
-		root,
-		"Ungroup Selection",
-		before,
-		Callable(plugin, "_record_history")
-	)
-	if plugin.dock:
-		plugin.dock.refresh_visgroup_ui()
-	return true
+	return HFPluginGroups.ungroup_selected(plugin, root)
 
 
 static func hollow_selected(plugin: Object, root: Node) -> bool:
