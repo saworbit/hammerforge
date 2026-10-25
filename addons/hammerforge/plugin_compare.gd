@@ -32,7 +32,7 @@ static func start(plugin: Object, path: String) -> Dictionary:
 	if overlay == null:
 		overlay = HFCompareOverlay.new()
 		plugin.set("_compare_overlay", overlay)
-	overlay.show(root, result)
+	overlay.show(root, result, fade(plugin))
 	var panel = plugin.get("console_panel")
 	if panel and is_instance_valid(panel):
 		panel.show_compare(path.get_file(), result)
@@ -40,6 +40,24 @@ static func start(plugin: Object, path: String) -> Dictionary:
 	HFConsoleLog.shared().info("Compared with %s: %s" % [path.get_file(), summary], "compare")
 	_say(plugin, "Compared with %s: %s" % [path.get_file(), summary], 0)
 	return result
+
+
+## How far a compare fades the brushes that did not change, from Settings.
+static func fade(plugin: Object) -> float:
+	var prefs = plugin.get("_user_prefs")
+	if prefs == null:
+		return HFCompareOverlay.DEFAULT_FADE
+	return float(prefs.get_pref("compare_fade", HFCompareOverlay.DEFAULT_FADE))
+
+
+## Fade the unchanged brushes again after a step, and at the strength Settings
+## has now. An undo or a redo that rebuilt a brush made a new node.
+static func refresh(plugin: Object) -> void:
+	var overlay = plugin.get("_compare_overlay")
+	if overlay == null or not overlay.is_showing():
+		return
+	var root: Node = plugin.call("_get_level_root")
+	overlay.set_fade(root, fade(plugin))
 
 
 ## Take the compare off the viewport and the Console.

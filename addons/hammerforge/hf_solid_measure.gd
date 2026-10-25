@@ -70,6 +70,82 @@ static func bounds(faces: Array) -> AABB:
 	return box
 
 
+## Which way each face points, by its winding: 1 away from the solid's middle,
+## -1 into it, and 0 for a face too small or too central to say (#1869).
+##
+## A face wound the wrong way points into its brush. It is culled seen from
+## outside and bakes facing into the solid, so it looks like any missing face.
+## A displaced face is measured on the face under the displacement, which is
+## what its corners are.
+static func face_directions(faces: Array) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	out.resize(faces.size())
+	var centre := vertex_centre(faces)
+	for index in faces.size():
+		var points := ring(faces[index])
+		if points.size() < 3:
+			continue
+		var a: Vector3 = points[0]
+		var normal: Vector3 = (points[2] - a).cross(points[1] - a)
+		if normal.length() < 0.000001:
+			continue
+		var corner_sum := Vector3.ZERO
+		for point in points:
+			corner_sum += point
+		var to_face: Vector3 = corner_sum / float(points.size()) - centre
+		if to_face.length() < 0.000001:
+			continue
+		out[index] = 1 if normal.normalized().dot(to_face.normalized()) > 0.0 else -1
+	return out
+
+
+## The index of each face that points into its solid.
+static func inward_faces(faces: Array) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var directions := face_directions(faces)
+	for index in directions.size():
+		if directions[index] < 0:
+			out.append(index)
+	return out
+
+
+## The share of the faces it can measure that point away from the solid's
+## middle: 1 when every face does, and -1 when it can measure none.
+static func outward_ratio(faces: Array) -> float:
+	var outward := 0
+	var counted := 0
+	for direction in face_directions(faces):
+		if direction != 0:
+			counted += 1
+			if direction > 0:
+				outward += 1
+	return float(outward) / float(counted) if counted > 0 else -1.0
+
+
+## Every corner of the solid lies on or behind every face's plane, each plane
+## turned to face away from the solid's middle, so a face wound the wrong way
+## does not make a convex solid read as bent.
+static func is_convex(faces: Array, tolerance := 0.01) -> bool:
+	var centre := vertex_centre(faces)
+	for face in faces:
+		var points := ring(face)
+		if points.size() < 3:
+			continue
+		var a: Vector3 = points[0]
+		var normal: Vector3 = (points[2] - a).cross(points[1] - a)
+		if normal.length() < 0.000001:
+			continue
+		normal = normal.normalized()
+		if normal.dot(centre - a) > 0.0:
+			normal = -normal
+		var d := normal.dot(a)
+		for other in faces:
+			for point in ring(other):
+				if normal.dot(point) - d > tolerance:
+					return false
+	return true
+
+
 ## The volume a closed solid holds, by the signed volumes of the tetrahedra its
 ## faces make with the origin. Winding either way gives the same size.
 static func volume(faces: Array) -> float:

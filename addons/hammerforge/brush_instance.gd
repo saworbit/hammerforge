@@ -15,6 +15,7 @@ const HFSmoothing = preload("hf_smoothing.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
 const HFOverlayColors = preload("hf_overlay_colors.gd")
+const HFFaceDirection = preload("hf_face_direction.gd")
 
 @export var shape: int = BrushShape.BOX:
 	set = set_shape
@@ -521,7 +522,7 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 		st.commit(mesh)
 		surface_count += 1
 	mesh_instance.mesh = mesh if surface_count > 0 else base_mesh
-	mesh_instance.material_override = null
+	mesh_instance.material_override = _face_direction_look()
 	_sync_visual_overlays()
 	_tell_joined(touching)
 
@@ -2145,6 +2146,10 @@ func _can_use_paint_preview() -> bool:
 
 
 func _should_use_face_preview() -> bool:
+	# Face Direction shows which way the faces are wound, so it draws the faces
+	# themselves, never the primitive mesh a plain box draws with.
+	if not faces.is_empty() and _face_direction_shown():
+		return true
 	# CUSTOM is the authoritative face representation produced by polygon/path,
 	# merge, and imported geometry. Falling back to _build_base_mesh() would show
 	# a misleading box whenever those faces have no explicit material assigned.
@@ -2525,7 +2530,7 @@ func _apply_material(force: bool = false) -> void:
 	if not mesh_instance:
 		return
 	if not force and faces.size() > 0:
-		mesh_instance.material_override = null
+		mesh_instance.material_override = _face_direction_look()
 		_sync_visual_overlays()
 		return
 	var mat: Material = null
@@ -2538,8 +2543,25 @@ func _apply_material(force: bool = false) -> void:
 		mat = editor_material
 	else:
 		mat = _default_material()
-	mesh_instance.material_override = mat
+	var direction := _face_direction_look()
+	mesh_instance.material_override = direction if direction != null else mat
 	_sync_visual_overlays()
+
+
+## The Face Direction look while the level shows it, and null otherwise (#1869).
+## Only the mesh instance the brush draws through takes it, never the brush's own
+## material, so nothing of it is saved or baked.
+func _face_direction_look() -> Material:
+	if not _face_direction_shown():
+		return null
+	var look := HFFaceDirection.material()
+	look.set_meta(EDITOR_LOOK_META, true)
+	return look
+
+
+func _face_direction_shown() -> bool:
+	var root := _level_root()
+	return root != null and bool(root.get("face_direction_view"))
 
 
 func _sync_visual_overlays() -> void:

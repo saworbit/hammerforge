@@ -1742,6 +1742,17 @@ const COMMANDS := [
 		"palette": true
 	},
 	{
+		"id": "toggle_face_direction",
+		"label": "Show Face Direction",
+		"help":
+		"Draw the front of every brush face in one colour and the back in another, so a face pointing into its brush shows from outside. The level and the bake are not changed.",
+		"aliases": ["face orientation", "inside out", "normals"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "selection_filter",
 		"label": "Selection Filters",
 		"help": "Open the selection filters, which pick by kind, material and more.",

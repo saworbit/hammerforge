@@ -717,6 +717,11 @@ var decals_node: Node3D
 ## own view, like the camera, so it is a plain var, never saved, and empty when a
 ## level opens.
 var view_filters: Dictionary = {}
+## Face Direction: every brush face drawn one colour from the front and another
+## from the back (#1869). The editor's own view, as `view_filters` is: a plain
+## var, never saved, and off when a level opens.
+var face_direction_view := false:
+	set = set_face_direction_view
 var brush_manager: BrushManager
 var material_manager: MaterialManager
 var baker: Baker
@@ -1468,6 +1473,14 @@ func clear_view_filters() -> void:
 
 func is_view_filtered(key: String) -> bool:
 	return view_filters.has(key)
+
+
+func set_face_direction_view(shown: bool) -> void:
+	if face_direction_view == shown:
+		return
+	face_direction_view = shown
+	for brush in _iter_managed_brush_nodes():
+		(brush as DraftBrush).refresh_editor_look()
 
 
 func _refresh_view_filters() -> void:

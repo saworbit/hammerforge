@@ -37,6 +37,8 @@ const AGENT_CHANGE := "color_agent_change"
 const COMPARE_ADDED := "color_compare_added"
 const COMPARE_CHANGED := "color_compare_changed"
 const COMPARE_REMOVED := "color_compare_removed"
+const FACE_FRONT := "color_face_front"
+const FACE_BACK := "color_face_back"
 
 ## The look before these were a preference, in the order Settings lists them.
 const DEFAULTS := {
@@ -61,6 +63,8 @@ const DEFAULTS := {
 	COMPARE_ADDED: Color(0.3, 0.9, 0.35, 1.0),
 	COMPARE_CHANGED: Color(1.0, 0.72, 0.15, 1.0),
 	COMPARE_REMOVED: Color(1.0, 0.3, 0.3, 1.0),
+	FACE_FRONT: Color(0.25, 0.5, 1.0, 1.0),
+	FACE_BACK: Color(1.0, 0.15, 0.15, 1.0),
 }
 
 ## Settings' High Contrast button. Taken from the Okabe-Ito colours, which stay
@@ -94,6 +98,8 @@ const HIGH_CONTRAST := {
 	COMPARE_ADDED: Color(0.0, 0.62, 0.45, 1.0),
 	COMPARE_CHANGED: Color(0.94, 0.89, 0.26, 1.0),
 	COMPARE_REMOVED: Color(0.84, 0.37, 0.0, 1.0),
+	FACE_FRONT: Color(0.0, 0.45, 0.7, 1.0),
+	FACE_BACK: Color(0.9, 0.62, 0.0, 1.0),
 }
 
 const LABELS := {
@@ -118,6 +124,8 @@ const LABELS := {
 	COMPARE_ADDED: "Compare: added",
 	COMPARE_CHANGED: "Compare: changed",
 	COMPARE_REMOVED: "Compare: removed",
+	FACE_FRONT: "Face Direction: front",
+	FACE_BACK: "Face Direction: back",
 }
 
 const TOOLTIPS := {
@@ -143,6 +151,9 @@ const TOOLTIPS := {
 	"A brush or entity the open level has and the compared file does not, drawn solid",
 	COMPARE_CHANGED: "A brush or entity that changed since the compared file, drawn twice",
 	COMPARE_REMOVED: "A brush or entity the compared file has and the open level does not, dashed",
+	FACE_FRONT: "With Face Direction on, the front of every brush face",
+	FACE_BACK:
+	"With Face Direction on, the back of every brush face\nSeen from outside, a face pointing into its brush",
 }
 
 ## The colours drawn on or round every brush. A change to one of these redraws
@@ -157,6 +168,8 @@ const BRUSH_KEYS := [
 	FUNC_WALL,
 	FUNC_CLIP,
 	BRUSH_ENTITY,
+	FACE_FRONT,
+	FACE_BACK,
 ]
 
 ## How strongly a cut's outline is drawn, against the see-through fill.
