@@ -777,6 +777,15 @@ That face can belong to any brush, including one you drew purely as a guide and
 delete afterwards — draw a box, rotate it to the angle you want, and use one of its
 faces as a straightedge.
 
+### Sweeping faces along a bend
+
+**Sweep Faces**, in the palette, carries the faces picked in Face Select somewhere else as a run of brushes ([#1714](https://github.com/saworbit/hammerforge/issues/1714)): a pipe with a flange, an arched corridor's profile or a bevelled beam bent round a corner. Pick the faces, all in one plane and facing one way, and run it. The dialog takes the path:
+- **Straight**: a run of **Length** along the way the faces point.
+- **Arc**: a circular bend of **Angle** degrees with **Radius**, turning **Toward** the faces' up, down, left or right.
+- **S bend**: **Length** along and **Offset** aside, ending facing the way it began.
+
+**Segments** sets how many pieces, and **Iterations** repeats the sweep from where it ended, so four quarter arcs close a loop and a few repeats make a long run of bends. Each face is swept as its own section, and each piece is one convex brush between two cuts, so neighbours meet face to face. The pieces are outlined in cyan as the values change. A bend too tight for the faces' width folds a piece back on itself: it is drawn red, OK is greyed out, and nothing is made. The pieces take the material and texture settings of the face they came from, and are made as one group in one undo step.
+
 ### The Clip tool
 
 For a cut that no face lines up with, press `C` with the brushes to cut

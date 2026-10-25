@@ -81,6 +81,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Extrude Down (`extrude_down`) | none | - | no | Switch to Extrude Down: drag a face to push a cut into it. |
 | Hollow (`hollow`) | Ctrl+H | 1 brush, a level | yes | Shell the selected brush into walls of the set thickness, after a preview. |
 | Clip (`clip`) | Shift+X | 1 brush, a level | yes | Split the selected brush in two across its middle, after a preview. |
+| Sweep Faces (`sweep_faces`) | none | a level | yes | Carry the faces picked in Face Select along a straight run, an arc or an S bend, as a run of brushes. |
 | Clip to Face Plane (`clip_to_face`) | Shift+Alt+X | a level | yes | Cut the selected brushes along the plane of the face picked in Face Select. |
 | Create Structure (`create_arch`) | Ctrl+Shift+A | a level | yes | Open the structure builder: stairs, arches, domes and the rest. |
 | Update Structure (`update_structure`) | none | a level | no | Rebuild the selected structure from the settings in its section. |

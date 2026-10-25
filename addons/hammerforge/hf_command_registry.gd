@@ -394,6 +394,17 @@ const COMMANDS := [
 		"repeat": true
 	},
 	{
+		"id": "sweep_faces",
+		"label": "Sweep Faces",
+		"help":
+		"Carry the faces picked in Face Select along a straight run, an arc or an S bend, as a run of brushes.",
+		"aliases": ["sweep", "bend faces", "follow path"],
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "clip_to_face",
 		"label": "Clip to Face Plane",
 		"help": "Cut the selected brushes along the plane of the face picked in Face Select.",
