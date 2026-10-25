@@ -4,6 +4,10 @@ extends CharacterBody3D
 ## How far over `max_step_height` a riser may measure and still be that step: the
 ## noise in a contact point, and the slack Validate's stair check gives a riser.
 const STEP_SLACK := 0.005
+## How hard the player shoves a rigid body it walks into, as newtons for each
+## metre a second it walks, so a func_physbox crate can be tried (#1892). At a
+## walk that beats the floor's grip on a 10 kg crate, and not on a 60 kg one.
+const PUSH_STRENGTH := 60.0
 
 # --- Movement Settings ---
 @export_group("Movement")
@@ -316,10 +320,27 @@ func _physics_process(delta: float) -> void:
 	velocity.z = move_toward(velocity.z, target_vel.z, accel * delta)
 
 	_step_up_if_blocked(delta)
+	var walking := Vector3(velocity.x, 0.0, velocity.z)
 	move_and_slide()
+	push_bodies(self, walking, delta)
 
 	# 5. Effects (FOV and Head Bob)
 	_apply_camera_effects(delta, has_input)
+
+
+## Push every rigid body `body` ran into on its last `move_and_slide()` the way it
+## was walking across the ground, `walking` its velocity before the slide. A
+## CharacterBody3D stops against a RigidBody3D and leaves it where it is, so a
+## func_physbox could not be tried in a playtest (#1892).
+static func push_bodies(body: CharacterBody3D, walking: Vector3, delta: float) -> void:
+	var across := Vector3(walking.x, 0.0, walking.z)
+	if across.is_zero_approx():
+		return
+	for i in body.get_slide_collision_count():
+		var pushed := body.get_slide_collision(i).get_collider() as RigidBody3D
+		if pushed == null or pushed.freeze:
+			continue
+		pushed.apply_central_impulse(across * PUSH_STRENGTH * delta)
 
 
 ## Lift a grounded body over a riser it is about to walk into. Returns whether it
