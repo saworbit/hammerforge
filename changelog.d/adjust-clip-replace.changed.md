@@ -1,0 +1,1 @@
+- Clip to Face Plane and Replace Material show what they ran with in the Adjust panel, and Repeat Run holds them. (issue [#1896](https://github.com/saworbit/hammerforge/issues/1896))

@@ -1233,6 +1233,11 @@ repeated R presses that make one step show their total. **Save** keeps the
 settings under a name, and the list beside it puts a saved set back on the last
 step. The names are kept with your preferences, by command.
 
+Clip to Face Plane and Replace Material show in the panel too, with what they
+were made from: the brush and face a cut ran along, and the material swapped and
+the one put in its place, shown and not changed there. Replace Material's
+**Scope** and **Reset UVs** can be changed ([#1896](https://github.com/saworbit/hammerforge/issues/1896)).
+
 The panel closes when any other step lands, an undo included, or with its **x**.
 **Adjust Last** in the palette, with no key by default, opens it again for the
 last step, or says there is nothing to adjust when the last step is another
@@ -1248,7 +1253,7 @@ With nothing typed, the palette shows **Repeat: Hollow** as its top row when the
 
 **Repeat Run** plays every command, move and turn you made since you last changed the selection by hand, again, on what is selected now, as one undo step ([#1735](https://github.com/saworbit/hammerforge/issues/1735)). For a stair that turns as it climbs: select the first step, **Duplicate**, move the copy up 3 m, turn it 15 degrees, then press Repeat Run once for each step after. After Duplicate the copy is the selection, so each press makes the next step from the last one.
 
-A move or turn is kept as how far it went, not where it ended: the arrow keys, Page Up and Page Down, **Rotate CW** and **Rotate CCW**, and a drag of the move or rotate gizmo. A gizmo turn is kept when it is about the X, Y or Z axis. Hollow, Clip and the Duplicate, Radial and Grid Arrays keep the settings they ran with: Radial Array of 6 round one pillar, select the next pillar and Repeat Run, and it gets the same ring, turned about the pivot it gives now ([#1896](https://github.com/saworbit/hammerforge/issues/1896)). The run also holds the commands the command line can run on a selection, such as Carve, Merge, Move to Floor and Snap to Grid. **Adjust Last** changes the run's step as it changes the level.
+A move or turn is kept as how far it went, not where it ended: the arrow keys, Page Up and Page Down, **Rotate CW** and **Rotate CCW**, and a drag of the move or rotate gizmo. A gizmo turn is kept when it is about the X, Y or Z axis. Hollow, Clip, Clip to Face Plane, Replace Material and the Duplicate, Radial and Grid Arrays keep the settings they ran with: Radial Array of 6 round one pillar, select the next pillar and Repeat Run, and it gets the same ring, turned about the pivot it gives now ([#1896](https://github.com/saworbit/hammerforge/issues/1896)). The run also holds the commands the command line can run on a selection, such as Carve, Merge, Move to Floor and Snap to Grid. **Adjust Last** changes the run's step as it changes the level.
 
 - **Starting over.** Select something else by hand, or with a selection command such as Select Similar, and the next command starts a new run. Until then Repeat Run still plays the last run, on what you have selected: hollow and clip one room, select the next, Repeat Run.
 - **What it cannot play.** A change the run cannot hold, such as Flip, a texture command or Delete, ends the run, and the next one starts after it. **Clear Run** empties it. Ctrl+Z takes a step out of the run along with the level.
