@@ -190,28 +190,30 @@ static func repeated(frame_list: Array, iterations: int) -> Array:
 
 
 ## The pieces of sweeping `rings` (world corner rings, all in `start`'s plane)
-## through `frame_list`: `{pieces, folded}`, each piece `{faces, section, segment,
-## ok}` with `faces` world FaceData, and `folded` how many fold back on
-## themselves. A ring is placed at each frame as it sits in the first.
-static func pieces(rings: Array, frame_list: Array) -> Dictionary:
+## through `frame_list`: `{pieces, folded}`, each piece `{faces, edges, section,
+## segment, ok}` with `faces` world FaceData, and `folded` how many fold back on
+## themselves. A ring is placed at each frame as it sits in the first, scaled
+## about the frame's middle from 1 at the first cut to `end_scale` at the last,
+## along its own X and Y, so a run narrows or widens and two pieces still share
+## the cut between them (#1899). `edges` says for each face the edge of its ring
+## it ran along, or -1 for an end.
+static func pieces(rings: Array, frame_list: Array, end_scale := Vector2.ONE) -> Dictionary:
 	var out: Array = []
 	var folded := 0
 	if frame_list.size() < 2:
 		return {"pieces": out, "folded": 0}
 	var first: Transform3D = frame_list[0]
 	var to_first := first.affine_inverse()
+	var last := frame_list.size() - 1
 	for section in rings.size():
 		var local := PackedVector3Array()
 		for corner in rings[section]:
 			local.append(to_first * (corner as Vector3))
-		for k in frame_list.size() - 1:
+		for k in last:
 			var near_frame: Transform3D = frame_list[k]
 			var far_frame: Transform3D = frame_list[k + 1]
-			var near := PackedVector3Array()
-			var far := PackedVector3Array()
-			for point in local:
-				near.append(near_frame * point)
-				far.append(far_frame * point)
+			var near := _placed(local, near_frame, Vector2.ONE.lerp(end_scale, float(k) / last))
+			var far := _placed(local, far_frame, Vector2.ONE.lerp(end_scale, float(k + 1) / last))
 			var ok := (
 				_ahead(near, near_frame.basis.z, far) and _ahead(far, -far_frame.basis.z, near)
 			)
@@ -223,8 +225,52 @@ static func pieces(rings: Array, frame_list: Array) -> Dictionary:
 					faces = hull["faces"]
 			if not ok:
 				folded += 1
-			out.append({"faces": faces, "section": section, "segment": k, "ok": ok})
+			(
+				out
+				. append(
+					{
+						"faces": faces,
+						"edges": _edges_run_along(faces, near, far),
+						"section": section,
+						"segment": k,
+						"ok": ok,
+					}
+				)
+			)
 	return {"pieces": out, "folded": folded}
+
+
+## `local`, a ring in the first frame's space, placed at `frame` and scaled by
+## `scale` along that frame's X and Y about its middle.
+static func _placed(
+	local: PackedVector3Array, frame: Transform3D, scale: Vector2
+) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for point in local:
+		out.append(frame * Vector3(point.x * scale.x, point.y * scale.y, point.z))
+	return out
+
+
+## For each of `faces`, the edge of the ring, from corner i to i + 1, whose two
+## ends at the near cut and at the far cut all lie on it, or -1 for a face no edge
+## ran along: the ends of the piece.
+static func _edges_run_along(
+	faces: Array, near: PackedVector3Array, far: PackedVector3Array
+) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for face in faces:
+		var plane := Plane((face as FaceData).normal, (face as FaceData).local_verts[0])
+		var found := -1
+		for i in near.size():
+			var j := (i + 1) % near.size()
+			var on_it := true
+			for point in [near[i], near[j], far[i], far[j]]:
+				on_it = on_it and absf(plane.distance_to(point)) <= AHEAD
+			if on_it:
+				found = i
+				break
+		out.append(found)
+	return out
 
 
 ## Whether every point of `ahead` is on the side of `ring`'s plane that `facing`

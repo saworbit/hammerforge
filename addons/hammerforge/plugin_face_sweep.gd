@@ -38,15 +38,20 @@ const DEFAULTS := {
 	"toward": "Right",
 	"segments": 8,
 	"iterations": 1,
+	"end_width": 1.0,
+	"end_height": 1.0,
 }
 
 
-## The picked faces as a cross section: `{ok, rings, normal, sources}`, each
-## ring a face's corners in world space and its source FaceData beside it, or
-## `{ok: false, reason}` when nothing is picked or the faces are not in one plane.
+## The picked faces as a cross section: `{ok, rings, normal, sources, sides}`,
+## each ring a face's corners in world space with its source FaceData beside it,
+## and for each of its edges the face of the same brush that meets it there, or
+## null; or `{ok: false, reason}` when nothing is picked or the faces are not in
+## one plane.
 static func section(root: Node) -> Dictionary:
 	var rings: Array = []
 	var sources: Array = []
+	var sides: Array = []
 	var normal := Vector3.ZERO
 	var plane := Plane()
 	var picked: Dictionary = root.get("face_selection") if root else {}
@@ -72,9 +77,34 @@ static func section(root: Node) -> Dictionary:
 				return {"ok": false, "reason": "Pick faces that lie in one plane, facing one way"}
 			rings.append(ring)
 			sources.append(face)
+			sides.append(_faces_along_edges(brush, face))
 	if rings.is_empty():
 		return {"ok": false, "reason": "Pick the faces to sweep in Face Select first"}
-	return {"ok": true, "rings": rings, "normal": normal, "sources": sources}
+	return {"ok": true, "rings": rings, "normal": normal, "sources": sources, "sides": sides}
+
+
+## For each edge of `face`, from corner i to i + 1, the other face of `brush`
+## holding both its corners, or null.
+static func _faces_along_edges(brush: Node, face: FaceData) -> Array:
+	var out: Array = []
+	var corners: PackedVector3Array = face.local_verts
+	for i in corners.size():
+		var a := corners[i]
+		var b := corners[(i + 1) % corners.size()]
+		var found: FaceData = null
+		for other in brush.faces:
+			if other == null or other == face:
+				continue
+			var has_a := false
+			var has_b := false
+			for corner in (other as FaceData).local_verts:
+				has_a = has_a or corner.distance_to(a) <= 0.001
+				has_b = has_b or corner.distance_to(b) <= 0.001
+			if has_a and has_b:
+				found = other
+				break
+		out.append(found)
+	return out
 
 
 ## What sweeping `cut` with `values` makes: `{pieces, folded, frames}`.
@@ -91,7 +121,10 @@ static func plan(cut: Dictionary, values: Dictionary) -> Dictionary:
 	)
 	var frame_list := HFFaceSweep.frames(int(values["path"]), start, end, int(values["segments"]))
 	frame_list = HFFaceSweep.repeated(frame_list, int(values["iterations"]))
-	var made := HFFaceSweep.pieces(cut["rings"], frame_list)
+	var end_scale := Vector2(
+		float(values.get("end_width", 1.0)), float(values.get("end_height", 1.0))
+	)
+	var made := HFFaceSweep.pieces(cut["rings"], frame_list, end_scale)
 	made["frames"] = frame_list
 	return made
 
@@ -121,7 +154,7 @@ static func run(plugin: Object, root: Node, values: Dictionary) -> bool:
 	var group := _group_name(root, pieces.size())
 	for piece in pieces:
 		var faces: Array = piece["faces"]
-		HFFaceSweep.take_look(faces, cut["sources"][int(piece["section"])])
+		_take_looks(piece, cut)
 		var info := _info(faces, group)
 		root.brush_system.give_active_material(info)
 		_keep_looks(info, faces)
@@ -137,6 +170,24 @@ static func run(plugin: Object, root: Node, values: Dictionary) -> bool:
 	)
 	_say(plugin, "Swept into %d pieces, grouped as %s" % [pieces.size(), group], 0)
 	return true
+
+
+## Each face of `piece` takes the look of the face it ran along: a side the face
+## of the source brush that meets the swept face along that edge, so a wall's
+## brick sides stay brick down the run, and an end the swept face's own (#1899).
+static func _take_looks(piece: Dictionary, cut: Dictionary) -> void:
+	var ring_index := int(piece["section"])
+	var swept: FaceData = cut["sources"][ring_index]
+	var all_sides: Array = cut.get("sides", [])
+	var sides: Array = all_sides[ring_index] if ring_index < all_sides.size() else []
+	var edges: PackedInt32Array = piece.get("edges", PackedInt32Array())
+	var faces: Array = piece["faces"]
+	for i in faces.size():
+		var edge := edges[i] if i < edges.size() else -1
+		var look: FaceData = swept
+		if edge >= 0 and edge < sides.size() and sides[edge] != null:
+			look = sides[edge]
+		HFFaceSweep.take_look([faces[i]], look)
 
 
 ## What `create_brush_from_info()` takes for one piece: its faces local to their
@@ -253,6 +304,9 @@ static func open(plugin: Object, root: Node) -> bool:
 		["offset", "Offset (m):", -1000.0, 1000.0, 0.1],
 		["segments", "Segments:", 1.0, float(HFFaceSweep.MAX_SEGMENTS), 1.0],
 		["iterations", "Iterations:", 1.0, float(HFFaceSweep.MAX_ITERATIONS), 1.0],
+		# How wide and tall the far end is, as a part of the start (#1899).
+		["end_width", "End width scale:", 0.05, 20.0, 0.05],
+		["end_height", "End height scale:", 0.05, 20.0, 0.05],
 	]:
 		var spin := SpinBox.new()
 		spin.min_value = spec[2]
