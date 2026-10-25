@@ -20,6 +20,7 @@ const HFSweepBuilder = preload("hf_sweep_builder.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFFaceSweep = preload("hf_face_sweep.gd")
 const HFSweepPreview = preload("systems/hf_sweep_preview.gd")
+const HFTranslationType = preload("hf_translation.gd")
 
 ## What the dialog starts with.
 const DEFAULTS := {
@@ -127,7 +128,12 @@ static func run(plugin: Object, root: Node, values: Dictionary) -> bool:
 		before,
 		Callable(plugin, "_record_history")
 	)
-	_say(plugin, "Swept into %d pieces, grouped as %s" % [count, group], 0)
+	var said := HFTranslationType.tn(
+		"Swept into {count} piece, grouped as {group}",
+		"Swept into {count} pieces, grouped as {group}",
+		count
+	)
+	_say(plugin, said.format({"count": count, "group": group}), 0)
 	return true
 
 
@@ -180,14 +186,15 @@ static func open(plugin: Object, root: Node) -> bool:
 		var folded := int(made["folded"])
 		var total := (made["pieces"] as Array).size()
 		dialog.get_ok_button().disabled = folded > 0
-		status.text = (
-			"%d pieces" % total
-			if folded == 0
-			else (
-				"%d of %d pieces fold back on themselves: widen the radius or cut more segments"
-				% [folded, total]
+		var outcome := HFTranslationType.tn("{count} piece", "{count} pieces", total)
+		if folded > 0:
+			outcome = (
+				HFTranslationType
+				. t(
+					"{folded} of {count} pieces fold back on themselves: widen the radius or cut more segments"
+				)
 			)
-		)
+		status.text = outcome.format({"count": total, "folded": folded})
 		var path := int(values["path"])
 		rows["length"].visible = path != HFFaceSweep.Path.ARC
 		rows["angle"].visible = path == HFFaceSweep.Path.ARC
