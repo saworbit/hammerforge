@@ -4,6 +4,7 @@ extends RefCounted
 ## Overlay lifecycle, viewport drawing, quick-property, and coach-mark behavior.
 
 const HFQuickProperty = preload("ui/hf_quick_property.gd")
+const HFTranslationType = preload("hf_translation.gd")
 const HFCoachMarks = preload("ui/hf_coach_marks.gd")
 const HFOperationReplay = preload("ui/hf_operation_replay.gd")
 const HFRadialMenu = preload("ui/hf_radial_menu.gd")
@@ -64,6 +65,8 @@ const VIEWPORT_OVERLAY_ANCHORS := {
 static func attach_viewport_overlay(plugin: Object, control: Control) -> void:
 	if plugin == null or control == null:
 		return
+	# The viewport is the editor's, so the overlay takes HammerForge's words (#1702).
+	HFTranslationType.adopt(control)
 	var host = plugin._viewport_overlay_host
 	if host != null and is_instance_valid(host):
 		host.add_child(control)

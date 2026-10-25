@@ -1,0 +1,23 @@
+# A test catalog for tests/test_translation.gd (#1702): a few of HammerForge's
+# words in Spanish, enough to see them change on screen.
+msgid ""
+msgstr ""
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8-bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Create Starter Level"
+msgstr "Crear un nivel listo para usar"
+
+msgid "Hollow"
+msgstr "Ahuecar"
+
+msgid "Repeat: {command}"
+msgstr "Repetir: {command}"
+
+msgid "{count} brush"
+msgid_plural "{count} brushes"
+msgstr[0] "{count} pincel"
+msgstr[1] "{count} pinceles"

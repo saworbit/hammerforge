@@ -11,6 +11,7 @@ extends RefCounted
 
 const HFCommandLine = preload("hf_command_line.gd")
 const HFCommandLineViewType = preload("ui/hf_command_line_view.gd")
+const HFTranslationType = preload("hf_translation.gd")
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
@@ -124,6 +125,7 @@ static func ask_for_script(plugin: Object) -> void:
 		var base: Control = plugin.get_editor_interface().get_base_control()
 		if base == null:
 			return
+		HFTranslationType.adopt(dialog)
 		base.add_child(dialog)
 		plugin.set("_command_script_dialog", dialog)
 	dialog.popup_centered_ratio(0.6)

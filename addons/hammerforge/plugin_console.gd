@@ -27,6 +27,7 @@ const HFPluginCrashJournalType = preload("plugin_crash_journal.gd")
 const HFPluginProblemReportType = preload("plugin_problem_report.gd")
 const HFPluginUpdateCheckType = preload("plugin_update_check.gd")
 const HFPluginCompareType = preload("plugin_compare.gd")
+const HFTranslationType = preload("hf_translation.gd")
 
 const PANEL_TITLE := "HammerForge"
 ## The Scene-tree icon, drawn at about 16px, is the compact weight of the mark.
@@ -65,6 +66,9 @@ static func setup(plugin: Object) -> void:
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.visible = false
 	var main_screen: Control = plugin.get_editor_interface().get_editor_main_screen()
+	# The main screen and the menu bar are the editor's, so both take HammerForge's
+	# words (#1702).
+	HFTranslationType.adopt(panel)
 	if main_screen:
 		main_screen.add_child(panel)
 
@@ -73,6 +77,7 @@ static func setup(plugin: Object) -> void:
 	strip.set_theme_source(plugin.get("base_control"))
 	strip.set_source(panel)
 	strip.console_requested.connect(Callable(plugin, "_on_console_requested"))
+	HFTranslationType.adopt(strip)
 	plugin.add_control_to_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, strip)
 
 	apply_icons(plugin)

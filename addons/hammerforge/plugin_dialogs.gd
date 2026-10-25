@@ -12,6 +12,8 @@ extends RefCounted
 ##
 ## On plugin _exit_tree, call `cleanup()` to free any open dialogs.
 
+const HFTranslationType = preload("hf_translation.gd")
+
 var _pending: Array = []  # Array[ConfirmationDialog]
 
 
@@ -20,6 +22,8 @@ var _pending: Array = []  # Array[ConfirmationDialog]
 func add(dlg: AcceptDialog, base_control: Control) -> void:
 	if not dlg or not base_control:
 		return
+	# The base control is the editor's, so the dialog takes HammerForge's words (#1702).
+	HFTranslationType.adopt(dlg)
 	base_control.add_child(dlg)
 	_pending.append(dlg)
 	dlg.tree_exiting.connect(func(): _pending.erase(dlg))

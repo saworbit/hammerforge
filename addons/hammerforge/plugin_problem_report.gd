@@ -8,6 +8,7 @@ extends RefCounted
 const HFProblemReportType = preload("hf_problem_report.gd")
 const HFConsoleLogType = preload("hf_console_log.gd")
 const HFCrashJournalType = preload("hf_crash_journal.gd")
+const HFTranslationType = preload("hf_translation.gd")
 
 const LOG_LINES := 50
 const UNDO_STEPS := 10
@@ -78,6 +79,7 @@ static func open_form(plugin: Object) -> void:
 			dialog.queue_free()
 	)
 	dialog.canceled.connect(dialog.queue_free)
+	HFTranslationType.adopt(dialog)
 	host.add_child(dialog)
 	dialog.popup_centered()
 
