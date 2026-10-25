@@ -173,7 +173,65 @@ func _finish_saving(level: LevelRoot) -> void:
 			return
 
 
-func test_a_resize_that_moves_its_corner_detaches_that_end():
+## A resize moves a corner within its brush's own space. The end used to come
+## loose there, drawn amber, the moment a wall was made thicker, which is when
+## the measurement matters; it now finds its corner by the faces that meet at it
+## (#1898).
+func test_a_resize_keeps_each_end_on_its_corner_and_reads_the_new_length():
 	var dimension := _doorway(1.5)
+	# The right wall twice as thick, away from the gap: its corner stays put.
 	root.set_brush_transform_by_id("right", Vector3(2, 2, 1), Vector3(1.75, 1, 0))
-	assert_true(HFDimensions.measure(root, dimension)["detached"], "the corner it was on moved")
+	var measured := HFDimensions.measure(root, dimension)
+	assert_false(measured["detached"], "still on the corner")
+	assert_almost_eq(measured["length"], 1.5, 0.0001, "the gap is as wide")
+	# And into the gap: the corner moves with the face.
+	root.set_brush_transform_by_id("right", Vector3(2, 2, 1), Vector3(0.75, 1, 0))
+	measured = HFDimensions.measure(root, dimension)
+	assert_false(measured["detached"], "still on the corner")
+	assert_almost_eq(measured["length"], 0.5, 0.0001, "and reads the narrower gap")
+
+
+func test_undo_of_a_resize_puts_the_old_length_back_with_the_ends_attached():
+	var dimension := _doorway(1.5)
+	HFUndoHelper.commit(
+		undo,
+		root,
+		"Resize Brush",
+		"set_brush_transform_by_id",
+		["right", Vector3(2, 2, 1), Vector3(0.75, 1, 0)],
+		false,
+		Callable()
+	)
+	assert_almost_eq(HFDimensions.measure(root, dimension)["length"], 0.5, 0.0001, "resized")
+	undo.undo()
+	await get_tree().process_frame
+	# The undo puts the level's entities back, the dimension among them.
+	var measured := HFDimensions.measure(root, HFDimensions.dimensions(root)[0])
+	assert_false(measured["detached"], "attached after the undo")
+	assert_almost_eq(measured["length"], 1.5, 0.0001, "the old length")
+
+
+func test_an_end_kept_before_faces_were_saved_reads_as_it_did():
+	var dimension := _doorway(1.5)
+	for key in [HFDimensions.END_A, HFDimensions.END_B]:
+		dimension.entity_data[key].erase("faces")
+	assert_false(HFDimensions.measure(root, dimension)["detached"], "attached where it was")
+	root.set_brush_transform_by_id("right", Vector3(2, 2, 1), Vector3(0.75, 1, 0))
+	assert_true(HFDimensions.measure(root, dimension)["detached"], "and comes loose on a resize")
+
+
+func test_an_end_on_an_edge_or_a_face_follows_a_resize_too():
+	_box("slab", Vector3(0, 0.5, 0), Vector3(4, 1, 4))
+	var on_edge := HFDimensions.attach(root, Vector3(0, 1, 2), Transform3D.IDENTITY)
+	var on_face := HFDimensions.attach(root, Vector3(0, 1, 0), Transform3D.IDENTITY)
+	assert_eq(str(on_edge["kind"]), "edge")
+	assert_eq(str(on_face["kind"]), "face")
+	root.set_brush_transform_by_id("slab", Vector3(4, 3, 6), Vector3(0, 1.5, 0))
+	var holder := Node3D.new()
+	add_child_autoqfree(holder)
+	assert_almost_eq(
+		HFDimensions.resolve(root, on_edge, holder)["point"], Vector3(0, 3, 3), Vector3.ONE * 0.0001
+	)
+	assert_almost_eq(
+		HFDimensions.resolve(root, on_face, holder)["point"], Vector3(0, 3, 0), Vector3.ONE * 0.0001
+	)
