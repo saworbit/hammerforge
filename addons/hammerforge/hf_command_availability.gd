@@ -32,6 +32,7 @@ const IN_VERTEX := "Not while editing vertices: the key snaps the vertices inste
 const IN_SELECT := "Not with the Select tool"
 const BUSY := "Finish what the viewport is doing first"
 const NOTHING_TO_REPEAT := "Run a command first"
+const NOTHING_IN_RUN := "Run commands on a selection first"
 const NOTHING_DRAWN := "Draw a brush first"
 const BAKING := "Wait for the bake to finish"
 
@@ -99,6 +100,9 @@ static func _mode_rule(action: String, state: Dictionary) -> Variant:
 	# Repeat waits for something to repeat (#1694).
 	if action == "repeat_last_command":
 		return "" if str(state.get("repeat_command", "")) != "" else NOTHING_TO_REPEAT
+	# Repeat Run and Clear Run wait for a run (#1735).
+	if action == "repeat_run" or action == "clear_run":
+		return "" if str(state.get("run_text", "")) != "" else NOTHING_IN_RUN
 	# A favourite goes on the picked faces, or else the selected brushes.
 	if action.begins_with("apply_favorite_"):
 		if mixed:

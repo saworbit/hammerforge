@@ -147,6 +147,12 @@ static func handle_active(
 			HFSelectionGestureType.ReleaseDecision.PASS_THROUGH,
 		]
 	):
+		# A drag of the gizmo, for Repeat Run, once Godot has finished it (#1735).
+		if (
+			not (result.get("moved", []) as Array).is_empty()
+			and plugin.has_method("_note_run_moved")
+		):
+			plugin.call_deferred("_note_run_moved", result["moved"])
 		if native_session:
 			plugin._queue_managed_brush_reconcile()
 			plugin.call_deferred(

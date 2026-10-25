@@ -1226,6 +1226,17 @@ command's.
 
 With nothing typed, the palette shows **Repeat: Hollow** as its top row when there is something to repeat, then the last eight commands you ran under **Recent**, newest first.
 
+### Repeat Run
+
+**Repeat Run** plays every command, move and turn you made since you last changed the selection by hand, again, on what is selected now, as one undo step ([#1735](https://github.com/saworbit/hammerforge/issues/1735)). For a stair that turns as it climbs: select the first step, **Duplicate**, move the copy up 3 m, turn it 15 degrees, then press Repeat Run once for each step after. After Duplicate the copy is the selection, so each press makes the next step from the last one.
+
+A move or turn is kept as how far it went, not where it ended: the arrow keys, Page Up and Page Down, **Rotate CW** and **Rotate CCW**, and a drag of the move or rotate gizmo. A gizmo turn is kept when it is about the X, Y or Z axis. Hollow and Clip keep the settings they ran with. The run also holds the commands the command line can run on a selection, such as Carve, Merge, Move to Floor and Snap to Grid. **Adjust Last** changes the run's step as it changes the level.
+
+- **Starting over.** Select something else by hand, or with a selection command such as Select Similar, and the next command starts a new run. Until then Repeat Run still plays the last run, on what you have selected: hollow and clip one room, select the next, Repeat Run.
+- **What it cannot play.** A change the run cannot hold, such as Flip, a texture command or Delete, ends the run, and the next one starts after it. **Clear Run** empties it. Ctrl+Z takes a step out of the run along with the level.
+- **Refusals.** A step that is refused on the new selection stops the run, takes back the steps it had already made, and says which step and why: "Repeat Run stopped at step 2 of 2, Hollow (0.5 m): ...".
+- **What it holds.** With nothing typed, the palette shows **Repeat Run: Duplicate, Move +Y 3 m, Rotate CCW 15° Y** under Repeat, so you know what a press does before you make it. Neither command has a key by default; give them one in the shortcut dialog.
+
 ## Example Library
 
 The **Test** tab contains an **Examples** section (collapsed by default) with 5 built-in demo levels:
