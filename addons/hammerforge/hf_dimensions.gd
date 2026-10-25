@@ -8,8 +8,10 @@ extends RefCounted
 ## middle or a face's centre, held by where that is in the brush's own space, or
 ## a point of its own, and are worked out from that whenever they are read. So a
 ## dimension follows a brush through a move, a turn and an undo with no step of
-## its own. An end whose brush has gone, or whose corner a Clip or a resize has
-## moved off that place, is detached: it reads where it was last seen.
+## its own. A resize moves a corner within the brush's own space, and the end
+## finds it again by the faces that meet there (#1898). An end whose brush has
+## gone, or whose corner a Clip has cut away, is detached: it reads where it was
+## last seen.
 
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -63,11 +65,14 @@ static func dimensions(root: Node) -> Array:
 
 ## What `point` (world) is on: the vertex, the edge's middle or the face's centre
 ## of a brush within ATTACH_REACH, nearest first in that order, held as
-## `{brush_id, kind, local}` with `local` where it is in the brush's own space; or
-## a point of its own in the space of `space`, the dimension's transform.
+## `{brush_id, kind, local, faces}` with `local` where it is in the brush's own
+## space and `faces` the normals there of the faces that meet at it, which find it
+## again after a resize has moved it (#1898); or a point of its own in the space
+## of `space`, the dimension's transform.
 static func attach(root: Node, point: Vector3, space: Transform3D) -> Dictionary:
 	var best := {}
 	var best_rank := 99
+	var best_brush: Node = null
 	for brush in root._iter_managed_brush_nodes():
 		if not (brush is DraftBrush) or str(brush.brush_id) == "":
 			continue
@@ -82,11 +87,93 @@ static func attach(root: Node, point: Vector3, space: Transform3D) -> Dictionary
 					"brush_id": str(brush.brush_id), "kind": feature[0], "local": _array(feature[1])
 				}
 				best_rank = rank
+				best_brush = brush
 		if best_rank == 0:
 			break
 	if not best.is_empty():
+		var normals: Array = []
+		for normal in _meeting(best_brush, best["kind"], _vector(best["local"])):
+			normals.append(_array(normal))
+		best["faces"] = normals
 		return best
 	return {"point": _array(space.affine_inverse() * point)}
+
+
+## The normals of the faces of `brush` that meet at the `kind` feature at `local`:
+## every face holding a vertex, the two faces holding an edge, and a face's own.
+static func _meeting(brush: Node, kind: String, local: Vector3) -> Array:
+	var out: Array = []
+	for face in brush.faces:
+		if face == null or (face.local_verts as PackedVector3Array).is_empty():
+			continue
+		var verts: PackedVector3Array = face.local_verts
+		var holds := false
+		match kind:
+			"vertex":
+				for corner in verts:
+					holds = holds or corner.distance_to(local) <= ATTACH_REACH
+			"edge":
+				for c in verts.size():
+					var middle: Vector3 = (verts[c] + verts[(c + 1) % verts.size()]) * 0.5
+					holds = holds or middle.distance_to(local) <= ATTACH_REACH
+			"face":
+				var middle := Vector3.ZERO
+				for corner in verts:
+					middle += corner
+				holds = (middle / verts.size()).distance_to(local) <= ATTACH_REACH
+		if holds:
+			out.append(face.normal)
+	return out
+
+
+## Where the `kind` feature the faces with `normals` meet at is now, in `brush`'s
+## own space, or null when they meet at none: a corner the planes of three of them
+## make that is still a corner of the brush, the middle of the edge two of them
+## share, or one's centre. How an end finds its corner after a resize (#1898).
+static func _found_by_faces(brush: Node, kind: String, normals: Array) -> Variant:
+	var faces: Array = []
+	for wanted in normals:
+		var normal = _vector(wanted)
+		if not (normal is Vector3):
+			return null
+		var match_face = null
+		for face in brush.faces:
+			if face != null and (face.normal as Vector3).dot(normal) > 0.9999:
+				match_face = face
+				break
+		if match_face == null or (match_face.local_verts as PackedVector3Array).is_empty():
+			return null
+		faces.append(match_face)
+	if faces.is_empty():
+		return null
+	var first: PackedVector3Array = faces[0].local_verts
+	match kind:
+		"face":
+			var middle := Vector3.ZERO
+			for corner in first:
+				middle += corner
+			return middle / first.size()
+		"edge":
+			if faces.size() < 2:
+				return null
+			var other := Plane(faces[1].normal, faces[1].local_verts[0])
+			for c in first.size():
+				var a: Vector3 = first[c]
+				var b: Vector3 = first[(c + 1) % first.size()]
+				if (
+					absf(other.distance_to(a)) <= ATTACH_REACH
+					and absf(other.distance_to(b)) <= ATTACH_REACH
+				):
+					return (a + b) * 0.5
+		"vertex":
+			for corner in first:
+				var on_all := true
+				for face in faces:
+					var plane := Plane(face.normal, (face.local_verts as PackedVector3Array)[0])
+					on_all = on_all and absf(plane.distance_to(corner)) <= ATTACH_REACH
+				if on_all and faces.size() >= 3:
+					return corner
+	return null
 
 
 ## The order an end is attached in when two lie on the point.
@@ -140,6 +227,11 @@ static func resolve(root: Node, end: Dictionary, holder: Node3D) -> Dictionary:
 			return {
 				"point": (brush as Node3D).global_transform * (local as Vector3), "attached": true
 			}
+	# A resize moved it: found again by the faces that meet at it, while they
+	# still do. An end kept before these were saved has none, and detaches.
+	var found = _found_by_faces(brush, kind, end.get("faces", []))
+	if found is Vector3:
+		return {"point": (brush as Node3D).global_transform * (found as Vector3), "attached": true}
 	return {"point": null, "attached": false}
 
 
