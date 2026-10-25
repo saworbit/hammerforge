@@ -720,6 +720,13 @@ static func clip_to_face_plane_selected(plugin: Object, root: Node) -> bool:
 		"",
 		true
 	)
+	# Which face it cut along, as the bridge's clip_to_face takes it, so the
+	# Adjust panel shows it and Repeat Run cuts the next brushes along it (#1896).
+	var again := func(_s: Dictionary) -> Array: return [cuttable, plane]
+	var recipe := {"action": "Clip to Face Plane", "method": "clip_brushes_by_plane", "args": again}
+	_note_run(
+		plugin, "clip_to_face", {"plane_brush_id": source_id, "plane_face": face_index}, recipe
+	)
 	_release_face_select_after_cut(plugin, root)
 	return true
 

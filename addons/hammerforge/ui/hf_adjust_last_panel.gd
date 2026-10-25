@@ -28,6 +28,10 @@ var _preset_name: LineEdit = null
 var _controls: Dictionary = {}
 ## The setting each control is for, by key.
 var _schema: Dictionary = {}
+## What a setting shown and not changed here holds: a string or a face, as a
+## material Replace Material swapped or the face a Clip to Face Plane cut along
+## (#1896), by key.
+var _fixed: Dictionary = {}
 ## Set while the controls are filled from code, so they do not ask to run.
 var _filling := false
 
@@ -77,6 +81,7 @@ func show_command(
 		child.queue_free()
 	_controls.clear()
 	_schema.clear()
+	_fixed.clear()
 	for field_def in params:
 		var key := str(field_def.get("key", ""))
 		if key == "":
@@ -123,6 +128,8 @@ func value_of(key: String) -> Variant:
 		"vec3":
 			var spins := control.get_children()
 			return Vector3(spins[0].value, spins[1].value, spins[2].value)
+		"string", "face":
+			return _fixed.get(key)
 	return (control as SpinBox).value
 
 
@@ -148,6 +155,11 @@ func _control_for(field_def: Dictionary) -> Control:
 			for i in 3:
 				row.add_child(_spin(field_def))
 			return row
+		"string", "face":
+			# Shown, not changed: what a step was made from.
+			var shown := Label.new()
+			shown.clip_text = true
+			return shown
 	return _spin(field_def)
 
 
@@ -171,12 +183,20 @@ func _set_value(key: String, value: Variant) -> void:
 		"axis":
 			(control as OptionButton).selected = maxi(0, AXES.find(str(value)))
 		"enum":
-			(control as OptionButton).selected = int(value)
+			# By its option, as the bridge takes it, or by index.
+			var options: Array = _schema[key].get("options", [])
+			var at_option := options.find(value) if value is String else int(value)
+			(control as OptionButton).selected = maxi(0, at_option)
 		"vec3":
 			var at: Vector3 = value if value is Vector3 else Vector3.ZERO
 			var spins := control.get_children()
 			for i in 3:
 				(spins[i] as SpinBox).value = at[i]
+		"string", "face":
+			_fixed[key] = value
+			# A material's file shows by its name, not its folder.
+			var text := str(value)
+			(control as Label).text = text.get_file() if text.contains("/") else text
 		_:
 			(control as SpinBox).value = float(value)
 
@@ -189,6 +209,8 @@ func _watch(key: String, control: Control) -> void:
 		(control as OptionButton).item_selected.connect(changed)
 	elif control is SpinBox:
 		(control as SpinBox).value_changed.connect(changed)
+	elif control is Label:
+		return
 	else:
 		for spin in control.get_children():
 			(spin as SpinBox).value_changed.connect(changed)
