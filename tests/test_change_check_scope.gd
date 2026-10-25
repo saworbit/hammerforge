@@ -208,10 +208,13 @@ func test_a_brush_a_command_made_is_taken_in_without_walking_every_brush():
 
 func test_a_brush_that_went_or_a_copy_godot_made_makes_it_a_full_walk():
 	var brushes := _watched_level()
-	level.delete_brush_by_id("c")
+	# Godot's Delete: the brush goes with no tag and no record that names it.
+	var gone: DraftBrush = brushes[2]
+	gone.get_parent().remove_child(gone)
+	gone.queue_free()
 	_native_move(brushes[1], Vector3.UP)
 	tracker.note_step(1, false)
-	assert_eq(tracker.reconcile_step(level, []), PackedStringArray(["b"]), "a brush deleted")
+	assert_eq(tracker.reconcile_step(level, []), PackedStringArray(["b"]), "a brush Godot deleted")
 	level.consume_dirty_tags()
 	# Ctrl+D in the Scene dock: a copy under its original's id, and no tag.
 	var copy: DraftBrush = brushes[0].duplicate()
@@ -220,6 +223,25 @@ func test_a_brush_that_went_or_a_copy_godot_made_makes_it_a_full_walk():
 	tracker.note_step(2, false)
 	assert_true(tracker.reconcile_step(level, []).has("b"), "a copy Godot made")
 	assert_ne(copy.brush_id, "a", "and the walk gave the copy an id of its own")
+
+
+## A brush a command took away, which tagged it, is let go without walking every
+## brush, as the undo of a placement takes away the brush its step's record names
+## (#1866). What else changed is the step's to name.
+func test_a_brush_a_command_took_away_is_let_go_without_a_full_walk():
+	var brushes := _watched_level()
+	level.delete_brush_by_id("c")
+	_native_move(brushes[1], Vector3.UP)
+	tracker.note_step(1, false)
+	assert_eq(
+		tracker.reconcile_step(level, [brushes[1]]),
+		PackedStringArray(["b"]),
+		"the selection's own change"
+	)
+	assert_true(tracker.owes_full_walk(), "found without walking every brush")
+	assert_false(tracker._instances_by_id.has("c"), "and the deleted brush is let go")
+	level.brush_changes_wanted.emit()
+	assert_false(tracker.owes_full_walk(), "the walk before a bake agrees")
 
 
 func test_a_selected_folder_moves_every_brush_in_it():

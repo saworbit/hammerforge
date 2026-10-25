@@ -39,6 +39,7 @@ const HFFaceDirection = preload("hf_face_direction.gd")
 @export var faces: Array[FaceData] = []:
 	set(value):
 		faces = value
+		forget_faces_record()
 		# Faces assigned from outside -- a `.map` import, a restore, a generator,
 		# the vertex tools -- have never been told where the brush is, and a world
 		# space UV needs that (#652).
@@ -47,6 +48,11 @@ const HFFaceDirection = preload("hf_face_direction.gd")
 
 var editor_material: Material = null
 var mesh_instance: MeshInstance3D = null
+## The faces as a record holds them, `serialize_faces()`, kept from one whole
+## level undo step to the next while no face can have changed (#1866). Every
+## record taken while it is kept shares it, so it is read-only.
+var _faces_record: Array = []
+var _faces_record_kept := false
 var geometry_dirty := true
 var _gizmo_update_queued := false
 ## The shape and size the faces were last built for from `_unit_faces()`, so a
@@ -127,6 +133,10 @@ func _notification(what: int) -> void:
 ## sites means a transform set by the gizmo, by undo, by a generator or by a
 ## `.map` import all arrive the same way.
 func sync_face_world_transform() -> void:
+	# A move can change a face: an offset from before #652 is converted here, and
+	# every path that changes a face ends in `rebuild_preview()`, which starts
+	# here. So the kept record goes.
+	forget_faces_record()
 	if faces.is_empty():
 		return
 	var xform := global_transform if is_inside_tree() else transform
@@ -2171,6 +2181,48 @@ func serialize_faces() -> Array:
 	return out
 
 
+## `serialize_faces()`, kept until a face can have changed, for the records a
+## whole level undo step takes of every brush (#1866). It and each face in it are
+## read-only, since every record taken while it is kept shares it: a caller that
+## changes a record changes a copy. Two records that share it are equal
+## without being compared face by face, which is what lets an undo keep every
+## brush it did not change cheaply.
+##
+## What lets it go: the faces assigned, any move, `rebuild_preview()`, which
+## every path that changes a face ends in, a restore of the faces, and
+## `LevelRoot.tag_brush_dirty()`, which every command that changes a brush calls.
+## A face Godot's Inspector changes reaches the next record through the change
+## check after the step, which tags the brush.
+func faces_record() -> Array:
+	if not _faces_record_kept:
+		_faces_record = serialize_faces()
+		_read_only(_faces_record)
+		_faces_record_kept = true
+	return _faces_record
+
+
+## Whether `faces` is the kept faces record itself, the array a record taken
+## while it was kept holds.
+func is_kept_faces_record(faces_value: Variant) -> bool:
+	return _faces_record_kept and is_same(faces_value, _faces_record)
+
+
+## Let go of the kept faces record, so the next one is taken from the faces.
+func forget_faces_record() -> void:
+	_faces_record_kept = false
+	_faces_record = []
+
+
+## The faces record and each face's dictionary made read-only: what a careless
+## caller would write through. The values inside are left as they are, since a
+## walk into each one cost twice what taking the record did.
+static func _read_only(record_faces: Array) -> void:
+	for face in record_faces:
+		if face is Dictionary:
+			(face as Dictionary).make_read_only()
+	record_faces.make_read_only()
+
+
 ## Shapes whose builders wound every face inside out before #313. Their saved
 ## faces carry the same inversion, and they are all convex, so the centroid
 ## check the v0 migration already uses resolves them exactly.
@@ -2184,6 +2236,7 @@ const INVERTED_BUILDER_SHAPES := [
 
 
 func apply_serialized_faces(data: Array) -> void:
+	forget_faces_record()
 	faces.clear()
 	var needs_winding_migration := false
 	var check_fully_inverted := false
