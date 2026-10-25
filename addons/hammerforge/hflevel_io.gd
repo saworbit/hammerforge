@@ -312,6 +312,16 @@ static func resolve_resources(value: Variant, _depth: int = 0) -> Variant:
 		return null
 	if value is Resource:
 		return encode_variant(value, _depth)
+	# A read-only value is written through by nothing, this walk included: a
+	# brush's kept faces record is one, shared by every undo step that holds it
+	# (#1866). It holds no live Resource, and is passed through; one that ever did
+	# would be resolved in a copy.
+	if (value is Dictionary or value is Array) and value.is_read_only():
+		return (
+			value
+			if not holds_resource(value, _depth)
+			else resolve_resources(value.duplicate(true), _depth)
+		)
 	if value is Dictionary:
 		var dict: Dictionary = value
 		# Same refusal as a typed array, for the same reason. Nothing in the level

@@ -467,7 +467,12 @@ func _legacy_manager_remove(brush: Node) -> void:
 		root.brush_manager.remove_brush(brush)
 
 
-func get_brush_info_from_node(brush: Node) -> Dictionary:
+## A brush's record: what an undo step, a save and a duplicate are made from.
+## With `kept_faces` its faces are `DraftBrush.faces_record()`, shared with every
+## record taken since they last changed and read-only, which the whole level undo
+## steps take of every brush (#1866). Without, they are made for this record, for
+## a caller that changes them.
+func get_brush_info_from_node(brush: Node, kept_faces := false) -> Dictionary:
 	if not brush or not (brush is DraftBrush):
 		return {}
 	var draft := brush as DraftBrush
@@ -497,7 +502,7 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	if draft.material_override:
 		info["material"] = draft.material_override
 	if draft.faces.size() > 0:
-		info["faces"] = draft.serialize_faces()
+		info["faces"] = draft.faces_record() if kept_faces else draft.serialize_faces()
 	var vgs: PackedStringArray = draft.get_meta("visgroups", PackedStringArray())
 	if not vgs.is_empty():
 		info["visgroups"] = Array(vgs)
@@ -861,7 +866,11 @@ func reusable_draft_brushes(records: Array) -> Dictionary:
 ## has changed and nothing says so. Capturing the record costs an allocation and
 ## cannot be wrong.
 func record_matches_node(brush: Node, record: Dictionary) -> bool:
-	var live: Dictionary = get_brush_info_from_node(brush)
+	# A record whose faces are the brush's kept faces record was taken while
+	# nothing changed a face, so the two compare without going face by face
+	# (#1866). Any other is compared with the faces as they are now.
+	var kept: bool = brush is DraftBrush and brush.is_kept_faces_record(record.get("faces"))
+	var live: Dictionary = get_brush_info_from_node(brush, kept)
 	if live.is_empty():
 		return false
 	return live.recursive_equal(record, _RECORD_COMPARE_DEPTH)
