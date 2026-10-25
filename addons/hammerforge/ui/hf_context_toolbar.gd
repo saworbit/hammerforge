@@ -13,6 +13,7 @@ const HFMaterialBrowserType = preload("res://addons/hammerforge/ui/hf_material_b
 const HFShapeIconsType = preload("res://addons/hammerforge/ui/hf_shape_icons.gd")
 const HFCommandAvailabilityType = preload("res://addons/hammerforge/hf_command_availability.gd")
 const HFAccessibility = preload("res://addons/hammerforge/hf_accessibility.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 signal action_requested(action: String, args: Array)
 signal operation_toggle_requested
@@ -744,15 +745,19 @@ func _apply_context(state: Dictionary) -> void:
 		var copies: int = state.get("prefab_copies", 0)
 		var tip := PackedStringArray()
 		if copies > 0:
-			tip.append(
-				"%d cop%s of %s in the level" % [copies, "y" if copies == 1 else "ies", pfb_name]
+			var placed := HFTranslationType.tn(
+				"{count} copy of {prefab} in the level",
+				"{count} copies of {prefab} in the level",
+				copies
 			)
+			tip.append(placed.format({"count": copies, "prefab": pfb_name}))
 		if not changes.is_empty():
 			tip.append("Changed from its prefab, Push to keep or Discard to throw away:")
 			for change in changes.slice(0, 8):
 				tip.append("  %s" % str(change.get("field", "")))
 			if changes.size() > 8:
-				tip.append("  and %d more" % (changes.size() - 8))
+				var more := HFTranslationType.t("and {count} more")
+				tip.append("  " + more.format({"count": changes.size() - 8}))
 		_label.tooltip_text = "\n".join(tip)
 		return
 
@@ -762,25 +767,27 @@ func _apply_context(state: Dictionary) -> void:
 			var bc: int = state.get("brush_count", 0)
 			var ec: int = state.get("entity_count", 0)
 			if ec > 0:
-				_label.text = (
-					"%d brush%s + %d entit%s"
-					% [bc, "" if bc == 1 else "es", ec, "y" if ec == 1 else "ies"]
-				)
+				_label.text = (HFTranslationType.t("{brushes} + {entities}").format(
+					{"brushes": _brushes(bc), "entities": _entities(ec)}
+				))
 			else:
-				_label.text = "%d brush%s selected" % [bc, "" if bc == 1 else "es"]
+				_label.text = HFTranslationType.t("{brushes} selected").format(
+					{"brushes": _brushes(bc)}
+				)
 		Context.FACE_SELECTED:
 			var fc: int = state.get("face_count", 0)
 			var bc: int = state.get("brush_count", 0)
 			if bc > 0:
-				_label.text = (
-					"%d face%s on %d brush%s"
-					% [fc, "" if fc == 1 else "s", bc, "" if bc == 1 else "es"]
-				)
+				_label.text = (HFTranslationType.t("{faces} on {brushes}").format(
+					{"faces": _faces(fc), "brushes": _brushes(bc)}
+				))
 			else:
-				_label.text = "%d face%s selected" % [fc, "" if fc == 1 else "s"]
+				_label.text = HFTranslationType.t("{faces} selected").format({"faces": _faces(fc)})
 		Context.ENTITY_SELECTED:
 			var count: int = state.get("entity_count", 0)
-			_label.text = "%d entit%s selected" % [count, "y" if count == 1 else "ies"]
+			_label.text = (HFTranslationType.t("{entities} selected").format(
+				{"entities": _entities(count)}
+			))
 		Context.DRAW_IDLE:
 			_label.text = "Draw"
 		Context.DRAGGING:
@@ -860,7 +867,9 @@ func _update_dynamic_content(state: Dictionary) -> void:
 			if show_cuts:
 				var cuts_label = section.get_node_or_null("CutsCountLabel")
 				if cuts_label:
-					cuts_label.text = "%d pending" % pcount
+					cuts_label.text = HFTranslationType.t("{count} pending").format(
+						{"count": pcount}
+					)
 				# Disable cut buttons during active bake
 				var bake_dis: bool = state.get("bake_disabled", false)
 				for n2 in ["ApplyCutsBtn", "CommitCutsBtn", "ClearCutsBtn"]:
@@ -982,19 +991,35 @@ func _set_structure_buttons_visible(section: Control, vis: bool) -> void:
 			child.visible = vis
 
 
+## "{count} brush" or "{count} brushes", and the same for faces and entities,
+## in the language shown, for the selection count.
+static func _brushes(count: int) -> String:
+	return HFTranslationType.tn("{count} brush", "{count} brushes", count).format({"count": count})
+
+
+static func _faces(count: int) -> String:
+	return HFTranslationType.tn("{count} face", "{count} faces", count).format({"count": count})
+
+
+static func _entities(count: int) -> String:
+	return HFTranslationType.tn("{count} entity", "{count} entities", count).format(
+		{"count": count}
+	)
+
+
 func _refresh_material_thumbs() -> void:
 	for i in range(_material_thumbs.size()):
 		var btn = _material_thumbs[i]
 		if i < _favorite_materials.size():
 			var info = _favorite_materials[i]
 			btn.text = str(i + 1)
-			btn.tooltip_text = (
-				"Apply: %s (%s)"
-				% [
-					info.get("name", "Material %d" % info.get("index", i)),
-					_chords("{apply_favorite_%d}" % (i + 1)),
-				]
+			var unnamed := HFTranslationType.t("Material {number}")
+			var shown_name: String = info.get(
+				"name", unnamed.format({"number": info.get("index", i)})
 			)
+			btn.tooltip_text = (HFTranslationType.t("Apply: {material} ({keys})").format(
+				{"material": shown_name, "keys": _chords("{apply_favorite_%d}" % (i + 1))}
+			))
 			btn.visible = true
 		else:
 			btn.visible = false

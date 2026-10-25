@@ -12,6 +12,7 @@ const HFBakeSplit = preload("hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFViewFiltersType = preload("hf_view_filters.gd")
 const HFGroupNameDialogType = preload("ui/hf_group_name_dialog.gd")
+const HFTranslationType = preload("hf_translation.gd")
 
 ## How far a cordon bound may sit from the origin.
 ##
@@ -128,7 +129,11 @@ static func refresh_view_filters(dock: Object) -> void:
 	var chip: Button = dock.get("_view_filter_chip")
 	if chip != null and is_instance_valid(chip):
 		chip.visible = not hidden.is_empty()
-		chip.text = "Filtered: %d kind%s" % [hidden.size(), "" if hidden.size() == 1 else "s"]
+		chip.text = (
+			HFTranslationType
+			. tn("Filtered: {count} kind", "Filtered: {count} kinds", hidden.size())
+			. format({"count": hidden.size()})
+		)
 
 
 static func _view_filter_row(
@@ -405,7 +410,14 @@ static func on_group_open(dock: Object) -> void:
 		return
 	dock.level_root.visgroup_system.set_open_group(group_name)
 	refresh_group_list(dock)
-	dock.show_toast("Open: %s. Its members pick one at a time. Escape closes it" % group_name, 0)
+	dock.show_toast(
+		(
+			HFTranslationType
+			. t("Open: {group}. Its members pick one at a time. Escape closes it")
+			. format({"group": group_name})
+		),
+		0
+	)
 
 
 static func on_group_add_selection(dock: Object) -> void:
@@ -531,7 +543,7 @@ static func on_view_isolate(dock: Object) -> void:
 		dock.show_toast("Isolate: highlight a visgroup, or select something in one", 1)
 		return
 	refresh_visgroup_ui(dock)
-	dock._set_status("Isolated %s" % ", ".join(names))
+	dock._set_status(HFTranslationType.t("Isolated {names}").format({"names": ", ".join(names)}))
 
 
 static func on_view_isolate_selection(dock: Object) -> void:
@@ -628,11 +640,12 @@ static func _sync_view_controls(dock: Object, system) -> void:
 		var hidden: int = system.view_hidden_nodes().size() if system else 0
 		var isolating: bool = system != null and system.is_isolating()
 		label.visible = hidden > 0 or isolating
-		label.text = (
-			("Isolated, %d hidden" % hidden)
+		var shown: String = (
+			HFTranslationType.t("Isolated, {count} hidden")
 			if isolating
-			else ("Hidden: %d, not saved with the level" % hidden)
+			else HFTranslationType.t("Hidden: {count}, not saved with the level")
 		)
+		label.text = shown.format({"count": hidden})
 	var opt = dock.get("view_saved_opt")
 	if opt:
 		var picked := _picked_view(dock)
@@ -814,7 +827,10 @@ static func reselect_visgroup_row(dock: Object, index: int) -> void:
 static func require_visgroup_name(dock: Object, action: String) -> String:
 	var visgroup_name := get_selected_visgroup_name(dock)
 	if visgroup_name == "" and dock:
-		dock._set_status("%s: select a visgroup first" % action, true)
+		dock._set_status(
+			HFTranslationType.t("{action}: select a visgroup first").format({"action": action}),
+			true
+		)
 	return visgroup_name
 
 
@@ -1305,7 +1321,9 @@ static func sync_cordon_ui(dock: Object, select: int = -1) -> bool:
 	if dock.cordon_name_edit:
 		var names: PackedStringArray = dock.level_root.cordon_names
 		dock.cordon_name_edit.text = names[index] if index < names.size() else ""
-		dock.cordon_name_edit.placeholder_text = "Cordon %d" % (index + 1)
+		dock.cordon_name_edit.placeholder_text = (HFTranslationType.t("Cordon {number}").format(
+			{"number": index + 1}
+		))
 	var clamped := false
 	for i in range(controls.size()):
 		if controls[i]:

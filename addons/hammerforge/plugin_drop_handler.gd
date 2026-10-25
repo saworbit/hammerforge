@@ -7,6 +7,7 @@ const BrushPresetType = preload("brush_preset.gd")
 const DraftBrushType = preload("brush_instance.gd")
 const HFPrefabType = preload("hf_prefab.gd")
 const HFBrushSystemType = preload("systems/hf_brush_system.gd")
+const HFTranslationType = preload("hf_translation.gd")
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
@@ -172,7 +173,8 @@ static func place_selected_prefab(plugin: Object, root: Node) -> void:
 		return
 	var prefab = HFPrefabType.load_from_file(prefab_path)
 	if prefab == null:
-		_toast(plugin, "%s is not a prefab this build can read" % prefab_path.get_file())
+		var unread := HFTranslationType.t("{file} is not a prefab this build can read")
+		_toast(plugin, unread.format({"file": prefab_path.get_file()}))
 		return
 	var point = _point_under(plugin, root, plugin.last_3d_mouse_pos)
 	if point == null:
@@ -301,7 +303,11 @@ static func handle_files_drop(plugin: Object, position: Vector2, data: Variant) 
 			return
 		var built := HFTextureFolder.build_for_image(image)
 		if (built["materials"] as Array).is_empty():
-			_toast(plugin, "%s: %s" % [image.get_file(), HFTextureFolder.report(built)])
+			var refused := HFTranslationType.t("{file}: {problem}")
+			_toast(
+				plugin,
+				refused.format({"file": image.get_file(), "problem": HFTextureFolder.report(built)})
+			)
 			return
 		material = built["materials"][0]
 		path = material.resource_path
@@ -312,7 +318,8 @@ static func handle_files_drop(plugin: Object, position: Vector2, data: Variant) 
 	else:
 		material = ResourceLoader.load(path) as Material
 	if material == null:
-		_toast(plugin, "%s could not be loaded as a material" % path.get_file())
+		var unloaded := HFTranslationType.t("{file} could not be loaded as a material")
+		_toast(plugin, unloaded.format({"file": path.get_file()}))
 		return
 	var slot := -1
 	if root.material_manager:
@@ -348,7 +355,8 @@ static func handle_material_drop(plugin: Object, position: Vector2, data: Varian
 	if mat_idx < 0:
 		return
 	if mat_idx >= root.get_materials().size():
-		_toast(plugin, "Material #%d is no longer in the palette" % mat_idx)
+		var gone := HFTranslationType.t("Material #{slot} is no longer in the palette")
+		_toast(plugin, gone.format({"slot": mat_idx}))
 		return
 	_paint_dropped(plugin, root, position, mat_idx, root.material_manager.get_material(mat_idx))
 
@@ -399,10 +407,12 @@ static func _paint_dropped(
 		plugin.dock._selected_material_index = slot
 		if plugin.dock.material_browser:
 			plugin.dock.material_browser.set_selected_index(slot)
-		if count == 1:
-			plugin.dock.show_toast("Applied material #%d to face" % slot, 0)
-		else:
-			plugin.dock.show_toast("Applied material #%d to %d faces" % [slot, count], 0)
+		var applied: String = (
+			HFTranslationType.t("Applied material #{slot} to face")
+			if count == 1
+			else HFTranslationType.t("Applied material #{slot} to {count} faces")
+		)
+		plugin.dock.show_toast(applied.format({"slot": slot, "count": count}), 0)
 
 
 ## The Hidden swatch dropped on a face (#1719): that face, or every selected face
@@ -433,7 +443,10 @@ static func _hide_dropped(plugin: Object, root: Node, position: Vector2) -> void
 		before["scope_ids"]
 	)
 	if plugin.dock:
-		plugin.dock.show_toast("%d face%s made Hidden" % [count, "" if count == 1 else "s"], 0)
+		var hidden := HFTranslationType.tn(
+			"{count} face made Hidden", "{count} faces made Hidden", count
+		)
+		plugin.dock.show_toast(hidden.format({"count": count}), 0)
 
 
 ## `{brush_id: [face indices]}` for a drop on face `face_idx` of `brush`: that

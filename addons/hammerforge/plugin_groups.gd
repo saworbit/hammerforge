@@ -14,6 +14,7 @@ extends RefCounted
 const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFGroupNameDialog = preload("ui/hf_group_name_dialog.gd")
+const HFTranslationType = preload("hf_translation.gd")
 
 
 ## Group Selection: ask for a name, then group the selection as one step. Whole
@@ -46,7 +47,7 @@ static func _group_as(plugin: Object, root: Node, nodes: Array, group_name: Stri
 	var before: Dictionary = root.capture_state()
 	system.group_units(unique, live)
 	_commit(plugin, root, "Group Selection", before)
-	_say(plugin, "Grouped as %s" % unique, 0)
+	_say(plugin, HFTranslationType.t("Grouped as {group}").format({"group": unique}), 0)
 
 
 ## Ungroup: take the selected groups apart one level. With a group open, a node
@@ -91,7 +92,15 @@ static func open_selected_group(plugin: Object, root: Node) -> bool:
 		return false
 	system.set_open_group(group_name)
 	_refresh(plugin)
-	_say(plugin, "Open: %s. Its members pick one at a time. Escape closes it" % group_name, 0)
+	_say(
+		plugin,
+		(
+			HFTranslationType
+			. t("Open: {group}. Its members pick one at a time. Escape closes it")
+			. format({"group": group_name})
+		),
+		0
+	)
 	return true
 
 
@@ -112,7 +121,15 @@ static func open_at(plugin: Object, root: Node, camera: Camera3D, position: Vect
 	var inner: String = system.selection_unit_of(picked)
 	_select(plugin, system.group_members_deep(inner) if inner != "" else [picked])
 	_refresh(plugin)
-	_say(plugin, "Open: %s. Its members pick one at a time. Escape closes it" % unit, 0)
+	_say(
+		plugin,
+		(
+			HFTranslationType
+			. t("Open: {group}. Its members pick one at a time. Escape closes it")
+			. format({"group": unit})
+		),
+		0
+	)
 	return true
 
 
@@ -130,7 +147,7 @@ static func close_group(plugin: Object, root: Node) -> bool:
 		var picked: Array = system.group_members_deep(unit) if unit != "" else members
 		_select(plugin, picked)
 	_refresh(plugin)
-	_say(plugin, "Closed %s" % closed, 0)
+	_say(plugin, HFTranslationType.t("Closed {group}").format({"group": closed}), 0)
 	return true
 
 

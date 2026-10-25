@@ -105,6 +105,10 @@ msgstr ""
 msgid "Add to Visgroup"
 msgstr ""
 
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Added output: {output} → {target}.{input}"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Adjust Last"
 msgstr ""
@@ -176,6 +180,20 @@ msgstr ""
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "Any material in the palette"
 msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "Applied material #{slot} to face"
+msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "Applied material #{slot} to {count} faces"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Applied preset '{preset}' ({count} connection)"
+msgid_plural "Applied preset '{preset}' ({count} connections)"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "Apply"
@@ -279,6 +297,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_material_browser.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Apply to Whole Brush"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Apply: {material} ({keys})"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -391,6 +413,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Bevel the selected edge (vertex mode, edge sub-mode)"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Bit {number}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/hf_command_registry.gd
@@ -681,6 +707,10 @@ msgstr ""
 msgid "Close the open group, one level, and select it."
 msgstr ""
 
+#: addons/hammerforge/plugin_groups.gd
+msgid "Closed {group}"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_overlay_colors_panel.gd
 msgid "Colours"
 msgstr ""
@@ -791,6 +821,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Cordon 1"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Cordon {number}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -1329,6 +1363,12 @@ msgstr ""
 msgid "Filter text..."
 msgstr ""
 
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Filtered: {count} kind"
+msgid_plural "Filtered: {count} kinds"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Filters by name and by description, so \"navmesh\" and \"pathfinding\" both find the same switch."
 msgstr ""
@@ -1597,6 +1637,10 @@ msgstr ""
 msgid "Group the selection under a name, so a click picks it all. Whole groups go in as groups."
 msgstr ""
 
+#: addons/hammerforge/plugin_groups.gd
+msgid "Grouped as {group}"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Groups"
 msgstr ""
@@ -1635,6 +1679,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_material_browser.gd
 msgid "Hidden: for a face nobody will see, such as the underside of a floor or the back of a wall against another. It keeps its collision, and the bake leaves it out of the mesh and the lightmap.\n\nClick: make the selected faces Hidden\nDrag onto a face: make it Hidden\nA material applied to a Hidden face shows it again"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Hidden: {count}, not saved with the level"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_edit_actions.gd
@@ -1855,6 +1903,14 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Isolate Visgroups"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Isolated {names}"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Isolated, {count} hidden"
 msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
@@ -2197,6 +2253,14 @@ msgstr ""
 msgid "Material"
 msgstr ""
 
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "Material #{slot} is no longer in the palette"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "Material {number}"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Max (X, Y, Z):"
 msgstr ""
@@ -2393,6 +2457,10 @@ msgstr ""
 msgid "No materials loaded. Refresh Prototypes is under Material Library."
 msgstr ""
 
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "No sound at {path}"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Noise"
 msgstr ""
@@ -2501,6 +2569,10 @@ msgstr ""
 msgid "Open the structure builder: stairs, arches, domes and the rest."
 msgstr ""
 
+#: addons/hammerforge/dock_visgroup_handler.gd addons/hammerforge/plugin_groups.gd
+msgid "Open: {group}. Its members pick one at a time. Escape closes it"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Operation Replay Timeline"
 msgstr ""
@@ -2607,6 +2679,18 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Pick Pivot"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Pick a sound first"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Pick a {kind} file"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Pick {kind}"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
@@ -4431,12 +4515,20 @@ msgstr ""
 msgid "Wire Connection"
 msgstr ""
 
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Wired: {output} → {target}.{input}"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Wireframe"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Wires:"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Wiring below is for {name}, the first of them."
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -4507,6 +4599,10 @@ msgstr ""
 msgid "Z offset per copy"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "and {count} more"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_prefab_library.gd
 msgid "e.g. wooden, metal, ornate"
 msgstr ""
@@ -4559,14 +4655,98 @@ msgstr ""
 msgid "x2"
 msgstr ""
 
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "{action}: select a visgroup first"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{brushes} + {entities}"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{brushes} selected"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{count} brush"
+msgid_plural "{count} brushes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{count} copy of {prefab} in the level"
+msgid_plural "{count} copies of {prefab} in the level"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{count} entity"
+msgid_plural "{count} entities"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "{count} entity. A value goes on each one that has it."
+msgid_plural "{count} entities. A value goes on each one that has it."
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{count} face"
+msgid_plural "{count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "{count} face made Hidden"
+msgid_plural "{count} faces made Hidden"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{count} pending"
+msgstr ""
+
 #: addons/hammerforge/plugin_face_sweep.gd
 msgid "{count} piece"
 msgid_plural "{count} pieces"
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{entities} selected"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{faces} on {brushes}"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_context_toolbar.gd
+msgid "{faces} selected"
+msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "{file} could not be loaded as a material"
+msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "{file} is not a prefab this build can read"
+msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "{file}: {problem}"
+msgstr ""
+
 #: addons/hammerforge/plugin_face_sweep.gd
 msgid "{folded} of {count} pieces fold back on themselves: widen the radius or cut more segments"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "{label} ({have} of {count}):"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "{label}:"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd

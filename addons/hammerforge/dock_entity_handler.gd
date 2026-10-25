@@ -11,6 +11,7 @@ const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFEntityMultiEdit = preload("ui/hf_entity_multi_edit.gd")
+const HFTranslationType = preload("hf_translation.gd")
 
 ## A value at its class default reads lighter than one set on purpose (#1729).
 const DEFAULT_TINT := Color(1.0, 1.0, 1.0, 0.55)
@@ -186,7 +187,15 @@ static func rebuild_multi_entity_props(dock: Object, entities: Array) -> void:
 	var content = dock._entity_props_section.get_content()
 	var header := Label.new()
 	header.name = "EntityMultiHeader"
-	header.text = "%d entities. A value goes on each one that has it." % entities.size()
+	header.text = (
+		HFTranslationType
+		. tn(
+			"{count} entity. A value goes on each one that has it.",
+			"{count} entities. A value goes on each one that has it.",
+			entities.size()
+		)
+		. format({"count": entities.size()})
+	)
 	header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(header)
 	dock._entity_props_controls.append(header)
@@ -197,9 +206,11 @@ static func rebuild_multi_entity_props(dock: Object, entities: Array) -> void:
 		content.add_child(line)
 		dock._entity_props_controls.append(line)
 		var lbl := Label.new()
-		lbl.text = "%s:" % row["label"]
+		lbl.text = HFTranslationType.t("{label}:").format({"label": row["label"]})
 		if holders.size() < entities.size():
-			lbl.text = "%s (%d of %d):" % [row["label"], holders.size(), entities.size()]
+			lbl.text = (HFTranslationType.t("{label} ({have} of {count}):").format(
+				{"label": row["label"], "have": holders.size(), "count": entities.size()}
+			))
 			lbl.modulate = PARTIAL_TINT
 		lbl.custom_minimum_size.x = 70
 		line.add_child(lbl)
@@ -209,7 +220,9 @@ static func rebuild_multi_entity_props(dock: Object, entities: Array) -> void:
 	_add_defaults_row(dock, content, entities)
 	var wiring := Label.new()
 	wiring.name = "EntityMultiWiring"
-	wiring.text = "Wiring below is for %s, the first of them." % str(entities[0].name)
+	wiring.text = (HFTranslationType.t("Wiring below is for {name}, the first of them.").format(
+		{"name": str(entities[0].name)}
+	))
 	wiring.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wiring.modulate = DEFAULT_TINT
 	content.add_child(wiring)
@@ -507,7 +520,7 @@ static func _add_resource_row(
 	row.add_child(field)
 	var pick := Button.new()
 	pick.text = "..."
-	pick.tooltip_text = "Pick a %s file" % resource_type
+	pick.tooltip_text = HFTranslationType.t("Pick a {kind} file").format({"kind": resource_type})
 	pick.pressed.connect(
 		dock._on_entity_resource_pick.bind(entity, prop_name, resource_type, field)
 	)
@@ -544,7 +557,7 @@ static func pick_entity_resource(
 	for extension in extensions:
 		patterns.append("*.%s" % extension)
 	dialog.filters = PackedStringArray(["%s ; %s" % [", ".join(patterns), resource_type]])
-	dialog.title = "Pick %s" % resource_type
+	dialog.title = HFTranslationType.t("Pick {kind}").format({"kind": resource_type})
 	dock._entity_resource_target = {"entity": entity, "prop": prop_name, "field": field}
 	dialog.popup_centered_ratio(0.6)
 
@@ -575,7 +588,12 @@ static func toggle_sound_preview(dock: Object, path: String) -> void:
 	if path != "" and ResourceLoader.exists(path):
 		stream = load(path) as AudioStream
 	if stream == null:
-		dock.show_toast("No sound at %s" % path if path != "" else "Pick a sound first", 1)
+		var missing: String = (
+			HFTranslationType.t("No sound at {path}").format({"path": path})
+			if path != ""
+			else HFTranslationType.t("Pick a sound first")
+		)
+		dock.show_toast(missing, 1)
 		return
 	if player == null or not is_instance_valid(player):
 		player = AudioStreamPlayer.new()
@@ -869,7 +887,7 @@ static func _add_flag_boxes(
 		var bit := int(bits[i])
 		var box := CheckBox.new()
 		box.text = str(labels[i]) if i < labels.size() else str(bit)
-		box.tooltip_text = "Bit %d" % bit
+		box.tooltip_text = HFTranslationType.t("Bit {number}").format({"number": bit})
 		box.button_pressed = (value & bit) != 0
 		box.toggled.connect(
 			func(on: bool): on_entity_flag_toggled(dock, on, entity, str(prop.get("name", "")), bit)
@@ -951,7 +969,11 @@ static func on_io_add(dock: Object) -> void:
 	)
 	if dock._io_wiring_panel:
 		dock._io_wiring_panel.set_source_entity(entity)
-	dock._set_status("Added output: %s → %s.%s" % [output_name, target_name, input_name])
+	dock._set_status(
+		HFTranslationType.t("Added output: {output} → {target}.{input}").format(
+			{"output": output_name, "target": target_name, "input": input_name}
+		)
+	)
 
 
 ## The wiring panel has already removed the output; this commits the undo step
@@ -985,7 +1007,11 @@ static func on_wiring_connection_added(
 	if dock == null:
 		return
 	commit_wiring_change(dock, "Add Entity Output")
-	dock._set_status("Wired: %s → %s.%s" % [output_name, target_name, input_name])
+	dock._set_status(
+		HFTranslationType.t("Wired: {output} → {target}.{input}").format(
+			{"output": output_name, "target": target_name, "input": input_name}
+		)
+	)
 
 
 static func on_wiring_preset_applied(
@@ -994,7 +1020,12 @@ static func on_wiring_preset_applied(
 	if dock == null:
 		return
 	commit_wiring_change(dock, "Apply I/O Preset: %s" % preset_name)
-	dock._set_status("Applied preset '%s' (%d connections)" % [preset_name, count])
+	var applied := HFTranslationType.tn(
+		"Applied preset '{preset}' ({count} connection)",
+		"Applied preset '{preset}' ({count} connections)",
+		count
+	)
+	dock._set_status(applied.format({"preset": preset_name, "count": count}))
 
 
 ## The wiring panel holds the entity system, not the dock's undo manager, so it
