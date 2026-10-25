@@ -3889,6 +3889,12 @@ msgstr ""
 msgid "Sweep Faces"
 msgstr ""
 
+#: addons/hammerforge/plugin_face_sweep.gd
+msgid "Swept into {count} piece, grouped as {group}"
+msgid_plural "Swept into {count} pieces, grouped as {group}"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Switch the next brush you draw between Solid and Cut."
 msgstr ""
@@ -4551,6 +4557,16 @@ msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "x2"
+msgstr ""
+
+#: addons/hammerforge/plugin_face_sweep.gd
+msgid "{count} piece"
+msgid_plural "{count} pieces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_face_sweep.gd
+msgid "{folded} of {count} pieces fold back on themselves: widen the radius or cut more segments"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd

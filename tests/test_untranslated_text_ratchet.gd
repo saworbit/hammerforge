@@ -1,0 +1,143 @@
+extends GutTest
+
+## Text HammerForge puts together in code and shows the mapper goes through
+## `HFTranslation.t()` or `tn()`, with named placeholders, or no catalog can
+## translate it (#1702). About a thousand strings were written before that was
+## possible, so this does not ask for all of them at once. It counts, per file,
+## the formatted strings given straight to a label, a tooltip, a title or a
+## toast, and fails when a file's count goes up. A file whose count goes down
+## fails too, until its line in the baseline is lowered, so the count only ever
+## moves one way.
+##
+## Formatted means a literal with `%` or `.format()` after it. A plain literal is
+## found by `tools/gen_pot.gd` and translated by its control already. The bridge's
+## replies stay English (`mcp/`), as the guide says.
+##
+## Run with `HF_RATCHET_WRITE=1` set to write the counts as they are.
+
+const ROOT := "res://addons/hammerforge"
+const BASELINE := "res://tests/fixtures/untranslated_interface_text.json"
+## Folders whose words stay English in every language.
+const ENGLISH_ONLY := ["res://addons/hammerforge/mcp"]
+
+var _sink := RegEx.create_from_string(
+	(
+		"(?:\\.text|\\btooltip_text|\\bplaceholder_text|\\bdialog_text|(?:^\\s*|\\.)title)"
+		+ "\\s*=(?!=)(.*)$|\\b(?:show_toast|_set_status|set_status|_toast|_say)\\((.*)$"
+	)
+)
+var _formatted := RegEx.create_from_string('"(?:[^"\\\\]|\\\\.)*"\\s*(?:%|\\.format\\()')
+var _literal := RegEx.create_from_string('"(?:[^"\\\\]|\\\\.)*"')
+
+
+func test_no_file_gains_text_that_skips_translation():
+	var counts := {}
+	var found := {}
+	_scan(ROOT, counts, found)
+	assert_gt(counts.size(), 0, "the scan reached the addon")
+	if OS.get_environment("HF_RATCHET_WRITE") == "1":
+		var file := FileAccess.open(BASELINE, FileAccess.WRITE)
+		file.store_string(JSON.stringify(_sorted(counts), "\t") + "\n")
+		file.close()
+		pass_test("wrote %s" % BASELINE)
+		return
+	var baseline := _baseline()
+	var problems: Array = []
+	var paths: Array = counts.keys()
+	for path in baseline:
+		if not paths.has(path):
+			paths.append(path)
+	paths.sort()
+	for path in paths:
+		var now := int(counts.get(path, 0))
+		var was := int(baseline.get(path, 0))
+		if now > was:
+			(
+				problems
+				. append(
+					(
+						"%s has %d formatted strings shown without HFTranslation.t(), %d more than before, among: %s"
+						% [path, now, now - was, "; ".join(found[path].slice(0, 8))]
+					)
+				)
+			)
+		elif now < was:
+			problems.append(
+				(
+					"%s is down to %d: lower its line in %s from %d to %d"
+					% [path, now, BASELINE, was, now]
+				)
+			)
+	assert_eq(problems, [], "see docs/translating.md, Adding a label")
+
+
+func _baseline() -> Dictionary:
+	if not FileAccess.file_exists(BASELINE):
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(BASELINE))
+	return parsed if parsed is Dictionary else {}
+
+
+func _scan(dir: String, counts: Dictionary, found: Dictionary) -> void:
+	if ENGLISH_ONLY.has(dir):
+		return
+	var access := DirAccess.open(dir)
+	if access == null:
+		return
+	for sub in access.get_directories():
+		_scan(dir.path_join(sub), counts, found)
+	for file_name in access.get_files():
+		if file_name.get_extension() != "gd":
+			continue
+		var path := dir.path_join(file_name)
+		var hits := _hits(FileAccess.get_file_as_string(path))
+		if not hits.is_empty():
+			counts[path] = hits.size()
+			found[path] = hits
+
+
+## The statements of `source` that hand a sink a formatted literal not put
+## through a translation call. A statement gdformat wrapped over several lines is
+## read whole.
+func _hits(source: String) -> Array:
+	var out: Array = []
+	var statement := ""
+	var depth := 0
+	for line in source.split("\n"):
+		var stripped := line.strip_edges()
+		if statement == "" and (stripped == "" or stripped.begins_with("#")):
+			continue
+		statement += " " + stripped
+		var bare := _literal.sub(stripped, '""', true)
+		var hash_at := bare.find("#")
+		if hash_at >= 0:
+			bare = bare.left(hash_at)
+		for ch in bare:
+			if ch in ["(", "[", "{"]:
+				depth += 1
+			elif ch in [")", "]", "}"]:
+				depth -= 1
+		if depth > 0:
+			continue
+		depth = 0
+		var sunk := _sink.search(statement)
+		if sunk:
+			var value := sunk.get_string(1) + sunk.get_string(2)
+			# `HFTranslation.t()` and `tn()`, under either of the names the addon
+			# preloads it by, or Godot's own.
+			var wrapped := (
+				value.contains("HFTranslation") or value.contains("tr(") or value.contains("tr_n(")
+			)
+			if not wrapped and _formatted.search(value):
+				out.append(statement.strip_edges().left(90))
+		statement = ""
+	return out
+
+
+static func _sorted(counts: Dictionary) -> Dictionary:
+	var out := {}
+	var keys: Array = counts.keys()
+	keys.sort()
+	for key in keys:
+		out[key] = counts[key]
+	return out
