@@ -1,1 +1,0 @@
-- Adjust Last: change the settings of the command that just ran, and a key can pass settings to a command. (issue [#1867](https://github.com/saworbit/hammerforge/issues/1867))

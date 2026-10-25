@@ -1,1 +1,0 @@
-- CI edits, undoes and redoes the level each release saved, and checks a whole level undo keeps every brush from the file. (issue [#1870](https://github.com/saworbit/hammerforge/issues/1870))

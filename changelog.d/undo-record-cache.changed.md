@@ -1,1 +1,0 @@
-- Placing or deleting a brush and the check after its undo no longer walk every brush, and the undo itself takes a third of the time. (issue [#1866](https://github.com/saworbit/hammerforge/issues/1866))

@@ -36,7 +36,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 **Highlights so far**
 
 - Textures lay and stay right with a Face projection, Wrap, linked surfaces and a Texture Gizmo, and take settings on many faces at once; a draw shows where it will land and builds on a face (#1419, #1428, #1437, #1420, #1728, #1400, #1401).
-- Stairs turn at a landing, Door Frame and Trim Run join the Structure section, Clip cuts along a plane, Hull and Shear make and lean brushes, and Extrude moves any face (#1410, #1416, #1411, #1711, #1715, #1718, #1712).
+- Stairs turn at a landing, Door Frame and Trim Run join the Structure section, Clip cuts along a plane, Hull, Shear and Sweep Faces make, lean and bend brushes, and Extrude moves any face (#1410, #1416, #1411, #1711, #1715, #1718, #1714, #1712).
 - Visgroups can be current, locked, isolated or left out of the bake, View Filters hide things by kind, Hidden faces stay out of the bake's mesh, and a linked prefab copy keeps chosen properties (#1732, #1697, #1720, #1719, #1734).
 - The Console takes typed commands, compares the level with another version, counts entities by class, lists notes left in the level and reports a crash from the last session (#1696, #1701, #1709, #1700, #1654).
 - One table says what each file format keeps, entity classes come from an FGD, agents get hf_measure, hf_plan and recorded sessions, and a full bake of 1,000 brushes is 12 times faster (#1706, #1721, #1649, #1705, #1645, #1589).
@@ -45,6 +45,17 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Added
 
+- **25 Oct** K in the Measure tool keeps a ruler as a dimension that follows the brushes it ends on, held to the player's sizes or a length, and Validate names one that fails. (issue [#1699](https://github.com/saworbit/hammerforge/issues/1699), PR [#1889](https://github.com/saworbit/hammerforge/pull/1889))
+- **25 Oct** Sweep Faces carries the faces picked in Face Select along a straight run, an arc or an S bend as convex brushes that meet face to face. (issue [#1714](https://github.com/saworbit/hammerforge/issues/1714), PR [#1888](https://github.com/saworbit/hammerforge/pull/1888))
+- **25 Oct** Resting on a snap point runs guides from it: a point lands on one or where two cross, a typed number puts it that far along, and a point can take X and Z from another. (issue [#1692](https://github.com/saworbit/hammerforge/issues/1692), PR [#1887](https://github.com/saworbit/hammerforge/pull/1887))
+- **25 Oct** Groups take a name, hold groups, show in a Groups list and open to change one member; a copy of a whole group is a new group. (issue [#1723](https://github.com/saworbit/hammerforge/issues/1723), PR [#1881](https://github.com/saworbit/hammerforge/pull/1881))
+- **25 Oct** Repeat Run plays the commands, moves and turns made since the selection last changed by hand again, as one undo step. (issue [#1735](https://github.com/saworbit/hammerforge/issues/1735), PR [#1880](https://github.com/saworbit/hammerforge/pull/1880))
+- **25 Oct** HammerForge follows the system's motion, contrast and transparency settings, every dock button can be reached with Tab, and every control is named for a screen reader. (issue [#1703](https://github.com/saworbit/hammerforge/issues/1703), PR [#1879](https://github.com/saworbit/hammerforge/pull/1879))
+- **25 Oct** Adjust Last: change the settings of the command that just ran, and a key can pass settings to a command. (issue [#1867](https://github.com/saworbit/hammerforge/issues/1867), PR [#1877](https://github.com/saworbit/hammerforge/pull/1877))
+- **25 Oct** Validate names a brush with faces pointing into it, and Validate + Fix turns them back on a convex brush. (issue [#1869](https://github.com/saworbit/hammerforge/issues/1869), PR [#1876](https://github.com/saworbit/hammerforge/pull/1876))
+- **25 Oct** Show Face Direction, in the palette, draws the front of every brush face blue and the back red. (issue [#1869](https://github.com/saworbit/hammerforge/issues/1869), PR [#1876](https://github.com/saworbit/hammerforge/pull/1876))
+- **25 Oct** A compare fades the brushes that did not change, by how far Settings > Colours says. (issue [#1864](https://github.com/saworbit/hammerforge/issues/1864), PR [#1875](https://github.com/saworbit/hammerforge/pull/1875))
+- **25 Oct** A grayed out command in the palette says why on its tooltip, in the same words its key would have shown. (issue [#1868](https://github.com/saworbit/hammerforge/issues/1868), PR [#1874](https://github.com/saworbit/hammerforge/pull/1874))
 - **25 Oct** Compare With shows what changed since another .hflevel, outlined in the viewport and listed in the Console, and tools/compare_levels.gd prints it for CI. (issue [#1701](https://github.com/saworbit/hammerforge/issues/1701), PR [#1860](https://github.com/saworbit/hammerforge/pull/1860))
 - **25 Oct** A command line in the Console and over the viewport (Shift+;) runs a command with its values, such as hollow 0.125, and runs scripts of them. (issue [#1696](https://github.com/saworbit/hammerforge/issues/1696), PR [#1859](https://github.com/saworbit/hammerforge/pull/1859))
 - **25 Oct** The portability page opens with a table of what each file format keeps, checked cell by cell by a test, and exports say what they left out. (issue [#1706](https://github.com/saworbit/hammerforge/issues/1706), PR [#1858](https://github.com/saworbit/hammerforge/pull/1858))
@@ -147,6 +158,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Changed
 
+- **25 Oct** Placing or deleting a brush and the check after its undo no longer walk every brush, and the undo itself takes a third of the time. (issue [#1866](https://github.com/saworbit/hammerforge/issues/1866), PR [#1878](https://github.com/saworbit/hammerforge/pull/1878))
 - **24 Oct** Every change to what a level saves raises the `.hflevel` format number, so an older build refuses a newer level instead of saving it back without what it lacks. (issue [#1638](https://github.com/saworbit/hammerforge/issues/1638), PR [#1833](https://github.com/saworbit/hammerforge/pull/1833))
 - **23 Oct** The timed autosave waits for a pause in editing, at most twice the interval, and skips a level that has not changed. (issue [#1736](https://github.com/saworbit/hammerforge/issues/1736), PR [#1807](https://github.com/saworbit/hammerforge/pull/1807))
 - **23 Oct** A brush or entity placed over the bridge records only itself for undo, so a placement costs about 2 ms at any level size. (issue [#1786](https://github.com/saworbit/hammerforge/issues/1786), PR [#1800](https://github.com/saworbit/hammerforge/pull/1800))
@@ -156,8 +168,13 @@ Unreleased work is counted when it ships. For the numbers so far, run
 - **22 Oct** The Geometry budget and dock health turn amber above 100 brushes and entities and red above 1,000, where measured edits start to pause; red came at 101. (issue [#1423](https://github.com/saworbit/hammerforge/issues/1423), PR [#1593](https://github.com/saworbit/hammerforge/pull/1593))
 - **21 Oct** Generator settings from scripts must use their declared types; fractions and numeric strings are refused for integer fields. (issue [#1480](https://github.com/saworbit/hammerforge/issues/1480), PR [#1495](https://github.com/saworbit/hammerforge/pull/1495))
 
+#### Removed
+
+- **25 Oct** The displacement Paint Mode list no longer offers Alpha. It wrote values nothing drew or baked; alpha values already in a level are still loaded and saved. (issue [#1863](https://github.com/saworbit/hammerforge/issues/1863), PR [#1871](https://github.com/saworbit/hammerforge/pull/1871))
+
 #### Fixed
 
+- **25 Oct** Compare with File no longer reports changes between a level an older build saved and the same level open. (issue [#1870](https://github.com/saworbit/hammerforge/issues/1870), PR [#1873](https://github.com/saworbit/hammerforge/pull/1873))
 - **25 Oct** A point entity reopened from its scene keeps every property, including keys its class does not define, such as those a .map import brings. (issue [#1855](https://github.com/saworbit/hammerforge/issues/1855), PR [#1857](https://github.com/saworbit/hammerforge/pull/1857))
 - **25 Oct** A level reopened from its scene keeps its floor paint: the cells, heightmaps, terrain slots and wall heights of every layer. (issue [#1854](https://github.com/saworbit/hammerforge/issues/1854), PR [#1856](https://github.com/saworbit/hammerforge/pull/1856))
 - **25 Oct** In a split layout every 3D viewport takes drops through its own camera, and the overlays go to the viewport clicked in. (issue [#1627](https://github.com/saworbit/hammerforge/issues/1627), PR [#1851](https://github.com/saworbit/hammerforge/pull/1851))
@@ -273,6 +290,10 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Behind the scenes
 
+- **25 Oct** Every brush and face action is tried on every brush and face of the test levels, against a baseline that only ratchets. (issue [#1648](https://github.com/saworbit/hammerforge/issues/1648), PR [#1882](https://github.com/saworbit/hammerforge/pull/1882))
+- **25 Oct** CI edits, undoes and redoes the level each release saved, and checks a whole level undo keeps every brush from the file. (issue [#1870](https://github.com/saworbit/hammerforge/issues/1870), PR [#1873](https://github.com/saworbit/hammerforge/pull/1873))
+- **25 Oct** DEVELOPMENT.md's codebase map names every addon script again, and CI fails a pull request that adds a script without a line there. (issue [#1865](https://github.com/saworbit/hammerforge/issues/1865), PR [#1872](https://github.com/saworbit/hammerforge/pull/1872))
+- **25 Oct** The changelog fragment check counts only a fragment the change adds, and a no-changelog label added after CI started now takes effect with no push. (issues [#1447](https://github.com/saworbit/hammerforge/issues/1447), [#1487](https://github.com/saworbit/hammerforge/issues/1487), PR [#1503](https://github.com/saworbit/hammerforge/pull/1503))
 - **25 Oct** Random runs of bridge calls are undone to the start and redone on every PR and each night; undoing a placed brush puts its id counter back. (issue [#1646](https://github.com/saworbit/hammerforge/issues/1646), PR [#1844](https://github.com/saworbit/hammerforge/pull/1844))
 - **24 Oct** The reference map validates clean: pillars, stairs and skirting stand on the hall floor, and the corridor walls stop at its floor and ceiling. (issue [#1815](https://github.com/saworbit/hammerforge/issues/1815), PR [#1825](https://github.com/saworbit/hammerforge/pull/1825))
 - **24 Oct** Pull request CI runs the five quick vibe scenarios, so a change that leaves Validate, a Controls switch or a documented key broken fails before it merges. (issue [#1819](https://github.com/saworbit/hammerforge/issues/1819), PR [#1825](https://github.com/saworbit/hammerforge/pull/1825))

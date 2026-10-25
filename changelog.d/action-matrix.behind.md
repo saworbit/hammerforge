@@ -1,1 +1,0 @@
-- Every brush and face action is tried on every brush and face of the test levels, against a baseline that only ratchets. (issue [#1648](https://github.com/saworbit/hammerforge/issues/1648))

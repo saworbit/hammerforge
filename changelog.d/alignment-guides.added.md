@@ -1,1 +1,0 @@
-- Resting on a snap point runs guides from it: a point lands on one or where two cross, a typed number puts it that far along, and a point can take X and Z from another. (issue [#1692](https://github.com/saworbit/hammerforge/issues/1692))

@@ -1,1 +1,0 @@
-- Show Face Direction, in the palette, draws the front of every brush face blue and the back red. (issue [#1869](https://github.com/saworbit/hammerforge/issues/1869))
