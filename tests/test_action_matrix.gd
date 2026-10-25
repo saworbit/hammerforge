@@ -1,7 +1,7 @@
 extends "res://tests/support/action_matrix_case.gd"
 ## The pull request's share of the action matrix (#1648): one try in `SAMPLE`,
 ## the same ones every time, against `tests/goldens/action_matrix.txt`. The
-## nightly run tries the lot (`tests/nightly/test_action_matrix_long.gd`).
+## nightly run tries the lot (`tests/nightly_matrix/test_action_matrix_long.gd`).
 
 
 func test_the_baseline_covers_every_brush_and_face(folder = use_parameters(folders())):
@@ -15,7 +15,7 @@ func test_the_baseline_covers_every_brush_and_face(folder = use_parameters(folde
 		missing.slice(0, 5),
 		[],
 		(
-			"%d items not in the baseline. Write it with %s=1 on tests/nightly"
+			"%d items not in the baseline. Write it with %s=1 on tests/nightly_matrix"
 			% [missing.size(), BLESS_ENV]
 		)
 	)

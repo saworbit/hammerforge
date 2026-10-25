@@ -21,7 +21,8 @@ extends "res://tests/mcp/mcp_dispatcher_case.gd"
 ## its shape, rounded middle and size, a face by its brush and the side it faces.
 ##
 ## `HF_MATRIX_BLESS=1` writes the baseline from the whole matrix, in the nightly
-## test, which runs every try. The test in `tests/` runs one try in `SAMPLE`.
+## test (`tests/nightly_matrix/`), which runs every try. The test in `tests/` runs
+## one try in `SAMPLE`.
 
 const SolidChecks = preload("res://tests/solid_checks.gd")
 const VarietyLevel = preload("res://tests/support/matrix_variety_level.gd")
@@ -33,6 +34,9 @@ const BLESS_ENV := "HF_MATRIX_BLESS"
 ## A comma list of levels to run alone, such as `variety`; the rest are left out,
 ## and a blessing keeps their lines as they are.
 const ONLY_ENV := "HF_MATRIX_ONLY"
+## "k/n": the levels whose place in the list leaves k - 1 over n, so the nightly
+## job splits them across n shards and a new folder joins one with no edit.
+const SHARD_ENV := "HF_MATRIX_SHARD"
 ## The pull request runs one try in this many, picked by a hash of the level, the
 ## item and the action, so the same ones run every time.
 const SAMPLE := 40
@@ -63,6 +67,15 @@ static func folders() -> Array:
 	if only != "":
 		var wanted := only.split(",", false)
 		out = out.filter(func(name): return wanted.has(name))
+	var shard := OS.get_environment(SHARD_ENV).split("/", false)
+	if shard.size() == 2 and shard[0].is_valid_int() and shard[1].is_valid_int():
+		var which := int(shard[0]) - 1
+		var many := maxi(1, int(shard[1]))
+		var mine: Array = []
+		for i in out.size():
+			if i % many == which:
+				mine.append(out[i])
+		out = mine
 	return out
 
 
@@ -488,7 +501,7 @@ func say_better(better: Array) -> void:
 		gut
 		. p(
 			(
-				"%d tries do better than the baseline, for example %s. Take them in with %s=1 on tests/nightly."
+				"%d tries do better than the baseline, for example %s. Take them in with %s=1 on tests/nightly_matrix."
 				% [better.size(), better[0], BLESS_ENV]
 			)
 		)
