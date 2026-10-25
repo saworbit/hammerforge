@@ -435,6 +435,7 @@ addons/hammerforge/
   hf_command_availability.gd  Why a command cannot run now: the palette's tooltip and the selection guard's toast read the same sentence
   hf_command_aliases.gd  Other words for commands, so the palette finds Hollow by "shell" and Clip by "slice"
   hf_name_match.gd       How close a typed name is to a real one: the palette's fuzzy search and the bridge's "did you mean"
+  hf_translation.gd      HammerForge's own translation domain: catalogs from translations/ in the editor's language, given to every surface it adds
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
   hf_bake_profiles.gd    Bake profiles: built-in Editing/Shipping, saved profiles, matching
   hf_settings_file.gd    HFSettingsFile: one reader and one atomic writer for shared settings files (presets, profiles)
@@ -460,6 +461,8 @@ addons/hammerforge/
     example_levels.json    Built-in demo level definitions (5 levels with annotations)
 
   textures/prototypes/   150 SVG prototype textures ({pattern}_{color}.svg)
+
+  translations/          hammerforge.pot, written by tools/gen_pot.gd, and any language's .po beside it
 
   map_adapters/          .map export format adapters (strategy pattern)
     hf_map_adapter.gd      Base adapter class (format_name, format_face_line, format_entity_properties)
