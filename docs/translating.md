@@ -70,6 +70,9 @@ The tool finds a word in these places, much as Godot finds a game's:
 - a literal given to `HFTranslation.t()` or `HFTranslation.tn()`;
 - the same properties in the addon's `.tscn` scenes.
 
+It does not find a label kept in a table yet, such as the captions in the
+Console's Controls. Those show translated once a catalog has them.
+
 A control in HammerForge's domain looks its own text up, so a label set from a
 literal needs nothing more. Text put together in code goes through
 `HFTranslation.t()` before anything is put in it, with named placeholders:
