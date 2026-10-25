@@ -170,6 +170,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Track Point for Guides (`track_snap_point`) | none | a level | yes | Run guides from the snap point under the pointer, or stop. Resting the pointer there does the same. |
 | Point Filter: X and Z from Here (`take_xz_for_next_pick`) | none | a level | yes | The next pick takes X and Z from the snap point under the pointer, and its height from where it lands. |
 | Clear Guides (`clear_guides`) | none | a level | yes | Stop every guide from tracked points. |
+| Keep Ruler as Dimension (`keep_ruler_as_dimension`) | none | a level | yes | Keep the Measure tool's last ruler in the level as a dimension that follows the brushes it ends on. K in the tool does the same. |
 | Next Pick: Vertex Only (`snap_next_vertex`) | none | a level | yes | The next click snaps only to a vertex, whatever snaps are on, then they all return. |
 | Next Pick: Midpoint Only (`snap_next_midpoint`) | none | a level | yes | The next click snaps only to the middle of an edge, then every snap that was on returns. |
 | Next Pick: Centre Only (`snap_next_centre`) | none | a level | yes | The next click snaps only to a brush's centre, then every snap that was on returns. |

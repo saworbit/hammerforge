@@ -280,6 +280,10 @@ ask that, not read everything and filter it in its own context
   tab counts them
   ([#1709](https://github.com/saworbit/hammerforge/issues/1709)).
 - An unknown filter key is refused, naming it.
+- A dimension (#1699) is an entity of class `dimension`. `hf_get_entities` gives
+  it a `dimension` beside its properties: its `length` now, its `check`, the
+  length it `needs`, whether it `passes`, and whether an end is `detached`.
+  `hf_get_status` counts `dimensions` and `dimensions_failing`.
 
 The rules are in `addons/hammerforge/hf_object_filter.gd`, for the editor's own
 selection commands to share.

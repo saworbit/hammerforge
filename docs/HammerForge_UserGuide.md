@@ -293,6 +293,15 @@ Press **M** to activate the Measure tool. It supports persistent multi-ruler mea
 - Press **Delete/Backspace** to remove the last ruler.
 - Press **Escape** to clear all rulers.
 - The HUD shows ruler count, distance of the last ruler, and alignment status.
+- Press **K** to keep the last ruler as a **dimension** (or **Keep Ruler as Dimension** in the palette).
+
+### Dimensions
+
+A **dimension** is a length kept in the level ([#1699](https://github.com/saworbit/hammerforge/issues/1699)): this doorway is 1.2 m, that corridor is 2 m wide, this jump is 3 m. Each end attaches to the brush vertex, edge middle or face centre it lies on, and a free end stays where it is. A dimension follows the brushes it is attached to through every move, turn and undo, and needs no step of its own. If a Clip cuts away the corner an end was on, or a resize moves it, that end comes loose: it stays where it was and the dimension is drawn amber.
+
+A dimension is an entity, like a note: select it to set its **Title** and its **Check** in Entity Properties, put it in a visgroup, move it or delete it. Its check is one of **At least player width**, **At least player height**, **At most jump height**, **At most step height**, or **At least** and **At most** with a **Value**; the player's numbers are the playtest player's own. A dimension whose check fails is drawn red, and Validate lists it by name, with its length and what it needs.
+
+Dimensions are drawn over the viewport, a line with a tick at each end and the length at the middle. Untick **Show dimensions** under Viewport in the Console's Controls to hide them. They never reach a bake, an export or a running game.
 
 ## Structures From Numbers
 
@@ -2137,6 +2146,7 @@ Preferences include:
 - Overlay colours (Test → Settings → Colours), each kept as a hex string such as `"#ffd133bf"`; one that is not a colour falls back to its default with a warning
 - Motion (`ui_motion`): 0 follow the system, 1 animate, 2 reduce
 - Guides from points (`snap_tracking`) and Shift takes a guide point (`snap_tracking_shift`)
+- Show dimensions (`show_dimensions`)
 
 ## Clipboard
 

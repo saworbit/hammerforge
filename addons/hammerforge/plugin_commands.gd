@@ -39,6 +39,7 @@ const HFSettingsFile = preload("hf_settings_file.gd")
 const HFPluginCompare = preload("plugin_compare.gd")
 const HFPluginAdjustLast = preload("plugin_adjust_last.gd")
 const HFPluginCommandLine = preload("plugin_command_line.gd")
+const HFPluginDimensions = preload("plugin_dimensions.gd")
 const HFPluginFaceSweep = preload("plugin_face_sweep.gd")
 const HFPluginGroups = preload("plugin_groups.gd")
 const HFPluginRun = preload("plugin_run.gd")
@@ -754,6 +755,8 @@ static func execute(
 			HFPluginSnapFeedbackType.take_xz_here(plugin)
 		"clear_guides":
 			HFPluginSnapFeedbackType.clear(plugin)
+		"keep_ruler_as_dimension":
+			HFPluginDimensions.keep_last_ruler(plugin)
 		"cancel_drag":
 			if root:
 				root.cancel_drag()

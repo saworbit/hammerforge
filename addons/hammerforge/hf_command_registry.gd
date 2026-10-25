@@ -2604,6 +2604,17 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "keep_ruler_as_dimension",
+		"label": "Keep Ruler as Dimension",
+		"help":
+		"Keep the Measure tool's last ruler in the level as a dimension that follows the brushes it ends on. K in the tool does the same.",
+		"aliases": ["keep dimension", "keep measurement"],
+		"category": "Editing",
+		"needs_level": true,
+		"palette": true,
+		"selection": {}
+	},
+	{
 		"id": "snap_next_vertex",
 		"label": "Next Pick: Vertex Only",
 		"help":

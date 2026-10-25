@@ -1,0 +1,1 @@
+- K in the Measure tool keeps a ruler as a dimension that follows the brushes it ends on, held to the player's sizes or a length, and Validate names one that fails. (issue [#1699](https://github.com/saworbit/hammerforge/issues/1699))

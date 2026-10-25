@@ -84,6 +84,12 @@ const GROUPS := [
 				"Shift over a snap point starts or ends guides from it, in place of resting the pointer there."
 			},
 			{
+				"pref": "show_dimensions",
+				"label": "Show dimensions",
+				"help":
+				"Draws the dimensions kept in the level, with their lengths: amber with an end come loose, red when a check fails."
+			},
+			{
 				"pref": "nudge_follows_view",
 				"label": "Arrows follow the view",
 				"help":
