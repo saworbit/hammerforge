@@ -4,6 +4,7 @@ extends RefCounted
 ## Native object and HammerForge face-selection pointer arbitration.
 
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
+const HFPluginGroupsType = preload("plugin_groups.gd")
 const SELECT_DRAG_THRESHOLD := 6.0
 const SELECT_INPUT_CONTINUE := -2
 
@@ -19,6 +20,11 @@ static func handle_press(
 	if not event.pressed:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 	var face_select: bool = plugin.dock.is_face_select_mode_enabled()
+	# A double click on a grouped brush opens its group, one level in (#1723).
+	if event.double_click and not face_select and not paint_mode:
+		if HFPluginGroupsType.open_at(plugin, root, camera, position):
+			plugin._cancel_selection_gesture()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if event.alt_pressed or Input.is_key_pressed(KEY_ALT):
 		plugin._cancel_selection_gesture()
 		return EditorPlugin.AFTER_GUI_INPUT_PASS

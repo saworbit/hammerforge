@@ -955,7 +955,8 @@ const COMMANDS := [
 	{
 		"id": "group",
 		"label": "Group",
-		"help": "Group the selected brushes, so a click picks them all.",
+		"help":
+		"Group the selection under a name, so a click picks it all. Whole groups go in as groups.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": false, "minimum": 2, "label": "Group"},
@@ -964,11 +965,61 @@ const COMMANDS := [
 	{
 		"id": "ungroup",
 		"label": "Ungroup",
-		"help": "Take the selected brushes out of their group.",
+		"help": "Take the selected groups apart one level.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Ungroup"},
 		"repeat": true
+	},
+	{
+		"id": "open_group",
+		"label": "Open Group",
+		"help":
+		"Edit the selected group's members one at a time, with the rest of the level faded. Escape closes it.",
+		"aliases": ["enter group", "edit group"],
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Open Group"},
+		"palette": true
+	},
+	{
+		"id": "close_group",
+		"label": "Close Group",
+		"help": "Close the open group, one level, and select it.",
+		"aliases": ["exit group", "leave group"],
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "add_to_group",
+		"label": "Add to Group",
+		"help":
+		"Put the selection in the group picked in the Groups list, or the open one, groups as groups.",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Add to Group"},
+		"palette": true
+	},
+	{
+		"id": "remove_from_group",
+		"label": "Remove from Group",
+		"help":
+		"Take the selection out of the group picked in the Groups list, or the open one, and leave the rest of it.",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Remove from Group"},
+		"palette": true
+	},
+	{
+		"id": "rename_group",
+		"label": "Rename Group",
+		"help": "Give the selected group, or the open one, a new name.",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
 	},
 	{
 		"id": "make_brush_entity",

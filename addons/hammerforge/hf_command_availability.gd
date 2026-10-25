@@ -34,6 +34,9 @@ const BUSY := "Finish what the viewport is doing first"
 const NOTHING_TO_REPEAT := "Run a command first"
 const NO_FACES_PICKED := "Pick the faces to sweep in Face Select first"
 const NOTHING_IN_RUN := "Run commands on a selection first"
+const NO_GROUP_SELECTED := "Select a group first"
+const NO_GROUP_OPEN := "Open a group first"
+const NO_TARGET_GROUP := "Pick a group in the Groups list, or open one"
 const NOTHING_DRAWN := "Draw a brush first"
 const BAKING := "Wait for the bake to finish"
 
@@ -107,6 +110,20 @@ static func _mode_rule(action: String, state: Dictionary) -> Variant:
 	# Repeat Run and Clear Run wait for a run (#1735).
 	if action == "repeat_run" or action == "clear_run":
 		return "" if str(state.get("run_text", "")) != "" else NOTHING_IN_RUN
+	# Opening takes a group, and the rest an open one (#1723).
+	var open := str(state.get("open_group", "")) != ""
+	match action:
+		"open_group":
+			return "" if str(state.get("selected_group", "")) != "" else NO_GROUP_SELECTED
+		"close_group":
+			if not open:
+				return NO_GROUP_OPEN
+		"add_to_group", "remove_from_group":
+			if str(state.get("target_group", "")) == "":
+				return NO_TARGET_GROUP
+		"rename_group":
+			if not open and str(state.get("selected_group", "")) == "":
+				return NO_GROUP_SELECTED
 	# A favourite goes on the picked faces, or else the selected brushes.
 	if action.begins_with("apply_favorite_"):
 		if mixed:

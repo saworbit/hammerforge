@@ -100,6 +100,7 @@ func test_grouping_and_ungrouping_from_the_keyboard_are_undone():
 	var undo = plugin.stand_in_undo
 	undo.clear()
 	plugin._on_hotkey_palette_action("group")
+	assert_eq(await _accept_dialogs(), 1, "Group asked for a name (#1723)")
 	assert_eq(root.capture_state()["group_order"].size(), 1, "grouped")
 	plugin._on_hotkey_palette_action("ungroup")
 	assert_eq(root.capture_state()["group_order"].size(), 0, "ungrouped")

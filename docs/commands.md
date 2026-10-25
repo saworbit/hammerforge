@@ -102,8 +102,13 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Paste (`paste`) | Ctrl+V | nothing, a level | yes | Place what is on the clipboard where it was copied from, or .map text copied since at the cursor. |
 | Paste at Cursor (`paste_at_cursor`) | Ctrl+Alt+V | nothing, a level | yes | Place what is on the clipboard standing on the point under the cursor. |
 | Delete (`delete`) | Del | 1 item, a level | yes | Delete the selected brushes and entities. |
-| Group (`group`) | Ctrl+G | 2 items, a level | yes | Group the selected brushes, so a click picks them all. |
-| Ungroup (`ungroup`) | Ctrl+U | 1 item, a level | yes | Take the selected brushes out of their group. |
+| Group (`group`) | Ctrl+G | 2 items, a level | yes | Group the selection under a name, so a click picks it all. Whole groups go in as groups. |
+| Ungroup (`ungroup`) | Ctrl+U | 1 item, a level | yes | Take the selected groups apart one level. |
+| Open Group (`open_group`) | none | 1 item, a level | yes | Edit the selected group's members one at a time, with the rest of the level faded. Escape closes it. |
+| Close Group (`close_group`) | none | a level | yes | Close the open group, one level, and select it. |
+| Add to Group (`add_to_group`) | none | 1 item, a level | yes | Put the selection in the group picked in the Groups list, or the open one, groups as groups. |
+| Remove from Group (`remove_from_group`) | none | 1 item, a level | yes | Take the selection out of the group picked in the Groups list, or the open one, and leave the rest of it. |
+| Rename Group (`rename_group`) | none | a level | yes | Give the selected group, or the open one, a new name. |
 | Make Brush Entity (`make_brush_entity`) | none | 1 brush, a level | no | Tie the selected brushes to a brush entity class, such as a trigger or a door. |
 | Back to World (`back_to_world`) | none | 1 brush, a level | no | Untie the selected brushes from their brush entity, so they are plain world brushes. |
 | Add to Visgroup (`add_to_visgroup`) | none | 1 item, a level | no | Add the selected brushes and entities to a visgroup. |

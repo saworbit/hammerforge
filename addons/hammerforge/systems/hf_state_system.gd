@@ -318,6 +318,9 @@ func capture_registries() -> Dictionary:
 		# order the mapper made on purpose (#706).
 		out["visgroup_order"] = root.visgroup_system.capture_order(captured_visgroups)
 		out["group_order"] = root.visgroup_system.capture_order(captured_groups)
+		# Groups inside groups (#1723). Beside them, so a build that does not know
+		# nesting reads the groups and leaves this.
+		out["group_parents"] = root.visgroup_system.capture_group_parents()
 		# Named visibility states; Hide Selection and an isolate are not kept (#1697).
 		out["visibility_views"] = root.visgroup_system.capture_saved_views()
 	if root.brush_system:
@@ -344,6 +347,7 @@ func restore_registries(state: Dictionary) -> void:
 			state.get("visgroups", {}), state.get("visgroup_order", [])
 		)
 		root.visgroup_system.restore_groups(state.get("groups", {}), state.get("group_order", []))
+		root.visgroup_system.restore_group_parents(state.get("group_parents", {}))
 		root.visgroup_system.restore_saved_views(state.get("visibility_views", {}))
 	if root.generator_system:
 		root.generator_system.restore(state.get("generators", []))
