@@ -1,0 +1,1 @@
+- Add Texture Folder reads the file names texture packs use. (issue [#1960](https://github.com/saworbit/hammerforge/issues/1960))
