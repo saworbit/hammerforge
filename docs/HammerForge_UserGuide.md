@@ -1925,13 +1925,16 @@ the one of that name in an earlier.
 - Properties keep their type: `string`, `integer`, `float`, `choices` (a list
   showing each choice's label), `flags` (a tick for each bit), `color255` and
   `color1` (a colour), and `target_source`, `target_destination` and the rest as
-  text. Defaults, labels and descriptions come across.
+  text. Defaults, labels and descriptions come across. A name typed in a class's
+  `targetname` field is the entity's own name, the one wires aim at and a `.map`
+  writes ([#1985](https://github.com/saworbit/hammerforge/issues/1985)).
 - `input` and `output` lines are what the I/O wiring panel offers.
 - `@include "other.fgd"` reads a file beside it.
 - What HammerForge has no use for, a model, a sprite or a helper for another
   editor, is skipped. The file says once how much it skipped and the line of the
   first. Base classes that name each other in a loop are refused, and the warning
-  names the loop.
+  names the loop. A class whose bracket is left open is left out with a warning
+  naming its line, and the classes after it load.
 - **Convert Entity Definitions to JSON** in the palette writes the classes as an
   `entities.json` beside the first FGD, to edit them in that form. Point the
   level's `entity_definitions_path` at it to use it.

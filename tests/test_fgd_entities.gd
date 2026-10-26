@@ -254,3 +254,50 @@ func test_convert_to_json_writes_a_file_that_reads_back_to_the_same_classes():
 
 static func _plain(value: Dictionary) -> Variant:
 	return JSON.parse_string(JSON.stringify(value, "", true))
+
+
+## JSON reads every number back a float, and a flags default of 2 came back 2.0,
+## which a placed entity read as 0 (#1986).
+func test_a_flags_default_keeps_its_value_through_convert_to_json():
+	var game := _write("game.fgd", GAME)
+	var root := _fresh_root()
+	root.entity_definitions_path = game
+	var out := HFPluginCommands.convert_entity_definitions(RefCounted.new(), root)
+	var defaults := {}
+	for path in [game, out]:
+		for definition in HFEntityDef.load_definitions_from_file(path):
+			if definition.classname != "light_bulb":
+				continue
+			for prop in definition.to_dict().get("properties", []):
+				if prop["name"] == "spawnflags":
+					defaults[path] = HFEntityPropUtils.coerce_default("flags", prop["default"])
+	assert_eq(defaults.get(game), 2, "Toggle is ticked by default in the FGD")
+	assert_eq(defaults.get(out), 2, "and in the JSON it converts to")
+
+
+## One unclosed bracket took every class after it out of the file (#1987).
+func test_an_unclosed_bracket_leaves_the_classes_after_it():
+	var read := HFFgdReader.read_text(
+		(
+			'@PointClass base(Targetname = broken : "x" [ ]\n'
+			+ '@PointClass = after_it : "y" [ a(string) ]\n'
+		),
+		"broken.fgd"
+	)
+	assert_true(_by_id(read["entries"]).has("after_it"), "the class after it loads")
+	var said := " ".join(read["warnings"])
+	assert_string_contains(said, "is not closed", "and the warning says which bracket")
+
+
+## The Name field a game's FGD gives its classes is the name a wire aims at, as a
+## `.map` import has always made it (#1985).
+func test_a_targetname_typed_in_its_field_is_the_name_wires_aim_at():
+	var root := _fresh_root()
+	var lamp: Node3D = root.entity_system.restore_entity_from_info(
+		{"name": "LightBulb1", "entity_class": "light_bulb"}
+	)
+	root.set_entity_property(lamp, "targetname", "hall_lamp")
+	assert_eq(root.find_entities_by_name("hall_lamp"), [lamp], "the typed name is its name")
+	root.set_entity_property(lamp, "targetname", "")
+	assert_eq(root.find_entities_by_name("hall_lamp"), [], "and clearing it takes the name away")
+	assert_eq(root.find_entities_by_name("LightBulb1"), [lamp], "leaving the node's own")
