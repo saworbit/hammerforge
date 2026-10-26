@@ -1,0 +1,2 @@
+- The command line knows the project's own aliases, as the palette does. (issue [#1991](https://github.com/saworbit/hammerforge/issues/1991))
+- The command line reads a tab as a word break, and a command label of seven words. (issue [#2015](https://github.com/saworbit/hammerforge/issues/2015))
