@@ -34,6 +34,37 @@ func _entity(level, entity_class: String, entity_name: String, at: Vector3) -> N
 	return entity
 
 
+## A point entity placed with a node name and no authored name.
+func _placed(level, entity_class: String, node_name: String, at: Vector3) -> Node:
+	return (
+		level
+		. entity_system
+		. restore_entity_from_info(
+			{
+				"name": node_name,
+				"entity_type": entity_class,
+				"properties": {},
+				"transform": Transform3D(Basis.IDENTITY, at),
+			}
+		)
+	)
+
+
+## The rows after the header, by their name column.
+static func _rows_by_name(rows: Array) -> Dictionary:
+	var header: PackedStringArray = rows[0]
+	var out := {}
+	for row in rows.slice(1):
+		out[row[header.find("name")]] = row
+	return out
+
+
+## One cell of the row named `entity_name`, or "" when there is no such row.
+static func _cell(by_name: Dictionary, entity_name: String, column: int) -> String:
+	var row: PackedStringArray = by_name.get(entity_name, PackedStringArray())
+	return row[column] if column < row.size() else ""
+
+
 ## Three lights, a sound, and a brush made a trigger.
 func _furnish(level) -> Dictionary:
 	var lamp_a := _entity(level, "light_point", "lamp_a", Vector3(0, 2, 0))
@@ -158,4 +189,101 @@ func test_a_scaled_entity_reports_the_turn_it_was_given():
 	assert_almost_eq(float(row[header.find("rotation_x")]), 20.0, 0.01, "its turn about X")
 	assert_almost_eq(float(row[header.find("rotation_y")]), 30.0, 0.01, "and about Y")
 	assert_almost_eq(float(row[header.find("rotation_z")]), 0.0, 0.01, "and none about Z")
+	await rig.leave_level(level)
+
+
+## A brush entity of several brushes is one entity. A trigger of two brushes
+## read as two triggers, each with two outputs, and its one wire gave the lamp two
+## inputs (#1958).
+func test_a_brush_entity_of_two_brushes_is_one_entity():
+	var level = await rig.make_level()
+	_entity(level, "light_point", "lamp", Vector3(0, 2, 0))
+	var near = rig.box(level, "near", Vector3(0, 1, 4), Vector3(2, 2, 2))
+	var far = rig.box(level, "far", Vector3(6, 1, 4), Vector3(2, 2, 2))
+	level.tie_brushes_to_entity(["near", "far"], "trigger_once")
+	level.add_entity_output(near, "OnTrigger", "lamp", "TurnOn")
+	assert_eq((far.get_meta("entity_io_outputs", []) as Array).size(), 1, "both hold the wire")
+	assert_eq(HFEntityCensus.counts(level), {"light_point": 1, "trigger_once": 1})
+	assert_eq(HFEntityCensus.of_class(level, "trigger_once"), [near], "one trigger")
+	var rows: Array = HFEntityCensus.csv_rows(level)
+	var header: PackedStringArray = rows[0]
+	assert_eq(rows.size(), 1 + 2, "a row for the lamp and one for the trigger")
+	var trigger: PackedStringArray = rows.slice(1).filter(func(r): return r[1] == "trigger_once")[0]
+	assert_eq(trigger[header.find("outputs")], "1", "its one wire")
+	assert_eq(trigger[header.find("bounds_min")], "-1.0 0.0 3.0", "its bounds from the near brush")
+	assert_eq(trigger[header.find("bounds_max")], "7.0 2.0 5.0", "to the far one")
+	assert_eq(_rows_by_name(rows)["lamp"][header.find("inputs")], "1", "one wire at the lamp")
+	# A wire on one of its brushes alone, as a level saved before #1129 holds
+	# one, is the trigger's too.
+	var own: Dictionary = (far.get_meta("entity_io_outputs")[0] as Dictionary).duplicate()
+	own["input_name"] = "TurnOff"
+	far.set_meta("entity_io_outputs", far.get_meta("entity_io_outputs") + [own])
+	rows = HFEntityCensus.csv_rows(level)
+	trigger = rows.slice(1).filter(func(r): return r[1] == "trigger_once")[0]
+	assert_eq(trigger[header.find("outputs")], "2", "the far brush's own wire as well")
+	assert_eq(_rows_by_name(rows)["lamp"][header.find("inputs")], "2", "both at the lamp")
+	# In a visgroup by its far brush alone, it is in that visgroup's census.
+	level.visgroup_system.add_to_visgroup(far, "upstairs")
+	assert_eq(HFEntityCensus.entities(level, "visgroup:upstairs"), [far], "by its far brush")
+	rows = HFEntityCensus.csv_rows(level)
+	trigger = rows.slice(1).filter(func(r): return r[1] == "trigger_once")[0]
+	assert_eq(trigger[header.find("visgroups")], "upstairs", "the visgroups of every brush")
+	# A click on the class still selects the whole trigger.
+	var panel = rig.plugin.console_panel
+	panel.show_tab(HFConsolePanelType.Tab.ENTITIES)
+	panel.refresh_census()
+	var item: TreeItem = panel._census_tree.get_root().get_first_child()
+	while item and item.get_text(0) != "trigger_once":
+		item = item.get_next()
+	item.select(0)
+	await rig.frame()
+	var selected: Array = rig.plugin.stand_in_editor.selection.get_selected_nodes()
+	assert_eq(selected.size(), 2, "both brushes")
+	assert_true(selected.has(near) and selected.has(far), "the near and the far")
+	rig.select([])
+	await rig.leave_level(level)
+
+
+## A point entity with no authored name is wired by its node name, as the wiring
+## panel lists it and `find_entities_by_name()` finds it. Its row read a blank
+## name and no inputs. An entity with both names goes by its authored name and
+## counts a wire at either, and a wire at a name it has twice counts once (#1984).
+func test_a_point_entity_is_named_and_aimed_at_as_the_wiring_finds_it():
+	var level = await rig.make_level()
+	var lamp := _placed(level, "light_point", "lamp", Vector3(0, 2, 0))
+	var hall := _placed(level, "light_point", "hall", Vector3(4, 2, 0))
+	hall.set_meta("entity_name", "hall_light")
+	var porch := _placed(level, "light_point", "porch", Vector3(8, 2, 0))
+	porch.set_meta("entity_name", "porch")
+	var button := _placed(level, "func_button", "button", Vector3(2, 1, 0))
+	for target in ["lamp", "hall", "hall_light", "porch"]:
+		level.add_entity_output(button, "OnPressed", target, "Toggle")
+	assert_eq(level.find_entities_by_name("lamp"), [lamp], "the wiring finds it by node name")
+	var rows: Array = HFEntityCensus.csv_rows(level)
+	var inputs: int = (rows[0] as PackedStringArray).find("inputs")
+	var by_name := _rows_by_name(rows)
+	assert_eq(by_name.keys().size(), 4, "a row each, each named")
+	assert_true(by_name.has("lamp"), "the lamp by its node name")
+	assert_eq(_cell(by_name, "lamp", inputs), "1", "its wire")
+	assert_false(by_name.has("hall"), "the hall light by its authored name")
+	assert_eq(_cell(by_name, "hall_light", inputs), "2", "a wire at either of its names")
+	assert_eq(_cell(by_name, "porch", inputs), "1", "a wire at a name it has twice, once")
+	await rig.leave_level(level)
+
+
+## A class property named like a column of the census's own goes under
+## "property:", so no name is in the header twice. A note's Kind and the
+## census's kind, point or brush, were both "kind" (#1988).
+func test_a_property_named_like_a_column_keeps_the_header_unique():
+	var level = await rig.make_level()
+	var note := _placed(level, "note", "todo", Vector3.ZERO)
+	level.set_entity_property(note, "kind", "To Do")
+	var rows: Array = HFEntityCensus.csv_rows(level)
+	var header: PackedStringArray = rows[0]
+	var seen := {}
+	for column in header:
+		assert_false(seen.has(column), "%s is in the header once" % column)
+		seen[column] = true
+	assert_eq(rows[1][header.find("kind")], "point", "the census's own kind")
+	assert_eq(rows[1][header.find("property:kind")], "To Do", "the note's, under property:")
 	await rig.leave_level(level)

@@ -280,8 +280,11 @@ static func _select_entity_class(plugin: Object, entity_class: String) -> void:
 	if selection == null:
 		return
 	selection.clear()
+	# The census gives a brush entity by one of its brushes (#1958), and a click
+	# selects all of them.
 	for node in nodes:
-		selection.add_node(node)
+		for part in root.entity_property_nodes(node):
+			selection.add_node(part)
 	_note(panel, "Selected %d %s." % [nodes.size(), entity_class])
 
 

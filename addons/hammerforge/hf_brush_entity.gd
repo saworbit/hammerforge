@@ -100,6 +100,47 @@ static func members(brush: Node, candidates: Array) -> Array:
 	return found
 
 
+## The brush entities `brushes` make, each a list of its brushes in the order
+## given, by the rule `members()` goes by. Plain geometry is left out. A count of
+## a level's entities goes by this, so a door of two leaves is one door (#1958).
+static func entities_in(brushes: Array) -> Array:
+	var out: Array = []
+	var at: Dictionary = {}
+	for brush in brushes:
+		var brush_class := entity_class(brush)
+		if brush_class == "":
+			continue
+		var key := identity(brush)
+		if key == "":
+			out.append([brush])
+			continue
+		var both := [brush_class, key]
+		if at.has(both):
+			(out[at[both]] as Array).append(brush)
+		else:
+			at[both] = out.size()
+			out.append([brush])
+	return out
+
+
+## The wires of the one brush entity `brushes` make. Each brush can hold the same
+## wire, and it is one wire, as the runtime and the `.map` export take it: a wire
+## an earlier brush holds is not counted again, and two alike on one brush are two
+## (#1129, #1958).
+static func wires_of(brushes: Array) -> Array:
+	var out: Array = []
+	var earlier: Array = []
+	for brush in brushes:
+		var held: Variant = brush.get_meta(OUTPUTS_META, [])
+		if not (held is Array):
+			continue
+		for wire in held:
+			if wire is Dictionary and not earlier.has(wire):
+				out.append(wire)
+		earlier.append_array(held)
+	return out
+
+
 ## What a brush was tied as: its class and the tie it was made in, empty for a
 ## brush never tied. Brushes alike in this were made one entity on purpose. Two
 ## ties under one name are one entity by `identity()` too, but nobody said so,
