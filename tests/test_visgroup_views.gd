@@ -190,6 +190,22 @@ func test_alt_h_hides_the_selection_and_alt_shift_h_shows_it():
 	await rig.leave_level(s.level)
 
 
+## Select All takes what is in view: not a hidden visgroup's brush, not one
+## hidden with Hide Selection. Its toast says how many it left out, so a Delete
+## after it deletes nothing the mapper cannot see (#1974).
+func test_select_all_leaves_out_what_is_hidden_and_says_how_many():
+	var s: Dictionary = await _level()
+	s.vg.hide_from_view([s.crate])
+	rig.clear_toasts()
+	rig.plugin._on_hotkey_palette_action("select_all")
+	var selected: Array = rig.plugin.stand_in_editor.selection.get_selected_nodes()
+	assert_eq(selected.size(), 2, "the two shown")
+	assert_true(selected.has(s.a) and selected.has(s.b), "a and b")
+	assert_has(rig.toasts(), "Selected 2 objects, left out 2 hidden")
+	rig.select([])
+	await rig.leave_level(s.level)
+
+
 func test_the_palette_isolates_the_selection_s_visgroups():
 	var s: Dictionary = await _level()
 	rig.select([s.b])

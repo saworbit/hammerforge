@@ -172,6 +172,9 @@ static func begin(plugin: Object, event: InputEvent) -> void:
 		return
 	var snap = _snap_of(plugin)
 	if snap:
+		var motion := event as InputEventMouseMotion
+		if motion and motion.button_mask & MOUSE_BUTTON_MASK_LEFT:
+			snap.drag_moved()
 		snap.begin_pointer_event()
 
 
@@ -181,8 +184,10 @@ static func end(plugin: Object, event: InputEvent) -> void:
 	var snap = _snap_of(plugin)
 	if snap == null:
 		return
-	var redraw: bool = snap.end_pointer_event(event is InputEventMouseMotion)
 	var button := event as InputEventMouseButton
+	if button and button.button_index == MOUSE_BUTTON_LEFT and button.pressed:
+		snap.press_taken()
+	var redraw: bool = snap.end_pointer_event(event is InputEventMouseMotion)
 	if button and button.button_index == MOUSE_BUTTON_LEFT and not button.pressed:
 		snap.pick_taken()
 		snap.guide_text = ""

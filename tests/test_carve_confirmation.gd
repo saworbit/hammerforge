@@ -122,6 +122,35 @@ func test_only_the_carvers_that_cut_are_asked_about_and_committed():
 	assert_eq(messages, [], "and nothing is refused after the yes")
 
 
+## A locked brush the carver overlaps is named before the yes and left whole
+## after it (#1973).
+func test_the_question_names_a_locked_brush_and_the_carve_leaves_it_whole():
+	_box("target", Vector3.ZERO, Vector3(64, 64, 64))
+	var done := _box("done", Vector3(64, 0, 0), Vector3(64, 64, 64))
+	root.create_visgroup("Done")
+	root.add_selection_to_visgroup("Done", [done])
+	root.visgroup_system.set_visgroup_locked("Done", true)
+	var before: Dictionary = root.get_brush_info_from_node(done)
+	var carver := _box("carver", Vector3(32, 0, 0), Vector3(16, 16, 16))
+	plugin.selection = [carver]
+
+	HFPluginEditActions.carve_selected(plugin, root)
+	assert_eq(plugin.dialogs.size(), 1, "the carve is asked about")
+	if plugin.dialogs.size() == 1:
+		assert_string_contains(plugin.dialogs[0].dialog_text, "Carve 1 brush(es)?")
+		assert_string_contains(
+			plugin.dialogs[0].dialog_text, "1 locked brush overlaps and is left alone."
+		)
+	_confirm_all()
+
+	assert_eq(plugin.history, ["Carve"], "one step")
+	assert_null(root.brush_system.find_brush_by_id("target"), "the unlocked brush is in pieces")
+	var still = root.brush_system.find_brush_by_id("done")
+	assert_not_null(still, "the locked brush is still there")
+	if still:
+		assert_eq(root.get_brush_info_from_node(still), before, "and is as it was")
+
+
 ## Two carvers that overlap each other: the first cuts the second up along with the
 ## target, so by its turn the second is no longer there to carve with.
 func test_a_carver_an_earlier_one_cut_up_is_not_committed():
