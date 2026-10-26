@@ -41,6 +41,9 @@ const BRUSH_NAME_META := "brush_node_name"
 ## Collision the player cannot see. The bake, the editor's tint, the `.map` import
 ## and export and Validate each treat it apart from the other classes (#1409).
 const CLIP_CLASS := "func_clip"
+## Geometry that is seen and walked through: the bake makes its mesh and no
+## collision (#1892).
+const ILLUSIONARY_CLASS := "func_illusionary"
 
 ## What an identity puts before a name, and before a tie.
 const NAME_PREFIX := "@"
@@ -68,6 +71,15 @@ static func entity_class(node: Node) -> String:
 ## Whether a brush or a baked node is a `func_clip`.
 static func is_clip(node: Node) -> bool:
 	return entity_class(node) == CLIP_CLASS
+
+
+## Whether the player walks through what the bake makes of a brush: a trigger
+## bakes a volume that only notices what comes in, and `func_illusionary` only its
+## mesh. The spawn check and Validate's movement checks read the brushes in place
+## of the baked collision, so they leave these out as the bake does (#1962).
+static func bakes_no_collision(node: Node) -> bool:
+	var tied := entity_class(node)
+	return tied.begins_with("trigger_") or tied == ILLUSIONARY_CLASS
 
 
 ## Which brush entity a draft brush is part of: `@` and its authored name, or `@#`

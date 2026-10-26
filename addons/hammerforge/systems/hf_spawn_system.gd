@@ -14,6 +14,7 @@ class_name HFSpawnSystem
 @warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
 const DraftBrush = preload("../brush_instance.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFBakeSystemType = preload("hf_bake_system.gd")
 
@@ -501,7 +502,9 @@ func floor_in_bake(spawn: Node3D) -> bool:
 ## order}`. A cutter carves the structural solids before it, as a CSG combiner
 ## does, and a committed cutter carves them all. A brush with a class is not cut,
 ## since only structural brushes go into the boolean. A trigger bakes to an
-## Area3D, and a pending cutter is not baked, so neither is either.
+## Area3D and a func_illusionary brush to its mesh alone, so the player walks
+## through both (#1962), and a pending cutter is not baked, so none of them is
+## either.
 ##
 ## Only the brushes the bake takes. This stands in for the baked collision, so a
 ## floor a cordon or Bake Visible Only left out of the bake approved a spawn that
@@ -522,7 +525,7 @@ func _brush_solids(near: AABB) -> Dictionary:
 			continue
 		if node is DraftBrush and bake and not bake.brush_bakes(node as DraftBrush):
 			continue
-		if str(node.get_meta("brush_entity_class", "")).begins_with("trigger_"):
+		if HFBrushEntity.bakes_no_collision(node):
 			continue
 		var structural := HFBakeSystemType.is_structural_brush(node)
 		var cuts := order >= first_committed

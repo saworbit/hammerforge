@@ -128,6 +128,13 @@ func test_a_wall_beside_a_floor_is_not_a_step():
 	assert_eq(_findings("steep_stairs"), [])
 
 
+func test_a_flight_of_illusionary_boxes_is_not_stairs():
+	# The bake gives them no collision, so the player walks through them (#1962).
+	for step in _stairs(5, 0.5):
+		root.tie_brushes_to_entity([str(step.brush_id)], "func_illusionary")
+	assert_eq(_findings("steep_stairs"), [])
+
+
 # ---------------------------------------------------------------------------
 # Doorways
 # ---------------------------------------------------------------------------

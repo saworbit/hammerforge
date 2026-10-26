@@ -35,7 +35,7 @@ const MOVER_CLASSES := ["func_door", "door_basic"]
 ## one that is seen and walked through, baked with no collision (#1892). Hammer's
 ## names, so a `.map` round trip keeps them.
 const PHYSBOX_CLASS := "func_physbox"
-const ILLUSIONARY_CLASS := "func_illusionary"
+const ILLUSIONARY_CLASS := HFBrushEntity.ILLUSIONARY_CLASS
 
 const BAKED_CONTAINER_NAME := &"BakedGeometry"
 const BAKED_CONTAINER_META := &"_hammerforge_baked_container"

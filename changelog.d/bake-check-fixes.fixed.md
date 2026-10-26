@@ -1,0 +1,1 @@
+- The spawn check and Validate's stairs check read a func_illusionary brush as empty space. (issue [#1962](https://github.com/saworbit/hammerforge/issues/1962))
