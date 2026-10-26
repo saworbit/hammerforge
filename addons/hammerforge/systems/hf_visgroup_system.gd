@@ -165,7 +165,20 @@ func rename_visgroup(old_name: String, new_name: String) -> bool:
 		if idx >= 0:
 			vgs[idx] = new_name
 			node.set_meta("visgroups", vgs)
+	# The saved views and the Previous steps name it too, and a view left on the
+	# old name left the renamed visgroup as it was when shown (#1979).
+	for view_name in saved_views:
+		_rename_key(saved_views[view_name], old_name, new_name)
+	for step in _view_history:
+		_rename_key(step.get("visgroups"), old_name, new_name)
+		_rename_key(step.get("locked"), old_name, new_name)
 	return true
+
+
+static func _rename_key(entries: Variant, old_name: String, new_name: String) -> void:
+	if entries is Dictionary and (entries as Dictionary).has(old_name):
+		entries[new_name] = entries[old_name]
+		(entries as Dictionary).erase(old_name)
 
 
 func set_visgroup_visible(vg_name: String, visible: bool) -> void:
@@ -446,6 +459,43 @@ func capture_view() -> Dictionary:
 ## Put back a view `capture_view()` took. A visgroup made since keeps its own
 ## visibility, and a hidden node since freed is passed over.
 func apply_view(view: Dictionary) -> void:
+	_apply_eyes_and_locks(view)
+	_view_hidden.clear()
+	for node in view.get("hidden", []):
+		if node is Node and is_instance_valid(node):
+			_view_hidden[node] = true
+	refresh_visibility()
+
+
+## `capture_view()` with what it hides named as well, by brush id or entity name,
+## for an undo or a redo to keep: either can build those nodes again (#1981).
+func capture_view_kept() -> Dictionary:
+	var view := capture_view()
+	var keys: Array = []
+	for node in view["hidden"]:
+		keys.append(_view_key(node))
+	view["hidden_keys"] = keys
+	return view
+
+
+## Put back the view `capture_view_kept()` took before an undo or a redo: each
+## visgroup's eye and lock where the visgroup is still there, and what was hidden,
+## a node rebuilt since found again by its key. Ctrl+Z never undoes a visibility
+## change (#1981). The caller draws it.
+func keep_view(view: Dictionary) -> void:
+	_apply_eyes_and_locks(view)
+	_view_hidden.clear()
+	var wanted: Dictionary = {}
+	for key in view.get("hidden_keys", []):
+		wanted[key] = true
+	if wanted.is_empty():
+		return
+	for node in _all_managed_nodes():
+		if wanted.has(_view_key(node)):
+			_view_hidden[node] = true
+
+
+func _apply_eyes_and_locks(view: Dictionary) -> void:
 	var shown: Dictionary = view.get("visgroups", {})
 	for vg_name in shown:
 		if visgroups.has(vg_name):
@@ -454,11 +504,12 @@ func apply_view(view: Dictionary) -> void:
 	for vg_name in locked:
 		if visgroups.has(vg_name):
 			visgroups[vg_name]["locked"] = bool(locked[vg_name])
-	_view_hidden.clear()
-	for node in view.get("hidden", []):
-		if node is Node and is_instance_valid(node):
-			_view_hidden[node] = true
-	refresh_visibility()
+
+
+static func _view_key(node: Node) -> String:
+	if node is DraftBrush:
+		return "brush:" + str((node as DraftBrush).brush_id)
+	return "node:" + str(node.name)
 
 
 ## Remember the visibility now, for Previous Visibility to come back to.

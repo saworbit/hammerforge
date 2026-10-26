@@ -51,17 +51,23 @@ func test_a_brush_an_undo_builds_into_a_hidden_visgroup_comes_back_hidden():
 	assert_true(kept.visible, "the brush the undo kept is still shown")
 
 
-func test_an_undo_that_shows_a_visgroup_again_draws_the_brushes_it_kept():
+## An undo keeps the eyes of now (#1981), so a load is the restore that can
+## still show a visgroup again. The brush it kept must be drawn with it.
+func test_a_load_that_shows_a_visgroup_again_draws_the_brushes_it_kept():
 	var member := _box(Vector3.ZERO)
 	root.visgroup_system.create_visgroup("walls")
 	root.visgroup_system.add_to_visgroup(member, "walls")
 	root.visgroup_system.refresh_visibility()
-	var before: Dictionary = root.capture_state()
+	var undo_step: Dictionary = root.capture_state()
+	var file: Dictionary = root.capture_state(false)
 	root.visgroup_system.set_visgroup_visible("walls", false)
 	assert_false(member.visible, "fixture: hidden")
-	root.restore_state(before)
+	root.restore_state(undo_step)
 	assert_eq(root.draft_brushes_node.get_child(0), member, "fixture: the brush is kept")
-	assert_true(member.visible, "the visgroup is shown again, and so is its brush")
+	assert_false(member.visible, "an undo leaves the visgroup hidden, and its brush")
+	root.restore_state(file)
+	assert_eq(root.draft_brushes_node.get_child(0), member, "fixture: the brush is kept")
+	assert_true(member.visible, "the file shows the visgroup again, and so its brush")
 
 
 func test_the_walk_draws_only_what_it_is_handed_while_nothing_it_reads_changes():
