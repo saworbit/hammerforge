@@ -245,3 +245,31 @@ func test_reset_grid_goes_back_to_the_worlds_grid_and_a_draw_is_square_to_the_wo
 	assert_false(level.input_state.drag_on_face, "a plain draw, square to the world")
 	level.cancel_drag()
 	await _leave(level)
+
+
+## An edge picked after the grid was laid on a wall turns the floor grid along it.
+## The grid kept the wall's plane, so the turn was set and never took (#1933).
+func test_an_edge_picked_after_a_wall_turns_the_floor_grid():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await _level()
+	var grid = level.grid_system
+	var wall = rig.box(level, "wall", Vector3(4, 1, 0), Vector3(2, 2, 2))
+	var index := -1
+	for i in wall.faces.size():
+		wall.faces[i].ensure_geometry()
+		if (wall.faces[i].normal as Vector3).is_equal_approx(Vector3.RIGHT):
+			index = i
+	level.face_selection = {"wall": [index]}
+	grid.run_command("grid_align", [])
+	assert_eq(grid.effective_grid_axis(), level.AxisLock.X, "fixture: the grid on the wall")
+	level.clear_face_selection()
+	var source := _turned_box(level, "wing", 30.0, Vector3(-6, 0, 0))
+	assert_eq(_pick_bottom_edge(level, source).size(), 2, "fixture: an edge picked")
+	grid.run_command("grid_align", [source])
+	level.vertex_system.clear_edge_selection()
+	assert_eq(grid.effective_grid_axis(), level.AxisLock.Y, "the floor grid")
+	assert_true(grid.is_turned(), "turned")
+	assert_almost_eq(grid.turn_degrees, 30.0, 0.001, "along the edge")
+	await _leave(level)

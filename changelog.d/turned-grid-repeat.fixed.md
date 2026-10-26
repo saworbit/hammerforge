@@ -1,0 +1,1 @@
+- On a turned grid a Repeat copy, and its ghost, turn with the grid as a draw does, with its corners on the grid's points; and picking one edge after the grid was laid on a wall turns the floor grid along it. (issues [#1923](https://github.com/saworbit/hammerforge/issues/1923), [#1933](https://github.com/saworbit/hammerforge/issues/1933))

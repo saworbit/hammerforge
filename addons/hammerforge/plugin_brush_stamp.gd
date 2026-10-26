@@ -158,9 +158,8 @@ func follow(root: Node, camera: Camera3D, mouse_pos: Vector2) -> void:
 			_ghost.visible = false
 		return
 	var ghost := _ensure_ghost(root)
-	var size: Vector3 = _brush["size"]
 	ghost.visible = true
-	ghost.global_position = (start["point"] as Vector3) + Vector3(0.0, size.y * 0.5, 0.0)
+	ghost.global_transform = root.drag_system.repeat_frame(_brush["size"], start["point"])
 
 
 ## The ghost, drawn once per arming from the outline the brush itself draws.
