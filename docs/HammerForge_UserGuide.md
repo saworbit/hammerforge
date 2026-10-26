@@ -2110,7 +2110,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Apply Favorite 7 | Alt+7 | Apply favorite 7 of the context toolbar strip to the selected faces or brushes |
 | Apply Favorite 8 | Alt+8 | Apply favorite 8 of the context toolbar strip to the selected faces or brushes |
 | Apply Favorite 9 | Alt+9 | Apply favorite 9 of the context toolbar strip to the selected faces or brushes |
-| Select All | A | Select all brushes and entities (clears face selection) |
+| Select All | A | Select all brushes and entities in view (clears face selection) |
 | Deselect All | Shift+A | Deselect everything (brushes, entities, faces) |
 | Select Similar | Shift+S | Select faces, brushes or entities similar to the selection, on what Selection Filters ticks |
 | Selection Filters | Alt+F | Open selection filter popover |

@@ -3434,7 +3434,7 @@ msgid "Select brushes or entities by a typed rule, such as class is light_point 
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
-msgid "Select every brush and entity."
+msgid "Select every brush and entity in view."
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -3480,6 +3480,12 @@ msgstr ""
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "Selected faces and brushes"
 msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Selected {count} object"
+msgid_plural "Selected {count} objects"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Selection"
@@ -4619,6 +4625,12 @@ msgstr ""
 msgid "func_wall"
 msgstr ""
 
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "left out {count} hidden"
+msgid_plural "left out {count} hidden"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/dock.gd
 msgid "mixed"
 msgstr ""
@@ -4700,6 +4712,12 @@ msgstr[1] ""
 #: addons/hammerforge/plugin_drop_handler.gd
 msgid "{count} face made Hidden"
 msgid_plural "{count} faces made Hidden"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "{count} locked brush overlaps and is left alone."
+msgid_plural "{count} locked brushes overlap and are left alone."
 msgstr[0] ""
 msgstr[1] ""
 
