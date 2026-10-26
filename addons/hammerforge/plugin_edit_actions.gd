@@ -839,7 +839,8 @@ static func repick_trim_run(plugin: Object, root: Node) -> bool:
 				var piece = root.find_brush_by_id(str(brush_id))
 				if piece != null:
 					saved.append(piece)
-	root.user_message.emit(_built_text("Trim Run re-picked along", read), 0)
+	var lead := "%s re-picked along" % HFGeneratorSystem.display_name(record.type)
+	root.user_message.emit(_built_text(lead, read), 0)
 	return true
 
 
