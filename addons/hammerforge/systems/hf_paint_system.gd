@@ -1494,10 +1494,34 @@ func _sync_region_manager() -> void:
 	region_manager.base_grid = root.paint_layers.base_grid if root.paint_layers else null
 
 
-func _screen_to_cell(camera: Camera3D, screen_pos: Vector2) -> Variant:
-	if not camera or not root.paint_layers or not root.paint_layers.base_grid:
+## The grid the cursor is read on, for the regions a stroke loads and pins: the
+## active layer's, which is where `HFPaintTool` writes the stroke's cells. A
+## painted layer keeps its cell size when the snap changes (#2011), so the
+## template for new layers can be another size and would name other cells.
+func _cursor_grid() -> HFPaintGrid:
+	if not root.paint_layers:
 		return null
-	var grid = root.paint_layers.base_grid
+	var layer: HFPaintLayer = root.paint_layers.get_active_layer()
+	if layer and layer.grid:
+		return layer.grid
+	return root.paint_layers.base_grid
+
+
+## Whether `layer` holds paint: cells or a heightmap in memory, or cells in a
+## region file its region was streamed out to. Such a layer keeps its cell size
+## when the grid snap changes (#2011).
+func layer_holds_paint(layer: HFPaintLayer) -> bool:
+	if layer == null:
+		return false
+	if not layer.get_chunk_ids().is_empty() or layer.has_heightmap():
+		return true
+	return _layer_ids_in_region_files().has(str(layer.layer_id))
+
+
+func _screen_to_cell(camera: Camera3D, screen_pos: Vector2) -> Variant:
+	var grid := _cursor_grid()
+	if not camera or not grid:
+		return null
 	var plane_point = grid.origin + (grid.basis * Vector3(0.0, grid.layer_y, 0.0))
 	var plane_normal = grid.basis.y.normalized()
 	var ray_origin = camera.project_ray_origin(screen_pos)
@@ -1908,7 +1932,8 @@ func _update_region_overlay() -> void:
 	if not region_streaming_enabled or not region_show_grid:
 		root.generated_region_overlay.mesh = null
 		return
-	if not root.paint_layers or not root.paint_layers.base_grid:
+	var grid := _cursor_grid()
+	if not grid:
 		root.generated_region_overlay.mesh = null
 		return
 	if region_overlay_material == null:
@@ -1917,7 +1942,6 @@ func _update_region_overlay() -> void:
 		mat.albedo_color = Color(0.2, 0.9, 1.0, 0.7)
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		region_overlay_material = mat
-	var grid = root.paint_layers.base_grid
 	var mesh := ImmediateMesh.new()
 	mesh.surface_begin(Mesh.PRIMITIVE_LINES, region_overlay_material)
 	for rid in region_manager.loaded_regions.keys():
