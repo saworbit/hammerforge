@@ -1,1 +1,1 @@
-- Save As over another streamed level clears that level's region files, so none of its paint streams into this one, and Undo after a Save As keeps the undone paint from streaming back in from the new folder. (issue [#1929](https://github.com/saworbit/hammerforge/issues/1929))
+- Save As over another level clears that level's paint region files, and an undo from before a Save As keeps the undone paint out. (issue [#1929](https://github.com/saworbit/hammerforge/issues/1929))
