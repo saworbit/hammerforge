@@ -1424,10 +1424,10 @@ func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
 ## Every brush the subtraction checks care about, with its world AABB measured
 ## once, in the order the level lists them.
 ##
-## The box is the brush's own size placed at its origin, which is what both
-## checks have always compared. It ignores rotation deliberately: widening it to
-## the turned brush's real extent would change which levels report an issue, and
-## that is a different question from this one.
+## The box is the brush's own bounds in the level, turn included, as the bake
+## reads them. It was the brush's size placed at its origin, so a doorway cut into
+## a wall turned a quarter turn overlapped nothing, and two cuts turned with it
+## were read across the wall rather than along it (#1967).
 func _build_brush_records(brush_nodes: Array) -> Array:
 	var records: Array = []
 	for node in brush_nodes:
@@ -1436,13 +1436,12 @@ func _build_brush_records(brush_nodes: Array) -> Array:
 		var brush := node as DraftBrush
 		if root.is_entity_node(brush):
 			continue
-		var half: Vector3 = brush.size * 0.5
 		(
 			records
 			. append(
 				{
 					"brush": brush,
-					"aabb": AABB(brush.global_position - half, brush.size),
+					"aabb": HFBakeSystemType.brush_world_aabb(brush, brush.global_transform),
 					"subtract": brush.operation == CSGShape3D.OPERATION_SUBTRACTION,
 					# A brush tied to an entity class bakes from its own faces and
 					# no cutter reaches it, so it cannot be what a cut lands on (#942).
@@ -1464,7 +1463,9 @@ func _build_brush_records(brush_nodes: Array) -> Array:
 ##
 ## Returns the subtractions that landed on an additive world brush, keyed by instance
 ## id, and the subtraction pairs that overlap each other, as index pairs into
-## `records`.
+## `records`. Boxes that meet are only a first pass: `_records_meet()` says
+## whether the brushes do, and is asked only for a pair one of the two answers
+## still needs.
 func _sweep_subtract_pairs(records: Array) -> Dictionary:
 	var grounded: Dictionary = {}
 	var subtract_pairs: Array = []
@@ -1494,16 +1495,54 @@ func _sweep_subtract_pairs(records: Array) -> Dictionary:
 			if not other_aabb.intersects(aabb):
 				continue
 			if record["subtract"] and other["subtract"]:
-				subtract_pairs.append([other_index, index])
-			elif record["subtract"]:
-				if other["ground"]:
-					grounded[(record["brush"] as Node).get_instance_id()] = true
-			elif other["subtract"]:
-				if record["ground"]:
-					grounded[(other["brush"] as Node).get_instance_id()] = true
+				if _records_meet(other, record):
+					subtract_pairs.append([other_index, index])
+			elif record["subtract"] or other["subtract"]:
+				var cut: Dictionary = record if record["subtract"] else other
+				var solid: Dictionary = other if record["subtract"] else record
+				var cut_id := (cut["brush"] as Node).get_instance_id()
+				if solid["ground"] and not grounded.has(cut_id) and _records_meet(cut, solid):
+					grounded[cut_id] = true
 		still_open.append(index)
 		active = still_open
 	return {"grounded": grounded, "subtract_pairs": subtract_pairs}
+
+
+## Whether two brushes whose boxes meet go into each other. A brush square to the
+## world fills its box, so for two of them the boxes meeting says so, as it always
+## has. A turned one's box holds more than the brush, so then their faces decide,
+## as convex solids, the way `_cut_reaches()` measures a cut (#1967). A brush whose
+## faces cannot be measured is taken at its box.
+func _records_meet(a: Dictionary, b: Dictionary) -> bool:
+	var a_faces := _record_faces(a)
+	var b_faces := _record_faces(b)
+	if a_faces.size() < 4 or b_faces.size() < 4:
+		return true
+	if a["square"] and b["square"]:
+		return true
+	# A doorway's or a window's middle is inside the wall it cuts, which is quick
+	# to see and says the rest.
+	if HFSolidMeasure.point_gap(HFSolidMeasure.vertex_centre(a_faces), b_faces) < 0.0:
+		return true
+	return HFSolidMeasure.solid_gap(a_faces, b_faces) < 0.0
+
+
+## A record's brush as world faces, read the first time a pair asks for them, and
+## whether it is square to the world: every face facing along an axis, so that
+## the brush is its box.
+func _record_faces(record: Dictionary) -> Array:
+	if not record.has("faces"):
+		var brush: DraftBrush = record["brush"]
+		var faces: Array = HFSolidMeasure.world_faces(brush) if _brush_is_measurable(brush) else []
+		var square := true
+		for face in faces:
+			var normal := HFSolidMeasure.face_normal(face).abs()
+			if maxf(normal.x, maxf(normal.y, normal.z)) < 0.9999:
+				square = false
+				break
+		record["faces"] = faces
+		record["square"] = square
+	return record["faces"]
 
 
 ## The axis the brushes are most spread out along, as an index into Vector3.

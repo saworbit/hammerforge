@@ -1562,7 +1562,8 @@ Click **Check Bake Issues** to scan for potential problems before baking. The fi
 - **Degenerate brush** (severity 2): near-zero thickness on any axis — blocks play.
 - **Oversized brush** (severity 1): very large dimensions — warning only.
 - **Floating cut** (severity 1): a cut brush that does not overlap any solid brush.
-- **Overlapping cuts** (severity 1): two cut brushes with intersecting AABBs.
+- **Overlapping cuts** (severity 1): two cut brushes that go into each other.
+  Both cut checks read a turned brush where it really is, so a doorway cut into a turned wall lands on it ([#1967](https://github.com/saworbit/hammerforge/issues/1967)).
 - **Open edges** (severity 1): edges shared by only one face — geometry is not watertight.
 - **Non-manifold edges** (severity 2): edges shared by 3+ faces — may cause bake artifacts.
 - **Non-planar faces** (severity 1): faces with 4+ vertices where a vertex drifts off the face plane beyond `planarity_tolerance` (default 0.01 units). Common in imported .map geometry with floating-point drift.

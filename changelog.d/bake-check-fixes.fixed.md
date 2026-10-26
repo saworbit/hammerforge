@@ -1,2 +1,3 @@
-- Generate Occluders leaves out doors, physboxes, func_illusionary brushes and brushes that take inputs. (issue [#1961](https://github.com/saworbit/hammerforge/issues/1961))
-- The spawn check and Validate's stairs check read a func_illusionary brush as empty space. (issue [#1962](https://github.com/saworbit/hammerforge/issues/1962))
+- Doors, physboxes, illusionary brushes and brushes with inputs make no occluder. (issue [#1961](https://github.com/saworbit/hammerforge/issues/1961))
+- Check Bake Issues reads a turned brush where it really is in its two cut checks. (issue [#1967](https://github.com/saworbit/hammerforge/issues/1967))
+- The spawn and stairs checks read a func_illusionary brush as empty space. (issue [#1962](https://github.com/saworbit/hammerforge/issues/1962))
