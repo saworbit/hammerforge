@@ -305,6 +305,61 @@ func test_the_pieces_carry_each_side_s_material_in_one_group_and_one_step():
 	await rig.leave_level(level)
 
 
+## A side that tapers on a bend still takes the look of the face it ran along. It
+## is not flat, so the hull splits it into two triangles, and a side was only
+## matched to its edge when one face held all four of the edge's corners: every
+## top and bottom of a tapered arc or S bend came out in the swept face's look
+## (#1970).
+func test_a_side_that_tapers_on_a_bend_keeps_the_look_of_the_face_it_ran_along():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _picked_face()
+	var level = made[0]
+	var box = made[1]
+	var slot_of := {
+		Vector3.RIGHT: 2, Vector3.UP: 3, Vector3.DOWN: 4, Vector3.BACK: 5, Vector3.FORWARD: 6
+	}
+	for face in box.faces:
+		for normal in slot_of:
+			if (face.normal as Vector3).is_equal_approx(normal):
+				face.material_idx = slot_of[normal]
+	var cut := HFPluginFaceSweep.section(level)
+	var placement: Transform3D = cut["placement"]
+	var cases := {
+		"straight, height 0.5": {"path": HFFaceSweep.Path.STRAIGHT, "end_height": 0.5},
+		"arc, no taper": {"path": HFFaceSweep.Path.ARC},
+		"arc, height 0.5": {"path": HFFaceSweep.Path.ARC, "end_height": 0.5},
+		"arc, width 0.5": {"path": HFFaceSweep.Path.ARC, "end_width": 0.5},
+		"arc, both 0.5": {"path": HFFaceSweep.Path.ARC, "end_width": 0.5, "end_height": 0.5},
+		"s bend, height 0.5": {"path": HFFaceSweep.Path.S_BEND, "end_height": 0.5},
+	}
+	for name in cases:
+		var settings := HFPluginFaceSweep.settings_of(_values(cases[name]))
+		var pieces: Array = HFSweepBuilder.build_along(settings, cut["run"])
+		assert_eq(pieces.size(), 8, "fixture: %s builds" % name)
+		var swept := 0
+		var tops := 0
+		for faces in pieces:
+			for face in faces:
+				if int(face.material_idx) == 2:
+					swept += 1
+				var up: float = (placement.basis * (face.normal as Vector3)).normalized().y
+				if absf(up) >= 0.7:
+					tops += 1
+					assert_eq(
+						int(face.material_idx),
+						3 if up > 0.0 else 4,
+						(
+							"%s: a face facing %s is the source's %s"
+							% [name, up, "top" if up > 0.0 else "bottom"]
+						)
+					)
+		assert_gt(tops, 0, "fixture: %s has tops and bottoms" % name)
+		assert_eq(swept, 2 * pieces.size(), "%s: only the ends take the swept face's look" % name)
+	await rig.leave_level(level)
+
+
 ## A look as a sweep keeps it is the whole look `FaceData.copy_appearance_from()`
 ## copies: a hidden face and its smoothing group come through too, which dropped
 ## off a swept face's sides (#1934, #1927).

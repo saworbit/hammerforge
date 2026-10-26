@@ -240,8 +240,10 @@ static func _placed(
 
 
 ## For each of `faces`, the edge of the ring, from corner i to i + 1, whose two
-## ends at the near cut and at the far cut all lie on it, or -1 for a face no edge
-## ran along: the ends of the piece.
+## ends at the near cut and at the far cut lie on it, or -1 for a face no edge ran
+## along: the ends of the piece. Three of the four will do: a side that tapers on
+## a bend is not flat, so the hull splits it into two triangles, each holding
+## three of them (#1970). An end holds two of any edge's.
 static func _edges_run_along(
 	faces: Array, near: PackedVector3Array, far: PackedVector3Array
 ) -> PackedInt32Array:
@@ -249,14 +251,16 @@ static func _edges_run_along(
 	for face in faces:
 		var plane := Plane((face as FaceData).normal, (face as FaceData).local_verts[0])
 		var found := -1
+		var most := 2
 		for i in near.size():
 			var j := (i + 1) % near.size()
-			var on_it := true
+			var on_it := 0
 			for point in [near[i], near[j], far[i], far[j]]:
-				on_it = on_it and absf(plane.distance_to(point)) <= AHEAD
-			if on_it:
+				if absf(plane.distance_to(point)) <= AHEAD:
+					on_it += 1
+			if on_it > most:
 				found = i
-				break
+				most = on_it
 		out.append(found)
 	return out
 
