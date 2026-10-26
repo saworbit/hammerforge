@@ -722,6 +722,62 @@ func test_a_repick_dresses_the_pieces_in_the_new_wall_s_looks():
 	await rig.leave_level(level)
 
 
+## Texture Lock, on by default, rewrites a face's offset through a move and its
+## turn through a turn so the texture stays on the piece, and the faces of a sweep
+## moved or turned that way read as painted by hand: a Re-pick kept the old wall's
+## looks on them. A face painted after the move is still kept (#1969).
+func test_a_repick_after_a_move_or_a_turn_dresses_every_untouched_face_anew():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	for move in ["nudged", "turned"]:
+		var made: Array = await _picked_face()
+		var level = made[0]
+		var box = made[1]
+		assert_true(level.texture_lock, "fixture: Texture Lock is on, as by default")
+		for face in box.faces:
+			face.material_idx = 2
+		assert_true(
+			HFPluginFaceSweep.run(
+				rig.plugin, level, _values({"path": HFFaceSweep.Path.STRAIGHT, "segments": 3})
+			)
+		)
+		var record = _sweeps(level)[0]
+		var ids := Array(record.brush_ids)
+		var first: Node = _pieces_of(level, record)[0]
+		var looks_before: Array = []
+		for face in first.faces:
+			looks_before.append([face.uv_offset, face.uv_rotation])
+		if move == "nudged":
+			level.nudge_brushes_by_id(ids, Vector3(0.25, 0, 5))
+		else:
+			level.rotate_managed_nodes(ids, [], 1, 90.0, Vector3(0, 0.5, 0))
+		var rewritten := 0
+		for i in first.faces.size():
+			if [first.faces[i].uv_offset, first.faces[i].uv_rotation] != looks_before[i]:
+				rewritten += 1
+		assert_gt(rewritten, 0, "fixture: Texture Lock rewrote faces of the %s sweep" % move)
+		first.faces[0].material_idx = 9
+		_pick_other_wall(level, Vector3(0, 0.5, -20), 5)
+		var read: Dictionary = level.run_from_faces(record.type, level.face_selection)
+		assert_true(
+			(
+				level
+				. generator_system
+				. repick(str(record.generator_id), read["run"], read["placement"])
+				. ok
+			)
+		)
+		var slots := {}
+		for piece in _pieces_of(level, record):
+			for face in piece.faces:
+				slots[int(face.material_idx)] = int(slots.get(int(face.material_idx), 0)) + 1
+		assert_eq(
+			slots, {5: 17, 9: 1}, "the %s sweep wears the new wall's looks but for the paint" % move
+		)
+		await rig.leave_level(level)
+
+
 ## A sweep nobody has painted has nothing an Update could lose: the looks it
 ## dressed its pieces in are its own to dress them in again. Every face read as
 ## hand work, so fewer segments asked whether to throw it away.

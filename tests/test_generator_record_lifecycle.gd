@@ -167,6 +167,42 @@ func test_an_unpainted_piece_that_would_be_dropped_is_not_named():
 	assert_eq(at_risk.size(), 0, "there is nothing on those pieces to lose")
 
 
+## Texture Lock, on by default, rewrites a face's offset through a move and its
+## turn through a turn, so the texture stays on the piece. That is not painting:
+## a staircase nudged and turned and then given fewer steps has nothing on the
+## steps it drops to lose. Each face read as hand work, so the Update asked twice
+## before it went ahead (#1969).
+func test_a_moved_and_turned_staircase_has_nothing_at_risk_until_a_step_is_painted():
+	assert_true(root.texture_lock, "fixture: Texture Lock is on, as by default")
+	var settings: Dictionary = HFGeneratorSystemScript.default_settings("stairs")
+	assert_true(root.create_generator("stairs", settings, Transform3D.IDENTITY).ok)
+	var generator_id := str(root.generator_system.generators.keys()[0])
+	var ids := Array(_record(generator_id).brush_ids)
+	var fewer := settings.duplicate()
+	fewer["steps"] = int(settings["steps"]) - 2
+	assert_eq(root.generator_appearance_at_risk(generator_id, fewer).size(), 0, "fixture")
+
+	root.nudge_brushes_by_id(ids, Vector3(0.25, 0, 3))
+	var top := _piece(generator_id, ids.size() - 1)
+	var up := -1
+	for i in top.faces.size():
+		if (top.faces[i].normal as Vector3).is_equal_approx(Vector3.UP):
+			up = i
+	assert_ne(top.faces[up].uv_offset, Vector2.ZERO, "fixture: Texture Lock moved the texture")
+	assert_eq(root.generator_appearance_at_risk(generator_id, fewer).size(), 0, "after a nudge")
+
+	root.rotate_managed_nodes(ids, [], 1, 90.0, Vector3.ZERO)
+	assert_ne(top.faces[up].uv_rotation, 0.0, "fixture: Texture Lock turned the texture")
+	assert_eq(root.generator_appearance_at_risk(generator_id, fewer).size(), 0, "after a turn")
+
+	_paint_face(generator_id, ids.size() - 1, up, 7)
+	assert_eq(
+		Array(root.generator_appearance_at_risk(generator_id, fewer)),
+		[str(ids[ids.size() - 1])],
+		"a step painted after the move is at risk"
+	)
+
+
 # ===========================================================================
 # Whole-level replacement (#191)
 # ===========================================================================
