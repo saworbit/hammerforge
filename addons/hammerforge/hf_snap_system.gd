@@ -470,6 +470,7 @@ func guide_choices(point: Vector3) -> Array:
 
 ## Where a guide meets an edge of a brush in reach: the point on the edge level
 ## with a tracked point one way. Ranked between a crossing and a guide alone.
+## A hidden brush's edges are left out, as `_collect_kinded()` leaves them (#1963).
 func _guide_on_edge(point: Vector3, near: Dictionary) -> Dictionary:
 	var best := {}
 	if root == null or not root.has_method("_iter_pick_nodes"):
@@ -479,6 +480,8 @@ func _guide_on_edge(point: Vector3, near: Dictionary) -> Dictionary:
 		if not (node is DraftBrush) or node == root.get("preview_brush"):
 			continue
 		var brush := node as DraftBrush
+		if not brush.is_visible_in_tree():
+			continue
 		var xform := brush.global_transform
 		var reach := _world_reach(xform.basis, _snap_half_extent(brush))
 		if point.distance_to(brush.global_position) > snap_threshold + reach:
@@ -830,6 +833,11 @@ func _collect_candidates(
 
 
 ## `_collect_candidates()` with what each one is: `[point, kind]` pairs.
+##
+## A hidden brush gives none, whether a visgroup, Hide Selection, a View Filter
+## or an isolate hid it: nothing is drawn there to aim at, so a point that jumped
+## to it landed on what the mapper could not see (#1963). A locked brush is drawn,
+## so it is still a target.
 func _collect_kinded(
 	exclude_ids: Array, point: Vector3 = Vector3.ZERO, max_distance: float = INF
 ) -> Array:
@@ -848,7 +856,7 @@ func _collect_kinded(
 		if node == preview:
 			continue
 		var brush := node as DraftBrush
-		if exclude_ids.has(str(brush.brush_id)):
+		if exclude_ids.has(str(brush.brush_id)) or not brush.is_visible_in_tree():
 			continue
 		var origin := brush.global_position
 		var origin_distance := point.distance_to(origin)

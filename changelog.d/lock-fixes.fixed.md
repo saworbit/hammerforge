@@ -1,0 +1,1 @@
+- A snap no longer lands on a corner, edge or centre of a hidden brush. (issue [#1963](https://github.com/saworbit/hammerforge/issues/1963))
