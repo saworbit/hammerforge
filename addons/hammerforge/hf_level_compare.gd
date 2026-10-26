@@ -14,14 +14,33 @@ const NEAR := 0.01
 ## How far apart two brush origins may be for a brush whose id changed to be the
 ## same brush.
 const SAME_PLACE := 0.01
+## How far apart a face's UVs at a corner may be and still show the texture in
+## the same place: a tenth of the smallest step the UV offset boxes take.
+const UV_NEAR := 0.001
 
 ## The kinds `compare()` counts, in the order its summary names them.
 const KINDS := ["brushes", "faces", "entities", "wires", "visgroups", "cordons", "paint"]
+
+## The keys of a face's record that say where its texture lies on it.
+const UV_KEYS := ["uv_projection", "uv_scale", "uv_offset", "uv_rotation", "custom_uvs"]
+## The keys a face needs to work out the UVs those give its corners.
+const UV_RECORD_KEYS := [
+	"uv_projection",
+	"uv_scale",
+	"uv_offset",
+	"uv_rotation",
+	"custom_uvs",
+	"uv_format_version",
+	"legacy_wall_axes",
+	"local_verts",
+	"normal",
+]
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const FaceData = preload("face_data.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
 const HFVisgroupSystem = preload("systems/hf_visgroup_system.gd")
 const HFDisplacementData = preload("displacement_data.gd")
@@ -291,7 +310,7 @@ static func _brush_changes(
 		var paired := face_pairs(old_faces, new_faces)
 		for index in new_faces.size():
 			var said := _face_changes(
-				old_faces[paired[index]], new_faces[index], palette_old, palette_new
+				old_faces[paired[index]], new_faces[index], [palette_old, palette_new], [told, tnew]
 			)
 			if said.is_empty():
 				continue
@@ -302,21 +321,21 @@ static func _brush_changes(
 	return {"lines": lines, "faces": faces_changed, "wires": int(wires.get("count", 0))}
 
 
+## What changed on one face. `palettes` is the two levels' materials and
+## `placements` the two transforms of its brush, older first.
 static func _face_changes(
-	old: Variant, now: Variant, palette_old: Array, palette_new: Array
+	old: Variant, now: Variant, palettes: Array, placements: Array
 ) -> PackedStringArray:
 	var out: PackedStringArray = []
 	if not (old is Dictionary and now is Dictionary):
 		return out
-	var old_material := material_name(palette_old, old)
-	var new_material := material_name(palette_new, now)
+	var old_material := material_name(palettes[0], old)
+	var new_material := material_name(palettes[1], now)
 	if old_material != new_material:
 		out.append("material changed from %s to %s" % [old_material, new_material])
 	old = _corners_turned_to(old, now)
-	for key in ["uv_projection", "uv_scale", "uv_offset", "uv_rotation", "custom_uvs"]:
-		if not same(old.get(key), now.get(key)):
-			out.append("texture moved")
-			break
+	if _texture_fields_differ(old, now) and not _shows_the_same(old, now, placements):
+		out.append("texture moved")
 	if not same(old.get("paint_layers", []), now.get("paint_layers", [])):
 		out.append("paint changed")
 	if not same(old.get("displacement"), now.get("displacement")):
@@ -326,6 +345,54 @@ static func _face_changes(
 	if int(old.get("face_type", 0)) != int(now.get("face_type", 0)):
 		out.append("now Hidden" if int(now.get("face_type", 0)) != 0 else "no longer Hidden")
 	return out
+
+
+static func _texture_fields_differ(old: Dictionary, now: Dictionary) -> bool:
+	for key in UV_KEYS:
+		if not same(old.get(key), now.get(key)):
+			return true
+	return false
+
+
+## Whether a face shows its texture where it did on its brush: the same UVs at
+## each of its corners, which are in the brush's own frame. Texture Lock, on by
+## default, rewrites a face's offset and rotation through a move or a turn so the
+## texture stays where it was on the brush, and those rewrites are not a texture
+## edit (#1989). A texture slid by hand shows other UVs at its corners. A face
+## whose values are the same is the other way a texture stays put: in the level,
+## as a move with Texture Lock off leaves it.
+##
+## A texture repeats every whole UV, so every corner moved by the same whole
+## number of repeats shows the same picture. A turn needs that: Texture Lock turns
+## the texture about the level's origin rather than the brush's, which moves it
+## by whole repeats about a pivot on whole metres.
+static func _shows_the_same(old: Dictionary, now: Dictionary, placements: Array) -> bool:
+	var was := _shown_uvs(old, placements[0])
+	var is_now := _shown_uvs(now, placements[1])
+	if was.is_empty() or was.size() != is_now.size():
+		return false
+	var repeats := (is_now[0] - was[0]).round()
+	for i in was.size():
+		if (is_now[i] - was[i] - repeats).length() > UV_NEAR:
+			return false
+	return true
+
+
+## The UVs a face's record draws at its corners with its brush at `placement`,
+## worked out as the open level works them out: its layout of its own, or its
+## projection taken where the brush stands. Only the keys that decide them are
+## read, so a painted face's weights are not decoded for this.
+static func _shown_uvs(face: Dictionary, placement: Transform3D) -> PackedVector2Array:
+	var record := {}
+	for key in UV_RECORD_KEYS:
+		if face.has(key):
+			record[key] = face[key]
+	var data := FaceData.from_dict(record)
+	data.world_transform = placement
+	# A face from before #652 converts its offset once it knows where its brush is,
+	# as a loaded brush does.
+	data.migrate_uvs_to_world_space()
+	return data.shown_uvs()
 
 
 ## `old` with its corners in the order `now` keeps them, when the two are the

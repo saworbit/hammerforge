@@ -223,6 +223,41 @@ func _lines_since(level: LevelRoot, before: Dictionary) -> PackedStringArray:
 	return lines
 
 
+## Texture Lock, on by default, keeps a texture where it is on a brush through a
+## move or a turn by rewriting each face's offset and rotation. Those rewrites
+## read as "texture moved" on four faces (#1989). A texture slid by hand after the
+## move still shows.
+func test_a_move_and_a_turn_with_texture_lock_are_not_texture_edits():
+	var level := _level()
+	var crate := _box(level, Vector3(4, 1, 2), "crate")
+	assert_true(level.texture_lock, "Texture Lock is on by default")
+	var saved := await _saved(level)
+	level.nudge_brushes_by_id(["crate"], Vector3(0, 0.5, 0))
+	await get_tree().process_frame
+	var result := HFLevelCompare.compare(saved, _now(level))
+	assert_eq(
+		result["lines"],
+		PackedStringArray(["1 brush changed", "brush '%s': moved 0.5 m up" % crate.name]),
+		"\n".join(result["lines"])
+	)
+
+	var before := _now(level)
+	level.rotate_managed_nodes(["crate"], [], 1, 90.0, crate.global_position)
+	await get_tree().process_frame
+	result = HFLevelCompare.compare(before, _now(level))
+	assert_eq(result["counts"]["faces"], 0, "\n".join(result["lines"]))
+	assert_has(result["lines"], "brush '%s': turned" % crate.name)
+
+	before = _now(level)
+	crate.faces[1].uv_offset += Vector2(0.25, 0)
+	result = HFLevelCompare.compare(before, _now(level))
+	assert_eq(result["counts"]["faces"], 1, "a texture slid by hand still shows")
+	assert_true(
+		Array(result["lines"]).any(func(l): return l.ends_with("texture moved")),
+		"\n".join(result["lines"])
+	)
+
+
 ## A removed paint layer is named as an added one is, by the name the mapper gave
 ## it and not its id (#1992).
 func test_a_removed_paint_layer_is_named_by_its_name():
