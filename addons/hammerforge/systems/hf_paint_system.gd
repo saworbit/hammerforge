@@ -46,6 +46,12 @@ var _stale_region_files: Dictionary = {}  # Dictionary[Vector2i, bool]
 ## wrote it, so a write reads the file again only when it may hold a layer the
 ## level no longer has (#1550).
 var _region_file_layers: Dictionary = {}  # Dictionary[Vector2i, PackedStringArray]
+## The level files this level was saved from under another name, whose region
+## files a Save As carried to the folder it uses now. A restore captured in one of
+## them reads that folder as its own (#1929). The level file a Save As is about to
+## use, so moving to any other, as a load does, starts the list again.
+var _saved_as_from: Dictionary = {}  # Dictionary[String, bool]
+var _saving_as_to := ""
 
 ## The surface paint stroke under way, for its undo step: each brush as it was
 ## before the stroke first painted it, or the whole level when the first brush
@@ -1175,6 +1181,9 @@ func set_region_base_path(hflevel_path: String) -> void:
 	var abs_path = hflevel_path
 	if hflevel_path.begins_with("res://") or hflevel_path.begins_with("user://"):
 		abs_path = ProjectSettings.globalize_path(hflevel_path)
+	if abs_path != _saving_as_to and abs_path != region_manager.region_base_path:
+		_saved_as_from.clear()
+	_saving_as_to = ""
 	# A digest says what was written to a file in the old folder; the new one's
 	# file for the same region holds nothing yet.
 	if abs_path != region_manager.region_base_path:
@@ -1308,7 +1317,10 @@ func restore_region_files(capture: Variant) -> void:
 		return
 	var folder := str(taken.get("base_path", ""))
 	if folder != "" and folder != region_manager.region_base_path:
-		return
+		# Unless this level was saved from there under another name, which carried
+		# its files to the folder it uses now (#1929).
+		if not _saved_as_from.has(folder):
+			return
 	# What was loaded is loaded again, paint or none. The restore marked only the
 	# regions with paint, and one an erase emptied would read its file back.
 	var loaded = taken.get("loaded", [])
@@ -1395,20 +1407,34 @@ static func _region_of_file(file_name: String) -> Variant:
 ## Save As, or an autosave to a path of its own, left that paint in the old
 ## folder and the level it wrote opened without it (#1665). A save to the folder
 ## the regions are in already copies nothing. OK, or the error of the first file
-## that could not be copied; the region folder is still the old one either way.
+## that could not be copied or cleared; the region folder is still the old one
+## either way.
+##
+## Any other region file in the new folder is the level's that was saved there
+## before, whose paint would stream in as this one's, so it goes; the loaded
+## regions are written there by the save itself (#1929).
 func carry_region_files_to(hflevel_path: String) -> int:
 	if not region_streaming_enabled or hflevel_path == "":
-		return OK
-	if region_manager.region_base_path == "":
 		return OK
 	var target := hflevel_path
 	if target.begins_with("res://") or target.begins_with("user://"):
 		target = ProjectSettings.globalize_path(target)
-	var from_dir := _region_dir_for_base_path(region_manager.region_base_path)
 	var to_dir := _region_dir_for_base_path(target)
-	if from_dir == to_dir or not DirAccess.dir_exists_absolute(from_dir):
+	# A level never saved has no region files anywhere.
+	if region_manager.region_base_path == "":
+		return _clear_region_files(to_dir, {})
+	var from_dir := _region_dir_for_base_path(region_manager.region_base_path)
+	if from_dir == to_dir:
 		return OK
-	for file_name in DirAccess.get_files_at(from_dir):
+	# The same level under another name, so an undo taken before reads the new
+	# folder as its own.
+	_saved_as_from[region_manager.region_base_path] = true
+	_saving_as_to = target
+	var carried: Dictionary = {}
+	var listed := PackedStringArray()
+	if DirAccess.dir_exists_absolute(from_dir):
+		listed = DirAccess.get_files_at(from_dir)
+	for file_name in listed:
 		var region_id: Variant = _region_of_file(file_name)
 		# A loaded region is written to the new folder by the save itself.
 		if region_id == null or region_manager.loaded_regions.has(region_id):
@@ -1422,6 +1448,21 @@ func carry_region_files_to(hflevel_path: String) -> int:
 		)
 		if copied != OK:
 			return copied
+		carried[file_name] = true
+	return _clear_region_files(to_dir, carried)
+
+
+## Remove every region file in `dir` but those named in `kept`. OK, or the error
+## of the first that could not be removed.
+func _clear_region_files(dir: String, kept: Dictionary) -> int:
+	if not DirAccess.dir_exists_absolute(dir):
+		return OK
+	for file_name in DirAccess.get_files_at(dir):
+		if _region_of_file(file_name) == null or kept.has(file_name):
+			continue
+		var removed := DirAccess.remove_absolute(dir.path_join(file_name))
+		if removed != OK:
+			return removed
 	return OK
 
 

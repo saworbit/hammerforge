@@ -316,9 +316,10 @@ func test_a_save_that_writes_the_same_paint_again_leaves_an_undo_nothing_to_rewr
 # ===========================================================================
 
 
-## Saved under another name, or another level loaded over it: the files in the
-## folder now are not the ones the capture knew, so a restore leaves them be.
-func test_an_undo_from_before_a_save_as_leaves_the_new_folders_files_alone():
+## Another level loaded over it: the files in the folder now are not the ones the
+## capture knew, so a restore leaves them be. Saved under another name is the
+## same level, whose files went with it (`test_save_as_carries_region_files.gd`).
+func test_an_undo_from_before_another_level_leaves_that_level_s_files_alone():
 	var level := streamed_level()
 	var sys := level.paint_system
 	var before := level.capture_state()
