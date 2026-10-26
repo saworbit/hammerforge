@@ -114,6 +114,20 @@ func test_generate_noise_deterministic():
 	assert_eq(match_count, 256, "Same seed should produce identical noise")
 
 
+## A layer reads its map wrapped, so column 0 sits beside the last column on
+## the ground. Plain noise put a cliff there along x = 0 and z = 0 (#2007).
+func test_generate_noise_tiles_across_its_edges():
+	var img = HFHeightmapIO.generate_noise(64, 64, {"seed": 3, "frequency": 0.05})
+	var inside := 0.0
+	var seam := 0.0
+	for y in range(64):
+		for x in range(63):
+			inside = maxf(inside, absf(img.get_pixel(x + 1, y).r - img.get_pixel(x, y).r))
+		seam = maxf(seam, absf(img.get_pixel(0, y).r - img.get_pixel(63, y).r))
+		seam = maxf(seam, absf(img.get_pixel(y, 0).r - img.get_pixel(y, 63).r))
+	assert_lt(seam, inside * 2.0, "the step across the wrap is no bigger than one inside")
+
+
 # ===========================================================================
 # Noise → base64 → decode round-trip
 # ===========================================================================
