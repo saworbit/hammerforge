@@ -563,3 +563,16 @@ Every one of these has cost a wasted run.
   behind a stack of fixes. `git diff main...origin/<branch>` over the file you
   are looking at is the check; several confirmed reproductions on `main` were
   already fixed on an unmerged branch.
+- **The load test reads `root.` across line breaks.** It joins gdformat's
+  wrapped calls, so a comment ending in "a fresh root." above a line starting
+  `root.save_hflevel(` reads as `root.root.save_hflevel()` and fails the build.
+  End such a comment with another word.
+- **A real line break inside a string literal parses in Godot and fails
+  gdlint.** A script written through a shell heredoc can turn `"\n"` into one,
+  even in a quoted heredoc, and the scenario still runs clean. Write anything
+  with a backslash through a file editor, and run CI's `gdlint tools/` before
+  pushing.
+- **Texture Lock rewrites a face's UV offset and rotation on every nudge and
+  turn.** A check that compares stored UV values reads a move as a texture
+  edit. Turn `texture_lock` off, or compare what the face shows, when the
+  question is not about Texture Lock.
