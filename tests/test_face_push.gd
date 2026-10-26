@@ -147,3 +147,29 @@ func test_coplanar_faces_of_a_wall_of_three_are_found():
 	assert_eq(partners.size(), 2, "the two others")
 	var off := _box(Vector3(2, 3, 0.5), Vector3(6, 1.5, 1))
 	assert_eq(HFFacePush.coplanar_faces(a, front, [off]).size(), 0, "one out of line is not")
+
+
+func test_a_push_on_a_scaled_wedge_moves_its_face_the_distance_asked():
+	# A push is asked in metres in the level. A wedge the gizmo scaled 1.5 moved
+	# its face 1.5 m for 1 m asked, and a snapped drag left it off the grid (#1998).
+	var wedge: DraftBrush = root.create_brush_from_info(
+		{"shape": DraftBrush.BrushShape.WEDGE, "size": Vector3(2, 2, 2), "center": Vector3(5, 1, 0)}
+	)
+	wedge.scale = Vector3(1.5, 1.5, 1.5)
+	var bottom := -1
+	for i in wedge.faces.size():
+		if HFFacePush.world_plane(wedge, i).normal.dot(Vector3.DOWN) > 0.99:
+			bottom = i
+	assert_gt(bottom, -1, "fixture: the wedge has a bottom")
+	var before := HFFacePush.world_plane(wedge, bottom)
+	var result := HFFacePush.pushed(wedge, bottom, 1.0)
+	assert_true(result["ok"], str(result))
+	HFFacePush.apply(wedge, result)
+	var moved := HFFacePush.world_plane(wedge, bottom).d - before.d
+	assert_almost_eq(moved, 1.0, 0.001, "1 m asked, 1 m moved")
+	var corners := HFFacePush.world_corners(wedge, bottom)
+	var normal := HFFacePush.world_plane(wedge, bottom).normal
+	var snapped := HFFacePush.snapped_distance(-0.3, corners, normal, 0.5)
+	HFFacePush.apply(wedge, HFFacePush.pushed(wedge, bottom, snapped))
+	var y: float = HFFacePush.world_corners(wedge, bottom)[0].y
+	assert_almost_eq(y, snappedf(y, 0.5), 0.001, "a snapped drag puts the face on the grid")

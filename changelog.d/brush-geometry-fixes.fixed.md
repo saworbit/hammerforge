@@ -1,0 +1,1 @@
+- A face pushed on a scaled custom brush moves the distance asked, so a snapped push lands on the grid. (issue [#1998](https://github.com/saworbit/hammerforge/issues/1998))
