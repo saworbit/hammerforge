@@ -22,6 +22,7 @@ const KINDS := ["brushes", "faces", "entities", "wires", "visgroups", "cordons",
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const HFBrushEntity = preload("hf_brush_entity.gd")
 const HFVisgroupSystem = preload("systems/hf_visgroup_system.gd")
 const HFDisplacementData = preload("displacement_data.gd")
 @warning_ignore_restore("shadowed_global_identifier")
@@ -145,12 +146,19 @@ static func _compare_brushes(
 	var rows: Array = []
 	var changed: Array = []
 	var unchanged: Array = []
+	# A brush entity of several brushes holds its wires on every one of them, so
+	# each entity's wires count once.
+	var wired := {}
 	for pair in pairs:
 		var changes := _brush_changes(pair[0], pair[1], palette_old, palette_new)
 		var brush_id := str(pair[1].get("brush_id", ""))
 		if changes["lines"].is_empty():
 			unchanged.append(brush_id)
 			continue
+		var entity := _brush_entity_of(pair[1])
+		if int(changes["wires"]) > 0 and not wired.has(entity):
+			wired[entity] = true
+			counts["wires"] += int(changes["wires"])
 		changed.append({"id": brush_id, "changes": changes["lines"], "faces": changes["faces"]})
 		counts["faces"] += int(changes["faces"])
 		for line in changes["lines"]:
@@ -159,6 +167,11 @@ static func _compare_brushes(
 		rows.append(_row("%s: added" % _brush_name(info), "brush:" + str(info.get("brush_id", ""))))
 	for info in removed:
 		rows.append(_row("%s: removed" % _brush_name(info)))
+	for info in added + removed:
+		var entity := _brush_entity_of(info)
+		if not wired.has(entity):
+			wired[entity] = true
+			counts["wires"] += _wires_of(info).size()
 	counts["brushes"] += changed.size() + added.size() + removed.size()
 	return {
 		"result":
@@ -207,7 +220,18 @@ static func _same_solid(a: Dictionary, b: Dictionary) -> bool:
 	return (a.get("faces", []) as Array).size() == (b.get("faces", []) as Array).size()
 
 
-## What changed on one brush, as sentences, and how many of its faces changed.
+## The brush entity a brush record is part of: its authored name, its tie, or
+## the brush alone.
+static func _brush_entity_of(info: Dictionary) -> String:
+	for key in [HFBrushEntity.NAME_META, HFBrushEntity.TIE_META]:
+		if str(info.get(key, "")) != "":
+			return "%s:%s" % [key, info[key]]
+	return "brush:%s" % info.get("brush_id", "")
+
+
+## What changed on one brush, as sentences, how many of its faces changed and how
+## many of its wires. Its brush entity too: its class, its settings and its wires
+## (#1941).
 static func _brush_changes(
 	old: Dictionary, now: Dictionary, palette_old: Array, palette_new: Array
 ) -> Dictionary:
@@ -236,6 +260,26 @@ static func _brush_changes(
 				else "now solid"
 			)
 		)
+	var old_class := str(old.get(HFBrushEntity.CLASS_META, ""))
+	var new_class := str(now.get(HFBrushEntity.CLASS_META, ""))
+	if old_class != new_class:
+		lines.append(
+			(
+				"brush entity changed from %s to %s"
+				% [
+					old_class if old_class != "" else "none",
+					new_class if new_class != "" else "none"
+				]
+			)
+		)
+	var settings := _settings_changed(
+		old.get(HFBrushEntity.DATA_META, {}), now.get(HFBrushEntity.DATA_META, {})
+	)
+	if settings != "":
+		lines.append(settings)
+	var wires := _wires_changed(_wires_of(old), _wires_of(now))
+	if not wires.is_empty():
+		lines.append(wires["line"])
 	var old_faces: Array = old.get("faces", [])
 	var new_faces: Array = now.get("faces", [])
 	var faces_changed := 0
@@ -255,7 +299,7 @@ static func _brush_changes(
 			var face_name := face_name_of(new_faces[index], basis, index)
 			for line in said:
 				lines.append("face %s: %s" % [face_name, line])
-	return {"lines": lines, "faces": faces_changed}
+	return {"lines": lines, "faces": faces_changed, "wires": int(wires.get("count", 0))}
 
 
 static func _face_changes(
@@ -585,9 +629,34 @@ static func _entity_place(info: Dictionary) -> Vector3:
 	return _transform_of(info).origin
 
 
+## A record's wires: a point entity keeps them under `io_outputs`, a brush under
+## `entity_io_outputs` (#1941).
 static func _wires_of(info: Dictionary) -> Array:
-	var wires = info.get("entity_io_outputs", [])
+	var wires = info.get("io_outputs", info.get(HFBrushEntity.OUTPUTS_META, []))
 	return wires if wires is Array else []
+
+
+## "wires: N added, M removed" and how many that is, or empty when the two lists
+## hold the same wires.
+static func _wires_changed(old_wires: Array, new_wires: Array) -> Dictionary:
+	if same(old_wires, new_wires):
+		return {}
+	var old_text := old_wires.map(func(w): return str(canonical(w)))
+	var new_text := new_wires.map(func(w): return str(canonical(w)))
+	var gained := new_text.filter(func(w): return not old_text.has(w)).size()
+	var lost := old_text.filter(func(w): return not new_text.has(w)).size()
+	return {"line": "wires: %d added, %d removed" % [gained, lost], "count": gained + lost}
+
+
+## "a, b changed" for the settings that differ, or "".
+static func _settings_changed(old_settings: Variant, new_settings: Variant) -> String:
+	var old_props: Dictionary = old_settings if old_settings is Dictionary else {}
+	var new_props: Dictionary = new_settings if new_settings is Dictionary else {}
+	var keys: PackedStringArray = []
+	for key in old_props.keys() + new_props.keys():
+		if not same(old_props.get(key), new_props.get(key)) and not keys.has(str(key)):
+			keys.append(str(key))
+	return "%s changed" % ", ".join(keys) if not keys.is_empty() else ""
 
 
 static func _entity_changes(
@@ -597,27 +666,19 @@ static func _entity_changes(
 	var delta := _entity_place(now) - _entity_place(old)
 	if delta.length() > NEAR:
 		out.append("moved %s" % moved_text(delta))
-	if not _transform_of(old).basis.is_equal_approx(_transform_of(now).basis):
+	# Its turn, not its scale (#1941).
+	var old_turn := _transform_of(old).basis.orthonormalized()
+	if not old_turn.is_equal_approx(_transform_of(now).basis.orthonormalized()):
 		out.append("turned")
 	if _entity_class(old) != _entity_class(now):
 		out.append("class changed from %s to %s" % [_entity_class(old), _entity_class(now)])
-	var old_props: Dictionary = old.get("properties", {})
-	var new_props: Dictionary = now.get("properties", {})
-	var keys: PackedStringArray = []
-	for key in old_props.keys() + new_props.keys():
-		if not same(old_props.get(key), new_props.get(key)) and not keys.has(str(key)):
-			keys.append(str(key))
-	if not keys.is_empty():
-		out.append("%s changed" % ", ".join(keys))
-	var old_wires := _wires_of(old)
-	var new_wires := _wires_of(now)
-	if not same(old_wires, new_wires):
-		var old_text := old_wires.map(func(w): return str(canonical(w)))
-		var new_text := new_wires.map(func(w): return str(canonical(w)))
-		var gained := new_text.filter(func(w): return not old_text.has(w)).size()
-		var lost := old_text.filter(func(w): return not new_text.has(w)).size()
-		counts["wires"] += gained + lost
-		out.append("wires: %d added, %d removed" % [gained, lost])
+	var settings := _settings_changed(old.get("properties", {}), now.get("properties", {}))
+	if settings != "":
+		out.append(settings)
+	var wires := _wires_changed(_wires_of(old), _wires_of(now))
+	if not wires.is_empty():
+		counts["wires"] += int(wires["count"])
+		out.append(wires["line"])
 	return out
 
 

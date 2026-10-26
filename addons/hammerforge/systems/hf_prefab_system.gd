@@ -1142,23 +1142,10 @@ func suggest_prefab_name(brush_nodes: Array, entity_nodes: Array) -> String:
 	return "untitled_prefab"
 
 
+## A shape's name as its `BrushShape` key, every shape the enum has (#1937).
 func _shape_name(shape: int) -> String:
-	# Maps to LevelRoot.BrushShape enum
-	match shape:
-		0:
-			return "box"
-		1:
-			return "cylinder"
-		2:
-			return "sphere"
-		3:
-			return "cone"
-		4:
-			return "wedge"
-		5:
-			return "pyramid"
-		_:
-			return "brush"
+	var key: Variant = DraftBrush.BrushShape.find_key(shape)
+	return str(key).to_lower() if key != null else "brush"
 
 
 ## A prefab name as a file name that stays inside the prefab directory.

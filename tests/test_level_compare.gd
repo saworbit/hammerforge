@@ -5,6 +5,7 @@ extends GutTest
 const FullLevel = preload("res://tests/support/full_feature_level.gd")
 const HFLevelCompare = preload("res://addons/hammerforge/hf_level_compare.gd")
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
+const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
 
 const PATH := "user://test_level_compare.hflevel"
 
@@ -167,3 +168,70 @@ func test_keys_a_file_is_older_than_show_no_change():
 	saved["settings"].erase("cordon_extra_aabbs")
 	var result := HFLevelCompare.compare(saved, _now(level))
 	assert_eq(result["lines"], PackedStringArray(["No changes"]), "\n".join(result["lines"]))
+
+
+## A wire added to a point entity, and a brush entity's class, setting and wire,
+## each show. Point entities keep their wires under `io_outputs`, which the
+## compare never read, and a brush entity's class, settings and wires were not
+## compared at all, so all of this read as no change (#1941).
+func test_wires_and_settings_on_point_and_brush_entities_show():
+	var level := _level()
+	var button: Node3D = (
+		level
+		. entity_system
+		. restore_entity_from_info(
+			{
+				"name": "button",
+				"entity_type": "func_button",
+				"properties": {},
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0, 1, 4)),
+			}
+		)
+	)
+	var door := _box(level, Vector3(0, 1, 0), "door")
+	HFBrushEntity.give(
+		door, {"brush_entity_class": "func_door", "brush_entity_data": {"speed": 100}}
+	)
+	var plain := _box(level, Vector3(6, 1, 0), "plain")
+	await get_tree().process_frame
+	var saved := await _saved(level)
+
+	level.add_entity_output(button, "OnPressed", "door", "Open")
+	level.add_entity_output(door, "OnOpen", "button", "Lock")
+	door.set_meta("brush_entity_data", {"speed": 200})
+	HFBrushEntity.give(plain, {"brush_entity_class": "trigger_once"})
+	var result := HFLevelCompare.compare(saved, _now(level))
+	var told := "\n".join(result["lines"])
+	assert_has(result["lines"], "entity 'button': wires: 1 added, 0 removed", told)
+	var changed := {}
+	for entry in result["brushes"]["changed"]:
+		changed[entry["id"]] = Array(entry["changes"])
+	assert_has(changed.get("door", []), "speed changed", told)
+	assert_has(changed.get("door", []), "wires: 1 added, 0 removed", told)
+	assert_has(changed.get("plain", []), "brush entity changed from none to trigger_once", told)
+	assert_eq(result["counts"]["wires"], 2, "two wires")
+
+
+## A point entity scaled, not turned, is not "turned". The compare held its whole
+## basis to the old one, scale and all (#1941).
+func test_a_scaled_point_entity_is_not_turned():
+	var level := _level()
+	var lamp: Node3D = (
+		level
+		. entity_system
+		. restore_entity_from_info(
+			{
+				"name": "lamp",
+				"entity_type": "light_point",
+				"properties": {},
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0, 3, 0)),
+			}
+		)
+	)
+	await get_tree().process_frame
+	var saved := await _saved(level)
+	lamp.scale = Vector3(2, 2, 2)
+	var result := HFLevelCompare.compare(saved, _now(level))
+	assert_false(
+		Array(result["lines"]).any(func(l): return l.contains("turned")), "\n".join(result["lines"])
+	)
