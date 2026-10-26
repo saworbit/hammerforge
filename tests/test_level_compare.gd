@@ -157,6 +157,8 @@ func test_a_box_whose_faces_a_file_keeps_in_another_order_shows_no_change():
 
 ## A visgroup and the cordons as a file saved before the keys added to them
 ## since: a load reads each missing key at its default, so a compare does too.
+## A brush the file has no name for is one a load names, which is not a rename
+## (#1982).
 func test_keys_a_file_is_older_than_show_no_change():
 	var level := _level()
 	_box(level, Vector3(0, 1, 0), "box")
@@ -166,6 +168,7 @@ func test_keys_a_file_is_older_than_show_no_change():
 	saved["state"]["visgroups"]["west"] = {"visible": true}
 	saved["settings"].erase("cordon_aabb_active")
 	saved["settings"].erase("cordon_extra_aabbs")
+	saved["state"]["brushes"][0].erase("name")
 	var result := HFLevelCompare.compare(saved, _now(level))
 	assert_eq(result["lines"], PackedStringArray(["No changes"]), "\n".join(result["lines"]))
 
@@ -210,6 +213,150 @@ func test_wires_and_settings_on_point_and_brush_entities_show():
 	assert_has(changed.get("door", []), "wires: 1 added, 0 removed", told)
 	assert_has(changed.get("plain", []), "brush entity changed from none to trigger_once", told)
 	assert_eq(result["counts"]["wires"], 2, "two wires")
+
+
+## Compare `before` with the level as it is now, and the lines it gives. What the
+## lines name is counted as well: `tools/compare_levels.gd` exits 1 on a count
+## and 0 on none.
+func _lines_since(level: LevelRoot, before: Dictionary) -> PackedStringArray:
+	var result := HFLevelCompare.compare(before, _now(level))
+	var lines: PackedStringArray = result["lines"]
+	var counted: bool = (result["counts"] as Dictionary).values().any(func(n): return int(n) > 0)
+	assert_eq(counted, lines.size() > 1, "counted as listed:\n%s" % "\n".join(lines))
+	return lines
+
+
+## A rename, a visgroup and a group each change what the level does: a wire is
+## aimed by name, a visgroup can leave a brush out of every bake, and a group
+## decides what a click selects. Each read as "No changes" (#1982).
+func test_renames_visgroups_and_groups_each_show():
+	var level := _level()
+	var wall := _box(level, Vector3(0, 1, 0), "wall")
+	var crate := _box(level, Vector3(4, 1, 2), "crate")
+	var door := _box(level, Vector3(-4, 1, 0), "door")
+	level.tie_brushes_to_entity(["door"], "func_door", "door_1")
+	var lamp: Node3D = (
+		level
+		. entity_system
+		. restore_entity_from_info(
+			{
+				"name": "lamp",
+				"entity_type": "light_point",
+				"properties": {},
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0, 3, 3)),
+			}
+		)
+	)
+	var button: Node3D = (
+		level
+		. entity_system
+		. restore_entity_from_info(
+			{
+				"name": "button",
+				"entity_type": "func_button",
+				"properties": {},
+				"transform": Transform3D(Basis.IDENTITY, Vector3(2, 1, 3)),
+			}
+		)
+	)
+	level.add_entity_output(button, "OnPressed", "door_1", "Open")
+	level.create_visgroup("detail")
+	level.set_visgroup_bakes("detail", false)
+	await get_tree().process_frame
+	var saved := await _saved(level)
+	assert_eq(_lines_since(level, saved), PackedStringArray(["No changes"]), "as saved")
+
+	var before := _now(level)
+	level.tie_brushes_to_entity(["door"], "func_door", "vault_door")
+	var lines := _lines_since(level, before)
+	assert_has(lines, "brush '%s': brush entity renamed from door_1 to vault_door" % door.name)
+	assert_has(lines, "entity 'button': wire OnPressed to door_1 reaches nothing now")
+
+	before = _now(level)
+	lamp.set_meta("entity_name", "hall_lamp")
+	assert_has(
+		_lines_since(level, before), "entity 'lamp': authored name changed from none to hall_lamp"
+	)
+
+	before = _now(level)
+	lamp.name = "ceiling_lamp"
+	assert_has(
+		_lines_since(level, before), "entity 'ceiling_lamp': renamed from lamp to ceiling_lamp"
+	)
+
+	before = _now(level)
+	var was_named := str(wall.name)
+	wall.name = "north_wall"
+	assert_has(
+		_lines_since(level, before), "brush 'north_wall': renamed from %s to north_wall" % was_named
+	)
+
+	before = _now(level)
+	level.add_selection_to_visgroup("detail", [wall])
+	lines = _lines_since(level, before)
+	assert_has(lines, "brush 'north_wall': visgroups changed from none to detail")
+	assert_eq(lines[0], "1 brush changed")
+
+	before = _now(level)
+	level.group_selection("room", [wall, crate])
+	lines = _lines_since(level, before)
+	assert_has(lines, "brush 'north_wall': group changed from none to room")
+	assert_has(lines, "group 'room': added")
+	assert_eq(lines[0], "2 brushes, 1 group changed")
+
+	assert_eq(
+		HFLevelCompare.compare(_now(level), _now(level))["lines"],
+		PackedStringArray(["No changes"]),
+		"the level against itself"
+	)
+
+
+## Texture Lock, on by default, keeps a texture where it is on a brush through a
+## move or a turn by rewriting each face's offset and rotation. Those rewrites
+## read as "texture moved" on four faces (#1989). A texture slid by hand after the
+## move still shows.
+func test_a_move_and_a_turn_with_texture_lock_are_not_texture_edits():
+	var level := _level()
+	var crate := _box(level, Vector3(4, 1, 2), "crate")
+	assert_true(level.texture_lock, "Texture Lock is on by default")
+	var saved := await _saved(level)
+	level.nudge_brushes_by_id(["crate"], Vector3(0, 0.5, 0))
+	await get_tree().process_frame
+	var result := HFLevelCompare.compare(saved, _now(level))
+	assert_eq(
+		result["lines"],
+		PackedStringArray(["1 brush changed", "brush '%s': moved 0.5 m up" % crate.name]),
+		"\n".join(result["lines"])
+	)
+
+	var before := _now(level)
+	level.rotate_managed_nodes(["crate"], [], 1, 90.0, crate.global_position)
+	await get_tree().process_frame
+	result = HFLevelCompare.compare(before, _now(level))
+	assert_eq(result["counts"]["faces"], 0, "\n".join(result["lines"]))
+	assert_has(result["lines"], "brush '%s': turned" % crate.name)
+
+	before = _now(level)
+	crate.faces[1].uv_offset += Vector2(0.25, 0)
+	result = HFLevelCompare.compare(before, _now(level))
+	assert_eq(result["counts"]["faces"], 1, "a texture slid by hand still shows")
+	assert_true(
+		Array(result["lines"]).any(func(l): return l.ends_with("texture moved")),
+		"\n".join(result["lines"])
+	)
+
+
+## A removed paint layer is named as an added one is, by the name the mapper gave
+## it and not its id (#1992).
+func test_a_removed_paint_layer_is_named_by_its_name():
+	var level := _level()
+	level.add_paint_layer()
+	var last := level.get_paint_layer_names().size() - 1
+	assert_true(level.rename_paint_layer(last, "Upper Floor"), "renamed")
+	var before := _now(level)
+	level.set_active_paint_layer(last)
+	level.remove_active_paint_layer()
+	assert_has(_lines_since(level, before), "paint layer 'Upper Floor': removed")
 
 
 ## A point entity scaled, not turned, is not "turned". The compare held its whole
