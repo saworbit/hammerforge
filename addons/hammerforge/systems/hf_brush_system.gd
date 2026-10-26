@@ -1696,9 +1696,15 @@ func faces_wearing(from_index: int, scope: Dictionary = {}) -> Dictionary:
 	var picked: Dictionary = scope.get("faces", {})
 	var whole_level := brush_ids.is_empty() and picked.is_empty()
 	var visible_only := bool(scope.get("visible_only", false))
+	var locks = root.get("visgroup_system")
 	for node in root._iter_managed_brush_nodes():
 		var brush := node as DraftBrush
 		if visible_only and not brush.is_visible_in_tree():
+			continue
+		# A locked brush keeps its material, whatever else wears it (#1697), so
+		# it is not found either: what the dialog counts and highlights is what
+		# Replace changes (#1936).
+		if locks != null and locks.is_locked(brush):
 			continue
 		var key := face_key(brush)
 		var candidates: Array = []
@@ -1733,11 +1739,6 @@ func replace_material(
 	var brushes: Dictionary = {}
 	for node in root._iter_managed_brush_nodes():
 		brushes[face_key(node)] = node
-	# A locked brush keeps its material, whatever else wears it (#1697).
-	if root.visgroup_system:
-		for key in found.keys():
-			if brushes.has(key) and root.visgroup_system.is_locked(brushes[key]):
-				found.erase(key)
 	var picked: Dictionary = {}
 	for key in found:
 		var brush: DraftBrush = brushes[key]

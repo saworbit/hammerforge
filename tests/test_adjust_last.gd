@@ -200,3 +200,30 @@ func test_shift_e_runs_extrude_down_and_an_old_keymap_still_works():
 	assert_true(keymap.matches("tool_extrude_down_alt", PluginRig.key(KEY_X, false, true)))
 	assert_eq(HFCommandRegistry.runs("tool_extrude_down_alt")["id"], "tool_extrude")
 	await rig.leave_level(level)
+
+
+## Replace Material on shown brushes, then Whole level in Adjust Last, then one
+## Ctrl+Z: the hidden brush the adjust reached goes back too. The step kept only
+## the brushes the first scope found, so the undo left the hidden one replaced
+## (#1930).
+func test_replace_shown_then_adjusted_to_the_whole_level_undoes_the_hidden_brush_too():
+	var level = await rig.make_level()
+	rig.undo().clear()
+	level.add_prototype_materials()
+	var shown: DraftBrush = rig.box(level, "shown", Vector3(0, 2, 0))
+	var hidden: DraftBrush = rig.box(level, "hidden", Vector3(8, 2, 0))
+	for face in shown.faces + hidden.faces:
+		face.material_idx = 1
+	hidden.visible = false
+	rig.plugin.dock._on_replace_material_requested(1, 2, {"visible_only": true}, false)
+	assert_eq(str(rig.plugin.last_run.get("id")), "replace_material", "fixture: Adjust Last has it")
+	assert_eq(hidden.faces[0].material_idx, 1, "fixture: shown only leaves the hidden brush")
+	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "scope", "level"), "adjusted")
+	await rig.frame()
+	hidden = level.find_brush_by_id("hidden")
+	assert_eq(hidden.faces[0].material_idx, 2, "the whole level reaches the hidden brush")
+	rig.undo().press_undo()
+	await rig.frame()
+	assert_eq(level.find_brush_by_id("hidden").faces[0].material_idx, 1, "one Ctrl+Z puts it back")
+	assert_eq(level.find_brush_by_id("shown").faces[0].material_idx, 1, "and the shown one")
+	await rig.leave_level(level)

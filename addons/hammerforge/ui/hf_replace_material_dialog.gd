@@ -12,6 +12,8 @@ signal replace_requested(from_index: int, to_index: int, scope: Dictionary, rese
 
 enum Scope { LEVEL, SELECTION, VISIBLE }
 
+const HFMaterialUse = preload("../hf_material_use.gd")
+
 var find_list: ItemList = null
 var with_list: ItemList = null
 var use_picked_btn: Button = null
@@ -145,13 +147,11 @@ func open_for(
 	popup_centered()
 
 
-## How many faces wear each palette slot, across the level.
+## How many faces wear each palette slot, across the level, as the material
+## browser counts them (#1936). A face with no slot has nothing to replace.
 static func use_counts(root: Node) -> Dictionary:
-	var counts: Dictionary = {}
-	for brush in root._iter_managed_brush_nodes():
-		for face in brush.faces:
-			if face and int(face.material_idx) >= 0:
-				counts[int(face.material_idx)] = int(counts.get(int(face.material_idx), 0)) + 1
+	var counts: Dictionary = HFMaterialUse.counts(root).duplicate()
+	counts.erase(-1)
 	return counts
 
 

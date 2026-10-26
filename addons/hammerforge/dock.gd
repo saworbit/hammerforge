@@ -6016,6 +6016,12 @@ func _on_replace_material_requested(
 	if not level_root:
 		return
 	var found: Dictionary = level_root.faces_wearing_material(from_index, scope)
+	# Every brush either scope reaches, read before the replace, for the step Adjust
+	# Last makes again: one on the whole level after one on what is shown undoes
+	# the hidden brushes it changed too (#1930).
+	var wider := scope.duplicate(true)
+	wider.erase("visible_only")
+	var either: Dictionary = level_root.faces_wearing_material(from_index, wider)
 	var faces := 0
 	for key in found:
 		faces += (found[key] as Array).size()
@@ -6060,7 +6066,7 @@ func _on_replace_material_requested(
 		"action": "Replace Material",
 		"method": "replace_material",
 		"args": again,
-		"scope_ids": found.keys(),
+		"scope_ids": either.keys(),
 	}
 	command_ran.emit("replace_material", settings, recipe)
 

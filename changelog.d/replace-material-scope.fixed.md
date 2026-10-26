@@ -1,0 +1,1 @@
+- Replace Material finds, counts and undoes the faces it changes: no locked brush, committed cuts counted, and the hidden brushes an adjusted scope reached. (issues [#1930](https://github.com/saworbit/hammerforge/issues/1930), [#1936](https://github.com/saworbit/hammerforge/issues/1936))

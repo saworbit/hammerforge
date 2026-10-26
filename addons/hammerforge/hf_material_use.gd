@@ -82,9 +82,15 @@ static func brushes_using(root: Node, slot: int) -> Array:
 	return out
 
 
+## Every brush in the level, a committed cut among them: Replace Material changes
+## a cut's faces, which paint the hole it carves, and Remove Unused keeps the
+## materials they wear (#1936). Only a visible brush can be picked.
 static func _brushes(root: Node) -> Array:
 	var out: Array = []
-	for container in [root.get("draft_brushes_node"), root.get("pending_node")]:
+	var containers := [
+		root.get("draft_brushes_node"), root.get("pending_node"), root.get("committed_node")
+	]
+	for container in containers:
 		if container == null:
 			continue
 		for child in container.get_children():
