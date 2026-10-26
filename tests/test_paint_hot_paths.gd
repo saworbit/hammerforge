@@ -295,6 +295,21 @@ func test_sculpt_clamps_to_the_unit_range():
 	assert_almost_eq(layer.heightmap.get_pixel(16, 16).r, 1.0, 0.0001, "height clamps at 1.0")
 
 
+## A heightmap imported in metres, or written by Convert to Heightmap, holds
+## samples outside 0..1. Raise took ground at 2.0 down to 1.0, and Lower took a
+## pit at -0.5 up to 0.0 (#2008).
+func test_sculpt_moves_a_sample_outside_the_unit_range_the_way_it_says():
+	var t = _make_tool()
+	var high = _make_sculpt_layer(32, 2.0)
+	t.tool = HFStroke.Tool.SCULPT_RAISE
+	t._apply_terrain_brush(high, Vector2i(16, 16))
+	assert_gt(high.heightmap.get_pixel(16, 16).r, 2.0, "Raise lifts ground above 1")
+	var low = _make_sculpt_layer(32, -0.5)
+	t.tool = HFStroke.Tool.SCULPT_LOWER
+	t._apply_terrain_brush(low, Vector2i(16, 16))
+	assert_lt(low.heightmap.get_pixel(16, 16).r, -0.5, "Lower digs a pit below 0 deeper")
+
+
 func test_sculpt_smooth_pulls_a_spike_towards_its_neighbours():
 	var t = _make_tool()
 	var layer = _make_sculpt_layer()
@@ -338,6 +353,32 @@ func test_sculpt_marks_the_touched_chunks_dirty():
 	t.tool = HFStroke.Tool.SCULPT_RAISE
 	t._apply_terrain_brush(layer, Vector2i(16, 16))
 	assert_gt(layer.consume_dirty_chunks().size(), 0, "affected chunks were flagged for rebuild")
+
+
+## The brush's first sample is also the far corner of the cell before it. At
+## cell 20 with radius 4 that is sample 16, the corner of cell 15 in chunk 0,
+## which kept the old height and left a step at the seam (#2014).
+func test_sculpt_at_a_chunks_first_column_marks_the_chunk_before():
+	var t = _make_tool()
+	var layer = _make_sculpt_layer()
+	layer.grid = HFPaintGrid.new()
+	t.tool = HFStroke.Tool.SCULPT_RAISE
+	t._apply_terrain_brush(layer, Vector2i(20, 8))
+	assert_has(layer.consume_dirty_chunks(), Vector2i(0, 0), "the chunk before is rebuilt too")
+
+
+## The map repeats every width, so a sculpt also changes painted ground a width
+## away. That chunk is rebuilt with the rest rather than kept on the old heights
+## until the next full rebuild (#2007).
+func test_sculpt_marks_painted_chunks_a_width_away():
+	var t = _make_tool()
+	var layer = _make_sculpt_layer()
+	layer.grid = HFPaintGrid.new()
+	layer.set_cell(Vector2i(40, 8), true)
+	layer.consume_dirty_chunks()
+	t.tool = HFStroke.Tool.SCULPT_RAISE
+	t._apply_terrain_brush(layer, Vector2i(8, 8))
+	assert_has(layer.consume_dirty_chunks(), Vector2i(2, 0), "the copy 32 cells on is rebuilt")
 
 
 func test_sculpt_marks_no_chunks_without_a_grid():
