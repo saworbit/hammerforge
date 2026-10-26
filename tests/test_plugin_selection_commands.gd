@@ -380,6 +380,22 @@ func test_select_all_collects_pick_nodes_and_clears_faces():
 	assert_eq(plugin.hf_selection.size(), 2)
 	assert_eq(plugin.applied_hf_selection, 1)
 	assert_eq(plugin.dock.selection_count, 2)
+	assert_eq(plugin.dock.last_toast().get("message"), "Selected 2 objects")
+
+
+## What is hidden stays out, as Invert Selection leaves it out, and the toast
+## says how many (#1974).
+func test_select_all_leaves_out_hidden_nodes_and_says_how_many():
+	var shown = _make_brush(Vector3.ONE, "b1")
+	var hidden = _make_brush(Vector3.ONE, "b2")
+	hidden.visible = false
+	root.pick_nodes = [shown, hidden]
+
+	HFPluginSelectionCommands.select_all(plugin, root)
+
+	assert_eq(plugin.hf_selection, [shown], "only the brush in view")
+	assert_eq(plugin.dock.selection_count, 1)
+	assert_eq(plugin.dock.last_toast().get("message"), "Selected 1 object, left out 1 hidden")
 
 
 func test_deselect_all_requests_the_clear_before_clearing_selection():
