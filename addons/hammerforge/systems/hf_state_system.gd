@@ -413,6 +413,11 @@ func capture_floor_paint() -> Dictionary:
 	}
 	if streamed:
 		out["terrain_regions"] = root.paint_system.capture_region_index()
+		# And the level file its region files sit beside. A scene reopened without
+		# it streamed in nothing, and its next save cleared that folder (#2006).
+		var level_file: String = root.paint_system.region_level_file()
+		if level_file != "":
+			out["terrain_region_level"] = level_file
 	return out
 
 
@@ -420,17 +425,23 @@ func capture_floor_paint() -> Dictionary:
 ## `capture_floor_paint()` gave the scene.
 func restore_floor_paint(state: Dictionary) -> void:
 	var region_data = state.get("terrain_regions", {})
-	if region_data is Dictionary and not region_data.is_empty():
-		if root.paint_system:
-			root.paint_system.region_streaming_enabled = true
-			root.paint_system.load_region_index(region_data)
+	var streamed: bool = region_data is Dictionary and not region_data.is_empty()
+	if streamed and root.paint_system:
+		root.paint_system.region_streaming_enabled = true
+		# A scene finds its region files by the level file they sit beside. A
+		# load has named it already, and an undo keeps the folder it has (#2006).
+		var level_file := str(state.get("terrain_region_level", ""))
+		if level_file != "" and root.paint_system.region_manager.region_base_path == "":
+			root.paint_system.set_region_base_path(level_file)
 	root.paint_system.restore_paint_layers(
 		state.get("paint_layers", []), int(state.get("paint_active_layer", 0))
 	)
 	if root.paint_tool:
 		root.paint_tool.restore_connector_defs(state.get("paint_connectors", []))
-	if region_data is Dictionary and not region_data.is_empty():
+	if streamed:
 		if root.paint_system:
+			# After the layers, whose restore empties the index (#2006).
+			root.paint_system.load_region_index(region_data)
 			root.paint_system.load_initial_regions()
 	else:
 		# Region files written since an undo capture go back in line with it, so
