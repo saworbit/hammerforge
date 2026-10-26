@@ -18,6 +18,10 @@ const HFBrushEntity = preload("../hf_brush_entity.gd")
 ## The meta a brush entity's properties live under. Not `entity_data`: that name
 ## belongs to a point entity, and the two were never the same key.
 const BRUSH_ENTITY_DATA := HFBrushEntity.DATA_META
+## The property a game's FGD names an entity by. HammerForge keeps an entity's
+## name in `HFBrushEntity.NAME_META`, which wires aim at and the `.map` writes as
+## the targetname, so the field writes the name there too (#1985).
+const NAME_PROPERTY := "targetname"
 
 
 ## Read entity_data from either DraftEntity.entity_data or the
@@ -90,6 +94,12 @@ static func set_entity_property(entity: Node3D, prop_name: String, value: Varian
 		var d: Dictionary = entity.get_meta("entity_data")
 		d[prop_name] = value
 		entity.set_meta("entity_data", d)
+	if prop_name == NAME_PROPERTY:
+		var authored := str(value).strip_edges()
+		if authored != "":
+			entity.set_meta(HFBrushEntity.NAME_META, authored)
+		elif entity.has_meta(HFBrushEntity.NAME_META):
+			entity.remove_meta(HFBrushEntity.NAME_META)
 
 
 ## A Vector3 property with one axis replaced. Reads the existing value
@@ -118,8 +128,11 @@ static func coerce_default(type_name: String, value: Variant) -> Variant:
 			return float(value) if value != null else 0.0
 		"int":
 			return int(value) if value != null else 0
-		# A bit mask, such as an FGD's spawnflags (#1721).
+		# A bit mask, such as an FGD's spawnflags (#1721). JSON reads a number back
+		# a float, so a converted FGD's 5 arrives as 5.0, and that is 5 too (#1986).
 		"flags":
+			if (value is float) and is_finite(value) and value == floorf(value):
+				return int(value)
 			return int(value) if value != null and str(value).is_valid_int() else 0
 		"bool":
 			# bool() has no String form; a definition can still write "false".

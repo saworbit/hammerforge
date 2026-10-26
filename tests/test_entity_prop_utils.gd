@@ -10,6 +10,14 @@ func test_coerce_default_float():
 	assert_eq(HFEntityPropUtils.coerce_default("float", "2.5"), 2.5)
 
 
+## A flags default read back from JSON is a float (#1986).
+func test_coerce_default_flags_takes_a_whole_float():
+	assert_eq(HFEntityPropUtils.coerce_default("flags", 5.0), 5)
+	assert_eq(HFEntityPropUtils.coerce_default("flags", 5), 5)
+	assert_eq(HFEntityPropUtils.coerce_default("flags", "5"), 5)
+	assert_eq(HFEntityPropUtils.coerce_default("flags", 5.5), 0, "a fraction is no bit mask")
+
+
 func test_coerce_default_int():
 	assert_eq(HFEntityPropUtils.coerce_default("int", 4.7), 4)
 	assert_eq(HFEntityPropUtils.coerce_default("int", null), 0)
