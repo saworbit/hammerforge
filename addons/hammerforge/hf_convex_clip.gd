@@ -432,8 +432,9 @@ static func progressive_remainder(
 ## then the sum of their volumes is more than the union's whatever shape it is.
 ##
 ## `origins` maps each face to the input face it came from, for
-## `carry_onto_union()`: the largest input face lying on it, the first listed on a
-## tie. A face that is that input face whole keeps its corners as they were.
+## `carry_onto_union()`: the largest drawn input face lying on it, the first listed
+## on a tie, or the largest Hidden one when every one on it is Hidden. A face that
+## is that input face whole keeps its corners as they were.
 ## `parts` maps each face that grew to every input face lying on it, for the
 ## sculpts they carry (#1906).
 static func union_of(
@@ -513,7 +514,7 @@ static func union_of(
 	var rank := {}
 	for face in joined:
 		var hull_face: FaceData = face as FaceData
-		var source: FaceData = _largest_on_face(sources, hull_face, on_plane)
+		var source: FaceData = _union_dress(sources, hull_face, on_plane)
 		if source == null:
 			source = _nearest_face(sources, _face_normal(hull_face))
 		var built: FaceData
@@ -1170,6 +1171,20 @@ static func _largest_on_face(sources: Array, face: FaceData, tolerance: float) -
 			best = data
 			best_area = area
 	return best
+
+
+## The face of `sources` a face of a union takes its look from: the largest drawn
+## one lying on `face`, or the largest Hidden one when every one on it is Hidden.
+## Hidden goes with the look, so a face that was Hidden in part came out Hidden
+## whole, or drawn whole, by whichever part was larger, and a bake left out
+## surface the mapper could see (#2002).
+static func _union_dress(sources: Array, face: FaceData, tolerance: float) -> FaceData:
+	var drawn: Array = []
+	for source in sources:
+		if not (source as FaceData).is_hidden():
+			drawn.append(source)
+	var best := _largest_on_face(drawn, face, tolerance)
+	return best if best != null else _largest_on_face(sources, face, tolerance)
 
 
 static func _polygon_area(verts: PackedVector3Array) -> float:
