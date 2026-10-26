@@ -1,0 +1,1 @@
+- Merge, Hollow and Clip keep the group of what they replace, and the wires aimed at it. (issue [#1975](https://github.com/saworbit/hammerforge/issues/1975))
