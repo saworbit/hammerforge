@@ -248,11 +248,6 @@ func _pending_cut_at(brush_id: String, center: Vector3) -> DraftBrush:
 	)
 
 
-func _in_pending(brush_id: String) -> bool:
-	var brush = root.find_brush_by_id(brush_id)
-	return brush != null and brush.get_parent() == root.pending_node and brush.is_pending_cut()
-
-
 ## Splitting a pending cut leaves both halves waiting for Apply. The pieces went
 ## into the level's brushes, applied without Apply being pressed.
 func test_a_pending_cut_split_in_two_stays_pending():
