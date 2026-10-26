@@ -1,1 +1,0 @@
-- The fade around an open group follows group edits and undo, and an undone Detach hides its pieces again under the Structures filter. (issues [#1926](https://github.com/saworbit/hammerforge/issues/1926), [#1928](https://github.com/saworbit/hammerforge/issues/1928))

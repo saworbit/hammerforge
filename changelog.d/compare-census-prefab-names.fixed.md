@@ -1,1 +1,0 @@
-- Compare shows entity wires and brush entity changes, the Census reads a scaled turn, and Quick Save names every shape. (issues [#1941](https://github.com/saworbit/hammerforge/issues/1941), [#1938](https://github.com/saworbit/hammerforge/issues/1938), [#1937](https://github.com/saworbit/hammerforge/issues/1937))

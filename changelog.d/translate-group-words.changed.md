@@ -1,1 +1,0 @@
-- Group, visgroup, cordon, entity panel, drop and context toolbar messages that carry a name or a count go through the translation catalogs, plurals included. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))
