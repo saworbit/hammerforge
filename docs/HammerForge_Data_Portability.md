@@ -49,7 +49,7 @@ One row for each thing a level holds, one column for each file it goes through. 
 
 ## Source of Truth: `.hflevel`
 - `.hflevel` files are the canonical save format for brushes, paint layers, materials, entities, decals, and settings.
-- When region streaming is enabled, per-region paint data is stored in a sibling `<level>.hfregions/` folder as one `.hfr` file per region.
+- When region streaming is enabled, per-region paint data is stored in a sibling `<level>.hfregions/` folder as one `.hfr` file per region. Save As copies the streamed out regions' files into the new name's folder and clears any other region file there, the files of a level saved under that name before ([#1929](https://github.com/saworbit/hammerforge/issues/1929)).
 - A region is written before its chunks are streamed out of memory. If that write fails the region stays loaded and you are told, so unsaved paint is not dropped by moving the cursor.
 - A region is only listed in the `.hflevel` index once its `.hfr` file exists on disk.
 - A region file holds every paint layer that has paint in that region, each as `{"id", "chunks"}`. A rewrite keeps the entries of a layer the level no longer has, so undoing the layer's removal brings its paint back from disk. A region erased to nothing is written without that paint, and removed with its `.previous` copy once no layer, current or removed, has paint there, so it does not come back when it streams in again (#1550).
