@@ -262,10 +262,12 @@ func inset_face(
 		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(ref_axis) < 0.0:
 			quad.reverse()
 		side_face.local_verts = quad
-		side_face.copy_texture_from(face)
-		side_face.uv_projection = face.uv_projection
-		side_face.uv_scale = face.uv_scale
-		side_face.legacy_wall_axes = face.legacy_wall_axes
+		# The face's whole look, as every face made from a face takes it (#1934).
+		side_face.copy_appearance_from(face)
+		# Raised or sunk, a wall is a new edge and shades flat, as a cut's new face
+		# does (#1429); a flat ring is part of the face and shades with it.
+		if not is_zero_approx(height):
+			side_face.smoothing_group = 0
 		side_face.ensure_geometry()
 		# Flat, the ring is the part of the old face around the inset, so each of
 		# its quads takes the sculpt that was there. Raised or sunk it is new wall.
@@ -393,10 +395,9 @@ func _append_endpoint_caps(
 			c = swap
 		var cap = FaceData.new()
 		cap.local_verts = PackedVector3Array([a, b, c])
-		cap.copy_texture_from(source_face)
-		cap.uv_projection = source_face.uv_projection
-		cap.uv_scale = source_face.uv_scale
-		cap.legacy_wall_axes = source_face.legacy_wall_axes
+		# The face's look (#1934). A cap closes the bevel's end flat.
+		cap.copy_appearance_from(source_face)
+		cap.smoothing_group = 0
 		cap.ensure_geometry()
 		out_faces.append(cap)
 
