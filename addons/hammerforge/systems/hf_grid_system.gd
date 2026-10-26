@@ -266,6 +266,11 @@ func _align_to_selection(nodes: Array) -> void:
 		var along: Variant = turn_along(edge[1] - edge[0])
 		if along != null:
 			set_turn(float(along), edge[0])
+			# On the floor's plane, as a turned brush lays it, whatever plane the
+			# grid held before: a turn shows only on the floor grid (#1933).
+			axis = root.AxisLock.Y
+			if points.is_empty():
+				points = edge
 	if points.is_empty():
 		var picked: Dictionary = root.get_primary_selected_face()
 		if not picked.is_empty():

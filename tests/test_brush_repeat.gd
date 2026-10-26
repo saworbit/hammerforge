@@ -314,3 +314,60 @@ func test_after_letting_go_a_click_draws_again():
 	assert_true(level.input_state.is_drag_base(), "the click starts a Draw, not a copy")
 	level.cancel_drag()
 	await rig.leave_level(level)
+
+
+# ===========================================================================
+# On a turned grid (#1923)
+# ===========================================================================
+
+
+## Whether `point` is a whole number of steps of 1 along each of `frame`'s axes.
+static func _on_steps(frame: Transform3D, point: Vector3) -> bool:
+	var local := frame.affine_inverse() * point
+	return local.is_equal_approx(local.round())
+
+
+## A copy on a grid turned 30 degrees turns with it, as a draw there does, with
+## its corners on the grid's points, and the ghost shows the turn before the
+## click. Back on the world's grid a copy stands square to the world. The copy
+## used to stand square to the world on a turned grid, its corners between the
+## grid's lines.
+func test_a_copy_on_a_turned_grid_turns_with_it_and_its_corners_are_on_the_grid():
+	var level = await _drawing_level()
+	var grid_before: float = rig.plugin.dock.grid_snap.value
+	rig.plugin.dock.grid_snap.value = 1.0
+	level.grid_snap = 1.0
+	_draw(level, BrushShape.BOX, Vector3(2, 2, 2))
+	level.grid_system.set_turn(30.0, Vector3.ZERO)
+	var frame: Transform3D = level.grid_system.grid_frame()
+	var turn := Basis(Vector3.UP, deg_to_rad(30.0))
+	_arm()
+	var spot := frame * Vector3(5, 0, 3)
+	_move_to(spot)
+	var ghost := _ghost(level)
+	assert_not_null(ghost, "fixture: a ghost")
+	if ghost:
+		assert_true(ghost.global_basis.is_equal_approx(turn), "the ghost shows the turn")
+	var before := _brushes(level)
+	_click(spot)
+	var made := _made_since(level, before)
+	assert_eq(made.size(), 1, "one copy")
+	if made.size() == 1:
+		var copy = made[0]
+		assert_true(copy.global_basis.orthonormalized().is_equal_approx(turn), "turned 30")
+		var off: Array = []
+		for face in copy.faces:
+			for corner in face.local_verts:
+				var world: Vector3 = copy.global_transform * corner
+				if not _on_steps(frame, Vector3(world.x, 0, world.z)):
+					off.append(world)
+		assert_eq(off, [], "every corner on the grid's points")
+	level.grid_system.run_command("grid_reset")
+	before = _brushes(level)
+	_click(Vector3(-6, 0, 2))
+	made = _made_since(level, before)
+	assert_eq(made.size(), 1, "one more copy")
+	if made.size() == 1:
+		assert_true(made[0].global_basis.is_equal_approx(Basis.IDENTITY), "square to the world")
+	rig.plugin.dock.grid_snap.value = grid_before
+	await rig.leave_level(level)

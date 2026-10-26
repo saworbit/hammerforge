@@ -196,19 +196,34 @@ static func _repeatable(info: Dictionary) -> Dictionary:
 func repeat_info(brush: Dictionary, base: Vector3) -> Dictionary:
 	var size: Vector3 = brush["size"]
 	var operation := int(brush["operation"])
+	var place := repeat_frame(size, base)
 	var info := {
 		"shape": brush["shape"],
 		"size": size,
-		"center": base + Vector3(0.0, size.y * 0.5, 0.0),
+		"center": place.origin,
 		"operation": operation,
 		"pending": operation == CSGShape3D.OPERATION_SUBTRACTION and root.pending_node != null,
 		"brush_id": root._next_brush_id(),
 		"draw_origin": base,
 	}
+	if not place.basis.is_equal_approx(Basis.IDENTITY):
+		info["transform"] = place
 	for key in ["sides", "material"]:
 		if brush.has(key):
 			info[key] = brush[key]
 	return info
+
+
+## Where a Repeat copy `size` across stands on `base`: centred over it, square to
+## the world, or on a turned floor grid turned with it about up, as a draw there
+## is (#1923). Centred on a grid point, a copy whose sides are even numbers of
+## steps has its corners on the grid's points. The ghost stands here too.
+func repeat_frame(size: Vector3, base: Vector3) -> Transform3D:
+	var center := base + Vector3(0.0, size.y * 0.5, 0.0)
+	var grid = root.get("grid_system")
+	if grid == null or not grid.is_turned():
+		return Transform3D(Basis.IDENTITY, center)
+	return Transform3D(Basis(Vector3.UP, deg_to_rad(float(grid.turn_degrees))), center)
 
 
 func end_drag(camera: Camera3D, mouse_pos: Vector2, size_default: Vector3) -> bool:
