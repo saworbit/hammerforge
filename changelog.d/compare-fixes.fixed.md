@@ -1,0 +1,1 @@
+- Compare names a removed paint layer by its name, not its id. (issue [#1992](https://github.com/saworbit/hammerforge/issues/1992))

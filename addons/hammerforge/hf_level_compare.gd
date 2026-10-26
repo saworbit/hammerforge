@@ -748,11 +748,7 @@ static func _compare_paint(
 			continue
 		var layer_id := str(entry.get("id", ""))
 		seen[layer_id] = true
-		var label := (
-			str(entry.get("display_name", ""))
-			if str(entry.get("display_name", "")) != ""
-			else layer_id
-		)
+		var label := _layer_label(entry)
 		if not old_layers.has(layer_id):
 			lines.append("paint layer '%s': added" % label)
 			counts["paint"] += 1
@@ -761,6 +757,13 @@ static func _compare_paint(
 			counts["paint"] += 1
 	for layer_id in old_layers:
 		if not seen.has(layer_id):
-			lines.append("paint layer '%s': removed" % layer_id)
+			# By the name it had, as an added one is named (#1992).
+			lines.append("paint layer '%s': removed" % _layer_label(old_layers[layer_id]))
 			counts["paint"] += 1
 	return lines
+
+
+## A paint layer by the name the mapper gave it, or its id when it has none.
+static func _layer_label(entry: Dictionary) -> String:
+	var shown := str(entry.get("display_name", ""))
+	return shown if shown != "" else str(entry.get("id", ""))

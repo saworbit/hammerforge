@@ -212,6 +212,30 @@ func test_wires_and_settings_on_point_and_brush_entities_show():
 	assert_eq(result["counts"]["wires"], 2, "two wires")
 
 
+## Compare `before` with the level as it is now, and the lines it gives. What the
+## lines name is counted as well: `tools/compare_levels.gd` exits 1 on a count
+## and 0 on none.
+func _lines_since(level: LevelRoot, before: Dictionary) -> PackedStringArray:
+	var result := HFLevelCompare.compare(before, _now(level))
+	var lines: PackedStringArray = result["lines"]
+	var counted: bool = (result["counts"] as Dictionary).values().any(func(n): return int(n) > 0)
+	assert_eq(counted, lines.size() > 1, "counted as listed:\n%s" % "\n".join(lines))
+	return lines
+
+
+## A removed paint layer is named as an added one is, by the name the mapper gave
+## it and not its id (#1992).
+func test_a_removed_paint_layer_is_named_by_its_name():
+	var level := _level()
+	level.add_paint_layer()
+	var last := level.get_paint_layer_names().size() - 1
+	assert_true(level.rename_paint_layer(last, "Upper Floor"), "renamed")
+	var before := _now(level)
+	level.set_active_paint_layer(last)
+	level.remove_active_paint_layer()
+	assert_has(_lines_since(level, before), "paint layer 'Upper Floor': removed")
+
+
 ## A point entity scaled, not turned, is not "turned". The compare held its whole
 ## basis to the old one, scale and all (#1941).
 func test_a_scaled_point_entity_is_not_turned():
