@@ -50,14 +50,25 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Changed
 
+- **26 Oct** Group, visgroup, cordon, entity panel, drop and context toolbar messages that carry a name or a count go through the translation catalogs, plurals included. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#1922](https://github.com/saworbit/hammerforge/pull/1922))
 - **26 Oct** An undo at 3,000 brushes takes 45 ms, from 74: it walks only the nodes it changed when nothing else can have changed. (issue [#1866](https://github.com/saworbit/hammerforge/issues/1866), PR [#1921](https://github.com/saworbit/hammerforge/pull/1921))
 
 #### Fixed
 
+- **27 Oct** A sweep keeps a face's Hidden and smoothing group, an inset its texture offset and turn, and Bake Changed sees Hidden set in the Inspector. (issues [#1927](https://github.com/saworbit/hammerforge/issues/1927), [#1934](https://github.com/saworbit/hammerforge/issues/1934), PR [#1954](https://github.com/saworbit/hammerforge/pull/1954))
+- **27 Oct** A pending cut that is clipped, hollowed or merged stays pending, and does not merge with an applied cut. (issue [#1943](https://github.com/saworbit/hammerforge/issues/1943), PR [#1948](https://github.com/saworbit/hammerforge/pull/1948))
+- **27 Oct** A ring's step changed in Adjust Last reaches the dock with Fill 360 off, so the next ring has that step. (issue [#1931](https://github.com/saworbit/hammerforge/issues/1931), PR [#1951](https://github.com/saworbit/hammerforge/pull/1951))
+- **27 Oct** Save As over another level clears that level's paint region files, and an undo from before a Save As keeps the undone paint out. (issue [#1929](https://github.com/saworbit/hammerforge/issues/1929), PR [#1952](https://github.com/saworbit/hammerforge/pull/1952))
+- **27 Oct** On a turned grid a Repeat copy and its ghost turn with the grid, and one edge picked after a wall turns the floor grid. (issues [#1923](https://github.com/saworbit/hammerforge/issues/1923), [#1933](https://github.com/saworbit/hammerforge/issues/1933), PR [#1950](https://github.com/saworbit/hammerforge/pull/1950))
+- **27 Oct** Replace Material finds, counts and undoes the faces it changes: no locked brush, committed cuts counted, and the hidden brushes an adjusted scope reached. (issues [#1930](https://github.com/saworbit/hammerforge/issues/1930), [#1936](https://github.com/saworbit/hammerforge/issues/1936), PR [#1949](https://github.com/saworbit/hammerforge/pull/1949))
+- **27 Oct** The fade around an open group follows group edits and undo, and an undone Detach hides its pieces again under the Structures filter. (issues [#1926](https://github.com/saworbit/hammerforge/issues/1926), [#1928](https://github.com/saworbit/hammerforge/issues/1928), PR [#1947](https://github.com/saworbit/hammerforge/pull/1947))
+- **27 Oct** Compare shows entity wires and brush entity changes, the Census reads a scaled turn, and Quick Save names every shape. (issues [#1941](https://github.com/saworbit/hammerforge/issues/1941), [#1938](https://github.com/saworbit/hammerforge/issues/1938), [#1937](https://github.com/saworbit/hammerforge/issues/1937), PR [#1953](https://github.com/saworbit/hammerforge/pull/1953))
+- **27 Oct** Re-pick moves a sweep onto the faces picked and dresses it in their looks, and Update no longer warns that a sweep's own looks are hand work. (issue [#1932](https://github.com/saworbit/hammerforge/issues/1932), PR [#1946](https://github.com/saworbit/hammerforge/pull/1946))
 - **26 Oct** Every import scan printed a parse error for the two sample scenes, which started with a byte order mark. (issue [#1917](https://github.com/saworbit/hammerforge/issues/1917), PR [#1918](https://github.com/saworbit/hammerforge/pull/1918))
 
 #### Behind the scenes
 
+- **27 Oct** The nightly's command surfaces scenario counts a held key as read when any plugin input module asks for it, so Sweep Select's hold no longer flags. (PR [#1945](https://github.com/saworbit/hammerforge/pull/1945))
 - **26 Oct** A test counts, per script, the text shown without going through the translation catalogs, and fails when a count goes up. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#1920](https://github.com/saworbit/hammerforge/pull/1920))
 
 ### Week of 19 Oct 2026

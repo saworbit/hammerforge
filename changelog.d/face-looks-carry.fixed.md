@@ -1,1 +1,0 @@
-- A sweep keeps a face's Hidden and smoothing group, an inset its texture offset and turn, and Bake Changed sees Hidden set in the Inspector. (issues [#1927](https://github.com/saworbit/hammerforge/issues/1927), [#1934](https://github.com/saworbit/hammerforge/issues/1934))

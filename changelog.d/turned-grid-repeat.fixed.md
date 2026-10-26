@@ -1,1 +1,0 @@
-- On a turned grid a Repeat copy and its ghost turn with the grid, and one edge picked after a wall turns the floor grid. (issues [#1923](https://github.com/saworbit/hammerforge/issues/1923), [#1933](https://github.com/saworbit/hammerforge/issues/1933))

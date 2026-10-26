@@ -1,1 +1,0 @@
-- Re-pick moves a sweep onto the faces picked and dresses it in their looks, and Update no longer warns that a sweep's own looks are hand work. (issue [#1932](https://github.com/saworbit/hammerforge/issues/1932))

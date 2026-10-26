@@ -1,1 +1,0 @@
-- The nightly's command surfaces scenario counts a held key as read when any plugin input module asks for it, so Sweep Select's hold no longer flags.

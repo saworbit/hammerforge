@@ -1,1 +1,0 @@
-- Save As over another level clears that level's paint region files, and an undo from before a Save As keeps the undone paint out. (issue [#1929](https://github.com/saworbit/hammerforge/issues/1929))
