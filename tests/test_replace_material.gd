@@ -7,6 +7,8 @@ const HFUndoHelper = preload("res://addons/hammerforge/undo_helper.gd")
 const UndoStandIn = preload("res://tests/mcp/mcp_undo_stand_in.gd")
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+const HFMaterialUse = preload("res://addons/hammerforge/hf_material_use.gd")
+const HFReplaceMaterialDialog = preload("res://addons/hammerforge/ui/hf_replace_material_dialog.gd")
 
 const GREY := 1
 const PLASTER := 2
@@ -142,3 +144,29 @@ func test_a_committed_cut_s_faces_change_but_are_not_picked():
 	level.replace_material(GREY, PLASTER)
 	assert_eq(cut.faces[0].material_idx, PLASTER, "the cut's interior takes it too")
 	assert_false(level.face_selection.has("cut"), "but a hidden cut's faces are not picked")
+
+
+## What Replace Material finds is what it changes: a brush a locked visgroup
+## holds is left out of both, so the count and the highlight the dialog shows
+## match the faces Replace changes (#1936).
+func test_a_locked_brush_is_neither_found_nor_changed():
+	level.visgroup_system.create_visgroup("Locked")
+	level.visgroup_system.add_to_visgroup(level.find_brush_by_id("a"), "Locked")
+	level.visgroup_system.set_visgroup_locked("Locked", true)
+	var found: Dictionary = level.faces_wearing_material(GREY, {})
+	assert_false(found.has("a"), "the locked brush is not found")
+	assert_eq(found.get("b", []), [0, 1, 2], "the others are")
+	level.replace_material(GREY, PLASTER)
+	assert_eq(_slots("a"), [GREY, GREY, GREY, GREY, GREY, GREY], "and it is not changed")
+
+
+## The counts beside each material, in the browser and in the Replace dialog
+## alike, take in a committed cut's faces, which Replace changes and Remove Unused
+## keeps a material for (#1936).
+func test_the_counts_take_in_a_committed_cut_as_replace_does():
+	var cut := _box("cut", Vector3(0, 0, 5), [GREY, GREY, GREY, GREY, GREY, GREY])
+	cut.operation = CSGShape3D.OPERATION_SUBTRACTION
+	level.brush_system._stash_committed_cut(cut)
+	var counts: Dictionary = HFMaterialUse.counts(level)
+	assert_eq(int(counts.get(GREY, 0)), 6 + 3 + 6, "a's, b's and the cut's grey faces")
+	assert_eq(HFReplaceMaterialDialog.use_counts(level), counts, "the dialog counts the same")
