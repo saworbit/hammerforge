@@ -243,6 +243,28 @@ func test_an_array_shows_its_count_and_a_new_count_makes_that_many():
 	await rig.leave_level(level)
 
 
+## A count past 100 reaches the dock as it is, and the next array makes it. The
+## dock's count stopped at 100, so the next array made 100 (#1996).
+func test_a_count_of_150_reaches_the_dock_and_the_next_array():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	var dock = rig.plugin.dock
+	dock.dup_mode_opt.selected = 0
+	dock.dup_count_spin.value = 2
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "count", 150))
+	await rig.frame()
+	assert_eq(level._iter_managed_brush_nodes().size(), 151, "the box and 150 copies")
+	assert_eq(int(dock.dup_count_spin.value), 150, "the dock holds 150")
+	var post: DraftBrush = rig.box(level, "post", Vector3(0, 2, 40))
+	rig.select([post])
+	await rig.frame()
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_eq(level._iter_managed_brush_nodes().size(), 302, "and the next array makes 150")
+	await rig.leave_level(level)
+
 
 ## A ring's new step from Adjust Last reaches the dock as the step, with Fill 360
 ## off, even when Fill 360 was ticked again for the next ring. Fill 360 stayed

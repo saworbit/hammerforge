@@ -1122,8 +1122,8 @@ it appears once you touch an array control and goes again when you create the
 array, clear the selection, or leave the Build tab. One more tick of a control
 brings it back.
 
-**An array has a ceiling of 256 brushes.** The cell counts go to 32 a side, which
-is a lattice of over thirty-two thousand brushes — not an edit but a hang. Ask
+**An array has a ceiling of 256 brushes.** The cell counts go to 64 a side, which
+is a lattice of over a quarter of a million brushes — not an edit but a hang. Ask
 for more than the ceiling and the ghost disappears and the line tells you the
 number you asked for, so you know which control to turn back. **Create Array**
 refuses the same arrays for the same reason, and so does **Update Array**: the

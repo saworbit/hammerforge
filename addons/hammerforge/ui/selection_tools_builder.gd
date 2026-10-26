@@ -234,7 +234,9 @@ func build(parent: Control) -> void:
 	var count_lbl = Label.new()
 	count_lbl.text = "Count:"
 	dup_row1.add_child(count_lbl)
-	dock.dup_count_spin = HFUIFactoryType.make_spin(1, 100, 1, 3)
+	# The counts' ranges are the command table's, so the dock holds any count
+	# Adjust Last can set and hands back to it (#1996).
+	dock.dup_count_spin = _setting_spin("duplicate_array", "count")
 	dock.dup_count_spin.tooltip_text = "Number of copies to create"
 	dup_row1.add_child(dock.dup_count_spin)
 
@@ -286,13 +288,13 @@ func build(parent: Control) -> void:
 	var grid_lbl = Label.new()
 	grid_lbl.text = "Cells:"
 	dock.dup_grid_row.add_child(grid_lbl)
-	dock.dup_grid_x = HFUIFactoryType.make_spin(1, 32, 1, 2)
+	dock.dup_grid_x = _setting_spin("grid_array", "count_x")
 	dock.dup_grid_x.tooltip_text = "Cells along X, counting the original"
 	dock.dup_grid_row.add_child(dock.dup_grid_x)
-	dock.dup_grid_y = HFUIFactoryType.make_spin(1, 32, 1, 1)
+	dock.dup_grid_y = _setting_spin("grid_array", "count_y")
 	dock.dup_grid_y.tooltip_text = "Cells along Y, counting the original"
 	dock.dup_grid_row.add_child(dock.dup_grid_y)
-	dock.dup_grid_z = HFUIFactoryType.make_spin(1, 32, 1, 2)
+	dock.dup_grid_z = _setting_spin("grid_array", "count_z")
 	dock.dup_grid_z.tooltip_text = "Cells along Z, counting the original"
 	dock.dup_grid_row.add_child(dock.dup_grid_z)
 	var grid_hint = Label.new()
@@ -332,6 +334,18 @@ func build(parent: Control) -> void:
 	dock.dup_detach_btn.visible = false
 	dock.dup_detach_btn.pressed.connect(dock._on_detach_duplicate_array)
 	dup_btns.add_child(dock.dup_detach_btn)
+
+
+## A spin box for setting `key` of command `id`, with the range, step and
+## default the command table gives it.
+static func _setting_spin(id: String, key: String) -> SpinBox:
+	var setting: Dictionary = HFCommandRegistryType.field(id, key)
+	return HFUIFactoryType.make_spin(
+		float(setting["min"]),
+		float(setting["max"]),
+		float(setting["step"]),
+		float(setting["default"])
+	)
 
 
 func _add_sub_header(parent: Control, text: String) -> void:

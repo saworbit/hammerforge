@@ -1,1 +1,2 @@
-- Adjust Last asks the command about a new value before it undoes the step, so a refused one leaves the step and says why. (issue [#1995](https://github.com/saworbit/hammerforge/issues/1995))
+- Adjust Last checks a new value before it undoes the step, and says why it refused one. (issue [#1995](https://github.com/saworbit/hammerforge/issues/1995))
+- The dock's array counts reach every count Adjust Last can set. (issue [#1996](https://github.com/saworbit/hammerforge/issues/1996))
