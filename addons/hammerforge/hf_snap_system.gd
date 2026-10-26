@@ -188,6 +188,10 @@ var _typed: Variant = null
 ## The point X and Z are taken from for the next pick, or null: a point built from
 ## two others, in plan from one and at the height of another.
 var _filter_xz: Variant = null
+## Whether the left press that began the drag under way took one of those points
+## as its pick. The drag's motion then snaps as the pointer goes, so a Draw's far
+## corner is not pinned to the corner the press took (#2001).
+var _pending_taken_by_press := false
 ## The point the pointer last rested on, and whether that rest has been counted,
 ## so one rest toggles a point once. `rest_serial` tells a timer that started for
 ## an earlier rest it is too late.
@@ -589,6 +593,7 @@ func cancel_pending_point() -> bool:
 		return false
 	_typed = null
 	_filter_xz = null
+	_pending_taken_by_press = false
 	revision += 1
 	return true
 
@@ -651,10 +656,30 @@ func next_pick_limit() -> String:
 func pick_taken() -> void:
 	_typed = null
 	_filter_xz = null
+	_pending_taken_by_press = false
 	if _only_kind == "" and _stepped_kind == "":
 		return
 	_only_kind = ""
 	_stepped_kind = ""
+	revision += 1
+
+
+## A left press has snapped. A typed point or a point X and Z were taken from that
+## it used is the pick it stood for: the press took it.
+func press_taken() -> void:
+	if _picked_in_event and has_pending_point():
+		_pending_taken_by_press = true
+
+
+## The pointer moved with the left button held. A pending point the press already
+## took is spent, so the drag snaps as the pointer goes (#2001). One typed during
+## the drag stands for the corner being dragged, and stays.
+func drag_moved() -> void:
+	if not _pending_taken_by_press:
+		return
+	_pending_taken_by_press = false
+	_typed = null
+	_filter_xz = null
 	revision += 1
 
 
