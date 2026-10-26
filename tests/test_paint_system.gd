@@ -250,6 +250,18 @@ func test_a_rename_is_trimmed_before_it_is_compared():
 	assert_eq(sys.get_paint_layer_names()[0], "Basement", "The stored name is trimmed")
 
 
+func test_a_new_layer_skips_an_id_another_row_shows_as_its_name():
+	# A rename to "layer_2" is allowed while no row shows it, and Add then gave
+	# the next layer that id, so two rows read "layer_2" (#2013).
+	root.paint_layers.create_layer(&"layer_0", 0.0)
+	root.paint_layers.create_layer(&"layer_1", 1.0)
+	assert_true(sys.rename_paint_layer(0, "layer_2"), "no row shows layer_2 yet")
+	sys.add_paint_layer()
+	assert_eq(str(root.paint_layers.layers[2].layer_id), "layer_3")
+	assert_eq(sys.get_paint_layer_names(), ["layer_2", "layer_1", "layer_3"])
+	assert_eq(sys.find_paint_layer("layer_3"), 2, "the new row is found by its name")
+
+
 # ===========================================================================
 # The memory budget only counts what it actually freed (#446)
 # ===========================================================================

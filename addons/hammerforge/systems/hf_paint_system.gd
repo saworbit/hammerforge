@@ -713,18 +713,21 @@ func remove_active_paint_layer() -> void:
 ## layer's paint outlives it in the undo history, and in its region files so an
 ## undo of the removal can read it back (#1554), so a new layer given the id of
 ## one took that paint as its region streamed in (#1564). The files cover the
-## sessions before this one, a level saved or not.
+## sessions before this one, a level saved or not. A new layer's row shows its id,
+## so an id another row already shows as its name is skipped too, as a rename to
+## it would be refused (#2013).
 func next_paint_layer_id() -> String:
 	const MAX_LAYER_ID_SEARCH := 10_000
 	var base = "layer_"
 	var index = root.paint_layers.layers.size() if root.paint_layers else 0
 	var in_files := _layer_ids_in_region_files()
+	var shown: Array = get_paint_layer_names()
 	for _i in range(MAX_LAYER_ID_SEARCH):
 		var candidate = "%s%d" % [base, index]
 		var held: bool = (
 			root.paint_layers != null and root.paint_layers.has_held_layer_id(StringName(candidate))
 		)
-		if not held and not in_files.has(candidate):
+		if not held and not in_files.has(candidate) and not shown.has(candidate):
 			return candidate
 		index += 1
 	return "%s0" % base

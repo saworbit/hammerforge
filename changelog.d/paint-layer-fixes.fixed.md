@@ -1,0 +1,1 @@
+- Add Layer names a new paint layer something no other row shows. (issue [#2013](https://github.com/saworbit/hammerforge/issues/2013))
