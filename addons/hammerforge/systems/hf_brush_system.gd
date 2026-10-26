@@ -2179,6 +2179,14 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 				"Cannot merge solid brushes and cuts together"
 			)
 			return plan
+		# The merged cut waits in Pending Cuts or is applied, as they all were. One
+		# of each made an applied cut of a pending one (#1943).
+		elif draft.is_pending_cut() != (drafts[0] as DraftBrush).is_pending_cut():
+			plan["result"] = HFOpResult.fail(
+				"Merge: some of these cuts are pending and some applied",
+				"Apply the pending cuts first, or merge only the pending ones"
+			)
+			return plan
 	# The merged brush is one brush of one entity or of none. Taking the first
 	# brush's class made a door's leaf merged into a wall a door, and two doors one
 	# door with the first one's name and nobody's wires (#1194).
@@ -2381,6 +2389,7 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	var brushes: Array = plan["drafts"]
 	var first: DraftBrush = brushes[0]
 	var operation: int = first.operation
+	var pending := first.is_pending_cut()
 	# The plan built its faces in the merged brush's own space.
 	var merged_xform: Transform3D = plan["placement"]
 	var faces: Array = plan["faces"]
@@ -2421,6 +2430,7 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 		"operation": operation,
 		"brush_id": _next_brush_id(),
 		"faces": _serialized(faces),
+		"pending": pending,
 	}
 	merged_info.merge(entity)
 	# The first brush's bake settings, as it gives its visgroups and group (#1660).
@@ -2864,6 +2874,9 @@ func _piece_infos_from_faces(draft: DraftBrush, face_sets: Array) -> Array:
 			info["group_id"] = group_id
 		# How the brush casts shadows and how fine its lightmap is (#1660).
 		info.merge(HFBakeSplit.fields(draft))
+		# A pending cut's pieces wait in Pending Cuts as it did, not applied (#1943).
+		if draft.is_pending_cut():
+			info["pending"] = true
 		infos.append(info)
 	return infos
 
