@@ -121,3 +121,47 @@ func test_a_save_to_the_same_name_copies_nothing():
 		),
 		"no second folder"
 	)
+
+
+## Saved as a level that is already there: the region files of the level it
+## replaces go, so none of that level's paint streams in as this one's. They
+## stayed beside the new files, and a region this level never painted streamed in
+## with the old level's paint (#1929).
+func test_save_as_over_another_level_leaves_none_of_its_paint():
+	var other := _streamed_level(NEW_LEVEL)
+	other.paint_layers.layers[0].set_cell(FAR, true)
+	var far_region: Vector2i = other.paint_system.region_manager.region_id_from_cell(FAR)
+	other.paint_system.region_manager.mark_loaded(far_region)
+	assert_true(other.paint_system._unload_region(far_region), "fixture: FAR written out")
+	assert_true(FileAccess.file_exists(_region_file(NEW_LEVEL, FAR, other)), "fixture: its file")
+
+	var level := _streamed_level(OLD_LEVEL)
+	level.paint_layers.layers[0].set_cell(NEAR, true)
+	level.paint_system.region_manager.mark_loaded(
+		level.paint_system.region_manager.region_id_from_cell(NEAR)
+	)
+	assert_eq(level.save_hflevel(NEW_LEVEL), OK)
+	await _drain_save(level)
+	assert_false(FileAccess.file_exists(_region_file(NEW_LEVEL, FAR, level)), "its file is gone")
+	level.paint_system._ensure_regions_for_cell(FAR)
+	assert_false(_painted(level, FAR), "and none of its paint streams in")
+	level.paint_system._ensure_regions_for_cell(NEAR)
+	assert_true(_painted(level, NEAR), "the level keeps its own")
+
+
+## Undo after a Save As: the paint the undo took does not stream back in from the
+## new folder. The restore left the new folder's files alone as another level's,
+## and the region read the undone paint back the next time it streamed in (#1929).
+func test_an_undo_from_before_a_save_as_keeps_the_undone_paint_out():
+	var level := _streamed_level(OLD_LEVEL)
+	var before := level.capture_state()
+	level.paint_layers.layers[0].set_cell(NEAR, true)
+	var near_region: Vector2i = level.paint_system.region_manager.region_id_from_cell(NEAR)
+	level.paint_system.region_manager.mark_loaded(near_region)
+	assert_eq(level.save_hflevel(NEW_LEVEL), OK)
+	await _drain_save(level)
+	assert_true(FileAccess.file_exists(_region_file(NEW_LEVEL, NEAR, level)), "fixture: written")
+	level.restore_state(before)
+	assert_false(_painted(level, NEAR), "the undo takes the paint")
+	level.paint_system._ensure_regions_for_cell(NEAR)
+	assert_false(_painted(level, NEAR), "and it does not stream back in")
