@@ -1,2 +1,3 @@
 - A snap no longer lands on a corner, edge or centre of a hidden brush. (issue [#1963](https://github.com/saworbit/hammerforge/issues/1963))
+- Carve leaves a locked brush whole and says how many it left alone. (issue [#1973](https://github.com/saworbit/hammerforge/issues/1973))
 - An edit to a texture group leaves a face on a locked brush as it was. (issue [#1978](https://github.com/saworbit/hammerforge/issues/1978))
