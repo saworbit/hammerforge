@@ -16,6 +16,7 @@ extends RefCounted
 const HFCommandRegistry = preload("hf_command_registry.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFNameMatch = preload("hf_name_match.gd")
+const HFCommandAliases = preload("hf_command_aliases.gd")
 
 ## Suggestions shown under the line, at most.
 const MOST_SUGGESTIONS := 8
@@ -24,9 +25,14 @@ const MOST_SUGGESTIONS := 8
 const TRUE_WORDS := ["true", "yes", "on", "1"]
 const FALSE_WORDS := ["false", "no", "off", "0"]
 
+## The project's own aliases, read as the palette reads them, so the line knows
+## the words the palette does (#1991). Tests point it elsewhere.
+static var aliases_path := HFCommandAliases.USER_FILE
 
-## The words of `line`: spaces part them, double quotes keep a value with spaces
-## in it together, and braces or brackets keep JSON whole, quotes and all.
+
+## The words of `line`: spaces or tabs part them, double quotes keep a value with
+## spaces in it together, and braces or brackets keep JSON whole, quotes and all.
+## A script pasted from elsewhere often parts them with tabs (#2015).
 static func words(line: String) -> PackedStringArray:
 	var out: PackedStringArray = []
 	var word := ""
@@ -44,7 +50,7 @@ static func words(line: String) -> PackedStringArray:
 		elif letter == '"':
 			quoted = not quoted
 			started = true
-		elif letter == " " and not quoted:
+		elif (letter == " " or letter == "\t") and not quoted:
 			if started:
 				out.append(word)
 			word = ""
@@ -62,7 +68,11 @@ static func words(line: String) -> PackedStringArray:
 ## is Move to Floor and not a command called `move`.
 static func command_of(typed: PackedStringArray) -> Dictionary:
 	var names := _names()
-	for used in range(mini(typed.size(), 6), 0, -1):
+	# As many words as the longest name has: six missed a seven word label (#2015).
+	var longest := 1
+	for name in names:
+		longest = maxi(longest, str(name).split(" ", false).size())
+	for used in range(mini(typed.size(), longest), 0, -1):
 		var said := " ".join(typed.slice(0, used)).to_lower()
 		if names.has(said):
 			return {"id": names[said], "used": used}
@@ -76,8 +86,9 @@ static func command_of(typed: PackedStringArray) -> Dictionary:
 ## two commands share goes to the first, as the registry lists them.
 static func _names() -> Dictionary:
 	var out := {}
+	var lists := _name_lists()
 	for id in HFCommandRegistry.dispatched_ids():
-		for name in [id, HFCommandRegistry.label(id)] + Array(HFCommandRegistry.aliases(id)):
+		for name in lists[id]:
 			var key := str(name).to_lower()
 			if not out.has(key):
 				out[key] = id
@@ -255,11 +266,14 @@ static func suggestions(text: String) -> PackedStringArray:
 	return out
 
 
-## Each command's names, by id, as `HFNameMatch.nearest()` takes them.
+## Each command's names, by id, as `HFNameMatch.nearest()` takes them: its id, its
+## label, and its aliases as the palette has them, the project's file's among them
+## and a word the file gives another command taken away (#1991).
 static func _name_lists() -> Dictionary:
+	var aliases := HFCommandAliases.by_command(HFCommandAliases.read_user(aliases_path))
 	var out := {}
 	for id in HFCommandRegistry.dispatched_ids():
-		out[id] = [id, HFCommandRegistry.label(id)] + Array(HFCommandRegistry.aliases(id))
+		out[id] = [id, HFCommandRegistry.label(id)] + Array(aliases.get(id, []))
 	return out
 
 

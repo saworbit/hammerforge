@@ -39,8 +39,11 @@ const COLORS := {
 	"door": Color(0.5, 0.33, 0.16),
 	"entity": Color(0.35, 0.35, 0.38),
 }
-## Room around the level, in metres.
+## The least room around the level, in metres; a bigger level gets more
+## (`_margin()`).
 const MARGIN := 1.0
+## How far a solid may reach into a height band and still only touch it.
+const TOUCH := 0.001
 ## An entity's symbol's radius, in metres in the SVG and pixels in the PNG.
 const SYMBOL_METRES := 0.3
 const SYMBOL_PIXELS := 4
@@ -68,6 +71,10 @@ static func shapes(
 		"bounds": Rect2(),
 	}
 	var points := PackedVector2Array()
+	# A brush entity's outline points and brushes, by the entity they are part of,
+	# so its wires start and end at one place however many brushes it has (#1959).
+	var entity_points: Dictionary = {}
+	var entity_brushes: Dictionary = {}
 	for brush in root._iter_managed_brush_nodes():
 		if brush.get_parent() == root.committed_node or not brush.is_visible_in_tree():
 			continue
@@ -79,6 +86,16 @@ static func shapes(
 		var kind := "solids"
 		if HFBrushEntity.entity_class(brush) != "":
 			kind = "brush_entities"
+			var key := HFBrushEntity.identity(brush)
+			if key == "":
+				key = "#%d" % brush.get_instance_id()
+			# A packed array is a copy when read out, so it is written back.
+			var gathered: PackedVector2Array = entity_points.get(key, PackedVector2Array())
+			gathered.append_array(outline)
+			entity_points[key] = gathered
+			if not entity_brushes.has(key):
+				entity_brushes[key] = []
+			(entity_brushes[key] as Array).append(brush)
 		elif brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			kind = "cuts"
 		data[kind].append(outline)
@@ -88,6 +105,8 @@ static func shapes(
 			centre += corner
 		data["labels"].append({"at": centre / outline.size(), "text": str(brush.name)})
 	var at_of: Dictionary = {}
+	# Which entity each node in `at_of` is part of.
+	var entity_of: Dictionary = {}
 	if root.entities_node:
 		for node in root.entities_node.get_children():
 			if not (node is DraftEntity) or not (node as Node3D).is_visible_in_tree():
@@ -102,15 +121,39 @@ static func shapes(
 			)
 			points.append(at)
 			at_of[node] = at
+			entity_of[node] = node.get_instance_id()
+	# A brush entity's place is the middle of its outline in plan, and each of its
+	# brushes stands for it.
+	for key in entity_points:
+		var middle := _bounds(entity_points[key]).get_center()
+		for brush in entity_brushes[key]:
+			at_of[brush] = middle
+			entity_of[brush] = key
 	if root.entity_system:
 		var index: Dictionary = root.entity_system.build_name_index()
+		# Each brush of an entity holds its wires, and a name can answer for each
+		# brush of one, so a wire is drawn once for its two entities.
+		var drawn: Dictionary = {}
 		for connection in root.entity_system.get_all_connections():
 			var source: Variant = connection.get("source")
 			if not at_of.has(source):
 				continue
 			for target in index.get(str(connection.get("target_name", "")), []):
-				if at_of.has(target):
-					data["wires"].append([at_of[source], at_of[target]])
+				if not at_of.has(target):
+					continue
+				var wire_key := (
+					"%s|%s|%s|%s"
+					% [
+						entity_of[source],
+						connection.get("output_name", ""),
+						entity_of[target],
+						connection.get("input_name", "")
+					]
+				)
+				if drawn.has(wire_key):
+					continue
+				drawn[wire_key] = true
+				data["wires"].append([at_of[source], at_of[target]])
 	# A level always has a cordon box; it means something only when cordons are on.
 	var cordons: Array = root.get_cordon_regions() if root.cordon_enabled else []
 	for region in cordons:
@@ -123,8 +166,18 @@ static func shapes(
 
 
 ## The outline seen from above of the part of a convex solid, given by its world
-## faces, between `y_min` and `y_max`. Empty when none of it is in the band.
+## faces, between `y_min` and `y_max`. Empty when none of it is in the band, and
+## when it only touches it: a storey's walls end on the next storey's floor, and
+## were drawn on that storey's plan as well as their own (#1983).
 static func footprint(faces: Array, y_min: float, y_max: float) -> PackedVector2Array:
+	var low := INF
+	var high := -INF
+	for face in faces:
+		for corner in HFSolidMeasure.ring(face):
+			low = minf(low, corner.y)
+			high = maxf(high, corner.y)
+	if high <= y_min + TOUCH or low >= y_max - TOUCH:
+		return PackedVector2Array()
 	var points := PackedVector2Array()
 	for face in faces:
 		var ring := HFSolidMeasure.ring(face)
@@ -192,7 +245,8 @@ static func _bounds(points: PackedVector2Array) -> Rect2:
 ## The plan as SVG text, in metres: one user unit is a metre, x is world X and y
 ## world Z.
 static func svg(data: Dictionary, labels: bool = false) -> String:
-	var view: Rect2 = (data["bounds"] as Rect2).grow(MARGIN)
+	var margin := _margin(data["bounds"])
+	var view: Rect2 = (data["bounds"] as Rect2).grow(margin)
 	var line_width := maxf(view.size.x, view.size.y) / 400.0
 	var out := PackedStringArray()
 	(
@@ -283,7 +337,7 @@ static func svg(data: Dictionary, labels: bool = false) -> String:
 						entity["kind"],
 						_n(entity["at"].x),
 						_n(entity["at"].y),
-						_n(SYMBOL_METRES),
+						_n(SYMBOL_METRES * margin),
 						_hex(entity["kind"]),
 						_hex("outline"),
 						_n(line_width)
@@ -298,9 +352,13 @@ static func svg(data: Dictionary, labels: bool = false) -> String:
 		for entity in data["entities"]:
 			if entity["name"] != "":
 				out.append(
-					_text(entity["at"] + Vector2(0.0, -SYMBOL_METRES * 2.0), entity["name"], size)
+					_text(
+						entity["at"] + Vector2(0.0, -SYMBOL_METRES * margin * 2.0),
+						entity["name"],
+						size
+					)
 				)
-	out.append_array(_svg_scale_and_arrow(view, line_width))
+	out.append_array(_svg_scale_and_arrow(view, line_width, margin))
 	out.append("</svg>")
 	return "\n".join(out) + "\n"
 
@@ -325,11 +383,11 @@ static func _text(at: Vector2, text: String, size: float) -> String:
 
 
 ## A scale bar along the bottom and an arrow to -Z in the top corner.
-static func _svg_scale_and_arrow(view: Rect2, width: float) -> PackedStringArray:
+static func _svg_scale_and_arrow(view: Rect2, width: float, margin: float) -> PackedStringArray:
 	var out := PackedStringArray()
 	var bar := scale_bar_metres(view.size.x)
-	var left := Vector2(view.position.x + MARGIN * 0.5, view.end.y - MARGIN * 0.4)
-	var tick := MARGIN * 0.15
+	var left := Vector2(view.position.x + margin * 0.5, view.end.y - margin * 0.4)
+	var tick := margin * 0.15
 	(
 		out
 		. append(
@@ -354,9 +412,9 @@ static func _svg_scale_and_arrow(view: Rect2, width: float) -> PackedStringArray
 			)
 		)
 	)
-	out.append(_text(left + Vector2(bar * 0.5, -tick * 1.5), "%s m" % _n(bar), MARGIN * 0.3))
-	var tip := Vector2(view.end.x - MARGIN * 0.5, view.position.y + MARGIN * 0.2)
-	var base := tip + Vector2(0.0, MARGIN * 0.6)
+	out.append(_text(left + Vector2(bar * 0.5, -tick * 1.5), "%s m" % _n(bar), margin * 0.3))
+	var tip := Vector2(view.end.x - margin * 0.5, view.position.y + margin * 0.2)
+	var base := tip + Vector2(0.0, margin * 0.6)
 	(
 		out
 		. append(
@@ -367,19 +425,19 @@ static func _svg_scale_and_arrow(view: Rect2, width: float) -> PackedStringArray
 					_n(base.y),
 					_n(tip.x),
 					_n(tip.y),
-					_n(tip.x - MARGIN * 0.15),
-					_n(tip.y + MARGIN * 0.2),
+					_n(tip.x - margin * 0.15),
+					_n(tip.y + margin * 0.2),
 					_n(tip.x),
 					_n(tip.y),
-					_n(tip.x + MARGIN * 0.15),
-					_n(tip.y + MARGIN * 0.2),
+					_n(tip.x + margin * 0.15),
+					_n(tip.y + margin * 0.2),
 					_hex("outline"),
 					_n(width * 2.0)
 				]
 			)
 		)
 	)
-	out.append(_text(base + Vector2(0.0, MARGIN * 0.3), "-Z", MARGIN * 0.25))
+	out.append(_text(base + Vector2(0.0, margin * 0.3), "-Z", margin * 0.25))
 	return out
 
 
@@ -391,6 +449,14 @@ static func scale_bar_metres(width: float) -> float:
 		if step * factor <= target:
 			return step * factor
 	return step
+
+
+## The room around the level, and the unit the scale bar, the arrow to -Z and an
+## entity's symbol are drawn in: a metre, or a tenth of the level's longer side on
+## a bigger level. Drawn in metres alone they shrank to a few pixels on a big
+## level (#1990).
+static func _margin(bounds: Rect2) -> float:
+	return maxf(MARGIN, maxf(bounds.size.x, bounds.size.y) / 10.0)
 
 
 ## A coordinate to a millimetre, with no ".0" on a whole number and no "-0".
@@ -411,7 +477,8 @@ static func _hex(kind: String) -> String:
 
 ## The plan drawn into an image `size` pixels on its long side.
 static func image(data: Dictionary, size: int = 1024) -> Image:
-	var view: Rect2 = (data["bounds"] as Rect2).grow(MARGIN)
+	var margin := _margin(data["bounds"])
+	var view: Rect2 = (data["bounds"] as Rect2).grow(margin)
 	var scale := float(maxi(size, 16)) / maxf(view.size.x, view.size.y)
 	var width := maxi(1, ceili(view.size.x * scale))
 	var height := maxi(1, ceili(view.size.y * scale))
@@ -442,21 +509,23 @@ static func image(data: Dictionary, size: int = 1024) -> Image:
 		_line(picture, to_pixels.call(wire[0]), to_pixels.call(wire[1]), COLORS["wire"])
 	for entity in data["entities"]:
 		_dot(picture, to_pixels.call(entity["at"]), SYMBOL_PIXELS, COLORS[entity["kind"]])
-	_png_scale_and_arrow(picture, view, to_pixels)
+	_png_scale_and_arrow(picture, view, to_pixels, margin)
 	return picture
 
 
 ## The SVG's scale bar and arrow to -Z, in the same places. The PNG has no text,
 ## so `hf_plan` gives the bar's length in metres beside it.
-static func _png_scale_and_arrow(picture: Image, view: Rect2, to_pixels: Callable) -> void:
+static func _png_scale_and_arrow(
+	picture: Image, view: Rect2, to_pixels: Callable, margin: float
+) -> void:
 	var color: Color = COLORS["outline"]
 	var bar := scale_bar_metres(view.size.x)
-	var left := Vector2(view.position.x + MARGIN * 0.5, view.end.y - MARGIN * 0.4)
-	var tick := Vector2(0.0, MARGIN * 0.15)
+	var left := Vector2(view.position.x + margin * 0.5, view.end.y - margin * 0.4)
+	var tick := Vector2(0.0, margin * 0.15)
 	var right := left + Vector2(bar, 0.0)
-	var tip := Vector2(view.end.x - MARGIN * 0.5, view.position.y + MARGIN * 0.2)
-	var base := tip + Vector2(0.0, MARGIN * 0.6)
-	var wing := Vector2(MARGIN * 0.15, MARGIN * 0.2)
+	var tip := Vector2(view.end.x - margin * 0.5, view.position.y + margin * 0.2)
+	var base := tip + Vector2(0.0, margin * 0.6)
+	var wing := Vector2(margin * 0.15, margin * 0.2)
 	var strokes := [
 		[left, right],
 		[left - tick, left + tick],
