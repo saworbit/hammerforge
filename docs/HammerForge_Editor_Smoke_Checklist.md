@@ -322,6 +322,7 @@ It writes one PNG per tab under `user://console_preview/`.
 ### 6b. Named Groups
 - Select two brushes and press **Ctrl+G**. Confirm it asks for a name with one ready, and Enter makes the group. Make a second group, select both groups and press Ctrl+G again. Confirm a click on any piece selects all of them, and the Groups list shows the two inner groups indented under the new one (#1723).
 - Double click the outer group. Confirm the rest of the level is drawn faded and a click picks one inner group. Press **Escape** and confirm the group closes and is selected.
+- Open a group of two, with a third brush outside it. Select both members and Ungroup. Confirm the group closes and nothing stays faded. Group them again, open it, and press Ctrl+Z: nothing stays faded (#1926, #1928).
 - Press **Ctrl+D** on the whole outer group. Confirm the copy is a group of its own, named with "copy", and a click on it selects only the copies.
 
 ### Empty Apply Cuts
@@ -543,6 +544,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Give the source box a brick material on its sides and run it again with **End width scale** 0.5. Confirm the run narrows evenly to half its width, every piece is convex, and the pieces' sides are brick (#1899).
 - Open it again on **Arc**. Drag the orange pivot handle along the face and confirm Radius and Toward follow it in grid steps and the outline follows. Drag the yellow end handle round the pivot and confirm Angle moves in 15 degree steps. Type a Radius and confirm the handle moves. Start a drag and right click: the values go back (#1885).
 - Press OK, select one of the pieces, raise Segments in the Structure section and press **Update Sweep**. Confirm the bend rebuilds smoother in one undo step, still one group (#1885).
+- With a piece selected, open Face Select, pick a face of another box painted in another material and press **Re-pick**. Confirm the sweep moves onto it in one undo step and its pieces take that box's material. Lower Segments and confirm Update asks nothing, since no piece was painted by hand (#1932).
 
 ### 7d. Face Winding Migration (Old Saves)
 - Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).
@@ -619,6 +621,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Enable **Face Select Mode**, click a face on a brush, then double-click a thumbnail or click **Assign to Selected Faces**; confirm only the selected face material changes.
 - Hover a different thumbnail in the grid; confirm the selected face temporarily previews that material. Move the mouse away; confirm the preview reverts.
 - Right-click a thumbnail → "Apply to Whole Brush"; confirm all faces of the selected brush(es) update.
+- Lock a visgroup holding a brush that wears a material, and open **Replace...** on that material. Confirm the count leaves the locked brush out and Replace leaves it as it was. Replace with **Shown brushes only** while a brush is hidden, change Where to the whole level in Adjust Last, then press Ctrl+Z once: the hidden brush goes back too (#1936, #1930).
 - Right-click a thumbnail → "Copy Name"; paste elsewhere to confirm clipboard content.
 - Press **T** (Texture Picker); click a face in the viewport. Confirm the browser selection updates to match that face's material.
 - Press **T** on a face with no material; confirm a toast message appears ("Face has no material assigned").
@@ -1011,11 +1014,13 @@ It writes one PNG per tab under `user://console_preview/`.
 - Select vertices and Align Grid. Confirm their average sets the coordinate on the current axis. With no vertices selected, align a face; confirm its dominant world axis and center set an axis-aligned plane, including an off-grid coordinate. An angled face does not tilt the plane.
 - Align a brush selection and confirm the grid uses the combined bounds' top. With no selection, Align Grid resets it. None of these commands adds an undo step.
 - Turn a box 30 degrees about up. In Vertex mode pick one of its bottom edges and press Align Grid. Confirm the grid's lines turn to run along that edge, the Angle field reads 30 and the HUD says `@ 30°`. Draw a box beside it and confirm it is square to the turned box with its corners on the turned lines; drag a resize handle and confirm its face stays on a line. Press an arrow key and confirm it moves along the turned grid. Reset Grid and confirm the grid and the next draw are square to the world (#1893).
+- Pick a wall face and press Align Grid, so the grid stands on the wall. Then pick one bottom edge of the turned box in Vertex mode and press Align Grid again. Confirm the grid lies on the floor, turned along the edge (#1933).
 - In separate draws, press Ctrl+Z during the base stage and during the height stage. Confirm only the preview and typed dimension disappear; the previous brush stays. Press Ctrl+Z again while idle and confirm the preceding action is undone.
 - Repeat with an unfinished Extrude. Confirm the preview is removed and its source brush stays. With a text field focused, confirm its own undo does not cancel the draw.
 - In Draw, move over the floor, a raised box top and a wedge's slope without clicking. Confirm the face under the cursor is tinted and a cross marks the snapped start point, and that both clear when a drag starts. Turn off **Draw hover preview** in Test → Settings: they go (#1400).
 - Press **L** (or tick **On Face** under Snap) and draw on a wall. Confirm the base lies on the wall, the size readout follows the wall's own axes, a Solid grows out of the wall and a Cutout cuts into it, and one undo removes it (#1401).
 - Draw a box, then press **Shift+D** (or **Repeat** on the context toolbar). Click on the floor and on a box top. Confirm a copy stands on the surface under the cursor at each click, one undo step each. Escape or a right click disarms it (#1407).
+- Type 30 in the grid's Angle field and draw a 2 by 2 by 2 box. Press Shift+D and confirm the ghost is turned 30 degrees, and a click places a copy turned with it, its corners on the grid's lines. Reset Grid and confirm the next copy is square to the world (#1923).
 - While drawing, confirm a size label follows the cursor through both stages, and reads Depth during an Extrude. Type a number during the draw and confirm it shows in brackets (#1402).
 - Start an Extrude on a top face, type 3 and press Enter without moving the mouse. Confirm a block 3 deep is placed as one undo step. Type 0, then 300: each is refused with a toast and the extrude goes on (#1560).
 
@@ -1059,6 +1064,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - With region streaming on and a region painted, use **Load .hflevel** on a file that is not a level (a renamed text file will do). Confirm the status line says the load failed and why, Undo has nothing new, and the file is not in recent files. Then move away until the painted region unloads, and confirm its paint lands in this level's `.hfregions` folder, not one named after the refused file (#823, #824).
 - With autosave on, use **Scene > Save Scene As...** to save the level's `.tscn` as a `.scn`. Confirm the `.hflevel` is written at once, its `scene` names the `.scn`, and the next autosave goes ahead with no refusal in the Console (#1591).
 - With region streaming on, paint a region, erase it all, move away until it unloads and come back: it is still empty. Paint again, undo the stroke, and move away and back: the undone paint stays gone. Add a paint layer, remove it and add another: the new layer starts empty everywhere (#1550, #1514, #1564).
+- With region streaming on, save a level as `a.hflevel` with paint far from the origin and let it unload. Open a new level, paint near the origin and **Save As** `a.hflevel` over it. Move to where the old paint was: nothing is there. Paint again, Save As `b.hflevel`, undo the stroke, move away and back: the undone paint stays gone (#1929).
 
 ### 33c. A LevelRoot Away From the World Origin
 Most placement bugs are invisible while the root sits at the origin, which is the
