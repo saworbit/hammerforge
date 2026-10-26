@@ -1,0 +1,3 @@
+- Export Plan draws the wires of brush entities, once for each entity. (issue [#1959](https://github.com/saworbit/hammerforge/issues/1959))
+- A plan's height band leaves out brushes that only touch it, so each storey draws its own walls. (issue [#1983](https://github.com/saworbit/hammerforge/issues/1983))
+- A plan's scale bar, arrow and labels are the same share of the picture on any size of level. (issue [#1990](https://github.com/saworbit/hammerforge/issues/1990))
