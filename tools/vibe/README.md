@@ -222,6 +222,37 @@ it from here.
 | `validate-own-output` | what Validate says about a hollow, a carve, a clip, a merge and each generator at its defaults |
 | `merge-result` | the faces Merge gives two boxes that share a face, and what Validate and `.map` make of them |
 | `bake-selected-twice` | what Bake Selected leaves of the selected brush's earlier bake, after a move and a second press |
+| `sweep-faces` | Sweep Faces along each path, past a half turn, with a taper, and as a structure through moves, saves and Re-pick |
+| `structure-paths` | structures on the floor, trim beside stairs and rails, Carve and Hull closed, and Merge's sculpts |
+| `nested-groups` | nested groups through copies, undo, a save, and Merge or Hollow of a group's last brushes |
+| `selection-rules` | the selection commands against hidden, locked and grouped brushes, and typed rules, through the real plugin |
+| `visibility-views` | views, isolate, locks, the current visgroup and filters through undo, a save, a bake and an export |
+| `prefab-copies` | kept properties through a Pull that drops a piece, Unlink, linked duplicates and locked copies |
+| `adjust-last` | Adjust Last at the edges of each command, Repeat Run after an undo, Replace Material, and a key's settings |
+| `shear-hull-clip` | Shear, Hull, the Clip tool, face push and shared corners: closed, convex, measured, undone |
+| `map-text-clipboard` | Copy as `.map` text and paste it back: brushes, materials, UVs, ties, wires, names and placement |
+| `texture-fit` | Align to Edge, Fit Repeats, Fit Strip and the slide and turn keys, read off the UVs a face shows |
+| `level-compare` | what Compare reports for each kind of edit, renames and membership among them |
+| `entity-census` | the census's counts, inputs and CSV against the level and Godot's own CSV reader |
+| `plan-export` | the level plan's height bands, bounds and marks for storeys, turned brushes, far and empty levels |
+| `fgd-import` | a game's FGD through the reader, a placed entity, Convert to JSON, a wire and a `.map` |
+| `console-commands` | the command line's names, aliases and scripts, Report a Problem's link, and the crash journal |
+| `notes-and-checks` | notes kept out of every export, To Do warnings, and accepted findings through undo, saves and edits |
+| `dimensions-guides` | dimensions through edits, undo, copies and saves, and a distance typed along a guide as a draw's start |
+| `turned-grid` | snapping, nudges, a draw, Repeat and round trips on a grid turned through an odd point |
+| `hidden-faces` | Hidden faces through every bake path and every operation that rebuilds faces, and face direction |
+| `entity-multi-edit` | several entities edited at once through the dock, and `func_physbox` and `func_illusionary` through bakes and exports |
+| `bake-tangents` | whether every bake path gives its meshes tangents that follow the UVs |
+| `texture-folder` | what Add Texture Folder makes of the names texture packs really use |
+| `occluder-movers` | whether Generate occluders makes occluders of doors, physboxes and illusionary brushes |
+| `illusionary-checks` | what the spawn check makes of a `func_illusionary` brush, which bakes no collision |
+| `snap-hidden` | whether a snap lands on a corner of a brush the mapper has hidden |
+| `move-to-floor` | where Move to Floor puts a brush's bottom against the surface under it |
+| `turned-checks` | what Check Bake Issues says about a cut in a turned wall |
+| `pending-cut-siblings` | whether Duplicate, Mirror Copy, arrays, Shear, Flip, Hull and Inset keep a pending cut pending |
+| `paint-layers-edit` | paint layers renamed, added, removed and resized under painted floors, connectors and undo |
+| `terrain-sculpt` | heightmap terrain across the origin, sculpts at chunk edges and off the 0 to 1 range |
+| `paint-scene-save` | what a level's `.tscn` keeps of its floor paint, streamed or not, and the save after a reopen |
 
 ## Adding a scenario
 
@@ -354,6 +385,23 @@ flag written before the data it should cover existed (the change tracker against
 a door's properties and tie, `tag_paint_dirty()` with no caller), and Validate or
 the navmesh measured against what the game actually has rather than what the
 editor shows (a body walking the stairs, a door in the navmesh, a prop out of it).
+
+The 27 October sweep added the rows from `sweep-faces` down, most of them on
+features less than a week old, and filed #1960 to #2009 and #2011 to #2015.
+`bake-tangents` and
+`pending-cut-siblings` are its clean ones: every bake path, the CSG and chunked
+ones included, gives tangents that follow the UVs, and every operation beside
+Clip, Hollow and Merge keeps a pending cut pending. Its findings took the same
+shapes as before, and one more. A rule taught to one sibling and not the next
+was most of them: `vertex_near_screen()` skips hidden brushes and the snap
+beside it does not, Invert skips them and Select All does not, a Pull respects a
+lock and Discard Changes does not, the spawn check skips triggers and not
+`func_illusionary`. The new shape is Texture Lock: it rewrites a face's UV
+offset and rotation on every nudge and turn, so anything that compares stored
+UV values to find hand work (Compare, a structure's as built test) reads a move
+as an edit. Several scenarios here build the real plugin through
+`tests/support/plugin_rig.gd`, which reaches the selection commands, the
+palette and Adjust Last that a bare `LevelRoot` cannot.
 
 `undo-collation` and `snapping` are the older two. The undo helper's
 collation window lives in `static var`s, which looked like it would carry one
@@ -514,3 +562,16 @@ Every one of these has cost a wasted run.
   behind a stack of fixes. `git diff main...origin/<branch>` over the file you
   are looking at is the check; several confirmed reproductions on `main` were
   already fixed on an unmerged branch.
+- **The load test reads `root.` across line breaks.** It joins gdformat's
+  wrapped calls, so a comment ending in "a fresh root." above a line starting
+  `root.save_hflevel(` reads as `root.root.save_hflevel()` and fails the build.
+  End such a comment with another word.
+- **A real line break inside a string literal parses in Godot and fails
+  gdlint.** A script written through a shell heredoc can turn `"\n"` into one,
+  even in a quoted heredoc, and the scenario still runs clean. Write anything
+  with a backslash through a file editor, and run CI's `gdlint tools/` before
+  pushing.
+- **Texture Lock rewrites a face's UV offset and rotation on every nudge and
+  turn.** A check that compares stored UV values reads a move as a texture
+  edit. Turn `texture_lock` off, or compare what the face shows, when the
+  question is not about Texture Lock.

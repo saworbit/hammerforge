@@ -10,6 +10,19 @@ const HFMcpCommands = preload("res://addons/hammerforge/mcp/hf_mcp_commands.gd")
 const HFMcpTools = preload("res://addons/hammerforge/mcp/hf_mcp_tools.gd")
 const HFGeneratorSystem = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
 
+const ALIASES := "user://test_command_line_aliases.txt"
+
+
+func before_each():
+	# The project's own aliases file is the user's; tests read one of their own.
+	HFCommandLine.aliases_path = ALIASES
+
+
+func after_each():
+	HFCommandLine.aliases_path = preload("res://addons/hammerforge/hf_command_aliases.gd").USER_FILE
+	if FileAccess.file_exists(ALIASES):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(ALIASES))
+
 
 func test_a_value_goes_in_by_place_or_by_name():
 	for line in ["hollow 0.125", "hollow thickness=0.125", "Hollow   0.125", "shell 0.125"]:
@@ -24,6 +37,32 @@ func test_a_command_is_named_by_its_id_its_label_or_an_alias_of_several_words():
 		var read := HFCommandLine.read(line)
 		assert_eq(read.get("id"), "move_to_floor", line)
 		assert_eq(read.get("params"), {}, "%s has no values" % line)
+
+
+## A script pasted from elsewhere often parts its words with tabs (#2015).
+func test_a_tab_parts_words_as_a_space_does():
+	assert_eq(HFCommandLine.words("hollow\t0.125"), PackedStringArray(["hollow", "0.125"]))
+	var read := HFCommandLine.read("hollow\t0.125")
+	assert_true(read["ok"], "a line with a tab reads")
+	assert_eq(read.get("params"), {"thickness": 0.125}, "and gives the thickness")
+
+
+## The line tried six words at most, and one label has seven (#2015).
+func test_a_label_of_seven_words_names_its_command():
+	var read := HFCommandLine.read("Point Filter: X and Z from Here")
+	assert_eq(read.get("id"), "take_xz_for_next_pick", "the whole label names the command")
+
+
+## The palette reads the project's aliases file, and a word in it is taken from
+## the command the registry gave it to. The line knew only the registry's (#1991).
+func test_the_project_aliases_name_commands_on_the_line():
+	var file := FileAccess.open(ALIASES, FileAccess.WRITE)
+	file.store_string("shell2 = hollow\nslice = hollow\n")
+	file.close()
+	var read := HFCommandLine.read("shell2 0.125")
+	assert_eq(read.get("id"), "hollow", "a word only the file has")
+	assert_eq(read.get("params"), {"thickness": 0.125}, "with its value")
+	assert_eq(HFCommandLine.read("slice").get("id"), "hollow", "a word the file takes from Clip")
 
 
 func test_values_by_name_and_place_mix_and_keep_their_shapes():

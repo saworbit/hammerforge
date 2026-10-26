@@ -13,11 +13,26 @@ extends GutTest
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 
 const PATH := "user://test_floor_paint_scene_save.tscn"
+## The `.hflevel` a streamed level saves its regions beside.
+const LEVEL := "user://test_floor_paint_scene_save_streamed.hflevel"
+## Region (0, 0) and region (2, 2) at 64 cells a region: far enough apart that
+## only one is loaded at a time.
+const NEAR := Vector2i(1, 1)
+const FAR := Vector2i(150, 150)
 
 
 func after_each():
 	if FileAccess.file_exists(PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(PATH))
+	var dir := ProjectSettings.globalize_path(LEVEL.get_basename() + ".hfregions")
+	if DirAccess.dir_exists_absolute(dir):
+		for file_name in DirAccess.get_files_at(dir):
+			DirAccess.remove_absolute(dir.path_join(file_name))
+		DirAccess.remove_absolute(dir)
+	var level_file := ProjectSettings.globalize_path(LEVEL)
+	for path in [level_file, level_file + ".previous"]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
 
 
 func _fresh_root() -> LevelRoot:
@@ -138,6 +153,88 @@ func test_a_streamed_level_carries_its_region_index_rather_than_its_cells():
 	assert_true(paint.has("terrain_regions"), "the region index")
 	for entry in paint.get("paint_layers", []):
 		assert_eq((entry["chunks"] as Array).size(), 0, "and no cells")
+
+
+## A streamed level painted near and far and saved, with FAR's region streamed
+## out, so its paint is in its file and nowhere else.
+func _streamed_and_saved() -> LevelRoot:
+	var root := _fresh_root()
+	root.hflevel_compress = false
+	var sys := root.paint_system
+	sys.region_streaming_enabled = true
+	sys.set_region_size_cells(64)
+	sys.region_manager.streaming_radius = 0
+	sys._sync_region_manager()
+	sys.set_region_base_path(LEVEL)
+	for at in [NEAR, FAR]:
+		_layer(root, 0).set_cell(at, true)
+		sys.region_manager.mark_loaded(sys.region_manager.region_id_from_cell(at))
+	assert_true(sys._unload_region(sys.region_manager.region_id_from_cell(FAR)), "FAR streams out")
+	assert_eq(root.save_hflevel(LEVEL, true), OK, "the level saves")
+	await _drain_save(root)
+	return root
+
+
+func _drain_save(level: LevelRoot) -> void:
+	var files = level.file_system
+	for _i in 400:
+		if files._hflevel_thread and files._hflevel_thread.is_alive():
+			await get_tree().process_frame
+			continue
+		files.process_thread_queue()
+		if not files._hflevel_thread and files._hflevel_pending.is_empty():
+			return
+
+
+func _far_file(root: LevelRoot) -> String:
+	var region: Vector2i = root.paint_system.region_manager.region_id_from_cell(FAR)
+	var dir := ProjectSettings.globalize_path(LEVEL.get_basename() + ".hfregions")
+	return dir.path_join("region_%d_%d.hfr" % [region.x, region.y])
+
+
+## The scene knows the level file its region files sit beside, so a reopened
+## scene streams its paint back in. It had no folder and streamed in nothing
+## (#2006).
+func test_a_reopened_streamed_scene_streams_its_paint_back_in():
+	var root := await _streamed_and_saved()
+	var copy := _save_and_reopen(root)
+	var sys := copy.paint_system
+	assert_eq(
+		sys.region_manager.region_base_path,
+		root.paint_system.region_manager.region_base_path,
+		"the reopened scene finds the region folder"
+	)
+	assert_true(_layer(copy, 0).get_cell(NEAR), "the near paint is there")
+	sys._ensure_regions_for_cell(FAR)
+	assert_true(_layer(copy, 0).get_cell(FAR), "and the far region streams back in")
+	var index: Dictionary = sys.capture_region_index()
+	assert_eq((index["regions"] as Array).size(), 2, "the index still names both regions")
+
+
+## The save after a reopen wrote over the level's own region folder with nothing
+## and cleared it (#2006).
+func test_a_save_after_reopening_keeps_the_region_files():
+	var root := await _streamed_and_saved()
+	var copy := _save_and_reopen(root)
+	assert_eq(copy.save_hflevel(LEVEL, true), OK, "the reopened level saves")
+	await _drain_save(copy)
+	assert_true(FileAccess.file_exists(_far_file(copy)), "FAR's region file is still there")
+	var loaded := _fresh_root()
+	assert_true(loaded.load_hflevel(LEVEL), "the level loads")
+	loaded.paint_system._ensure_regions_for_cell(FAR)
+	assert_true(_layer(loaded, 0).get_cell(FAR), "with its far paint")
+
+
+## A level that names regions it has not loaded, and has lost the folder they are
+## in, as a scene from before #2006 reopens, refuses the save rather than
+## clearing the folder it was given.
+func test_a_level_that_lost_its_region_folder_refuses_to_clear_one():
+	var root := await _streamed_and_saved()
+	root.paint_system.region_manager.region_base_path = ""
+	assert_eq(
+		root.paint_system.carry_region_files_to(LEVEL), ERR_FILE_NOT_FOUND, "the carry refuses"
+	)
+	assert_true(FileAccess.file_exists(_far_file(root)), "FAR's region file is still there")
 
 
 ## A scene that keeps only its bake loads the `.hflevel` instead (#645).

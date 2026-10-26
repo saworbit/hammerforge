@@ -1207,6 +1207,14 @@ func set_region_base_path(hflevel_path: String) -> void:
 	region_manager.region_base_path = abs_path
 
 
+## The level file the region files sit beside, as a project path when it is in
+## the project, or "" before the level is saved or loaded. What a scene keeps so
+## it can find them again when it is reopened (#2006).
+func region_level_file() -> String:
+	var base: String = region_manager.region_base_path
+	return ProjectSettings.localize_path(base) if base != "" else ""
+
+
 func _region_dir_for_base_path(base_path: String) -> String:
 	var dir = base_path.get_base_dir()
 	var name = base_path.get_file().get_basename()
@@ -1435,8 +1443,13 @@ func carry_region_files_to(hflevel_path: String) -> int:
 	if target.begins_with("res://") or target.begins_with("user://"):
 		target = ProjectSettings.globalize_path(target)
 	var to_dir := _region_dir_for_base_path(target)
-	# A level never saved has no region files anywhere.
 	if region_manager.region_base_path == "":
+		# A level that names regions it has not loaded keeps their paint in files
+		# whose folder it has lost, and the target may be that folder. The save is
+		# refused rather than clearing it (#2006).
+		if _has_regions_elsewhere():
+			return ERR_FILE_NOT_FOUND
+		# A level never saved has no region files anywhere.
 		return _clear_region_files(to_dir, {})
 	var from_dir := _region_dir_for_base_path(region_manager.region_base_path)
 	if from_dir == to_dir:
@@ -1465,6 +1478,15 @@ func carry_region_files_to(hflevel_path: String) -> int:
 			return copied
 		carried[file_name] = true
 	return _clear_region_files(to_dir, carried)
+
+
+## Whether the region index names a region that is not loaded: one whose paint is
+## only in its file.
+func _has_regions_elsewhere() -> bool:
+	for region_id in region_manager.region_index.keys():
+		if not region_manager.loaded_regions.has(region_id):
+			return true
+	return false
 
 
 ## Remove every region file in `dir` but those named in `kept`. OK, or the error

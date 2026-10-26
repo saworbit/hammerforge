@@ -937,16 +937,49 @@ func _apply_terrain_brush(layer: HFPaintLayer, center_cell: Vector2i) -> void:
 					new_val = lerp(current, avg, weight * 0.5)
 				HFStroke.Tool.SCULPT_FLATTEN:
 					new_val = lerp(current, _sculpt_flatten_height, weight * 0.5)
-			new_val = clamp(new_val, 0.0, 1.0)
+			# A sample in 0..1 stays there, as it always has. One outside it, from
+			# an import in metres or Convert to Heightmap, is not pulled back:
+			# Raise took ground at 2.0 down to 1.0 (#2008).
+			new_val = clampf(
+				new_val, 0.0 if current >= 0.0 else -INF, 1.0 if current <= 1.0 else INF
+			)
 			if new_val != current:
 				img.set_pixel(px, py, Color(new_val, new_val, new_val))
-	# Mark chunks dirty for the affected area
+	# Mark chunks dirty for the affected area. A sample is also the far corner of
+	# the cell before it, which can be in the chunk before, so the range starts a
+	# cell early; it ended on the old height until a full rebuild (#2014).
 	if layer.grid:
 		var chunk_size = layer.chunk_size
-		var min_cx = int(floor(float(center_cell.x - r) / float(chunk_size)))
-		var max_cx = int(floor(float(center_cell.x + r) / float(chunk_size)))
-		var min_cy = int(floor(float(center_cell.y - r) / float(chunk_size)))
-		var max_cy = int(floor(float(center_cell.y + r) / float(chunk_size)))
+		var lo := Vector2i(center_cell.x - r - 1, center_cell.y - r - 1)
+		var hi := Vector2i(center_cell.x + r, center_cell.y + r)
+		var min_cx = int(floor(float(lo.x) / float(chunk_size)))
+		var max_cx = int(floor(float(hi.x) / float(chunk_size)))
+		var min_cy = int(floor(float(lo.y) / float(chunk_size)))
+		var max_cy = int(floor(float(hi.y) / float(chunk_size)))
 		for cy in range(min_cy, max_cy + 1):
 			for cx in range(min_cx, max_cx + 1):
 				layer._dirty_chunks[Vector2i(cx, cy)] = true
+		# The heightmap repeats every width, so the samples changed here are also
+		# under every painted chunk a whole number of widths away, which kept the
+		# old heights until a rebuild (#2007).
+		for cid in layer.get_chunk_ids():
+			var c0 := Vector2i(cid.x * chunk_size, cid.y * chunk_size)
+			var c1 := c0 + Vector2i(chunk_size - 1, chunk_size - 1)
+			if (
+				_overlaps_wrapped(c0.x, c1.x, lo.x, hi.x, w)
+				and _overlaps_wrapped(c0.y, c1.y, lo.y, hi.y, h)
+			):
+				layer._dirty_chunks[cid] = true
+
+
+## Whether the span `a0..a1` meets `b0..b1` shifted by any whole number of
+## `period`s.
+static func _overlaps_wrapped(a0: int, a1: int, b0: int, b1: int, period: int) -> bool:
+	if period <= 0:
+		return a0 <= b1 and b0 <= a1
+	var first := floori(float(a0 - b1) / float(period))
+	var last := floori(float(a1 - b0) / float(period))
+	for k in range(first, last + 1):
+		if a0 <= b1 + k * period and b0 + k * period <= a1:
+			return true
+	return false
