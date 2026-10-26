@@ -1,0 +1,1 @@
+- An arc of a half turn or more, or of a negative angle, sweeps as far as its Angle says. (issue [#1968](https://github.com/saworbit/hammerforge/issues/1968))

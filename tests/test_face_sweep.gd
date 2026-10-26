@@ -144,6 +144,106 @@ func test_four_turns_of_a_quarter_arc_close_a_loop():
 	await rig.leave_level(level)
 
 
+static func _volume_of(pieces: Array) -> float:
+	var total := 0.0
+	for piece in pieces:
+		total += HFSolidMeasure.volume(piece["faces"])
+	return total
+
+
+## An arc turns as far as its Angle says, on past a half turn, as the field and
+## the end handle allow. The turn was read back off the two end frames, never more
+## than a half turn, so 270 ran the other way, 360 was no turn at all, and every
+## piece read as folding back (#1968).
+func test_an_arc_of_a_half_turn_or_more_turns_that_far():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _picked_face()
+	var level = made[0]
+	var cut := HFPluginFaceSweep.section(level)
+	var placement: Transform3D = cut["placement"]
+	for angle in [180.0, 270.0, 360.0]:
+		var values := _values(
+			{"path": HFFaceSweep.Path.ARC, "angle": angle, "radius": 4.0, "segments": 16}
+		)
+		var plan := HFPluginFaceSweep.plan(cut, values)
+		assert_eq(int(plan["folded"]), 0, "%d degrees builds" % angle)
+		var pieces: Array = plan["pieces"]
+		assert_eq(pieces.size(), 16)
+		# An arc of n pieces of a 1 x 1 section at radius r holds n sin(angle / n) r.
+		assert_almost_eq(
+			_volume_of(pieces),
+			16.0 * sin(deg_to_rad(angle) / 16.0) * 4.0,
+			0.001,
+			"%d degrees holds the volume of its path" % angle
+		)
+		var frames: Array = plan["frames"]
+		var halfway: Transform3D = frames[8]
+		var turn := Basis(
+			placement.basis * HFSweepBuilder.axis_of(HFPluginFaceSweep.settings_of(values)),
+			deg_to_rad(angle * 0.5)
+		)
+		assert_true(
+			halfway.basis.z.is_equal_approx(turn * placement.basis.z),
+			"%d degrees is turned half of it halfway" % angle
+		)
+		assert_almost_eq(
+			(frames[16] as Transform3D).origin,
+			placement * HFSweepBuilder.end_of(HFPluginFaceSweep.settings_of(values)),
+			Vector3.ONE * 0.001,
+			"%d degrees ends where the end handle shows it" % angle
+		)
+		if angle == 360.0:
+			assert_true(
+				_share_a_face(pieces[15]["faces"], pieces[0]["faces"]),
+				"a whole turn closes, the last piece meeting the first"
+			)
+	await rig.leave_level(level)
+
+
+## A negative Angle turns the other way round the pivot, back through the faces:
+## the mirror of the same angle forward, across the faces' plane. Every piece of
+## it read as folding back (#1968).
+func test_an_arc_of_a_negative_angle_is_the_mirror_of_the_positive_one():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _picked_face()
+	var level = made[0]
+	var cut := HFPluginFaceSweep.section(level)
+	var faces := Plane(
+		(cut["placement"] as Transform3D).basis.z.normalized(),
+		(cut["placement"] as Transform3D).origin
+	)
+	var forward := HFPluginFaceSweep.plan(
+		cut, _values({"path": HFFaceSweep.Path.ARC, "angle": 90.0, "radius": 4.0})
+	)
+	var back := HFPluginFaceSweep.plan(
+		cut, _values({"path": HFFaceSweep.Path.ARC, "angle": -90.0, "radius": 4.0})
+	)
+	assert_eq(int(back["folded"]), 0, "-90 builds")
+	assert_eq((back["pieces"] as Array).size(), 8)
+	assert_almost_eq(_volume_of(back["pieces"]), _volume_of(forward["pieces"]), 0.001)
+	for k in (forward["frames"] as Array).size():
+		var ahead: Vector3 = (forward["frames"][k] as Transform3D).origin
+		var mirrored := ahead - faces.normal * faces.distance_to(ahead) * 2.0
+		assert_almost_eq(
+			(back["frames"][k] as Transform3D).origin,
+			mirrored,
+			Vector3.ONE * 0.001,
+			"cut %d is the forward cut's mirror" % k
+		)
+	for i in (back["pieces"] as Array).size():
+		var piece_faces: Array = back["pieces"][i]["faces"]
+		assert_true(HFSolidMeasure.is_convex(piece_faces), "piece %d is convex" % i)
+		if i > 0:
+			assert_true(
+				_share_a_face(back["pieces"][i - 1]["faces"], piece_faces), "joined at %d" % i
+			)
+	await rig.leave_level(level)
+
+
 func test_a_bend_too_tight_for_the_face_folds_and_makes_nothing():
 	if rig.plugin == null:
 		fail_test(rig.error())
