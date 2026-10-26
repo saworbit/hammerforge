@@ -534,6 +534,30 @@ func confirmed_keys() -> Dictionary:
 	return keys
 
 
+## Take the paint layer that was at `index` out of the connectors, once the
+## layer list has lost it. A connector names its two layers by their place in
+## that list, so one past the removed layer kept a number that now names the next
+## layer or none, and built the wrong pair or nothing (#2009). A connector that
+## joined the removed layer goes with it. The last stroke's ghosts are dropped,
+## as Enter would confirm them with the old numbers. How many confirmed went.
+func forget_layer(index: int) -> int:
+	_pending_connector_defs.clear()
+	var kept: Array = []
+	var dropped := 0
+	for definition in connector_defs:
+		if definition is HFConnectorTool.ConnectorDef:
+			if definition.from_layer_index == index or definition.to_layer_index == index:
+				dropped += 1
+				continue
+			if definition.from_layer_index > index:
+				definition.from_layer_index -= 1
+			if definition.to_layer_index > index:
+				definition.to_layer_index -= 1
+		kept.append(definition)
+	connector_defs = kept
+	return dropped
+
+
 func get_pending_connector_meshes() -> Array:
 	if _pending_connector_defs.is_empty() or not layer_manager:
 		return []

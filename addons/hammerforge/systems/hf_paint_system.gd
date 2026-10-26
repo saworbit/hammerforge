@@ -704,7 +704,19 @@ func remove_active_paint_layer() -> void:
 	if root.paint_layers.layers.size() <= 1:
 		return
 	var idx = root.paint_layers.active_layer_index
+	var layer: HFPaintLayer = paint_layer_at(idx)
+	var shown := paint_layer_name(layer) if layer else ""
 	root.paint_layers.remove_layer(idx)
+	# The confirmed connectors name layers by their place in the list (#2009).
+	var dropped: int = root.paint_tool.forget_layer(idx) if root.paint_tool else 0
+	if dropped > 0:
+		root.user_message.emit(
+			(
+				'Paint layer "%s" took %d confirmed connector%s with it'
+				% [shown, dropped, "" if dropped == 1 else "s"]
+			),
+			1
+		)
 	regenerate_paint_layers()
 
 
