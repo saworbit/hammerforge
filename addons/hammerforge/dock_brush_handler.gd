@@ -823,16 +823,22 @@ static func _array_to_dock(settings: Dictionary, dock: Object, id: String) -> vo
 		"count_y": dock.dup_grid_y,
 		"count_z": dock.dup_grid_z,
 	}
+	# Set as `_load_array_settings()` sets them, without a change signal: these are
+	# the array in the level, not a new one to preview.
 	for key in spins:
 		if settings.has(key) and spins[key]:
-			(spins[key] as SpinBox).value = float(settings[key])
+			(spins[key] as SpinBox).set_value_no_signal(float(settings[key]))
 	var along: Variant = settings.get("offset", settings.get("spacing"))
 	if along is Vector3 and dock.dup_offset_x:
-		dock.dup_offset_x.value = (along as Vector3).x
-		dock.dup_offset_y.value = (along as Vector3).y
-		dock.dup_offset_z.value = (along as Vector3).z
+		dock.dup_offset_x.set_value_no_signal((along as Vector3).x)
+		dock.dup_offset_y.set_value_no_signal((along as Vector3).y)
+		dock.dup_offset_z.set_value_no_signal((along as Vector3).z)
 	if id == "radial_array" and settings.has("axis") and dock.dup_axis_opt:
 		dock.dup_axis_opt.selected = maxi(0, AXES.find(str(settings["axis"])))
+	# The ring has the step it was given. Fill 360 works out a step of its own and
+	# would throw that away on the next press (#1931).
+	if id == "radial_array" and settings.has("step") and dock.dup_fill_check:
+		dock.dup_fill_check.set_pressed_no_signal(false)
 
 
 ## Draw a ghost of the copies the button would make, before it makes them.

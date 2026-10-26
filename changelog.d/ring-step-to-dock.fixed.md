@@ -1,0 +1,1 @@
+- A ring's step changed in Adjust Last reaches the dock with Fill 360 off, so the next ring has that step. (issue [#1931](https://github.com/saworbit/hammerforge/issues/1931))
