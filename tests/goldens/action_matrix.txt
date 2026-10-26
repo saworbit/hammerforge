@@ -1,14 +1,14 @@
 # What each action does to each brush and face of the levels in tests/levels (#1648).
 # Bare passes, ~ is refused with a reason, ! fails. Written by HF_MATRIX_BLESS=1;
 # see tests/support/action_matrix_case.gd.
-0.3.2/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -11.0,0.1,6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,0.1,6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,0.1,6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
@@ -43,7 +43,7 @@
 0.3.2/brush:box -11.0,3.5,-5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,3.5,-5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,3.5,-5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -11.0,3.5,0.0 13.5x0.3x0.4/face:+x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,3.5,0.0 13.5x0.3x0.4/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,3.5,0.0 13.5x0.3x0.4/face:+z: extrude clip_to_face material wrap_texture justify
@@ -64,7 +64,7 @@
 0.3.2/brush:box -11.0,3.5,5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,3.5,5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,3.5,5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -11.0,3.9,0.0 13.5x0.2x14.0/face:+x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,3.9,0.0 13.5x0.2x14.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.0,3.9,0.0 13.5x0.2x14.0/face:+z: extrude ~clip_to_face material wrap_texture justify
@@ -78,14 +78,14 @@
 0.3.2/brush:box -11.1,0.1,0.0 13.2x0.2x14.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.1,0.1,0.0 13.2x0.2x14.0/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -11.1,0.1,0.0 13.2x0.2x14.0/face:-z: extrude ~clip_to_face material wrap_texture justify
-0.3.2/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -134,28 +134,28 @@
 0.3.2/brush:box -15.0,1.9,-2.0 3.0x0.2x0.5/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,1.9,-2.0 3.0x0.2x0.5/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,1.9,-2.0 3.0x0.2x0.5/face:-z: extrude ~clip_to_face material wrap_texture justify
-0.3.2/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:+x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:+z: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -16.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -169,49 +169,49 @@
 0.3.2/brush:box -16.0,0.5,3.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.5,3.0 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,0.5,3.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -16.0,1.7,0.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -16.0,1.7,0.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -17.7,0.1,0.0 0.1x0.2x13.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -17.7,0.1,0.0 0.1x0.2x13.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -17.7,0.1,0.0 0.1x0.2x13.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -225,7 +225,7 @@
 0.3.2/brush:box -17.9,2.0,0.0 0.2x4.0x14.0/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -17.9,2.0,0.0 0.2x4.0x14.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -17.9,2.0,0.0 0.2x4.0x14.0/face:-z: extrude ~clip_to_face material wrap_texture justify
-0.3.2/brush:box -3.0,1.1,0.0 2.0x2.2x1.7: hollow clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -3.0,1.1,0.0 2.0x2.2x1.7: hollow clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -3.0,1.1,0.0 2.0x2.2x1.7/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.0,1.1,0.0 2.0x2.2x1.7/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.0,1.1,0.0 2.0x2.2x1.7/face:+z: extrude clip_to_face material wrap_texture justify
@@ -239,14 +239,14 @@
 0.3.2/brush:box -3.7,-0.1,0.0 0.5x0.1x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,-0.1,0.0 0.5x0.1x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,-0.1,0.0 0.5x0.1x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -3.7,0.1,1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,0.1,1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,0.1,1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
@@ -267,14 +267,14 @@
 0.3.2/brush:box -3.7,2.4,1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,2.4,1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,2.4,1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -4.0,1.2,0.0 0.2x2.4x1.9: ~hollow clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -4.0,1.2,0.0 0.2x2.4x1.9: ~hollow clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -4.0,1.2,0.0 0.2x2.4x1.9/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -4.0,1.2,0.0 0.2x2.4x1.9/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -4.0,1.2,0.0 0.2x2.4x1.9/face:+z: extrude clip_to_face material wrap_texture justify
@@ -295,7 +295,7 @@
 0.3.2/brush:box -4.0,1.3,1.1 0.3x2.8x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -4.0,1.3,1.1 0.3x2.8x0.2/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -4.0,1.3,1.1 0.3x2.8x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -4.0,2.6,0.0 0.3x0.2x2.3/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -4.0,2.6,0.0 0.3x0.2x2.3/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -4.0,2.6,0.0 0.3x0.2x2.3/face:+z: extrude clip_to_face material wrap_texture justify
@@ -344,63 +344,63 @@
 0.3.2/brush:box -4.4,0.1,4.0 0.2x0.2x6.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -4.4,0.1,4.0 0.2x0.2x6.0/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -4.4,0.1,4.0 0.2x0.2x6.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -6.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -6.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -421,7 +421,7 @@
 0.3.2/brush:box -7.0,0.5,4.8 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -7.0,0.5,4.8 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -7.0,0.5,4.8 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box -7.0,1.1,2.0 0.3x0.3x0.3: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box -7.0,1.1,2.0 0.3x0.3x0.3: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box -7.0,1.1,2.0 0.3x0.3x0.3/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box -7.0,1.1,2.0 0.3x0.3x0.3/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box -7.0,1.1,2.0 0.3x0.3x0.3/face:+z: extrude clip_to_face material wrap_texture justify
@@ -456,35 +456,35 @@
 0.3.2/brush:box 0.0,0.5,0.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,0.5,0.0 1.0x1.0x1.0/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,0.5,0.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 0.0,1.2,1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 0.0,1.2,1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 0.0,2.5,0.0 7.0x0.2x2.5: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 0.0,2.5,0.0 7.0x0.2x2.5: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:+z: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:-z: extrude ~clip_to_face material wrap_texture justify
-0.3.2/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 11.0,0.1,6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,0.1,6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,0.1,6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
@@ -519,7 +519,7 @@
 0.3.2/brush:box 11.0,3.5,-5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,3.5,-5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,3.5,-5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 11.0,3.5,0.0 13.5x0.3x0.4/face:+x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,3.5,0.0 13.5x0.3x0.4/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,3.5,0.0 13.5x0.3x0.4/face:+z: extrude clip_to_face material wrap_texture justify
@@ -540,7 +540,7 @@
 0.3.2/brush:box 11.0,3.5,5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,3.5,5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,3.5,5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 11.0,3.9,0.0 13.5x0.2x14.0/face:+x: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,3.9,0.0 13.5x0.2x14.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 11.0,3.9,0.0 13.5x0.2x14.0/face:+z: extrude ~clip_to_face material wrap_texture justify
@@ -561,63 +561,63 @@
 0.3.2/brush:box 15.5,0.5,5.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 15.5,0.5,5.0 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 15.5,0.5,5.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 16.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 16.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 16.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -631,7 +631,7 @@
 0.3.2/brush:box 16.3,0.5,5.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.3,0.5,5.0 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 16.3,0.5,5.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 17.7,0.1,0.0 0.1x0.2x13.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 17.7,0.1,0.0 0.1x0.2x13.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 17.7,0.1,0.0 0.1x0.2x13.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -652,14 +652,14 @@
 0.3.2/brush:box 3.7,-0.1,0.0 0.5x0.1x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,-0.1,0.0 0.5x0.1x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,-0.1,0.0 0.5x0.1x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 3.7,0.1,1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,0.1,1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,0.1,1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
@@ -680,7 +680,7 @@
 0.3.2/brush:box 3.7,2.4,1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,2.4,1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,2.4,1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 3.7,2.6,0.0 0.5x0.1x2.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,2.6,0.0 0.5x0.1x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 3.7,2.6,0.0 0.5x0.1x2.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -701,7 +701,7 @@
 0.3.2/brush:box 4.0,1.3,1.1 0.3x2.8x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 4.0,1.3,1.1 0.3x2.8x0.2/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 4.0,1.3,1.1 0.3x2.8x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 4.0,2.6,0.0 0.3x0.2x2.3/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 4.0,2.6,0.0 0.3x0.2x2.3/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 4.0,2.6,0.0 0.3x0.2x2.3/face:+z: extrude clip_to_face material wrap_texture justify
@@ -750,63 +750,63 @@
 0.3.2/brush:box 4.4,0.1,4.0 0.2x0.2x6.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 4.4,0.1,4.0 0.2x0.2x6.0/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 4.4,0.1,4.0 0.2x0.2x6.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.3.2/brush:box 6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.3.2/brush:box 6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.3.2/brush:box 6.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 6.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -834,14 +834,14 @@
 0.3.2/brush:box 8.0,0.5,-4.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.3.2/brush:box 8.0,0.5,-4.0 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.3.2/brush:box 8.0,0.5,-4.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -11.0,0.1,6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,0.1,6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,0.1,6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
@@ -876,7 +876,7 @@
 0.4.0/brush:box -11.0,3.5,-5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,3.5,-5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,3.5,-5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -11.0,3.5,0.0 13.5x0.3x0.4/face:+x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,3.5,0.0 13.5x0.3x0.4/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,3.5,0.0 13.5x0.3x0.4/face:+z: extrude clip_to_face material wrap_texture justify
@@ -897,7 +897,7 @@
 0.4.0/brush:box -11.0,3.5,5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,3.5,5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,3.5,5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -11.0,3.9,0.0 13.5x0.2x14.0/face:+x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,3.9,0.0 13.5x0.2x14.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.0,3.9,0.0 13.5x0.2x14.0/face:+z: extrude ~clip_to_face material wrap_texture justify
@@ -911,14 +911,14 @@
 0.4.0/brush:box -11.1,0.1,0.0 13.2x0.2x14.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.1,0.1,0.0 13.2x0.2x14.0/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -11.1,0.1,0.0 13.2x0.2x14.0/face:-z: extrude ~clip_to_face material wrap_texture justify
-0.4.0/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -967,28 +967,28 @@
 0.4.0/brush:box -15.0,1.9,-2.0 3.0x0.2x0.5/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,1.9,-2.0 3.0x0.2x0.5/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,1.9,-2.0 3.0x0.2x0.5/face:-z: extrude ~clip_to_face material wrap_texture justify
-0.4.0/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:+x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:+z: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -16.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1002,49 +1002,49 @@
 0.4.0/brush:box -16.0,0.5,3.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.5,3.0 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,0.5,3.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -16.0,1.7,0.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -16.0,1.7,0.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -17.7,0.1,0.0 0.1x0.2x13.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -17.7,0.1,0.0 0.1x0.2x13.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -17.7,0.1,0.0 0.1x0.2x13.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1058,7 +1058,7 @@
 0.4.0/brush:box -17.9,2.0,0.0 0.2x4.0x14.0/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -17.9,2.0,0.0 0.2x4.0x14.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -17.9,2.0,0.0 0.2x4.0x14.0/face:-z: extrude ~clip_to_face material wrap_texture justify
-0.4.0/brush:box -3.0,1.1,0.0 2.0x2.2x1.7: hollow clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -3.0,1.1,0.0 2.0x2.2x1.7: hollow clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -3.0,1.1,0.0 2.0x2.2x1.7/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.0,1.1,0.0 2.0x2.2x1.7/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.0,1.1,0.0 2.0x2.2x1.7/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1072,14 +1072,14 @@
 0.4.0/brush:box -3.7,-0.1,0.0 0.5x0.1x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,-0.1,0.0 0.5x0.1x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,-0.1,0.0 0.5x0.1x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -3.7,0.1,1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,0.1,1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,0.1,1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1100,14 +1100,14 @@
 0.4.0/brush:box -3.7,2.4,1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,2.4,1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,2.4,1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -4.0,1.2,0.0 0.2x2.4x1.9: ~hollow clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -4.0,1.2,0.0 0.2x2.4x1.9: ~hollow clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -4.0,1.2,0.0 0.2x2.4x1.9/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -4.0,1.2,0.0 0.2x2.4x1.9/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -4.0,1.2,0.0 0.2x2.4x1.9/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1128,7 +1128,7 @@
 0.4.0/brush:box -4.0,1.3,1.1 0.3x2.8x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -4.0,1.3,1.1 0.3x2.8x0.2/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -4.0,1.3,1.1 0.3x2.8x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -4.0,2.6,0.0 0.3x0.2x2.3/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -4.0,2.6,0.0 0.3x0.2x2.3/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -4.0,2.6,0.0 0.3x0.2x2.3/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1177,63 +1177,63 @@
 0.4.0/brush:box -4.4,0.1,4.0 0.2x0.2x6.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -4.4,0.1,4.0 0.2x0.2x6.0/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -4.4,0.1,4.0 0.2x0.2x6.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -6.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -6.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1254,7 +1254,7 @@
 0.4.0/brush:box -7.0,0.5,4.8 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -7.0,0.5,4.8 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -7.0,0.5,4.8 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box -7.0,1.1,2.0 0.3x0.3x0.3: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box -7.0,1.1,2.0 0.3x0.3x0.3: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box -7.0,1.1,2.0 0.3x0.3x0.3/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box -7.0,1.1,2.0 0.3x0.3x0.3/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box -7.0,1.1,2.0 0.3x0.3x0.3/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1289,35 +1289,35 @@
 0.4.0/brush:box 0.0,0.5,0.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,0.5,0.0 1.0x1.0x1.0/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,0.5,0.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 0.0,1.2,1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 0.0,1.2,1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 0.0,2.5,0.0 7.0x0.2x2.5: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 0.0,2.5,0.0 7.0x0.2x2.5: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:+z: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:-z: extrude ~clip_to_face material wrap_texture justify
-0.4.0/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 11.0,0.1,6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,0.1,6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,0.1,6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1352,7 +1352,7 @@
 0.4.0/brush:box 11.0,3.5,-5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,3.5,-5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,3.5,-5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 11.0,3.5,0.0 13.5x0.3x0.4/face:+x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,3.5,0.0 13.5x0.3x0.4/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,3.5,0.0 13.5x0.3x0.4/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1373,7 +1373,7 @@
 0.4.0/brush:box 11.0,3.5,5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,3.5,5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,3.5,5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 11.0,3.9,0.0 13.5x0.2x14.0/face:+x: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,3.9,0.0 13.5x0.2x14.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 11.0,3.9,0.0 13.5x0.2x14.0/face:+z: extrude ~clip_to_face material wrap_texture justify
@@ -1394,63 +1394,63 @@
 0.4.0/brush:box 15.5,0.5,5.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 15.5,0.5,5.0 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 15.5,0.5,5.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 16.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 16.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 16.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1464,7 +1464,7 @@
 0.4.0/brush:box 16.3,0.5,5.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.3,0.5,5.0 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 16.3,0.5,5.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 17.7,0.1,0.0 0.1x0.2x13.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 17.7,0.1,0.0 0.1x0.2x13.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 17.7,0.1,0.0 0.1x0.2x13.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1485,14 +1485,14 @@
 0.4.0/brush:box 3.7,-0.1,0.0 0.5x0.1x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,-0.1,0.0 0.5x0.1x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,-0.1,0.0 0.5x0.1x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 3.7,0.1,1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,0.1,1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,0.1,1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1513,7 +1513,7 @@
 0.4.0/brush:box 3.7,2.4,1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,2.4,1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,2.4,1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 3.7,2.6,0.0 0.5x0.1x2.5/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,2.6,0.0 0.5x0.1x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 3.7,2.6,0.0 0.5x0.1x2.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1534,7 +1534,7 @@
 0.4.0/brush:box 4.0,1.3,1.1 0.3x2.8x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 4.0,1.3,1.1 0.3x2.8x0.2/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 4.0,1.3,1.1 0.3x2.8x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 4.0,2.6,0.0 0.3x0.2x2.3/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 4.0,2.6,0.0 0.3x0.2x2.3/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 4.0,2.6,0.0 0.3x0.2x2.3/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1583,63 +1583,63 @@
 0.4.0/brush:box 4.4,0.1,4.0 0.2x0.2x6.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 4.4,0.1,4.0 0.2x0.2x6.0/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 4.4,0.1,4.0 0.2x0.2x6.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-0.4.0/brush:box 6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+0.4.0/brush:box 6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 0.4.0/brush:box 6.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 6.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1667,14 +1667,14 @@
 0.4.0/brush:box 8.0,0.5,-4.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 0.4.0/brush:box 8.0,0.5,-4.0 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 0.4.0/brush:box 8.0,0.5,-4.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,0.1,-6.7 13.5x0.2x0.1/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -11.0,0.1,6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,0.1,6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,0.1,6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1709,7 +1709,7 @@ reference_map/brush:box -11.0,3.5,-5.0 13.5x0.3x0.4/face:+z: extrude clip_to_fac
 reference_map/brush:box -11.0,3.5,-5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,3.5,-5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,3.5,-5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -11.0,3.5,0.0 13.5x0.3x0.4/face:+x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,3.5,0.0 13.5x0.3x0.4/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,3.5,0.0 13.5x0.3x0.4/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1730,7 +1730,7 @@ reference_map/brush:box -11.0,3.5,5.0 13.5x0.3x0.4/face:+z: extrude clip_to_face
 reference_map/brush:box -11.0,3.5,5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,3.5,5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,3.5,5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -11.0,3.9,0.0 13.5x0.2x14.0/face:+x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,3.9,0.0 13.5x0.2x14.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -11.0,3.9,0.0 13.5x0.2x14.0/face:+z: extrude ~clip_to_face material wrap_texture justify
@@ -1744,14 +1744,14 @@ reference_map/brush:box -11.1,0.1,0.0 13.2x0.2x14.0/face:+z: extrude ~clip_to_fa
 reference_map/brush:box -11.1,0.1,0.0 13.2x0.2x14.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -11.1,0.1,0.0 13.2x0.2x14.0/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -11.1,0.1,0.0 13.2x0.2x14.0/face:-z: extrude ~clip_to_face material wrap_texture justify
-reference_map/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,0.1,-5.5 3.0x0.2x0.5/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,0.4,-5.0 3.0x0.2x0.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1800,28 +1800,28 @@ reference_map/brush:box -15.0,1.9,-2.0 3.0x0.2x0.5/face:+z: extrude clip_to_face
 reference_map/brush:box -15.0,1.9,-2.0 3.0x0.2x0.5/face:-x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,1.9,-2.0 3.0x0.2x0.5/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,1.9,-2.0 3.0x0.2x0.5/face:-z: extrude ~clip_to_face material wrap_texture justify
-reference_map/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:+x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:+z: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:-x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -15.0,2.1,-0.7 3.0x0.2x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -16.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1835,49 +1835,49 @@ reference_map/brush:box -16.0,0.5,3.0 1.0x1.0x1.0/face:+z: extrude clip_to_face 
 reference_map/brush:box -16.0,0.5,3.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.5,3.0 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,0.5,3.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -16.0,1.7,0.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -16.0,1.7,0.0 0.6x3.0x0.6: hollow clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -16.0,3.4,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -17.7,0.1,0.0 0.1x0.2x13.5/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -17.7,0.1,0.0 0.1x0.2x13.5/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -17.7,0.1,0.0 0.1x0.2x13.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1891,7 +1891,7 @@ reference_map/brush:box -17.9,2.0,0.0 0.2x4.0x14.0/face:+z: extrude ~clip_to_fac
 reference_map/brush:box -17.9,2.0,0.0 0.2x4.0x14.0/face:-x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -17.9,2.0,0.0 0.2x4.0x14.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -17.9,2.0,0.0 0.2x4.0x14.0/face:-z: extrude ~clip_to_face material wrap_texture justify
-reference_map/brush:box -3.0,1.1,0.0 2.0x2.2x1.7: hollow clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -3.0,1.1,0.0 2.0x2.2x1.7: hollow clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -3.0,1.1,0.0 2.0x2.2x1.7/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.0,1.1,0.0 2.0x2.2x1.7/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.0,1.1,0.0 2.0x2.2x1.7/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1905,14 +1905,14 @@ reference_map/brush:box -3.7,-0.1,0.0 0.5x0.1x2.5/face:+z: extrude clip_to_face 
 reference_map/brush:box -3.7,-0.1,0.0 0.5x0.1x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,-0.1,0.0 0.5x0.1x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,-0.1,0.0 0.5x0.1x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,0.1,-1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -3.7,0.1,1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,0.1,1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,0.1,1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1933,14 +1933,14 @@ reference_map/brush:box -3.7,2.4,1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face m
 reference_map/brush:box -3.7,2.4,1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,2.4,1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,2.4,1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -3.7,2.6,0.0 0.5x0.1x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -4.0,1.2,0.0 0.2x2.4x1.9: ~hollow clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -4.0,1.2,0.0 0.2x2.4x1.9: ~hollow clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -4.0,1.2,0.0 0.2x2.4x1.9/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -4.0,1.2,0.0 0.2x2.4x1.9/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -4.0,1.2,0.0 0.2x2.4x1.9/face:+z: extrude clip_to_face material wrap_texture justify
@@ -1961,7 +1961,7 @@ reference_map/brush:box -4.0,1.3,1.1 0.3x2.8x0.2/face:+z: extrude clip_to_face m
 reference_map/brush:box -4.0,1.3,1.1 0.3x2.8x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -4.0,1.3,1.1 0.3x2.8x0.2/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -4.0,1.3,1.1 0.3x2.8x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -4.0,2.6,0.0 0.3x0.2x2.3/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -4.0,2.6,0.0 0.3x0.2x2.3/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -4.0,2.6,0.0 0.3x0.2x2.3/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2010,63 +2010,63 @@ reference_map/brush:box -4.4,0.1,4.0 0.2x0.2x6.0/face:+z: extrude ~clip_to_face 
 reference_map/brush:box -4.4,0.1,4.0 0.2x0.2x6.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -4.4,0.1,4.0 0.2x0.2x6.0/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -4.4,0.1,4.0 0.2x0.2x6.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,0.1,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -6.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -6.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2087,7 +2087,7 @@ reference_map/brush:box -7.0,0.5,4.8 1.0x1.0x1.0/face:+z: extrude clip_to_face m
 reference_map/brush:box -7.0,0.5,4.8 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -7.0,0.5,4.8 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -7.0,0.5,4.8 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box -7.0,1.1,2.0 0.3x0.3x0.3: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box -7.0,1.1,2.0 0.3x0.3x0.3: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box -7.0,1.1,2.0 0.3x0.3x0.3/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box -7.0,1.1,2.0 0.3x0.3x0.3/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box -7.0,1.1,2.0 0.3x0.3x0.3/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2122,35 +2122,35 @@ reference_map/brush:box 0.0,0.5,0.0 1.0x1.0x1.0/face:+z: extrude clip_to_face ma
 reference_map/brush:box 0.0,0.5,0.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,0.5,0.0 1.0x1.0x1.0/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,0.5,0.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,1.2,-1.1 8.0x2.5x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 0.0,1.2,1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 0.0,1.2,1.1 8.0x2.5x0.2: ~hollow clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,1.2,1.1 8.0x2.5x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 0.0,2.5,0.0 7.0x0.2x2.5: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 0.0,2.5,0.0 7.0x0.2x2.5: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:+z: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 0.0,2.5,0.0 7.0x0.2x2.5/face:-z: extrude ~clip_to_face material wrap_texture justify
-reference_map/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,0.1,-6.7 13.5x0.2x0.1/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 11.0,0.1,6.7 13.5x0.2x0.1: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 11.0,0.1,6.7 13.5x0.2x0.1/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,0.1,6.7 13.5x0.2x0.1/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,0.1,6.7 13.5x0.2x0.1/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2185,7 +2185,7 @@ reference_map/brush:box 11.0,3.5,-5.0 13.5x0.3x0.4/face:+z: extrude clip_to_face
 reference_map/brush:box 11.0,3.5,-5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,3.5,-5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,3.5,-5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 11.0,3.5,0.0 13.5x0.3x0.4: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 11.0,3.5,0.0 13.5x0.3x0.4/face:+x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,3.5,0.0 13.5x0.3x0.4/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,3.5,0.0 13.5x0.3x0.4/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2206,7 +2206,7 @@ reference_map/brush:box 11.0,3.5,5.0 13.5x0.3x0.4/face:+z: extrude clip_to_face 
 reference_map/brush:box 11.0,3.5,5.0 13.5x0.3x0.4/face:-x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,3.5,5.0 13.5x0.3x0.4/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,3.5,5.0 13.5x0.3x0.4/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 11.0,3.9,0.0 13.5x0.2x14.0: ~hollow ~clip ~carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 11.0,3.9,0.0 13.5x0.2x14.0/face:+x: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,3.9,0.0 13.5x0.2x14.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 11.0,3.9,0.0 13.5x0.2x14.0/face:+z: extrude ~clip_to_face material wrap_texture justify
@@ -2227,63 +2227,63 @@ reference_map/brush:box 15.5,0.5,5.0 1.0x1.0x1.0/face:+z: extrude clip_to_face m
 reference_map/brush:box 15.5,0.5,5.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 15.5,0.5,5.0 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 15.5,0.5,5.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 16.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 16.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,0.1,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 16.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 16.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 16.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 16.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 16.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 16.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2297,7 +2297,7 @@ reference_map/brush:box 16.3,0.5,5.0 1.0x1.0x1.0/face:+z: extrude clip_to_face m
 reference_map/brush:box 16.3,0.5,5.0 1.0x1.0x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 16.3,0.5,5.0 1.0x1.0x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 16.3,0.5,5.0 1.0x1.0x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 17.7,0.1,0.0 0.1x0.2x13.5: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 17.7,0.1,0.0 0.1x0.2x13.5/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 17.7,0.1,0.0 0.1x0.2x13.5/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 17.7,0.1,0.0 0.1x0.2x13.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2318,14 +2318,14 @@ reference_map/brush:box 3.7,-0.1,0.0 0.5x0.1x2.5/face:+z: extrude clip_to_face m
 reference_map/brush:box 3.7,-0.1,0.0 0.5x0.1x2.5/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,-0.1,0.0 0.5x0.1x2.5/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,-0.1,0.0 0.5x0.1x2.5/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,0.1,-1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 3.7,0.1,1.1 0.5x0.1x0.2: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 3.7,0.1,1.1 0.5x0.1x0.2/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,0.1,1.1 0.5x0.1x0.2/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,0.1,1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2346,7 +2346,7 @@ reference_map/brush:box 3.7,2.4,1.1 0.5x0.1x0.2/face:+z: extrude clip_to_face ma
 reference_map/brush:box 3.7,2.4,1.1 0.5x0.1x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,2.4,1.1 0.5x0.1x0.2/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,2.4,1.1 0.5x0.1x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 3.7,2.6,0.0 0.5x0.1x2.5: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 3.7,2.6,0.0 0.5x0.1x2.5/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,2.6,0.0 0.5x0.1x2.5/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 3.7,2.6,0.0 0.5x0.1x2.5/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2367,7 +2367,7 @@ reference_map/brush:box 4.0,1.3,1.1 0.3x2.8x0.2/face:+z: extrude clip_to_face ma
 reference_map/brush:box 4.0,1.3,1.1 0.3x2.8x0.2/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 4.0,1.3,1.1 0.3x2.8x0.2/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 4.0,1.3,1.1 0.3x2.8x0.2/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 4.0,2.6,0.0 0.3x0.2x2.3: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 4.0,2.6,0.0 0.3x0.2x2.3/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 4.0,2.6,0.0 0.3x0.2x2.3/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 4.0,2.6,0.0 0.3x0.2x2.3/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2416,63 +2416,63 @@ reference_map/brush:box 4.4,0.1,4.0 0.2x0.2x6.0/face:+z: extrude ~clip_to_face m
 reference_map/brush:box 4.4,0.1,4.0 0.2x0.2x6.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 4.4,0.1,4.0 0.2x0.2x6.0/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 4.4,0.1,4.0 0.2x0.2x6.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 6.0,0.1,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 6.0,0.1,4.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,0.1,4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:-y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,-4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 6.0,1.7,0.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,0.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 6.0,1.7,4.0 0.6x3.0x0.6: hollow clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:+y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,1.7,4.0 0.6x3.0x0.6/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,-4.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 6.0,3.4,0.0 1.0x0.2x1.0: ~hollow ~clip carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,0.0 1.0x0.2x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-reference_map/brush:box 6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip move_to_floor ~reset_rotation mirror_copy
+reference_map/brush:box 6.0,3.4,4.0 1.0x0.2x1.0: ~hollow ~clip ~carve ~merge ~flip ~move_to_floor ~reset_rotation mirror_copy
 reference_map/brush:box 6.0,3.4,4.0 1.0x0.2x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,4.0 1.0x0.2x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 reference_map/brush:box 6.0,3.4,4.0 1.0x0.2x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2573,14 +2573,14 @@ variety/brush:custom 40.0,1.5,0.0 2.0x2.9x2.0/face:+z: extrude ~clip_to_face mat
 variety/brush:custom 40.0,1.5,0.0 2.0x2.9x2.0/face:-x: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 40.0,1.5,0.0 2.0x2.9x2.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 40.0,1.5,0.0 2.0x2.9x2.0/face:-z: extrude ~clip_to_face material wrap_texture justify
-variety/brush:custom 40.0,3.1,0.0 2.0x1.9x2.0: hollow ~clip ~carve merge flip move_to_floor ~reset_rotation mirror_copy
+variety/brush:custom 40.0,3.1,0.0 2.0x1.9x2.0: hollow ~clip ~carve merge flip ~move_to_floor ~reset_rotation mirror_copy
 variety/brush:custom 40.0,3.1,0.0 2.0x1.9x2.0/face:+x: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 40.0,3.1,0.0 2.0x1.9x2.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 40.0,3.1,0.0 2.0x1.9x2.0/face:+z: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 40.0,3.1,0.0 2.0x1.9x2.0/face:-x: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 40.0,3.1,0.0 2.0x1.9x2.0/face:-y: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 40.0,3.1,0.0 2.0x1.9x2.0/face:-z: extrude ~clip_to_face material wrap_texture justify
-variety/brush:custom 58.9,0.0,0.5 1.8x0.1x1.0: ~hollow ~clip ~carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+variety/brush:custom 58.9,0.0,0.5 1.8x0.1x1.0: ~hollow ~clip ~carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 variety/brush:custom 58.9,0.0,0.5 1.8x0.1x1.0/face:+x: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 58.9,0.0,0.5 1.8x0.1x1.0/face:+y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 58.9,0.0,0.5 1.8x0.1x1.0/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2594,14 +2594,14 @@ variety/brush:custom 58.9,0.2,-0.5 1.8x0.1x1.0/face:+z: extrude clip_to_face mat
 variety/brush:custom 58.9,0.2,-0.5 1.8x0.1x1.0/face:-x: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 58.9,0.2,-0.5 1.8x0.1x1.0/face:-y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 58.9,0.2,-0.5 1.8x0.1x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-variety/brush:custom 59.1,-0.2,0.9 1.6x0.1x1.6: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+variety/brush:custom 59.1,-0.2,0.9 1.6x0.1x1.6: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 variety/brush:custom 59.1,-0.2,0.9 1.6x0.1x1.6/face:+x: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 59.1,-0.2,0.9 1.6x0.1x1.6/face:+x#2: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 59.1,-0.2,0.9 1.6x0.1x1.6/face:+y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 59.1,-0.2,0.9 1.6x0.1x1.6/face:-x: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 59.1,-0.2,0.9 1.6x0.1x1.6/face:-y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 59.1,-0.2,0.9 1.6x0.1x1.6/face:-z: extrude clip_to_face material wrap_texture justify
-variety/brush:custom 59.1,0.4,-0.9 1.6x0.1x1.6: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+variety/brush:custom 59.1,0.4,-0.9 1.6x0.1x1.6: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 variety/brush:custom 59.1,0.4,-0.9 1.6x0.1x1.6/face:+x: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 59.1,0.4,-0.9 1.6x0.1x1.6/face:+x#2: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 59.1,0.4,-0.9 1.6x0.1x1.6/face:+y: extrude clip_to_face material wrap_texture justify
@@ -2615,7 +2615,7 @@ variety/brush:custom 59.5,-0.4,1.1 1.0x0.1x1.8/face:+z: extrude ~clip_to_face ma
 variety/brush:custom 59.5,-0.4,1.1 1.0x0.1x1.8/face:-x: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 59.5,-0.4,1.1 1.0x0.1x1.8/face:-y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 59.5,-0.4,1.1 1.0x0.1x1.8/face:-z: extrude clip_to_face material wrap_texture justify
-variety/brush:custom 59.5,0.6,-1.1 1.0x0.1x1.8: ~hollow ~clip ~carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+variety/brush:custom 59.5,0.6,-1.1 1.0x0.1x1.8: ~hollow ~clip ~carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 variety/brush:custom 59.5,0.6,-1.1 1.0x0.1x1.8/face:+x: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 59.5,0.6,-1.1 1.0x0.1x1.8/face:+y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 59.5,0.6,-1.1 1.0x0.1x1.8/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2633,7 +2633,7 @@ variety/brush:custom 60.0,0.0,0.0 0.5x2.4x0.5/face:-x#2: extrude clip_to_face ma
 variety/brush:custom 60.0,0.0,0.0 0.5x2.4x0.5/face:-y: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 60.0,0.0,0.0 0.5x2.4x0.5/face:-z: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 60.0,0.0,0.0 0.5x2.4x0.5/face:-z#2: extrude clip_to_face material wrap_texture justify
-variety/brush:custom 60.5,-0.6,1.1 1.0x0.1x1.8: ~hollow ~clip ~carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+variety/brush:custom 60.5,-0.6,1.1 1.0x0.1x1.8: ~hollow ~clip ~carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 variety/brush:custom 60.5,-0.6,1.1 1.0x0.1x1.8/face:+x: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 60.5,-0.6,1.1 1.0x0.1x1.8/face:+y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 60.5,-0.6,1.1 1.0x0.1x1.8/face:+z: extrude ~clip_to_face material wrap_texture justify
@@ -2647,14 +2647,14 @@ variety/brush:custom 60.5,0.7,-1.1 1.0x0.1x1.8/face:+z: extrude clip_to_face mat
 variety/brush:custom 60.5,0.7,-1.1 1.0x0.1x1.8/face:-x: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 60.5,0.7,-1.1 1.0x0.1x1.8/face:-y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 60.5,0.7,-1.1 1.0x0.1x1.8/face:-z: extrude ~clip_to_face material wrap_texture justify
-variety/brush:custom 60.9,-0.9,0.9 1.6x0.1x1.6: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+variety/brush:custom 60.9,-0.9,0.9 1.6x0.1x1.6: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 variety/brush:custom 60.9,-0.9,0.9 1.6x0.1x1.6/face:+x: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 60.9,-0.9,0.9 1.6x0.1x1.6/face:+y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 60.9,-0.9,0.9 1.6x0.1x1.6/face:-x: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 60.9,-0.9,0.9 1.6x0.1x1.6/face:-x#2: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 60.9,-0.9,0.9 1.6x0.1x1.6/face:-y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 60.9,-0.9,0.9 1.6x0.1x1.6/face:-z: extrude clip_to_face material wrap_texture justify
-variety/brush:custom 60.9,0.9,-0.9 1.6x0.1x1.6: ~hollow ~clip carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+variety/brush:custom 60.9,0.9,-0.9 1.6x0.1x1.6: ~hollow ~clip carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 variety/brush:custom 60.9,0.9,-0.9 1.6x0.1x1.6/face:+x: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 60.9,0.9,-0.9 1.6x0.1x1.6/face:+y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 60.9,0.9,-0.9 1.6x0.1x1.6/face:+z: extrude clip_to_face material wrap_texture justify
@@ -2668,7 +2668,7 @@ variety/brush:custom 61.1,-1.0,0.5 1.8x0.1x1.0/face:+z: extrude clip_to_face mat
 variety/brush:custom 61.1,-1.0,0.5 1.8x0.1x1.0/face:-x: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 61.1,-1.0,0.5 1.8x0.1x1.0/face:-y: extrude clip_to_face material wrap_texture justify
 variety/brush:custom 61.1,-1.0,0.5 1.8x0.1x1.0/face:-z: extrude clip_to_face material wrap_texture justify
-variety/brush:custom 61.1,1.2,-0.5 1.8x0.1x1.0: ~hollow ~clip ~carve ~merge flip move_to_floor ~reset_rotation mirror_copy
+variety/brush:custom 61.1,1.2,-0.5 1.8x0.1x1.0: ~hollow ~clip ~carve ~merge flip ~move_to_floor ~reset_rotation mirror_copy
 variety/brush:custom 61.1,1.2,-0.5 1.8x0.1x1.0/face:+x: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 61.1,1.2,-0.5 1.8x0.1x1.0/face:+y: extrude ~clip_to_face material wrap_texture justify
 variety/brush:custom 61.1,1.2,-0.5 1.8x0.1x1.0/face:+z: extrude clip_to_face material wrap_texture justify

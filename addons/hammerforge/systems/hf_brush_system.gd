@@ -19,6 +19,7 @@ const HFGridSystem = preload("hf_grid_system.gd")
 const HFUVWrap = preload("../hf_uv_wrap.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOverlayColors = preload("../hf_overlay_colors.gd")
+const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
 const ROLE_PENDING := "pending"
@@ -2461,59 +2462,94 @@ func move_brushes_to_ceiling(brush_ids: Array) -> void:
 	_move_brushes_vertical(brush_ids, 1.0)
 
 
+## The selection goes straight down, or up for `direction` 1, as one piece, until
+## a brush of it meets a brush outside it (#1964). Each used to drop on its own,
+## so a table's top fell between its legs into them.
+##
+## Each brush is measured by its faces in the level, so a turned one rests on
+## its lowest corner, and it is left touching: the middle was put half the
+## unturned size above the hit and snapped to the grid, which left a brush
+## floating or sunk (#1966). What it meets is found from the brushes, as the face
+## pick finds a face, and not by a physics ray, which met a hidden brush's pick
+## body and the collision of a bake the level had moved on from (#1965).
 func _move_brushes_vertical(brush_ids: Array, direction: float) -> void:
-	if brush_ids.is_empty():
-		return
+	var moving: Dictionary = {}  # brush_id -> DraftBrush
 	for brush_id in brush_ids:
-		var brush = _find_brush_by_id(str(brush_id))
-		if not brush or not (brush is DraftBrush):
+		var key := str(brush_id)
+		var brush = _find_brush_by_id(key) if key != "" else null
+		if brush is DraftBrush:
+			moving[key] = brush
+	if moving.is_empty():
+		return
+	var along := Vector3(0.0, direction, 0.0)
+	var travel := _travel_until_met(moving.values(), along)
+	if not is_finite(travel):
+		return
+	for key in moving:
+		var draft: DraftBrush = moving[key]
+		set_brush_transform_by_id(key, draft.size, draft.global_position + along * travel)
+
+
+## How far the brushes `moving` can go together along `along`, straight up or
+## down, before one of them meets another brush, or INF when none is in the way.
+## A brush one of them is already in by no more than half its own height holds
+## them where they are, as a door frame sunk into the floor stands on it. Lifting
+## it out instead raised walls off the baseboards set into them. A brush it is
+## deeper in, such as a wall it was drawn into the side of, does not stop it.
+func _travel_until_met(moving: Array, along: Vector3) -> float:
+	var surfaces := _surfaces_to_meet(moving)
+	var faces_of: Dictionary = {}  # DraftBrush -> its faces in the level
+	var touch := HFSolidMeasure.TOUCH
+	var best := INF
+	for mover in moving:
+		var faces := HFSolidMeasure.world_faces(mover)
+		if faces.size() < 4:
 			continue
-		var draft := brush as DraftBrush
-		var half_y = draft.size.y * 0.5
-		var origin = draft.global_position
-		# Cast ray from brush center in the vertical direction
-		var ray_origin = origin + Vector3(0.0, half_y * direction, 0.0)
-		var ray_dir = Vector3(0.0, direction, 0.0)
-		var space = root.get_world_3d().direct_space_state
-		if not space:
+		var box := HFSolidMeasure.bounds(faces)
+		for surface in surfaces:
+			var other: DraftBrush = surface["brush"]
+			if not _could_meet(box, surface["box"], along.y):
+				continue
+			if not faces_of.has(other):
+				faces_of[other] = HFSolidMeasure.world_faces(other)
+			var gap := HFSolidMeasure.gap_along(faces, faces_of[other], along)
+			if gap < -touch and -gap > box.size.y * 0.5 + touch:
+				continue
+			best = minf(best, maxf(gap, 0.0))
+	return best
+
+
+## The brushes a moving selection can come to rest against: those the face pick
+## takes, shown and not the drag preview (#1965), and solid, so not a cut, which
+## is a hole, or a trigger, which bakes to an area nothing stands on.
+func _surfaces_to_meet(moving: Array) -> Array:
+	var out: Array = []
+	for node in root._iter_pick_nodes():
+		var brush := node as DraftBrush
+		if brush == null or brush == root.preview_brush or moving.has(brush):
 			continue
-		var query = PhysicsRayQueryParameters3D.new()
-		query.from = ray_origin
-		query.to = ray_origin + ray_dir * 10000.0
-		var result = space.intersect_ray(query)
-		if result.is_empty():
-			# No physics hit — try raycasting against other brushes
-			var best_t = INF
-			var best_pos = Vector3.ZERO
-			var found = false
-			for node in root._iter_pick_nodes():
-				if not (node is DraftBrush) or node == brush:
-					continue
-				var other := node as DraftBrush
-				if not other.mesh_instance:
-					continue
-				var inv = other.mesh_instance.global_transform.affine_inverse()
-				var local_origin = inv * ray_origin
-				var local_dir = (inv.basis * ray_dir).normalized()
-				var aabb = other.mesh_instance.get_aabb()
-				var t = root._ray_intersect_aabb(local_origin, local_dir, aabb)
-				if t >= 0.0 and t < best_t:
-					best_t = t
-					best_pos = ray_origin + ray_dir * best_t
-					found = true
-			if found:
-				var new_y = best_pos.y - half_y * direction
-				var snap = root.grid_snap if root.grid_snap > 0.0 else 0.0
-				var new_position: Vector3 = origin
-				new_position.y = snapped(new_y, snap) if snap > 0.0 else new_y
-				set_brush_transform_by_id(str(brush_id), draft.size, new_position)
-		else:
-			var hit_pos: Vector3 = result["position"]
-			var new_y = hit_pos.y - half_y * direction
-			var snap = root.grid_snap if root.grid_snap > 0.0 else 0.0
-			var new_position: Vector3 = origin
-			new_position.y = snapped(new_y, snap) if snap > 0.0 else new_y
-			set_brush_transform_by_id(str(brush_id), draft.size, new_position)
+		var mesh_inst: MeshInstance3D = brush.mesh_instance
+		if mesh_inst == null or not mesh_inst.is_inside_tree():
+			continue
+		if not is_brush_node(brush) or _is_subtract_brush(brush):
+			continue
+		if HFBrushEntity.entity_class(brush).begins_with("trigger_"):
+			continue
+		if not (root._is_pick_visible(brush) and root._is_pick_visible(mesh_inst)):
+			continue
+		out.append({"brush": brush, "box": mesh_inst.global_transform * mesh_inst.get_aabb()})
+	return out
+
+
+## Whether a brush with bounds `other` can be in the way of one with bounds `box`
+## going up (`direction` 1) or down: beside it across the move, and reaching
+## above its bottom going up, or below its top going down.
+static func _could_meet(box: AABB, other: AABB, direction: float) -> bool:
+	if other.position.x >= box.end.x or box.position.x >= other.end.x:
+		return false
+	if other.position.z >= box.end.z or box.position.z >= other.end.z:
+		return false
+	return other.end.y > box.position.y if direction > 0.0 else other.position.y < box.end.y
 
 
 # ---------------------------------------------------------------------------

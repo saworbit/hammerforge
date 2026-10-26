@@ -21,6 +21,11 @@ const TOUCH := 0.0001
 ## Edge directions paired for the overlap test, past which only face normals are
 ## tried. A 64 sided cylinder against another is 4,225 pairs.
 const MAX_EDGE_PAIRS := 4096
+## Two solids whose shadows along a move share no more than this each way pass
+## each other.
+const SHADOW_HAIR := 0.001
+## A face whose normal is this near square to a move runs along it.
+const ALONG_FACE := 0.0001
 
 
 static func ring(face: Variant) -> PackedVector3Array:
@@ -283,6 +288,55 @@ static func face_gap(a: Variant, b: Variant) -> float:
 	return gap if gap > TOUCH else 0.0
 
 
+## How far convex solid `a` can move along `direction` before it meets convex
+## solid `b` (#1964, #1966): the least, over the lines along `direction` through
+## both, of the room between the end of `a` that leads and the end of `b` that
+## faces it. Less than 0 when they overlap on a line, by how far `a` is into `b`
+## there. INF when nothing of `b` is ahead of `a`, and when they pass each other,
+## which they do when their shadows along `direction` share no more than a hair,
+## so a box beside a wall's face is not stopped by the top of the wall.
+##
+## The least is on a line through a corner of either, or through a place where
+## an edge of one crosses an edge of the other seen along the move, so those are
+## the lines measured. A line on which `b` is wholly behind `a` does not count.
+static func gap_along(a_faces: Array, b_faces: Array, direction: Vector3) -> float:
+	var along := direction.normalized()
+	if along == Vector3.ZERO:
+		return INF
+	var side := along.cross(Vector3.RIGHT if absf(along.x) < 0.9 else Vector3.UP).normalized()
+	var other := along.cross(side)
+	var a_corners := _corners(a_faces)
+	var b_corners := _corners(b_faces)
+	var a_shadow := _shadow(a_corners, side, other)
+	var b_shadow := _shadow(b_corners, side, other)
+	if not _shadows_overlap(a_shadow, b_shadow):
+		return INF
+	var lines := PackedVector3Array(a_corners)
+	lines.append_array(b_corners)
+	var b_edges: Array = []
+	for edge in _segments(b_faces):
+		b_edges.append(_shadow(PackedVector3Array(edge), side, other))
+	for edge in _segments(a_faces):
+		var from := _shadow(PackedVector3Array(edge), side, other)
+		for flat in b_edges:
+			var crossing: Variant = Geometry2D.segment_intersects_segment(
+				from[0], from[1], flat[0], flat[1]
+			)
+			if crossing is Vector2:
+				lines.append(side * crossing.x + other * crossing.y)
+	var a_planes := _outward_planes(a_faces)
+	var b_planes := _outward_planes(b_faces)
+	var best := INF
+	for point in lines:
+		var a_span := _span_along(a_planes, point, along)
+		var b_span := _span_along(b_planes, point, along)
+		if a_span.x > a_span.y + TOUCH or b_span.x > b_span.y + TOUCH:
+			continue
+		if b_span.y > a_span.x + TOUCH:
+			best = minf(best, b_span.x - a_span.y)
+	return best
+
+
 ## How far apart two solids are along the axis that keeps them furthest apart,
 ## of their face normals and the crossings of their edges: the separation when
 ## positive, and minus the shallowest way out when they overlap.
@@ -434,3 +488,72 @@ static func _span(points: PackedVector3Array, axis: Vector3) -> Vector2:
 		low = minf(low, along)
 		high = maxf(high, along)
 	return Vector2(low, high)
+
+
+## Each corner once.
+static func _corners(faces: Array) -> PackedVector3Array:
+	var seen := {}
+	for face in faces:
+		for point in ring(face):
+			seen[point] = true
+	return PackedVector3Array(seen.keys())
+
+
+## `points` seen along a move, on the plane across it that `side` and `other` span.
+static func _shadow(
+	points: PackedVector3Array, side: Vector3, other: Vector3
+) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for point in points:
+		out.append(Vector2(side.dot(point), other.dot(point)))
+	return out
+
+
+## Whether two shadows share more than a hair. Each outline is drawn in by
+## `SHADOW_HAIR` first, so two that only meet along an edge or at a corner do not.
+static func _shadows_overlap(a: PackedVector2Array, b: PackedVector2Array) -> bool:
+	var a_hull := Geometry2D.convex_hull(a)
+	var b_hull := Geometry2D.convex_hull(b)
+	if a_hull.size() < 3 or b_hull.size() < 3:
+		return false
+	var a_inner := Geometry2D.offset_polygon(a_hull, -SHADOW_HAIR)
+	var b_inner := Geometry2D.offset_polygon(b_hull, -SHADOW_HAIR)
+	for a_part in a_inner:
+		for b_part in b_inner:
+			if not Geometry2D.intersect_polygons(a_part, b_part).is_empty():
+				return true
+	return false
+
+
+## Each face's plane, turned to face away from the solid's middle.
+static func _outward_planes(faces: Array) -> Array[Plane]:
+	var centre := vertex_centre(faces)
+	var out: Array[Plane] = []
+	for face in faces:
+		var normal := face_normal(face)
+		if normal == Vector3.ZERO:
+			continue
+		var plane := Plane(normal, face_centre(face))
+		out.append(-plane if plane.distance_to(centre) > 0.0 else plane)
+	return out
+
+
+## The stretch of the line through `point` along `along` that is inside every
+## plane, as distances along it from `point`: (in, out), with in past out when
+## the line misses. A face the line runs along keeps it when the line is within
+## `TOUCH` of it, so a line down a box's side is in the box.
+static func _span_along(planes: Array[Plane], point: Vector3, along: Vector3) -> Vector2:
+	var enter := -INF
+	var leave := INF
+	for plane in planes:
+		var height := plane.distance_to(point)
+		var rate := plane.normal.dot(along)
+		if absf(rate) < ALONG_FACE:
+			if height > TOUCH:
+				return Vector2(INF, -INF)
+			continue
+		if rate > 0.0:
+			leave = minf(leave, -height / rate)
+		else:
+			enter = maxf(enter, -height / rate)
+	return Vector2(enter, leave)

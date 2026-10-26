@@ -201,7 +201,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_undo` | Take back the agent's last step, never anyone else's |
 | `hf_redo` | Put back the step `hf_undo` took |
 
-Command replies list a target in `changed` only when its brush data differs after the command. A mixed Move to Floor selection leaves brushes already on the floor out of that list.
+Command replies list a target in `changed` only when its brush data differs after the command. A mixed Snap to Grid selection leaves brushes already on the grid out of that list.
 
 Paint replies count filled-bit flips in `cells_changed` separately from material
 id changes in `materials_changed`. `heights_changed` counts new or changed
