@@ -222,3 +222,86 @@ func test_a_pending_cut_put_back_by_an_undo_is_read_only():
 	assert_true(restored.is_pending_cut())
 	assert_true(_operation_read_only(restored))
 	assert_eq(_colour(restored), _pending_colour())
+
+
+# ===========================================================================
+# Cutting, hollowing and merging a pending cut keep it pending (#1943)
+# ===========================================================================
+
+
+func _pending_cut_at(brush_id: String, center: Vector3) -> DraftBrush:
+	return (
+		(
+			root
+			. create_brush_from_info(
+				{
+					"shape": LevelRoot.BrushShape.BOX,
+					"size": Vector3(2, 2, 2),
+					"center": center,
+					"operation": CSGShape3D.OPERATION_SUBTRACTION,
+					"pending": true,
+					"brush_id": brush_id,
+				}
+			)
+		)
+		as DraftBrush
+	)
+
+
+func _in_pending(brush_id: String) -> bool:
+	var brush = root.find_brush_by_id(brush_id)
+	return brush != null and brush.get_parent() == root.pending_node and brush.is_pending_cut()
+
+
+## Splitting a pending cut leaves both halves waiting for Apply. The pieces went
+## into the level's brushes, applied without Apply being pressed.
+func test_a_pending_cut_split_in_two_stays_pending():
+	_pending_cut_at("cut", Vector3.ZERO)
+	var result: HFOpResult = root.clip_brush_by_id("cut", 0, 0.0)
+	assert_true(result.ok, result.message)
+	var pieces: Array = root.pending_node.get_children()
+	assert_eq(pieces.size(), 2, "both halves wait in Pending Cuts")
+	for piece in pieces:
+		assert_true(piece.is_pending_cut(), "as pending cuts")
+	assert_eq(root.draft_brushes_node.get_child_count(), 0, "and none is applied")
+
+
+func test_a_hollowed_pending_cut_stays_pending():
+	_pending_cut_at("cut", Vector3.ZERO)
+	var result: HFOpResult = root.hollow_brush_by_id("cut", 0.25)
+	assert_true(result.ok, result.message)
+	assert_gt(root.pending_node.get_child_count(), 1, "its walls wait in Pending Cuts")
+	assert_eq(root.draft_brushes_node.get_child_count(), 0, "and none is applied")
+
+
+## Two pending cuts merge into one pending cut, and a pending cut does not merge
+## with an applied one.
+func test_merged_pending_cuts_stay_pending_and_do_not_mix_with_applied_ones():
+	_pending_cut_at("a", Vector3.ZERO)
+	_pending_cut_at("b", Vector3(2, 0, 0))
+	var merged: HFOpResult = root.merge_brushes_by_ids(["a", "b"])
+	assert_true(merged.ok, merged.message)
+	assert_eq(root.pending_node.get_child_count(), 1, "one cut")
+	assert_true((root.pending_node.get_child(0) as DraftBrush).is_pending_cut(), "still pending")
+	assert_eq(root.draft_brushes_node.get_child_count(), 0, "not applied")
+
+	var applied: DraftBrush = (
+		(
+			root
+			. create_brush_from_info(
+				{
+					"shape": LevelRoot.BrushShape.BOX,
+					"size": Vector3(2, 2, 2),
+					"center": Vector3(-2, 0, 0),
+					"operation": CSGShape3D.OPERATION_SUBTRACTION,
+					"brush_id": "applied",
+				}
+			)
+		)
+		as DraftBrush
+	)
+	assert_false(applied.is_pending_cut(), "fixture: an applied cut")
+	var pending_id := str((root.pending_node.get_child(0) as DraftBrush).brush_id)
+	var mixed: HFOpResult = root.can_merge_brushes([pending_id, "applied"])
+	assert_false(mixed.ok, "a pending and an applied cut do not merge")
+	assert_string_contains(mixed.message, "pending")

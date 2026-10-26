@@ -1,0 +1,1 @@
+- A pending cut that is clipped, hollowed or merged stays pending: its pieces used to be applied without Apply Pending Cuts, and a pending cut no longer merges with an applied one. (issue [#1943](https://github.com/saworbit/hammerforge/issues/1943))
