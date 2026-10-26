@@ -2517,9 +2517,14 @@ func generator_repick_changes_nothing(
 	return generator_system.repick_changes_nothing(generator_id, run, placement)
 
 
-## Forget a structure's record, leaving its brushes as ordinary geometry.
+## Forget a structure's record, leaving its brushes as ordinary geometry. Under the
+## Structures filter they show again, as plain brushes do.
 func detach_generator(generator_id: String) -> bool:
-	return generator_system.detach(generator_id) if generator_system else false
+	if not generator_system or not generator_system.detach(generator_id):
+		return false
+	if view_filters.has("structure") and visgroup_system:
+		visgroup_system.refresh_visibility()
+	return true
 
 
 func generator_for_selection(brush_ids: Array):

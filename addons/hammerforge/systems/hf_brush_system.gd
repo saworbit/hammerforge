@@ -243,6 +243,9 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	var visgroups = root.get("visgroup_system")
 	if not committed and visgroups != null and visgroups.view_filter_hides(brush):
 		brush.visible = false
+	# Faded from the start too, when it is locked or outside the open group (#1926).
+	if not committed and visgroups != null:
+		visgroups.apply_fade(brush)
 	root.tag_brush_dirty(str(brush_id))
 	if root.has_method("_emit_or_batch"):
 		root._emit_or_batch("brush_added", [str(brush_id)])

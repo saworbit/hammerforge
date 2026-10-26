@@ -366,11 +366,18 @@ func get_members_of(vg_name: String) -> Array:
 ## walk reads has changed since it last walked every node, those are the only
 ## nodes that can be shown wrongly: a node the restore kept has the record it had,
 ## memberships included, so the walk would draw it as it is. At 3,000 brushes the
-## walk was 12 ms of every undo (#1866).
+## walk was 12 ms of every undo (#1866). The Structures and Prefab copies filters
+## read what the restore tags a kept node with, not its record, so with either on
+## every node is walked (#1928).
 func refresh_visibility(only: Variant = null) -> void:
 	var inputs := _visibility_inputs()
 	var nodes: Array
-	if only is Array and _walked_with is Dictionary and inputs.recursive_equal(_walked_with, 8):
+	if (
+		only is Array
+		and _walked_with is Dictionary
+		and not _filters_read_tags()
+		and inputs.recursive_equal(_walked_with, 8)
+	):
 		nodes = only
 	else:
 		nodes = _all_managed_nodes()
@@ -384,12 +391,23 @@ func refresh_visibility(only: Variant = null) -> void:
 		if not is_instance_valid(node):
 			continue
 		node.visible = shown_ignoring_view_filters(node) and not view_filter_hides(node)
-		# A locked brush is drawn faded, and so is one outside an open group
-		# (#1723). Its own mesh, which no bake copies.
-		var mesh = node.get("mesh_instance")
-		if mesh is GeometryInstance3D:
-			var faded := is_locked(node) or not inside_open_group(node)
-			(mesh as GeometryInstance3D).transparency = LOCKED_FADE if faded else 0.0
+		apply_fade(node)
+
+
+## Draw `node` faded when it is locked or outside the open group (#1723). Its own
+## mesh, which no bake copies. A brush made while a group is open, an undo's
+## among them, fades from the start (#1926).
+func apply_fade(node: Node) -> void:
+	var mesh = node.get("mesh_instance")
+	if mesh is GeometryInstance3D:
+		var faded := is_locked(node) or not inside_open_group(node)
+		(mesh as GeometryInstance3D).transparency = LOCKED_FADE if faded else 0.0
+
+
+## Whether a view filter hides by a tag a restore puts on the nodes it keeps.
+func _filters_read_tags() -> bool:
+	var filters: Variant = root.get("view_filters") if root else null
+	return filters is Dictionary and (filters.has("structure") or filters.has("prefab"))
 
 
 ## Everything `refresh_visibility()` reads that is not on a node: the visgroups,
@@ -753,6 +771,7 @@ func group_units(group_name: String, nodes: Array) -> void:
 	if stripped == "":
 		return
 	var units := units_of(nodes)
+	var was_open := open_group
 	create_group(stripped)
 	if open_group != "" and open_group != stripped:
 		group_parents[stripped] = open_group
@@ -761,6 +780,7 @@ func group_units(group_name: String, nodes: Array) -> void:
 			group_parents[unit] = stripped
 	for node in units["nodes"]:
 		node.set_meta("group_id", stripped)
+	_fade_after_group_edit(was_open)
 
 
 ## Ungroup (#1723): the selected groups taken apart one level, their members and
@@ -768,6 +788,7 @@ func group_units(group_name: String, nodes: Array) -> void:
 ## of its own leaves it.
 func ungroup_units(nodes: Array) -> void:
 	var units := units_of(nodes)
+	var was_open := open_group
 	for unit in units["groups"]:
 		_dissolve(unit)
 	if open_group != "":
@@ -776,6 +797,7 @@ func ungroup_units(nodes: Array) -> void:
 			if get_group_of(node) == open_group:
 				node.set_meta("group_id", around)
 		_cleanup_empty_group(open_group)
+	_fade_after_group_edit(was_open)
 
 
 ## Add to Group (#1723): the selection into `group_name`, groups as groups and
@@ -789,6 +811,7 @@ func add_units_to_group(nodes: Array, group_name: String) -> void:
 			group_parents[unit] = group_name
 	for node in units["nodes"]:
 		node.set_meta("group_id", group_name)
+	_fade_after_group_edit(open_group)
 
 
 ## Remove from Group (#1723): what of the selection is in `group_name`, out to
@@ -796,6 +819,7 @@ func add_units_to_group(nodes: Array, group_name: String) -> void:
 func remove_units_from_group(nodes: Array, group_name: String) -> void:
 	if not groups.has(group_name):
 		return
+	var was_open := open_group
 	var around := parent_of_group(group_name)
 	var moved: Dictionary = {}
 	for node in nodes:
@@ -812,6 +836,15 @@ func remove_units_from_group(nodes: Array, group_name: String) -> void:
 	for unit in moved:
 		_set_parent(unit, around)
 	_cleanup_empty_group(group_name)
+	_fade_after_group_edit(was_open)
+
+
+## Fade the level again after a group edit made while a group was open, or one
+## that closed it: the fade reads who is in the open group, and a group edit
+## records no full restore that would draw it (#1926).
+func _fade_after_group_edit(was_open: String) -> void:
+	if was_open != "" or open_group != "":
+		refresh_visibility()
 
 
 ## The groups a copy of `nodes` takes whole, those whose members are all among
@@ -1120,16 +1153,19 @@ func capture_order(registry: Dictionary) -> Array:
 
 
 ## With `made`, the nodes a restore built, as `refresh_visibility()` takes them.
-func restore_visgroups(data: Dictionary, order: Array = [], made: Variant = null) -> void:
+## Without `refresh` the caller draws them, once whatever else they read is back.
+func restore_visgroups(
+	data: Dictionary, order: Array = [], made: Variant = null, refresh := true
+) -> void:
 	visgroups.clear()
-	if not data is Dictionary:
-		return
-	for key in _ordered_keys(data, order):
-		var entry = data[key]
-		if not entry is Dictionary:
-			continue
-		visgroups[str(key)] = record_from(entry)
-	refresh_visibility(made)
+	if data is Dictionary:
+		for key in _ordered_keys(data, order):
+			var entry = data[key]
+			if not entry is Dictionary:
+				continue
+			visgroups[str(key)] = record_from(entry)
+	if refresh:
+		refresh_visibility(made)
 
 
 ## A visgroup's record as a file or a state holds it, with what it leaves out
