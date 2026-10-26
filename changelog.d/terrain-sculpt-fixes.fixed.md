@@ -1,0 +1,3 @@
+- Raise and Lower move ground outside 0 to 1 the way they say, not back into range. (issue [#2008](https://github.com/saworbit/hammerforge/issues/2008))
+- A sculpt at a chunk's first column rebuilds the chunk before it, so no step is left at the seam. (issue [#2014](https://github.com/saworbit/hammerforge/issues/2014))
+- Generate Noise makes a map that tiles, so terrain across the origin has no cliff along the axes. (issue [#2007](https://github.com/saworbit/hammerforge/issues/2007))

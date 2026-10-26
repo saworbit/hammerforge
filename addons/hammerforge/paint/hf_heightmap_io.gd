@@ -20,7 +20,10 @@ static func generate_noise(width: int, height: int, settings: Dictionary = {}) -
 	noise.frequency = float(settings.get("frequency", 0.01))
 	noise.fractal_octaves = int(settings.get("octaves", 4))
 	noise.seed = int(settings.get("seed", 0))
-	var img := noise.get_image(width, height, false, false)
+	# Seamless, because a layer reads the map wrapped: cell -1 is the last column.
+	# Plain noise put a cliff along x = 0 and z = 0 of any terrain across the
+	# origin (#2007).
+	var img := noise.get_seamless_image(width, height, false, false)
 	img.convert(Image.FORMAT_RF)
 	return img
 

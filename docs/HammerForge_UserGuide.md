@@ -133,7 +133,7 @@ The **Compare** tab names the file and sums up, such as "3 brushes, 1 face, 1 en
 
 The viewport outlines the same changes: what the open level added is drawn solid, what changed is drawn twice, and what it removed is drawn dashed where the file has it. Each has its own line as well as its own colour, and the colours are in **Settings** with the other overlay colours, so **High Contrast** covers them. The brushes that did not change are faded, so the changes stand out in a big level ([#1864](https://github.com/saworbit/hammerforge/issues/1864)). How far they fade is **Compare: unchanged** in Settings, beside the compare colours, 70% unless you change it, and 0% leaves them as they are. The fade is drawn and nothing more: the brushes, their materials, a scene saved meanwhile and the undo history are all left as they were, and **End Compare** brings them back.
 
-Brushes are matched by id, and a brush whose id changed but whose shape and place did not is still the same brush. Entities are matched by name, then by class and place. Visgroups, cordons and paint layers are counted too.
+Brushes are matched by id, and a brush whose id changed but whose shape and place did not is still the same brush. Entities are matched by name, then by class and place. A rename counts, of a brush, an entity or the name a wire is aimed at, as "entity 'ceiling_lamp': renamed from lamp to ceiling_lamp", and so do a brush's or an entity's visgroups and group. A wire that a rename left aimed at nothing says so, as "entity 'button': wire OnPressed to door_1 reaches nothing now" ([#1982](https://github.com/saworbit/hammerforge/issues/1982)). Visgroups, groups, cordons and paint layers are counted too. A face reads "texture moved" when it shows its texture somewhere else on its brush, so a move with **Texture Lock** on, which keeps the texture where it is on the brush, reads as the move alone ([#1989](https://github.com/saworbit/hammerforge/issues/1989)).
 
 The compare only looks: the open level is not changed and nothing goes into the undo history. **End Compare**, in the tab or the palette, takes the outlines and the list off.
 
@@ -1925,13 +1925,16 @@ the one of that name in an earlier.
 - Properties keep their type: `string`, `integer`, `float`, `choices` (a list
   showing each choice's label), `flags` (a tick for each bit), `color255` and
   `color1` (a colour), and `target_source`, `target_destination` and the rest as
-  text. Defaults, labels and descriptions come across.
+  text. Defaults, labels and descriptions come across. A name typed in a class's
+  `targetname` field is the entity's own name, the one wires aim at and a `.map`
+  writes ([#1985](https://github.com/saworbit/hammerforge/issues/1985)).
 - `input` and `output` lines are what the I/O wiring panel offers.
 - `@include "other.fgd"` reads a file beside it.
 - What HammerForge has no use for, a model, a sprite or a helper for another
   editor, is skipped. The file says once how much it skipped and the line of the
   first. Base classes that name each other in a loop are refused, and the warning
-  names the loop.
+  names the loop. A class whose bracket is left open is left out with a warning
+  naming its line, and the classes after it load.
 - **Convert Entity Definitions to JSON** in the palette writes the classes as an
   `entities.json` beside the first FGD, to edit them in that form. Point the
   level's `entity_definitions_path` at it to use it.
