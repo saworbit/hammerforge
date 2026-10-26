@@ -108,23 +108,24 @@ func _the_keymap(handled: Dictionary) -> void:
 	var plugin_source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	var overlays := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_overlays.gd")
 	var input_source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_input.gd")
-	# A held key runs no command: the viewport reads it off every event while a
-	# drag is under way (#1431, #1399). It belongs there, not in the dispatcher.
-	var viewport_input := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin_viewport_input.gd"
-	)
+	# A held key runs no command: an input path reads it off each event, the
+	# viewport's through a drag (#1431, #1399) and the selection's for a sweep
+	# select. So it counts as read when any plugin module asks `held()` for it.
+	var input_paths := ""
+	for file_name in DirAccess.get_files_at("res://addons/hammerforge"):
+		if file_name.begins_with("plugin") and file_name.ends_with(".gd"):
+			input_paths += FileAccess.get_file_as_string(
+				"res://addons/hammerforge".path_join(file_name)
+			)
 	var unread_holds: Array[String] = []
 	for hold in HFKeymapType.HOLDS:
-		if viewport_input.find('"%s"' % hold) < 0:
+		if input_paths.find('held("%s"' % hold) < 0:
 			unread_holds.append(str(hold))
-	note("held keys the viewport reads through a drag", HFKeymapType.HOLDS.keys())
+	note("held keys an input path reads", HFKeymapType.HOLDS.keys())
 	if not unread_holds.is_empty():
 		flag(
 			"a held key nothing reads",
-			(
-				"%s are held keys the viewport input never reads, so holding them does nothing"
-				% [unread_holds]
-			)
+			"%s are held keys no input path reads, so holding them does nothing" % [unread_holds]
 		)
 	var orphaned: Array[String] = []
 	for a in bindings:
