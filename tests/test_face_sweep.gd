@@ -205,6 +205,25 @@ func test_the_pieces_carry_each_side_s_material_in_one_group_and_one_step():
 	await rig.leave_level(level)
 
 
+## A look as a sweep keeps it is the whole look `FaceData.copy_appearance_from()`
+## copies: a hidden face and its smoothing group come through too, which dropped
+## off a swept face's sides (#1934, #1927).
+func test_a_look_kept_by_a_sweep_is_the_whole_look():
+	var face := FaceData.new()
+	face.material_idx = 4
+	face.map_texture = "TRIM02"
+	face.face_type = FaceData.FaceType.HIDDEN
+	face.uv_projection = FaceData.UVProjection.PLANAR_X
+	face.uv_scale = Vector2(2, 3)
+	face.uv_offset = Vector2(0.5, 0.25)
+	face.uv_rotation = 45.0
+	face.legacy_wall_axes = true
+	face.smoothing_group = 5
+	var copy := FaceData.new()
+	HFSweepBuilder.give_look(copy, HFSweepBuilder.look_of(face))
+	assert_true(copy.appearance_matches(face), "every field of the look")
+
+
 ## An End scale of 0.5 ends the run at half the width and height, each piece
 ## convex and meeting the next face to face (#1899).
 func test_a_straight_run_with_end_scale_half_ends_at_half_size():

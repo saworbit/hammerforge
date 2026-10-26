@@ -73,3 +73,19 @@ func test_no_edit_is_no_change():
 	var root := _fresh_root()
 	var pair := _tracked(root)
 	assert_eq((pair[1] as BrushChangeTracker).reconcile(root), PackedStringArray())
+
+
+## Hidden and the `.map` texture name are bake inputs the Inspector edits too: a
+## face hidden in the Inspector stayed in the mesh Bake Changed made (#1927).
+func test_a_face_type_edit_is_seen():
+	var root := _fresh_root()
+	var pair := _tracked(root)
+	(pair[0] as DraftBrush).get_faces()[0].face_type = FaceData.FaceType.HIDDEN
+	assert_eq((pair[1] as BrushChangeTracker).reconcile(root), PackedStringArray(["t"]))
+
+
+func test_a_map_texture_edit_is_seen():
+	var root := _fresh_root()
+	var pair := _tracked(root)
+	(pair[0] as DraftBrush).get_faces()[0].map_texture = "BRICK01"
+	assert_eq((pair[1] as BrushChangeTracker).reconcile(root), PackedStringArray(["t"]))

@@ -283,16 +283,3 @@ static func _ahead(ring: PackedVector3Array, facing: Vector3, ahead: PackedVecto
 		if plane.distance_to(point) <= AHEAD:
 			return false
 	return true
-
-
-## Give every face in `faces` the look of `source`: its material and how its
-## texture is laid on.
-static func take_look(faces: Array, source: FaceData) -> void:
-	for face: FaceData in faces:
-		face.material_idx = source.material_idx
-		face.map_texture = source.map_texture
-		face.uv_projection = source.uv_projection
-		face.legacy_wall_axes = source.legacy_wall_axes
-		face.uv_scale = source.uv_scale
-		face.uv_offset = source.uv_offset
-		face.uv_rotation = source.uv_rotation

@@ -925,6 +925,10 @@ static func _faces_signature(value: Variant) -> Array:
 			. append(
 				{
 					"material_idx": face.get("material_idx"),
+					# Hidden and the `.map` name are bake inputs the Inspector edits
+					# too (#1927).
+					"face_type": face.get("face_type"),
+					"map_texture": face.get("map_texture"),
 					"uv_projection": face.get("uv_projection"),
 					"uv_scale": face.get("uv_scale"),
 					"uv_offset": face.get("uv_offset"),

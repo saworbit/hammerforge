@@ -19,7 +19,7 @@ extends RefCounted
 ##
 ## each ring a picked face's corners, all in the frame's XY plane facing +Z, and
 ## beside it the look of that face and of the face of its brush along each edge
-## (`HFFaceSweep.take_look()`'s fields), which the sides take (#1899).
+## (`LOOK_KEYS`), which the sides take (#1899).
 
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -38,15 +38,19 @@ const TOWARD_DEGREES := {"Right": 0.0, "Up": 90.0, "Left": 180.0, "Down": 270.0}
 ## The Radius field's step, which a dragged pivot lands on.
 const RADIUS_STEP := 0.01
 
-## What a face's look is: the fields `HFFaceSweep.take_look()` sets.
+## What a face's look is: the fields `FaceData.copy_appearance_from()` copies and
+## `FaceData.appearance_matches()` compares, Hidden and the smoothing group among
+## them (#1934). A level saved before they were here reads without them.
 const LOOK_KEYS := [
 	"material_idx",
 	"map_texture",
+	"face_type",
 	"uv_projection",
 	"legacy_wall_axes",
 	"uv_scale",
 	"uv_offset",
 	"uv_rotation",
+	"smoothing_group",
 ]
 
 

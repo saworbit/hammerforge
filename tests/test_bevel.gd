@@ -618,3 +618,31 @@ func test_a_flat_inset_ring_faces_the_way_the_original_face_did():
 	assert_true(sys.inset_face("box_brush", 0, 4.0, 0.0))
 	for i in range(6, brush.faces.size()):
 		assert_gt(brush.faces[i].normal.dot(was), 0.9, "the ring is the old surface")
+
+
+## An inset's walls take the face's whole look, its offset and turn among it, as
+## every other face made from a face does. Only the texture and the scale went
+## over, so the walls' texture sat out of line with the face (#1934). A ring at no
+## height is part of the old face and shades with it; a raised wall is a new edge
+## and is flat, as a cut's new face is (#1429).
+func test_an_inset_s_walls_take_the_face_s_look():
+	var brush = _make_box_brush()
+	var face: FaceData = brush.faces[0]
+	face.material_idx = 3
+	face.uv_offset = Vector2(0.25, 0.5)
+	face.uv_rotation = 30.0
+	face.smoothing_group = 2
+	var before: int = brush.faces.size()
+	assert_true(sys.inset_face("box_brush", 0, 2.0, 0.0))
+	for wall in brush.faces.slice(before):
+		assert_eq(wall.material_idx, 3)
+		assert_eq(wall.uv_offset, Vector2(0.25, 0.5), "its offset")
+		assert_eq(wall.uv_rotation, 30.0, "its turn")
+		assert_eq(wall.smoothing_group, 2, "a flat ring shades with the face")
+	var raised = _make_box_brush("raised")
+	raised.faces[0].copy_appearance_from(face)
+	before = raised.faces.size()
+	assert_true(sys.inset_face("raised", 0, 2.0, 3.0))
+	for wall in raised.faces.slice(before):
+		assert_eq(wall.uv_offset, Vector2(0.25, 0.5), "a raised wall's offset")
+		assert_eq(wall.smoothing_group, 0, "a raised wall is a new edge, flat")
