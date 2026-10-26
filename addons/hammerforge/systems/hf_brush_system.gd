@@ -1851,14 +1851,27 @@ func can_hollow_brush(brush_id: String, wall_thickness: float) -> HFOpResult:
 	return _plan_hollow(brush as DraftBrush, wall_thickness)["result"]
 
 
+## Whether a brush with these faces, in its own space, hollows at
+## `wall_thickness`: `can_hollow_brush()` for a solid the level no longer holds.
+## Adjust Last asks it of the solid a Hollow took away before it undoes the
+## Hollow (#1995).
+func can_hollow_faces(faces: Array, wall_thickness: float) -> HFOpResult:
+	return _plan_hollow_faces(faces, wall_thickness)["result"]
+
+
 func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
 	if brush_id == "":
 		return HFOpResult.fail("Clip: no brush ID provided")
 	var brush = _find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
 		return HFOpResult.fail("Clip: brush not found")
-	var draft := brush as DraftBrush
-	var bounds := world_bounds_of(draft)
+	return can_clip_bounds(world_bounds_of(brush as DraftBrush), axis, split_pos)
+
+
+## Whether a cut at `split_pos` on `axis` splits a brush whose world bounds are
+## `bounds`: `can_clip_brush()` for a brush the level no longer holds whole.
+## Adjust Last asks it of the brush a Clip cut before it undoes the Clip (#1995).
+func can_clip_bounds(bounds: AABB, axis: int, split_pos: float) -> HFOpResult:
 	# The same refusal the operation makes, so the ghost and the cut agree.
 	if not HFTransformSystem.is_valid_axis(axis):
 		return HFOpResult.fail(
@@ -1947,6 +1960,12 @@ func hollow_brush_by_id(
 ## comparing twice the thickness against the smallest dimension only ever meant
 ## anything for a box.
 func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
+	_ensure_faces(draft)
+	return _plan_hollow_faces(draft.get_faces(), wall_thickness)
+
+
+## `_plan_hollow()` for a brush's faces, in its own space.
+func _plan_hollow_faces(faces: Array, wall_thickness: float) -> Dictionary:
 	var empty: Array = []
 	if wall_thickness <= 0.0:
 		return {
@@ -1957,8 +1976,6 @@ func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
 			),
 			"walls": empty
 		}
-	_ensure_faces(draft)
-	var faces: Array = draft.get_faces()
 	if faces.size() < 4:
 		return {
 			"result":

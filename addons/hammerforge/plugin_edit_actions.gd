@@ -14,6 +14,7 @@ const HFBrushConversion = preload("hf_brush_conversion.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 const DraftBrush = preload("brush_instance.gd")
+const FaceData = preload("face_data.gd")
 const HFTransformSystem = preload("systems/hf_transform_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFViewAxes = preload("hf_view_axes.gd")
@@ -469,6 +470,17 @@ static func _hollow_to_dock(settings: Dictionary, plugin: Object) -> void:
 		dock.hollow_thickness.value = float(settings["thickness"])
 
 
+## A copy of the faces of brush `brush_id` as they are now, which the brush
+## changing or going does not touch. Empty when there is no such brush.
+static func _faces_of(root: Node, brush_id: String) -> Array:
+	var brush = root.find_brush_by_id(brush_id)
+	var out: Array = []
+	if brush is DraftBrush:
+		for data in (brush as DraftBrush).serialize_faces():
+			out.append(FaceData.from_dict(data))
+	return out
+
+
 static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bool:
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
 	var targets := collect_managed_targets(plugin, root)
@@ -542,6 +554,9 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 				return
 			if root.hollow_preview:
 				root.hollow_preview.clear()
+			# The solid as it is before the walls take its place, for Adjust Last to
+			# ask whether a new thickness fits it (#1995).
+			var solid := _faces_of(root, brush_id)
 			HFUndoHelper.commit(
 				plugin._get_undo_redo(),
 				root,
@@ -554,10 +569,13 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 				true
 			)
 			var again := func(s: Dictionary) -> Array: return [brush_id, float(s["thickness"])]
+			var fits := func(s: Dictionary, level: Node) -> HFOpResult:
+				return level.brush_system.can_hollow_faces(solid, float(s["thickness"]))
 			var recipe := {
 				"action": "Hollow",
 				"method": "hollow_brush_by_id",
 				"args": again,
+				"check": fits,
 				"dock": _hollow_to_dock.bind(plugin),
 			}
 			_note_run(plugin, "hollow", {"thickness": thickness}, recipe)
@@ -955,6 +973,12 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 				return
 			if root.clip_preview:
 				root.clip_preview.clear()
+			# The brush whole, for Adjust Last to ask whether a new cut crosses it
+			# (#1995).
+			var cut = root.find_brush_by_id(brush_id)
+			var whole: AABB = (
+				root.brush_system.world_bounds_of(cut) if cut is DraftBrush else AABB()
+			)
 			HFUndoHelper.commit(
 				plugin._get_undo_redo(),
 				root,
@@ -968,7 +992,12 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 			)
 			var again := func(s: Dictionary) -> Array:
 				return [brush_id, AXES.find(str(s["axis"])), float(s["position"])]
+			var crosses := func(s: Dictionary, level: Node) -> HFOpResult:
+				return level.brush_system.can_clip_bounds(
+					whole, AXES.find(str(s["axis"])), float(s["position"])
+				)
 			var recipe := {"action": "Clip Brush", "method": "clip_brush_by_id", "args": again}
+			recipe["check"] = crosses
 			_note_run(plugin, "clip", {"axis": "y", "position": split_pos}, recipe)
 			dlg.queue_free()
 	)
