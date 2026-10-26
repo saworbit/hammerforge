@@ -667,3 +667,22 @@ func test_clearing_the_hover_takes_the_ghost_away():
 	assert_eq(root.prefab_overlay._active_instance_id, "", "cleared, no copy is marked")
 	assert_null(root.prefab_overlay._overlay_mesh_instance, "and the ghost is gone")
 	await get_tree().process_frame
+
+
+## A lone brush names the prefab after its shape, every shape: past the first
+## six, every one was called "brush" (#1937).
+func test_every_shape_past_the_first_six_names_a_lone_brush_s_prefab():
+	var root := _make_level_root()
+	var system: HFPrefabSystemType = root.prefab_system
+	var brush := DraftBrushType.new()
+	for shape in [
+		DraftBrushType.BrushShape.BOX,
+		DraftBrushType.BrushShape.CAPSULE,
+		DraftBrushType.BrushShape.TORUS,
+		DraftBrushType.BrushShape.PRISM_TRI,
+		DraftBrushType.BrushShape.DODECAHEDRON,
+	]:
+		brush.shape = shape
+		var named := system.suggest_prefab_name([brush], [])
+		assert_eq(named, str(DraftBrushType.BrushShape.find_key(shape)).to_lower())
+	brush.free()

@@ -146,7 +146,9 @@ static func cell(value: Variant) -> String:
 static func _fixed(root: Node, node: Node, targeted: Dictionary) -> PackedStringArray:
 	var spatial := node as Node3D
 	var at := spatial.global_position
-	var turn := spatial.global_transform.basis.get_euler() * (180.0 / PI)
+	# The turn, in the Inspector's order, read off the basis without its scale:
+	# angles read off a scaled basis are not the turn it was given (#1938).
+	var turn := spatial.global_transform.basis.orthonormalized().get_euler() * (180.0 / PI)
 	var bounds_min := ""
 	var bounds_max := ""
 	var kind := "point"

@@ -142,3 +142,20 @@ func test_the_bridge_counts_by_class():
 	)
 	assert_false(refused.get("ok", true), "with a filter it would count something else")
 	await rig.leave_level(level)
+
+
+## A scaled entity reports the turn it was given, as the Inspector shows it. The
+## turn was read off the scaled basis, so a prop scaled up reported angles nobody
+## gave it (#1938).
+func test_a_scaled_entity_reports_the_turn_it_was_given():
+	var level = await rig.make_level()
+	var lamp := _entity(level, "light_point", "lamp", Vector3(0, 2, 0)) as Node3D
+	lamp.rotation_degrees = Vector3(20, 30, 0)
+	lamp.scale = Vector3(2, 2, 2)
+	var rows: Array = HFEntityCensus.csv_rows(level)
+	var header: PackedStringArray = rows[0]
+	var row: PackedStringArray = rows[1]
+	assert_almost_eq(float(row[header.find("rotation_x")]), 20.0, 0.01, "its turn about X")
+	assert_almost_eq(float(row[header.find("rotation_y")]), 30.0, 0.01, "and about Y")
+	assert_almost_eq(float(row[header.find("rotation_z")]), 0.0, 0.01, "and none about Z")
+	await rig.leave_level(level)
