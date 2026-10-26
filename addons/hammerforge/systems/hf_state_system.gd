@@ -346,7 +346,7 @@ func capture_registries() -> Dictionary:
 func restore_registries(state: Dictionary, made: Variant = null) -> void:
 	if root.visgroup_system:
 		root.visgroup_system.restore_visgroups(
-			state.get("visgroups", {}), state.get("visgroup_order", []), made
+			state.get("visgroups", {}), state.get("visgroup_order", []), made, false
 		)
 		root.visgroup_system.restore_groups(state.get("groups", {}), state.get("group_order", []))
 		root.visgroup_system.restore_group_parents(state.get("group_parents", {}))
@@ -392,6 +392,11 @@ func restore_registries(state: Dictionary, made: Variant = null) -> void:
 		root.prefab_system.restore_state(state["prefab_instances"])
 	if root.validation_system and state.get("accepted_findings") is Dictionary:
 		root.validation_system.accepted = (state["accepted_findings"] as Dictionary).duplicate(true)
+	# Drawn last, with everything it reads back: the open group and its nesting,
+	# and the structures and prefab copies the view filters ask about. Drawn
+	# first, an undone group stayed faded open with no group open (#1926, #1928).
+	if root.visgroup_system:
+		root.visgroup_system.refresh_visibility(made)
 
 
 ## The floor paint as the `.hflevel` writes it, for `LevelRoot.live_registries`.

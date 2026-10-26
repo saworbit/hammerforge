@@ -296,3 +296,113 @@ func test_a_level_from_before_nesting_reads_as_it_was():
 	assert_eq(system.group_parents, {})
 	system.restore_group_parents({"group_1": "group_9", "group_2": "group_1"})
 	assert_eq(system.group_parents, {"group_2": "group_1"}, "a parent no group has is dropped")
+
+
+# ===========================================================================
+# The fade follows the open group through edits and undo (#1926, #1928)
+# ===========================================================================
+
+
+func _faded(node) -> bool:
+	return node.mesh_instance.transparency > 0.0
+
+
+## A pair grouped and open, and a brush outside it.
+func _open_pair(level: Node) -> Dictionary:
+	var parts := {
+		"a": rig.box(level, "a", Vector3(0, 2, 0)),
+		"b": rig.box(level, "b", Vector3(6, 2, 0)),
+		"outside": rig.box(level, "outside", Vector3(20, 2, 0)),
+	}
+	await _group(level, [parts["a"], parts["b"]], "Pair")
+	await _select([parts["a"]])
+	HFPluginGroups.open_selected_group(rig.plugin, level)
+	assert_true(_faded(parts["outside"]), "fixture: the rest fades")
+	return parts
+
+
+## Ungrouping the open group's last members closes it, and the rest of the level
+## was left faded with no group open.
+func test_ungrouping_the_open_group_unfades_the_level():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await _level()
+	var parts: Dictionary = await _open_pair(level)
+	await _select([parts["a"], parts["b"]])
+	assert_true(HFPluginGroups.ungroup_selected(rig.plugin, level))
+	assert_eq(_system(level).open_group, "", "the group is gone, and closed")
+	assert_false(_faded(parts["outside"]), "nothing is faded")
+	await rig.leave_level(level)
+
+
+## A brush added to the open group is inside it, and one removed is outside.
+func test_a_brush_added_to_or_taken_from_the_open_group_fades_as_it_should():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await _level()
+	var parts: Dictionary = await _open_pair(level)
+	var c = rig.box(level, "c", Vector3(12, 2, 0))
+	level.add_units_to_group([c], "Pair")
+	assert_false(_faded(c), "added, it is inside the open group")
+	level.remove_units_from_group([parts["b"]], "Pair")
+	assert_true(_faded(parts["b"]), "taken out, it is outside")
+	await rig.leave_level(level)
+
+
+## A brush made while a group is open, as an undo makes one again, is outside it.
+func test_a_brush_made_while_a_group_is_open_is_faded():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await _level()
+	await _open_pair(level)
+	var late = rig.box(level, "late", Vector3(30, 2, 0))
+	assert_true(_faded(late), "faded from the start")
+	await rig.leave_level(level)
+
+
+## Undoing the group that is open closes it. The restore faded the level by the
+## open group before it put the groups back, and left every brush faded.
+func test_undoing_the_open_group_leaves_nothing_faded():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await _level()
+	var parts: Dictionary = await _open_pair(level)
+	rig.undo().press_undo()
+	await rig.frame()
+	assert_eq(_system(level).open_group, "", "the group is gone")
+	for key in ["a", "b", "outside"]:
+		var node = level.find_brush_by_id(key)
+		assert_false(_faded(node), "%s is not faded" % key)
+	await rig.leave_level(level)
+
+
+## A structure's pieces stay hidden under the Structures filter through an undo
+## of Detach. The restore reuses the pieces and tags them again, and the walk of
+## only the brushes it made did not look at them.
+func test_an_undone_detach_hides_the_pieces_under_the_structures_filter():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await _level()
+	var made: HFOpResult = level.create_generator(
+		"stairs", HFGeneratorSystem.default_settings("stairs"), Transform3D.IDENTITY
+	)
+	assert_true(made.ok, "fixture: stairs")
+	var record = level.generator_system.generators.values()[0]
+	var pieces: Array = []
+	for brush_id in record.brush_ids:
+		pieces.append(level.find_brush_by_id(str(brush_id)))
+	level.set_view_filter("structure", true)
+	assert_false(pieces[0].visible, "fixture: the filter hides them")
+	var before: Dictionary = level.capture_state()
+	assert_true(level.detach_generator(str(record.generator_id)))
+	assert_true(pieces[0].visible, "detached, they are plain brushes and show")
+	level.restore_state(before)
+	for piece in pieces:
+		assert_false(piece.visible, "the undo makes them a structure again, hidden")
+	level.set_view_filter("structure", false)
+	await rig.leave_level(level)
