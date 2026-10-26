@@ -131,6 +131,30 @@ func test_an_array_shows_its_count_and_a_new_count_makes_that_many():
 	await rig.leave_level(level)
 
 
+## A ring's new step from Adjust Last reaches the dock as the step, with Fill 360
+## off, even when Fill 360 was ticked again for the next ring. Fill 360 stayed
+## ticked and the next ring threw the step away (#1931).
+func test_a_ring_s_new_step_reaches_the_dock_with_fill_360_off():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	var dock = rig.plugin.dock
+	dock.dup_mode_opt.selected = 1
+	dock.dup_count_spin.value = 3
+	dock.dup_fill_check.button_pressed = true
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_eq(str(rig.plugin.last_run.get("id")), "radial_array", "fixture: a ring")
+	rig.select([])
+	await rig.frame()
+	dock.dup_fill_check.button_pressed = true
+	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "step", 30.0))
+	await rig.frame()
+	assert_false(dock.dup_fill_check.button_pressed, "Fill 360 is off")
+	var params: Dictionary = HFDockBrushHandler.array_params(dock, PackedStringArray())
+	assert_almost_eq(float(params["step_degrees"]), 30.0, 0.001, "and the dock's step is 30")
+	await rig.leave_level(level)
+
+
 ## Settings kept by name come back on another run.
 func test_settings_kept_by_name_come_back():
 	var made: Array = await _level_with_box()
