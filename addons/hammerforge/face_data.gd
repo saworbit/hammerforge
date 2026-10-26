@@ -654,6 +654,22 @@ func projected_points(points: PackedVector3Array, projection: int = -1) -> Packe
 	return out
 
 
+## Where this face reads `points`, on it in its brush's space, before its rotation,
+## scale and offset: what it shows there with those taken back out. On a face with
+## no layout of its own that is `projected_points()`. A layout, as Texture Lock
+## writes on a sheared wall, shows something its projection does not, and
+## `LevelRoot.set_face_uv_params()` carries it through a change of values as if it
+## were this reading, so Align to Edge and the turn and slide keys work from this
+## and not from the projection (#1993). Empty for Cylindrical.
+func raw_uvs_at(points: PackedVector3Array) -> PackedVector2Array:
+	if texture_axes().is_empty():
+		return PackedVector2Array()
+	var values := uv_transform()
+	if not has_uv_layout() or local_verts.size() < 3 or is_zero_approx(values.determinant()):
+		return projected_points(points)
+	return values.affine_inverse() * shown_uvs_at(points)
+
+
 ## Whether `projection` lays a texture flat on this face: Cylindrical does not, nor
 ## does a planar axis the face is seen edge on from, whose two axes leave the face.
 func projection_lies_on_face(projection: int) -> bool:
