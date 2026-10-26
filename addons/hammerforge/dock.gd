@@ -3961,8 +3961,15 @@ func _log(message: String, force: bool = false) -> void:
 ## it too when the command makes brushes, whose ids a second run would not give
 ## back (#1275). With it on, the do operation becomes a snapshot of the result
 ## instead of the call.
+##
+## A spin box passes a `collation_tag` naming what it sets, so a run of changes
+## to it within a second is one step, as the other spins are (#2012).
 func _commit_state_action(
-	action_name: String, method_name: String, args: Array = [], absolute_redo: bool = false
+	action_name: String,
+	method_name: String,
+	args: Array = [],
+	absolute_redo: bool = false,
+	collation_tag: String = ""
 ) -> void:
 	if not level_root:
 		return
@@ -3974,7 +3981,7 @@ func _commit_state_action(
 		args,
 		false,
 		Callable(self, "record_history"),
-		"",
+		collation_tag,
 		absolute_redo
 	)
 

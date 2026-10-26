@@ -1,2 +1,3 @@
 - Add Layer names a new paint layer something no other row shows. (issue [#2013](https://github.com/saworbit/hammerforge/issues/2013))
 - Removing a paint layer keeps the confirmed connectors after it on their layers. (issue [#2009](https://github.com/saworbit/hammerforge/issues/2009))
+- Height Scale, Layer Y and Rename on the Paint tab are undo steps. (issue [#2012](https://github.com/saworbit/hammerforge/issues/2012))
