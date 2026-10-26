@@ -1,7 +1,8 @@
 @tool
 extends RefCounted
 ## What changed between two versions of a level (#1701): brushes added, removed
-## and changed, face by face, entities, wires, visgroups, cordons and paint.
+## and changed, face by face, entities, wires, visgroups, groups, cordons and
+## paint.
 ##
 ## Both sides are what a `.hflevel` holds: `{"settings", "state"}`, read from a
 ## file with `HFFileSystem.read_hflevel()` or captured from the open level with
@@ -19,7 +20,7 @@ const SAME_PLACE := 0.01
 const UV_NEAR := 0.001
 
 ## The kinds `compare()` counts, in the order its summary names them.
-const KINDS := ["brushes", "faces", "entities", "wires", "visgroups", "cordons", "paint"]
+const KINDS := ["brushes", "faces", "entities", "wires", "visgroups", "groups", "cordons", "paint"]
 
 ## The keys of a face's record that say where its texture lies on it.
 const UV_KEYS := ["uv_projection", "uv_scale", "uv_offset", "uv_rotation", "custom_uvs"]
@@ -62,8 +63,10 @@ static func compare(before: Dictionary, after: Dictionary) -> Dictionary:
 	var brushes := _compare_brushes(old_state, new_state, counts)
 	var entities := _compare_entities(old_state, new_state, counts)
 	var rows: Array = brushes["rows"] + entities["rows"]
+	rows.append_array(_wires_aimed_at_nothing(old_state, new_state))
 	var rest: PackedStringArray = []
 	rest.append_array(_compare_visgroups(old_state, new_state, counts))
+	rest.append_array(_compare_groups(old_state, new_state, counts))
 	rest.append_array(
 		_compare_cordons(before.get("settings", {}), after.get("settings", {}), counts)
 	)
@@ -113,6 +116,8 @@ static func _kind_word(kind: String, many: int) -> String:
 			return "wire" if many == 1 else "wires"
 		"visgroups":
 			return "visgroup" if many == 1 else "visgroups"
+		"groups":
+			return "group" if many == 1 else "groups"
 		"cordons":
 			return "cordon" if many == 1 else "cordons"
 	return "paint layer" if many == 1 else "paint layers"
@@ -250,11 +255,18 @@ static func _brush_entity_of(info: Dictionary) -> String:
 
 ## What changed on one brush, as sentences, how many of its faces changed and how
 ## many of its wires. Its brush entity too: its class, its settings and its wires
-## (#1941).
+## (#1941). Its name, its brush entity's name, its visgroups and its group, which
+## decide what a wire reaches, what a bake leaves out and what a click selects
+## (#1982).
 static func _brush_changes(
 	old: Dictionary, now: Dictionary, palette_old: Array, palette_new: Array
 ) -> Dictionary:
 	var lines: PackedStringArray = []
+	# A record with no name is a brush nobody named, under a name Godot made up
+	# (#660) or from a file older than every brush having one. A load names it
+	# `Box_3`, and that is not a rename.
+	if str(old.get("name", "")) != "" and str(now.get("name", "")) != "":
+		_append_said(lines, _from_to("renamed", old.get("name"), now.get("name")))
 	var told := _transform_of(old)
 	var tnew := _transform_of(now)
 	var delta := tnew.origin - told.origin
@@ -291,6 +303,14 @@ static func _brush_changes(
 				]
 			)
 		)
+	_append_said(
+		lines,
+		_from_to(
+			"brush entity renamed",
+			old.get(HFBrushEntity.NAME_META),
+			now.get(HFBrushEntity.NAME_META)
+		)
+	)
 	var settings := _settings_changed(
 		old.get(HFBrushEntity.DATA_META, {}), now.get(HFBrushEntity.DATA_META, {})
 	)
@@ -299,6 +319,7 @@ static func _brush_changes(
 	var wires := _wires_changed(_wires_of(old), _wires_of(now))
 	if not wires.is_empty():
 		lines.append(wires["line"])
+	lines.append_array(_membership_changes(old, now))
 	var old_faces: Array = old.get("faces", [])
 	var new_faces: Array = now.get("faces", [])
 	var faces_changed := 0
@@ -730,6 +751,13 @@ static func _entity_changes(
 	old: Dictionary, now: Dictionary, counts: Dictionary
 ) -> PackedStringArray:
 	var out: PackedStringArray = []
+	# Its node name and the name it is addressed by, which wires are aimed at, and
+	# its visgroups and group (#1982). Paired by class and place, a renamed entity
+	# read as the same one with nothing changed.
+	_append_said(out, _from_to("renamed", old.get("name"), now.get("name")))
+	_append_said(
+		out, _from_to("authored name changed", old.get("entity_name"), now.get("entity_name"))
+	)
 	var delta := _entity_place(now) - _entity_place(old)
 	if delta.length() > NEAR:
 		out.append("moved %s" % moved_text(delta))
@@ -746,7 +774,102 @@ static func _entity_changes(
 	if not wires.is_empty():
 		counts["wires"] += int(wires["count"])
 		out.append(wires["line"])
+	out.append_array(_membership_changes(old, now))
 	return out
+
+
+## "<what> from a to b", with "none" for a name that is not there, or "" when the
+## two are the same.
+static func _from_to(what: String, was: Variant, is_now: Variant) -> String:
+	var before := str(was) if was != null else ""
+	var after := str(is_now) if is_now != null else ""
+	if before == after:
+		return ""
+	return (
+		"%s from %s to %s"
+		% [what, before if before != "" else "none", after if after != "" else "none"]
+	)
+
+
+static func _append_said(lines: PackedStringArray, line: String) -> void:
+	if line != "":
+		lines.append(line)
+
+
+## The visgroups and the group a brush or an entity record is in, as changes. The
+## visgroups are a set: the order a record lists them in means nothing.
+static func _membership_changes(old: Dictionary, now: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = []
+	_append_said(
+		out,
+		_from_to("visgroups changed", ", ".join(_visgroups_of(old)), ", ".join(_visgroups_of(now)))
+	)
+	_append_said(out, _from_to("group changed", old.get("group_id"), now.get("group_id")))
+	return out
+
+
+static func _visgroups_of(info: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = []
+	var listed = info.get("visgroups", [])
+	if listed is Array or listed is PackedStringArray:
+		for vg_name in listed:
+			if str(vg_name) != "" and not out.has(str(vg_name)):
+				out.append(str(vg_name))
+	out.sort()
+	return out
+
+
+## The names a wire can be aimed at in a level: each entity's node name and
+## authored name, and each brush entity's, as `HFEntitySystem.build_name_index()`
+## reads them from the nodes.
+static func _addresses(state: Dictionary) -> Dictionary:
+	var out := {}
+	for info in state.get("entities", []):
+		if info is Dictionary:
+			for key in ["name", "entity_name"]:
+				if str(info.get(key, "")) != "":
+					out[str(info[key])] = true
+	for info in state.get("brushes", []):
+		if info is Dictionary and str(info.get(HFBrushEntity.CLASS_META, "")) != "":
+			for key in ["name", HFBrushEntity.NAME_META]:
+				if str(info.get(key, "")) != "":
+					out[str(info[key])] = true
+	return out
+
+
+## A line for each wire that reached something before and reaches nothing now, as
+## a rename leaves the wires aimed at the old name (#1982). Not counted: the change
+## that left it is.
+static func _wires_aimed_at_nothing(old_state: Dictionary, new_state: Dictionary) -> Array:
+	var reached := _addresses(old_state)
+	var reaches := _addresses(new_state)
+	# Each as [its record, what a line calls it, what the line selects, the entity
+	# it is part of]. A brush entity of several brushes holds its wires on every
+	# one of them, and each wire is said once.
+	var sources: Array = []
+	for info in new_state.get("entities", []):
+		if info is Dictionary:
+			var ref := "entity:" + _entity_name(info)
+			sources.append([info, "entity '%s'" % _entity_name(info), ref, ref])
+	for info in new_state.get("brushes", []):
+		if info is Dictionary:
+			var ref := "brush:" + str(info.get("brush_id", ""))
+			sources.append([info, _brush_name(info), ref, _brush_entity_of(info)])
+	var rows: Array = []
+	var said := {}
+	for source in sources:
+		for wire in _wires_of(source[0]):
+			if not (wire is Dictionary):
+				continue
+			var target := str(wire.get("target_name", ""))
+			if target == "" or not reached.has(target) or reaches.has(target):
+				continue
+			var line := "wire %s to %s reaches nothing now" % [wire.get("output_name", ""), target]
+			if said.has(source[3] + line):
+				continue
+			said[source[3] + line] = true
+			rows.append(_row("%s: %s" % [source[1], line], source[2]))
+	return rows
 
 
 static func _compare_visgroups(
@@ -775,6 +898,46 @@ static func _compare_visgroups(
 
 static func _visgroup(entry: Variant) -> Variant:
 	return HFVisgroupSystem.record_from(entry) if entry is Dictionary else entry
+
+
+## Groups made and done away with, and a group put inside another or taken out
+## (#1982). Which group a brush or an entity is in is its own change.
+static func _compare_groups(
+	old_state: Dictionary, new_state: Dictionary, counts: Dictionary
+) -> PackedStringArray:
+	var lines: PackedStringArray = []
+	var old_groups := _dictionary_at(old_state, "groups")
+	var new_groups := _dictionary_at(new_state, "groups")
+	var old_parents := _dictionary_at(old_state, "group_parents")
+	var new_parents := _dictionary_at(new_state, "group_parents")
+	for group_name in new_groups:
+		var line := ""
+		if not old_groups.has(group_name):
+			line = "group '%s': added" % group_name
+		else:
+			var was := str(old_parents.get(group_name, ""))
+			var is_now := str(new_parents.get(group_name, ""))
+			if was != is_now:
+				line = (
+					"group '%s': %s"
+					% [
+						group_name,
+						"no longer inside %s" % was if is_now == "" else "now inside %s" % is_now
+					]
+				)
+		if line != "":
+			lines.append(line)
+			counts["groups"] += 1
+	for group_name in old_groups:
+		if not new_groups.has(group_name):
+			lines.append("group '%s': removed" % group_name)
+			counts["groups"] += 1
+	return lines
+
+
+static func _dictionary_at(state: Dictionary, key: String) -> Dictionary:
+	var value = state.get(key)
+	return value if value is Dictionary else {}
 
 
 const CORDON_KEYS := [
