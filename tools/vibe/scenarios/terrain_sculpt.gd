@@ -24,7 +24,7 @@ func summary() -> String:
 
 
 func expected_issues() -> Array[int]:
-	return [2007, 2008]
+	return [2007, 2008, 2014]
 
 
 func run() -> void:
@@ -166,7 +166,8 @@ func _sculpt_at_a_chunk_edge() -> void:
 		note("chunk %s corners that disagree with the heightmap" % tag, per_chunk[tag].size())
 	var left: Array = per_chunk.get("0,0", [])
 	if not left.is_empty():
-		flag(
+		known(
+			2014,
 			"a sculpt at a chunk's first column leaves the chunk before it on the old heights",
 			(
 				(

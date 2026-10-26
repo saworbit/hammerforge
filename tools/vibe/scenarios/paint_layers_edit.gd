@@ -23,7 +23,7 @@ func summary() -> String:
 
 
 func expected_issues() -> Array[int]:
-	return [2009]
+	return [2009, 2011, 2012, 2013]
 
 
 func run() -> void:
@@ -192,7 +192,8 @@ func _grid_snap_under_paint() -> void:
 		not after_stroke.size.is_equal_approx(laid.size)
 		or not after_undo.size.is_equal_approx(laid.size)
 	):
-		flag(
+		known(
+			2011,
 			"changing the grid snap resizes every floor already painted",
 			(
 				(
@@ -335,7 +336,8 @@ func _a_name_add_hands_out_again() -> void:
 		counts[row] = int(counts.get(row, 0)) + 1
 	for row in counts:
 		if counts[row] > 1:
-			flag(
+			known(
+				2013,
 				"Add Layer gives a new layer the name another row already shows",
 				(
 					(
@@ -387,7 +389,8 @@ func _layer_settings_and_undo() -> void:
 	var redone: Array = read.call()
 	note("after Ctrl+Y of the stroke", redone)
 	if redone != set_to:
-		flag(
+		known(
+			2012,
 			"Height Scale, Layer Y and Rename take no undo step, so undo and redo of the stroke before them throws them away",
 			(
 				(

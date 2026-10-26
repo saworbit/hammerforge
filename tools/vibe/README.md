@@ -387,9 +387,8 @@ the navmesh measured against what the game actually has rather than what the
 editor shows (a body walking the stairs, a door in the navmesh, a prop out of it).
 
 The 27 October sweep added the rows from `sweep-faces` down, most of them on
-features less than a week old, and filed #1960 to #2009. Four findings of
-`paint-layers-edit` and `terrain-sculpt` were left unfiled at the session's
-fifty issue cap and still flag. `bake-tangents` and
+features less than a week old, and filed #1960 to #2009 and #2011 to #2015.
+`bake-tangents` and
 `pending-cut-siblings` are its clean ones: every bake path, the CSG and chunked
 ones included, gives tangents that follow the UVs, and every operation beside
 Clip, Hollow and Merge keeps a pending cut pending. Its findings took the same
