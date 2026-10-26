@@ -324,7 +324,7 @@ msgid "Auto-cordon to selection, bake only that area, and play"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
-msgid "Auto-generate OccluderInstance3D nodes from large flat surfaces\nReduces draw calls via occlusion culling without manual placement"
+msgid "Auto-generate OccluderInstance3D nodes from large flat surfaces\nReduces draw calls via occlusion culling without manual placement\nOnly geometry that stays put gets one: not a door, a physbox, a func_illusionary brush or a brush that takes inputs"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd

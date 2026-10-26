@@ -1,1 +1,2 @@
+- Generate Occluders leaves out doors, physboxes, func_illusionary brushes and brushes that take inputs. (issue [#1961](https://github.com/saworbit/hammerforge/issues/1961))
 - The spawn check and Validate's stairs check read a func_illusionary brush as empty space. (issue [#1962](https://github.com/saworbit/hammerforge/issues/1962))
