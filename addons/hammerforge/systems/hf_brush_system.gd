@@ -2249,6 +2249,21 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 			)
 		)
 		return plan
+	# One sculpt over the faces a face grew from keeps their points only when its
+	# grid has them all. Three in a row, two of unequal widths, or two halves at
+	# the finest power have no such grid, and laid on another their relief moved
+	# under a message that said only how many brushes merged (#1972).
+	var moving := HFConvexClip.sculpts_a_union_would_move(union["faces"], union["parts"])
+	if moving > 0:
+		plan["result"] = HFOpResult.fail(
+			"Merge: %d sculpt%s would move" % [moving, "" if moving == 1 else "s"],
+			(
+				"One sculpt over the merged face has 4, 8 or 16 cells a side, and no such "
+				+ "grid has every point of these. Merge sculpted faces that halve evenly, "
+				+ "such as two halves at power 2 or 3, or take the sculpts off first"
+			)
+		)
+		return plan
 	plan["drafts"] = drafts
 	plan["placement"] = placement
 	plan["faces"] = union["faces"]

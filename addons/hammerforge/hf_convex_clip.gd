@@ -542,7 +542,8 @@ static func union_of(
 ## a piece of a cut. A sculpt is laid against the four corners of its face, so a
 ## face that grew takes a sculpt only when `parts`, as `union_of()` gives it,
 ## names the faces it grew from, and it and they are quads: one sculpt over all
-## of them, a power finer so their grid points are its own (#1906).
+## of them, at the coarsest power whose grid points include theirs (#1906). With
+## no such power the sculpts are dropped rather than resampled (#1972).
 static func carry_onto_union(faces: Array, origins: Dictionary, parts: Dictionary = {}) -> int:
 	var dropped := 0
 	for face in faces:
@@ -577,12 +578,51 @@ static func carry_onto_union(faces: Array, origins: Dictionary, parts: Dictionar
 			continue
 		var merged: HFDisplacementData = null
 		if parts.has(built):
-			var power := mini(finest + 1, 4) if on_it.size() > 1 else finest
-			merged = HFDisplacementData.merged_onto(laid, built.local_verts, power)
+			var power := _union_sculpt_power(laid, built.local_verts, finest)
+			if power > 0:
+				merged = HFDisplacementData.merged_onto(laid, built.local_verts, power)
 		built.displacement = merged
 		if merged == null:
 			dropped += sculpted
 	return dropped
+
+
+## The power of the one sculpt laid over `laid`, the faces a face of a union grew
+## from as `HFDisplacementData.merged_onto()` takes them: the coarsest whose grid
+## over `corners` has each of their grid points, or -1 when none has. `finest` is
+## the finest power among them, and one face alone keeps it.
+static func _union_sculpt_power(laid: Array, corners: PackedVector3Array, finest: int) -> int:
+	if laid.size() < 2:
+		return finest
+	return HFDisplacementData.power_holding(laid, corners, finest)
+
+
+## How many sculpts a union would move: those on the faces a face grew from when
+## no grid of up to 16 cells a side over it has every point of theirs. Three in a
+## row, or two of unequal widths, are such faces, and one sculpt laid over them
+## could only be resampled (#1972). A face `sculpts_a_union_would_drop()` counts
+## is left to it.
+static func sculpts_a_union_would_move(faces: Array, parts: Dictionary) -> int:
+	var moved := 0
+	for face in faces:
+		var built: FaceData = face as FaceData
+		if built == null or not parts.has(built) or built.local_verts.size() != 4:
+			continue
+		var sculpted := 0
+		var finest := 0
+		var laid: Array = []
+		for part in parts[built]:
+			var data: FaceData = part as FaceData
+			if data.local_verts.size() != 4:
+				sculpted = 0
+				break
+			if data.displacement != null:
+				sculpted += 1
+				finest = maxi(finest, data.displacement.power)
+			laid.append([data.displacement, data.local_verts])
+		if sculpted > 0 and _union_sculpt_power(laid, built.local_verts, finest) < 0:
+			moved += sculpted
+	return moved
 
 
 ## Every face of `sources` lying on `face`'s plane and facing its way.
