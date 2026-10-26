@@ -440,3 +440,148 @@ func test_a_saved_and_reopened_sweep_is_still_editable():
 	assert_eq(_pieces_of(other, records[0]).size(), 3)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 	await rig.leave_level(other)
+
+
+# ===========================================================================
+# Re-pick and the looks a sweep dresses its pieces in (#1932)
+# ===========================================================================
+
+
+## A second box at `at`, every face in palette slot `slot`, its +X face picked.
+func _pick_other_wall(level, at: Vector3, slot: int) -> Node:
+	var box = rig.box(level, "other", at, Vector3(1, 1, 1))
+	var index := -1
+	for i in box.faces.size():
+		box.faces[i].material_idx = slot
+		if (box.global_basis * box.faces[i].normal).normalized().is_equal_approx(Vector3.RIGHT):
+			index = i
+	level.face_selection = {"other": [index]}
+	return box
+
+
+func _slots_of(pieces: Array) -> Dictionary:
+	var out := {}
+	for piece in pieces:
+		for face in piece.faces:
+			out[int(face.material_idx)] = true
+	return out
+
+
+## Re-picking the faces a sweep was made from changes nothing, and picking a face of
+## another wall is a change. Both used to read as the run the sweep has, since
+## only a Trim Run's walls were compared, so a Re-pick always said nothing to do.
+func test_a_repick_along_another_wall_is_a_change_and_the_same_faces_are_not():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _swept({"path": HFFaceSweep.Path.STRAIGHT, "segments": 2})
+	var level = made[0]
+	var record = made[1]
+	var generator_id := str(record.generator_id)
+	var same: Dictionary = level.run_from_faces(record.type, level.face_selection)
+	assert_true(
+		level.generator_repick_changes_nothing(generator_id, same["run"], same["placement"]),
+		"the faces it was made from give the run it has"
+	)
+	_pick_other_wall(level, Vector3(0, 0.5, 6), 0)
+	var other: Dictionary = level.run_from_faces(record.type, level.face_selection)
+	assert_false(
+		level.generator_repick_changes_nothing(generator_id, other["run"], other["placement"]),
+		"another wall's face is another run"
+	)
+	await rig.leave_level(level)
+
+
+## A Re-pick runs through the command and says what it was built along. The
+## message used to read a Trim Run's counts, which a sweep's run has not got, and
+## stopped with an error once the pieces were already rebuilt.
+func test_repick_moves_a_sweep_to_another_wall_and_says_so():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _swept({"path": HFFaceSweep.Path.STRAIGHT, "segments": 2})
+	var level = made[0]
+	var record = made[1]
+	var generator_id := str(record.generator_id)
+	rig.select([_pieces_of(level, record)[0]])
+	await rig.frame()
+	_pick_other_wall(level, Vector3(0, 0.5, 6), 3)
+	var steps: int = rig.undo().step_count()
+	assert_true(HFPluginEditActions.repick_trim_run(rig.plugin, level), "re-picked")
+	assert_eq(rig.undo().step_count(), steps + 1, "in one step")
+	var rebuilt = level.generator_for_id(generator_id)
+	for piece in _pieces_of(level, rebuilt):
+		assert_almost_eq(piece.global_position.z, 6.0, 0.01, "the pieces stand on the other wall")
+	assert_true(
+		rig.toasts().any(func(t): return t.contains("Sweep re-picked along 1 face")),
+		"and it says what it was built along: %s" % [rig.toasts()]
+	)
+	rig.select([])
+	await rig.leave_level(level)
+
+
+## The pieces of a Re-pick wear the new wall's looks. The rebuild used to take
+## the looks the sweep dressed its old pieces in for work done on them, and put
+## the old wall's material back over the new one's.
+func test_a_repick_dresses_the_pieces_in_the_new_wall_s_looks():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _picked_face()
+	var level = made[0]
+	var box = made[1]
+	for face in box.faces:
+		face.material_idx = 2
+	assert_true(
+		HFPluginFaceSweep.run(
+			rig.plugin, level, _values({"path": HFFaceSweep.Path.STRAIGHT, "segments": 2})
+		)
+	)
+	var record = _sweeps(level)[0]
+	assert_eq(_slots_of(_pieces_of(level, record)), {2: true}, "fixture: the first wall's looks")
+	_pick_other_wall(level, Vector3(0, 0.5, 6), 5)
+	var read: Dictionary = level.run_from_faces(record.type, level.face_selection)
+	assert_true(
+		level.generator_system.repick(str(record.generator_id), read["run"], read["placement"]).ok
+	)
+	assert_eq(_slots_of(_pieces_of(level, record)), {5: true}, "the new wall's looks")
+	await rig.leave_level(level)
+
+
+## A sweep nobody has painted has nothing an Update could lose: the looks it
+## dressed its pieces in are its own to dress them in again. Every face read as
+## hand work, so fewer segments asked whether to throw it away.
+func test_a_fresh_sweep_has_no_looks_at_risk_and_a_painted_face_has():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _picked_face()
+	var level = made[0]
+	var box = made[1]
+	for face in box.faces:
+		face.material_idx = 2
+	assert_true(
+		HFPluginFaceSweep.run(
+			rig.plugin, level, _values({"path": HFFaceSweep.Path.STRAIGHT, "segments": 4})
+		)
+	)
+	var record = _sweeps(level)[0]
+	var generator_id := str(record.generator_id)
+	var fewer: Dictionary = record.settings.duplicate()
+	fewer["segments"] = 2
+	assert_eq(level.generator_appearance_at_risk(generator_id, fewer).size(), 0, "nothing at risk")
+	var pieces := _pieces_of(level, record)
+	pieces[0].faces[0].material_idx = 7
+	pieces[3].faces[0].material_idx = 7
+	assert_eq(
+		Array(level.generator_appearance_at_risk(generator_id, fewer)),
+		[str(pieces[3].brush_id)],
+		"the painted piece fewer segments drop is"
+	)
+	var longer: Dictionary = record.settings.duplicate()
+	longer["length"] = float(record.settings.get("length", 4.0)) + 1.0
+	assert_true(level.regenerate_generator(generator_id, longer).ok)
+	var rebuilt := _pieces_of(level, record)
+	assert_eq(rebuilt[0].faces[0].material_idx, 7, "an Update keeps the paint")
+	assert_eq(_slots_of(rebuilt.slice(1, 3)), {2: true}, "and the others their looks")
+	await rig.leave_level(level)

@@ -19,6 +19,7 @@ class_name HFGeneratorSystem
 const HFArchBuilder = preload("../hf_arch_builder.gd")
 const HFDomeBuilder = preload("../hf_dome_builder.gd")
 const HFDoorFrameBuilder = preload("../hf_door_frame_builder.gd")
+const FaceData = preload("../face_data.gd")
 const HFGenerator = preload("../hf_generator.gd")
 const HFOpResult = preload("../hf_op_result.gd")
 const HFSpiralStairsBuilder = preload("../hf_spiral_stairs_builder.gd")
@@ -356,10 +357,12 @@ func repick_changes_nothing(generator_id: String, run: Dictionary, placement: Tr
 		return false
 	if not update_changes_nothing(generator_id, record.settings):
 		return false
-	# Both read in the space the structure stands in now.
-	var world := HFTrimRunBuilder.in_space(run, placement.affine_inverse())
-	var now := HFTrimRunBuilder.in_space(world, rebuild_placement(generator_id))
-	return HFTrimRunBuilder.same_run(now, record.run)
+	# Both read in the space the structure stands in now, as its own type reads a
+	# run: a Trim Run's walls or a Sweep's faces (#1932).
+	var builder = builder_for(record.type)
+	var world: Dictionary = builder.in_space(run, placement.affine_inverse())
+	var now: Dictionary = builder.in_space(world, rebuild_placement(generator_id))
+	return builder.same_run(now, record.run)
 
 
 ## What `create()` and a rebuild ask first: the settings, and for a type built
@@ -1066,13 +1069,22 @@ func _cuts_applied(record: HFGenerator) -> bool:
 ## the piece gave the new piece a stranger's name, entity and visgroups (#1221).
 func _carry_of(record: HFGenerator) -> HFRebuildCarry:
 	var keys := _old_piece_keys(record)
+	var built := build_faces(record.type, record.settings, record.run)
 	var pieces: Array = []
+	var as_built: Dictionary = {}
 	for i in record.brush_ids.size():
 		var brush = _owned_brush(str(record.brush_ids[i]), record.generator_id)
 		if brush:
 			pieces.append([keys[i], brush])
+			as_built[keys[i]] = _faces_as_built(brush, built[i] if i < built.size() else [])
 	var visgroups = root.get("visgroup_system") if root else null
-	return HFRebuildCarry.capture(pieces, CARRIED, visgroups)
+	var carry := HFRebuildCarry.capture(pieces, CARRIED, visgroups)
+	# A face still in the look its builder gave it is the builder's to dress again.
+	# A Sweep dresses its pieces in the looks of the faces it was picked from, so a
+	# Re-pick's pieces wear the new faces' looks, not the old ones (#1932).
+	for key in as_built:
+		carry.forget_faces(key, as_built[key])
+	return carry
 
 
 ## The pieces whose authored appearance a rebuild with these settings could not
@@ -1088,12 +1100,16 @@ func appearance_at_risk(generator_id: String, settings: Dictionary) -> PackedStr
 		return out
 	var record: HFGenerator = generators[generator_id]
 	var face_sets := build_faces(record.type, settings, record.run)
+	var built := build_faces(record.type, record.settings, record.run)
 	# Each old piece is matched to the new piece the carry gives its look to.
 	var new_keys := _piece_keys(face_sets.size(), Array(cutter_pieces(record.type, settings)))
 	var old_keys := _old_piece_keys(record)
 	for i in record.brush_ids.size():
 		var brush = _owned_brush(str(record.brush_ids[i]), generator_id)
-		if brush == null or not _has_authored_faces(brush):
+		if brush == null:
+			continue
+		var piece_built: Array = built[i] if i < built.size() else []
+		if _faces_as_built(brush, piece_built).size() == brush.faces.size():
 			continue
 		var j := new_keys.find(old_keys[i])
 		if j < 0 or face_sets[j].size() != brush.faces.size():
@@ -1108,23 +1124,41 @@ static func _old_piece_keys(record: HFGenerator) -> PackedStringArray:
 	return _piece_keys(record.brush_ids.size(), cut_indices)
 
 
-## True when any face of the piece carries appearance the Paint tab put there, or
-## a `.map` name.
-static func _has_authored_faces(brush) -> bool:
-	for face in brush.faces:
-		if face == null:
+## The faces of `brush` nobody has worked on since its builder made them from
+## `built`, the face set the piece came from: each still in the look the builder
+## gave it, with no paint, no hand UV layout and no texture group. A face the
+## builder made plain and the Paint tab, a `.map` name or a hidden face type has
+## changed since is work; so is a Sweep's face dressed in anything but the look of
+## the face it was picked from (#1932). By index. When the piece has another
+## number of faces than `built`, each is held to a plain face, as before a builder
+## could dress one.
+static func _faces_as_built(brush, built: Array) -> PackedInt32Array:
+	var looks: Array = []
+	if built.size() == brush.faces.size():
+		for face in built:
+			if face != null:
+				face.ensure_geometry()
+		# A box piece lists its faces in box order, so each is matched by the way it
+		# points, as the carry matches them.
+		var sources := HFRebuildCarry._stored_face_for_each(brush, built)
+		for i in brush.faces.size():
+			looks.append(built[sources[i]])
+	else:
+		for face in brush.faces:
+			looks.append(FaceData.new())
+	var out := PackedInt32Array()
+	for i in brush.faces.size():
+		var face = brush.faces[i]
+		var look = looks[i]
+		if face == null or look == null:
+			out.append(i)
 			continue
-		if face.material_idx != -1 or not face.paint_layers.is_empty():
-			return true
-		if face.map_texture != "":
-			return true
-		if not face.custom_uvs.is_empty() or not is_zero_approx(face.uv_rotation):
-			return true
-		if not face.uv_scale.is_equal_approx(Vector2.ONE):
-			return true
-		if not face.uv_offset.is_equal_approx(Vector2.ZERO):
-			return true
-	return false
+		if not face.paint_layers.is_empty() or face.has_hand_layout():
+			continue
+		if face.uv_group != 0 or not face.appearance_matches(look):
+			continue
+		out.append(i)
+	return out
 
 
 ## Delete only the brushes that still say they belong to this generator.

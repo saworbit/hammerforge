@@ -104,6 +104,20 @@ func kept(property: String) -> Dictionary:
 	return out
 
 
+## Let go of the look of each face in `faces`, by index, of the node under `key`:
+## a face its source dresses as the node had it, so the node made in its place
+## keeps the look its source gives. A generated piece's faces still in the look
+## the builder gave them (#1932). The rest of its appearance is kept.
+func forget_faces(key: String, faces: PackedInt32Array) -> void:
+	var own: Dictionary = _kept.get(key, {})
+	var appearance: Variant = own.get(APPEARANCE)
+	if faces.is_empty() or not (appearance is Dictionary) or appearance.is_empty():
+		return
+	var forgotten: Dictionary = (appearance as Dictionary).get_or_add("forgotten", {})
+	for index in faces:
+		forgotten[index] = true
+
+
 ## Give each node of `made`, each `[key, node]`, what the node under its key had,
 ## and a node with nothing under its key what every node had, where that is kept.
 func restore(made: Array) -> void:
@@ -275,8 +289,10 @@ static func _apply_appearance(brush, appearance) -> void:
 	if stored.size() != faces.size():
 		return
 	var sources := _stored_face_for_each(brush, stored)
+	var forgotten: Dictionary = appearance.get("forgotten", {})
 	for i in faces.size():
-		_restore_face(faces[i], stored[sources[i]])
+		if not forgotten.has(sources[i]):
+			_restore_face(faces[i], stored[sources[i]])
 	brush.rebuild_preview()
 
 

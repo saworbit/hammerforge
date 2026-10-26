@@ -187,7 +187,63 @@ static func read(picked: Array) -> Dictionary:
 		looks.append(
 			{"swept": picked[i]["look"], "sides": (picked[i]["sides"] as Array).duplicate()}
 		)
-	return {"run": {"rings": plain_rings, "looks": looks}, "placement": start}
+	# `used` and `hidden` as a Trim Run's read gives them, for the message a
+	# Re-pick shows: a sweep takes every face picked and leaves none out (#1932).
+	return {
+		"run": {"rings": plain_rings, "looks": looks},
+		"placement": start,
+		"used": picked.size(),
+		"hidden": PackedStringArray(),
+	}
+
+
+## The run as it reads in the space `placement` sets up: every corner carried back
+## through the placement. The looks are not where anything is, so they stay.
+static func in_space(run: Dictionary, placement: Transform3D) -> Dictionary:
+	var back := placement.affine_inverse()
+	var rings: Array = []
+	for ring in rings_of(run):
+		var plain: Array = []
+		for corner in ring as PackedVector3Array:
+			plain.append(_plain(back * corner))
+		rings.append(plain)
+	return {"rings": rings, "looks": (run.get("looks", []) as Array).duplicate(true)}
+
+
+## Two runs that build the same sweep: the same faces, read to a thousandth, in
+## the same looks. What a Re-pick asks before it rebuilds (#1932).
+static func same_run(a: Dictionary, b: Dictionary) -> bool:
+	return _run_text(a) == _run_text(b)
+
+
+static func _run_text(run: Dictionary) -> String:
+	var parts := PackedStringArray()
+	for ring in rings_of(run):
+		parts.append("ring")
+		for corner in ring as PackedVector3Array:
+			parts.append("%.3f %.3f %.3f" % [corner.x, corner.y, corner.z])
+	parts.append(_value_text(run.get("looks", [])))
+	return ",".join(parts)
+
+
+## A look as text that reads the same after a save: a whole number read back as a
+## float, and a float to a ten thousandth.
+static func _value_text(value: Variant) -> String:
+	if value is int or value is float:
+		return "%.4f" % float(value)
+	if value is Array:
+		var parts := PackedStringArray()
+		for item in value:
+			parts.append(_value_text(item))
+		return "[%s]" % ",".join(parts)
+	if value is Dictionary:
+		var keys: Array = (value as Dictionary).keys()
+		keys.sort()
+		var parts := PackedStringArray()
+		for key in keys:
+			parts.append("%s:%s" % [key, _value_text(value[key])])
+		return "{%s}" % ",".join(parts)
+	return str(value)
 
 
 ## `face`'s look, as plain data a level file holds.
