@@ -2525,7 +2525,7 @@ Notes:
 - **Cast Shadows** under the list sets how the highlighted visgroup's brushes cast shadows: Off for a sky shell, say. **Level Default** leaves it to the level. A brush's own Cast Shadows beats its visgroups', and when two of a brush's visgroups disagree, the one higher in the list wins and **Check Bake Issues** names the brush. Hover a visgroup to see its setting. Saved in the `.hflevel` and undone like any other edit ([#1444](https://github.com/saworbit/hammerforge/issues/1444)).
 - **Current** makes the highlighted visgroup the one new work joins: a brush you draw, stamp or drop, an entity you place, a structure, and a prefab you place or paste, from the dock or over the bridge. The row says `(current)`, and the viewport's shortcut row names it while you draw, as `Click + Drag: Draw Base  (into Upper floor)`, so nobody fills the wrong one. Untick it for none. It is a setting of the level, saved in the `.hflevel` and the scene, and not an undo step, so undoing an edit never changes where the next brush goes ([#1732](https://github.com/saworbit/hammerforge/issues/1732)).
 - **Leave out of bake** keeps the highlighted visgroup in the editor only: guide brushes, a scale figure, a reference copy of a room being rebuilt. Its members stay visible and editable, and every bake skips them, the preview, Bake Changed and a full bake alike. A `.map` export leaves them out too, and a `.map` or `.glb` export says how many it left out. The row says `(not baked)` in a muted colour. Saved in the `.hflevel` and the scene, and undone like any other edit.
-- Use **Rename** to change a visgroup's name. Every member moves with it, so you do not have to rebuild the group. A name that is already taken is refused rather than merging the two visgroups, because merging is a different operation and one you should have to ask for by name.
+- Use **Rename** to change a visgroup's name. Every member moves with it, so you do not have to rebuild the group, and so does its place in each saved view and in **Previous** ([#1979](https://github.com/saworbit/hammerforge/issues/1979)). A name that is already taken is refused rather than merging the two visgroups, because merging is a different operation and one you should have to ask for by name.
 - Visgroups persist in `.hflevel` saves and undo/redo state.
 
 ### Isolate, hide and step back
@@ -2546,7 +2546,9 @@ changing the level ([#1697](https://github.com/saworbit/hammerforge/issues/1697)
   visgroup.
 - **Previous** steps back to the visibility before the last show, hide, isolate
   or end, up to 20 times. It is kept apart from the undo history, so it never
-  undoes an edit, and Ctrl+Z never undoes a visibility change.
+  undoes an edit, and Ctrl+Z never undoes a visibility change. An undo leaves
+  each visgroup's eye and lock, and each hidden brush, as they are now
+  ([#1981](https://github.com/saworbit/hammerforge/issues/1981)).
 - **Save View** keeps which visgroups are shown now under a name, such as "Upper
   floor only" or "Lighting pass". **Views** lists them; **Show** puts one back and
   **Delete** forgets it. Views are saved in the `.hflevel` and the scene, and
