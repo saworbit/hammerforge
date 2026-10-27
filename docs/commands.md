@@ -361,13 +361,13 @@ No parameters.
 
 ### Move to Floor (`move_to_floor`)
 
-Move each brush straight down until its bottom rests on the first surface below it: the floor, a brush, or baked collision. Its x and z stay; the new height snaps to the grid.
+Move the brushes straight down as one piece until one of them rests on a shown brush below it. Hidden brushes, cuts, triggers and baked collision do not stop them, and one already sunk into a brush by up to half its height holds them where they are. Their x and z stay, and they end touching, on the grid or not.
 
 No parameters.
 
 ### Move to Ceiling (`move_to_ceiling`)
 
-Move each brush straight up until its top meets the first surface above it. Its x and z stay; the new height snaps to the grid.
+Move the brushes straight up as one piece until one of them meets a shown brush above it. Hidden brushes, cuts, triggers and baked collision do not stop them, and one already pushed into a brush by up to half its height holds them where they are. Their x and z stay, and they end touching, on the grid or not.
 
 No parameters.
 

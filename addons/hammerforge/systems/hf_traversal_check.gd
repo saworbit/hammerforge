@@ -73,9 +73,10 @@ static func findings(root: Node, brush_nodes: Array) -> Array:
 		if not brush.is_inside_tree() or root.is_entity_node(brush):
 			continue
 		var entity_class := HFBrushEntity.entity_class(brush)
-		# A trigger is nothing to stand on. A clip is collision the player cannot
+		# A trigger or a func_illusionary brush is nothing to stand on, since the
+		# player walks through it (#1962). A clip is collision the player cannot
 		# see, laid over the stairs and ledges these read, never one of them (#1409).
-		if entity_class.begins_with("trigger_") or entity_class == HFBrushEntity.CLIP_CLASS:
+		if HFBrushEntity.bakes_no_collision(brush) or entity_class == HFBrushEntity.CLIP_CLASS:
 			continue
 		var box := HFBakeSystemType.brush_world_aabb(brush, brush.global_transform)
 		if not (box.position.is_finite() and box.size.is_finite()):

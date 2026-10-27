@@ -19,6 +19,7 @@ const HFGridSystem = preload("hf_grid_system.gd")
 const HFUVWrap = preload("../hf_uv_wrap.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOverlayColors = preload("../hf_overlay_colors.gd")
+const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
 const ROLE_PENDING := "pending"
@@ -2266,6 +2267,21 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 			)
 		)
 		return plan
+	# One sculpt over the faces a face grew from keeps their points only when its
+	# grid has them all. Three in a row, two of unequal widths, or two halves at
+	# the finest power have no such grid, and laid on another their relief moved
+	# under a message that said only how many brushes merged (#1972).
+	var moving := HFConvexClip.sculpts_a_union_would_move(union["faces"], union["parts"])
+	if moving > 0:
+		plan["result"] = HFOpResult.fail(
+			"Merge: %d sculpt%s would move" % [moving, "" if moving == 1 else "s"],
+			(
+				"One sculpt over the merged face has 4, 8 or 16 cells a side, and no such "
+				+ "grid has every point of these. Merge sculpted faces that halve evenly, "
+				+ "such as two halves at power 2 or 3, or take the sculpts off first"
+			)
+		)
+		return plan
 	plan["drafts"] = drafts
 	plan["placement"] = placement
 	plan["faces"] = union["faces"]
@@ -2435,10 +2451,6 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	# The entity they all are, with every wire and property any of them held.
 	var entity := HFBrushEntity.carried_by_all(brushes)
 
-	# Delete all original brushes
-	for brush in brushes:
-		delete_brush(brush)
-
 	# Create merged brush with full transform (not just center position)
 	var merged_info: Dictionary = {
 		"shape": root.BrushShape.CUSTOM,
@@ -2452,13 +2464,19 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	merged_info.merge(entity)
 	# The first brush's bake settings, as it gives its visgroups and group (#1660).
 	merged_info.merge(HFBakeSplit.fields(first))
+	if not src_visgroups.is_empty():
+		merged_info["visgroups"] = Array(src_visgroups)
+	if src_group_id != "":
+		merged_info["group_id"] = src_group_id
 
-	var merged = create_brush_from_info(merged_info)
-	if merged:
-		if src_visgroups.size() > 0:
-			merged.set_meta("visgroups", src_visgroups.duplicate())
-		if src_group_id != "":
-			merged.set_meta("group_id", src_group_id)
+	# Made before the brushes it replaces are deleted, as Intersect makes its own.
+	# Deleting a group's last brushes drops the group, and each group round it that
+	# is left empty, so a merged brush made after named a group the level no longer
+	# had (#1975). A brush that could not be made leaves every source where it was.
+	if create_brush_from_info(merged_info) == null:
+		return _op_fail("Merge: produced no geometry")
+	for brush in brushes:
+		delete_brush(brush)
 
 	var count: int = brushes.size()
 	root._log("Merge: combined %d brushes into one" % count)
@@ -2478,59 +2496,94 @@ func move_brushes_to_ceiling(brush_ids: Array) -> void:
 	_move_brushes_vertical(brush_ids, 1.0)
 
 
+## The selection goes straight down, or up for `direction` 1, as one piece, until
+## a brush of it meets a brush outside it (#1964). Each used to drop on its own,
+## so a table's top fell between its legs into them.
+##
+## Each brush is measured by its faces in the level, so a turned one rests on
+## its lowest corner, and it is left touching: the middle was put half the
+## unturned size above the hit and snapped to the grid, which left a brush
+## floating or sunk (#1966). What it meets is found from the brushes, as the face
+## pick finds a face, and not by a physics ray, which met a hidden brush's pick
+## body and the collision of a bake the level had moved on from (#1965).
 func _move_brushes_vertical(brush_ids: Array, direction: float) -> void:
-	if brush_ids.is_empty():
-		return
+	var moving: Dictionary = {}  # brush_id -> DraftBrush
 	for brush_id in brush_ids:
-		var brush = _find_brush_by_id(str(brush_id))
-		if not brush or not (brush is DraftBrush):
+		var key := str(brush_id)
+		var brush = _find_brush_by_id(key) if key != "" else null
+		if brush is DraftBrush:
+			moving[key] = brush
+	if moving.is_empty():
+		return
+	var along := Vector3(0.0, direction, 0.0)
+	var travel := _travel_until_met(moving.values(), along)
+	if not is_finite(travel):
+		return
+	for key in moving:
+		var draft: DraftBrush = moving[key]
+		set_brush_transform_by_id(key, draft.size, draft.global_position + along * travel)
+
+
+## How far the brushes `moving` can go together along `along`, straight up or
+## down, before one of them meets another brush, or INF when none is in the way.
+## A brush one of them is already in by no more than half its own height holds
+## them where they are, as a door frame sunk into the floor stands on it. Lifting
+## it out instead raised walls off the baseboards set into them. A brush it is
+## deeper in, such as a wall it was drawn into the side of, does not stop it.
+func _travel_until_met(moving: Array, along: Vector3) -> float:
+	var surfaces := _surfaces_to_meet(moving)
+	var faces_of: Dictionary = {}  # DraftBrush -> its faces in the level
+	var touch := HFSolidMeasure.TOUCH
+	var best := INF
+	for mover in moving:
+		var faces := HFSolidMeasure.world_faces(mover)
+		if faces.size() < 4:
 			continue
-		var draft := brush as DraftBrush
-		var half_y = draft.size.y * 0.5
-		var origin = draft.global_position
-		# Cast ray from brush center in the vertical direction
-		var ray_origin = origin + Vector3(0.0, half_y * direction, 0.0)
-		var ray_dir = Vector3(0.0, direction, 0.0)
-		var space = root.get_world_3d().direct_space_state
-		if not space:
+		var box := HFSolidMeasure.bounds(faces)
+		for surface in surfaces:
+			var other: DraftBrush = surface["brush"]
+			if not _could_meet(box, surface["box"], along.y):
+				continue
+			if not faces_of.has(other):
+				faces_of[other] = HFSolidMeasure.world_faces(other)
+			var gap := HFSolidMeasure.gap_along(faces, faces_of[other], along)
+			if gap < -touch and -gap > box.size.y * 0.5 + touch:
+				continue
+			best = minf(best, maxf(gap, 0.0))
+	return best
+
+
+## The brushes a moving selection can come to rest against: those the face pick
+## takes, shown and not the drag preview (#1965), and solid, so not a cut, which
+## is a hole, or a trigger, which bakes to an area nothing stands on.
+func _surfaces_to_meet(moving: Array) -> Array:
+	var out: Array = []
+	for node in root._iter_pick_nodes():
+		var brush := node as DraftBrush
+		if brush == null or brush == root.preview_brush or moving.has(brush):
 			continue
-		var query = PhysicsRayQueryParameters3D.new()
-		query.from = ray_origin
-		query.to = ray_origin + ray_dir * 10000.0
-		var result = space.intersect_ray(query)
-		if result.is_empty():
-			# No physics hit — try raycasting against other brushes
-			var best_t = INF
-			var best_pos = Vector3.ZERO
-			var found = false
-			for node in root._iter_pick_nodes():
-				if not (node is DraftBrush) or node == brush:
-					continue
-				var other := node as DraftBrush
-				if not other.mesh_instance:
-					continue
-				var inv = other.mesh_instance.global_transform.affine_inverse()
-				var local_origin = inv * ray_origin
-				var local_dir = (inv.basis * ray_dir).normalized()
-				var aabb = other.mesh_instance.get_aabb()
-				var t = root._ray_intersect_aabb(local_origin, local_dir, aabb)
-				if t >= 0.0 and t < best_t:
-					best_t = t
-					best_pos = ray_origin + ray_dir * best_t
-					found = true
-			if found:
-				var new_y = best_pos.y - half_y * direction
-				var snap = root.grid_snap if root.grid_snap > 0.0 else 0.0
-				var new_position: Vector3 = origin
-				new_position.y = snapped(new_y, snap) if snap > 0.0 else new_y
-				set_brush_transform_by_id(str(brush_id), draft.size, new_position)
-		else:
-			var hit_pos: Vector3 = result["position"]
-			var new_y = hit_pos.y - half_y * direction
-			var snap = root.grid_snap if root.grid_snap > 0.0 else 0.0
-			var new_position: Vector3 = origin
-			new_position.y = snapped(new_y, snap) if snap > 0.0 else new_y
-			set_brush_transform_by_id(str(brush_id), draft.size, new_position)
+		var mesh_inst: MeshInstance3D = brush.mesh_instance
+		if mesh_inst == null or not mesh_inst.is_inside_tree():
+			continue
+		if not is_brush_node(brush) or _is_subtract_brush(brush):
+			continue
+		if HFBrushEntity.entity_class(brush).begins_with("trigger_"):
+			continue
+		if not (root._is_pick_visible(brush) and root._is_pick_visible(mesh_inst)):
+			continue
+		out.append({"brush": brush, "box": mesh_inst.global_transform * mesh_inst.get_aabb()})
+	return out
+
+
+## Whether a brush with bounds `other` can be in the way of one with bounds `box`
+## going up (`direction` 1) or down: beside it across the move, and reaching
+## above its bottom going up, or below its top going down.
+static func _could_meet(box: AABB, other: AABB, direction: float) -> bool:
+	if other.position.x >= box.end.x or box.position.x >= other.end.x:
+		return false
+	if other.position.z >= box.end.z or box.position.z >= other.end.z:
+		return false
+	return other.end.y > box.position.y if direction > 0.0 else other.position.y < box.end.y
 
 
 # ---------------------------------------------------------------------------
@@ -2898,12 +2951,15 @@ func _piece_infos_from_faces(draft: DraftBrush, face_sets: Array) -> Array:
 	return infos
 
 
-## Delete a brush and put the pieces of it back in its place.
+## Put the pieces of a brush in its place and delete it.
+##
+## The pieces are made first, as Intersect makes its brush. Deleting a group's
+## last brush drops the group, and each group round it that is left empty, so
+## pieces made after named a group the level no longer had (#1975). Pieces that
+## could not be made leave the brush where it was.
 func _replace_brush_with_pieces(
 	brush_id: String, infos: Array, op_name: String, piece_noun: String = "pieces"
 ) -> HFOpResult:
-	delete_brush_by_id(brush_id)
-
 	var created: Array = []
 	for info in infos:
 		var piece = create_brush_from_info(info)
@@ -2911,6 +2967,7 @@ func _replace_brush_with_pieces(
 			created.append(piece)
 	if created.is_empty():
 		return _op_fail("%s: produced no geometry" % op_name)
+	delete_brush_by_id(brush_id)
 	# A piece of a face in a texture group is still that surface (#1437).
 	refit_texture_groups(created)
 	var message := "%s: %d %s" % [op_name, created.size(), piece_noun]
