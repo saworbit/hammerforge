@@ -114,10 +114,16 @@ static func count(root: Node, row: String, only: Array = []) -> int:
 			return _within(_point_entities(root), only).size()
 		"entity_properties":
 			return _within(_point_entities(root), only).filter(_has_properties).size()
+		# A brush entity of several brushes is one entity, and each of its brushes
+		# holds its wires: a door of two leaves was the wires of 2 entities (#1958).
 		"wires":
-			return (_within(_entities(root), only) + brushes).filter(_has_wires).size()
+			var wired := _within(_entities(root), only).filter(_has_wires).size()
+			for each in HFBrushEntity.entities_in(brushes):
+				if (each as Array).any(_has_wires):
+					wired += 1
+			return wired
 		"brush_entities":
-			return brushes.filter(func(b): return HFBrushEntity.entity_class(b) != "").size()
+			return HFBrushEntity.entities_in(brushes).size()
 		"visgroups":
 			return _visgroups(root, only)
 		"groups":

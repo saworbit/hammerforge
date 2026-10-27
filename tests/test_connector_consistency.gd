@@ -61,6 +61,28 @@ func test_bake_skips_malformed_confirmed_connectors_as_validation_does():
 	root.paint_tool.connector_defs.clear()
 
 
+func test_layers_of_two_cell_sizes_are_not_joined_by_index():
+	# A painted layer keeps its cell size when the snap changes (#2011), so two
+	# layers can differ. Cell [1, 0] of 0.5 m is not beside cell [0, 0] of 1 m.
+	var hi: HFPaintLayer = root.paint_layers.layers[1]
+	hi.grid.cell_size = 0.5
+	var found: Dictionary = root.paint_system.connector_candidates(0, Vector2i.ZERO, Vector2i.ZERO)
+	assert_false(found["ok"], "no ghost")
+	assert_eq(HFAutoConnector.new().detect_boundaries(root.paint_layers).size(), 0, "nor in a bake")
+	var definition := HFConnectorTool.ConnectorDef.new()
+	definition.from_layer_index = 0
+	definition.to_layer_index = 1
+	definition.from_cell = Vector2i.ZERO
+	definition.to_cell = Vector2i.RIGHT
+	assert_null(HFConnectorTool.new().generate_connector(definition, root.paint_layers))
+	assert_false(
+		root.validation_system._connector_builds(definition, root.paint_layers.layers),
+		"Check Issues agrees it builds nothing"
+	)
+	hi.grid.cell_size = 1.0
+	assert_not_null(HFConnectorTool.new().generate_connector(definition, root.paint_layers))
+
+
 func test_full_scan_skips_null_layers_and_agrees_with_touched_cells():
 	root.paint_layers.layers.insert(1, null)
 	var gen := HFAutoConnector.new()

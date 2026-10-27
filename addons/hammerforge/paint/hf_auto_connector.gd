@@ -203,6 +203,8 @@ func _collect_segments_at(
 		var layer_j: HFPaintLayer = layers.layers[j]
 		if layer_j == null or not layer_j.get_cell(neighbour):
 			continue
+		if not HFConnectorTool.same_cell_size(layer_i, layer_j):
+			continue
 		var h_j: float = layer_j.grid.layer_y + layer_j.get_height_at(neighbour)
 		var diff := absf(h_j - h_i)
 		if diff < MIN_HEIGHT_DIFF:
