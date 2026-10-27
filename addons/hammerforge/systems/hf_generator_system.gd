@@ -59,6 +59,10 @@ const RELOCATION_EPSILON := 0.01
 ## this is an angle in disguise: about a twentieth of a degree.
 const ROTATION_EPSILON := 0.001
 
+## How far apart, in UV, a face's corners may show its texture and still show the
+## look its builder gave it, as Compare allows (#1969).
+const SHOWN_NEAR := 0.001
+
 ## What an Update keeps of each piece: all of it but its shape, which is the
 ## settings'. Its look is what a designer adds after generating, and losing it on
 ## every radius nudge would make this not worth using. Its node name and its brush
@@ -1076,7 +1080,8 @@ func _carry_of(record: HFGenerator) -> HFRebuildCarry:
 		var brush = _owned_brush(str(record.brush_ids[i]), record.generator_id)
 		if brush:
 			pieces.append([keys[i], brush])
-			as_built[keys[i]] = _faces_as_built(brush, built[i] if i < built.size() else [])
+			var was := _built_at(record, str(record.brush_ids[i]), brush)
+			as_built[keys[i]] = _faces_as_built(brush, built[i] if i < built.size() else [], was)
 	var visgroups = root.get("visgroup_system") if root else null
 	var carry := HFRebuildCarry.capture(pieces, CARRIED, visgroups)
 	# A face still in the look its builder gave it is the builder's to dress again.
@@ -1109,7 +1114,8 @@ func appearance_at_risk(generator_id: String, settings: Dictionary) -> PackedStr
 		if brush == null:
 			continue
 		var piece_built: Array = built[i] if i < built.size() else []
-		if _faces_as_built(brush, piece_built).size() == brush.faces.size():
+		var was := _built_at(record, str(record.brush_ids[i]), brush)
+		if _faces_as_built(brush, piece_built, was).size() == brush.faces.size():
 			continue
 		var j := new_keys.find(old_keys[i])
 		if j < 0 or face_sets[j].size() != brush.faces.size():
@@ -1131,8 +1137,9 @@ static func _old_piece_keys(record: HFGenerator) -> PackedStringArray:
 ## changed since is work; so is a Sweep's face dressed in anything but the look of
 ## the face it was picked from (#1932). By index. When the piece has another
 ## number of faces than `built`, each is held to a plain face, as before a builder
-## could dress one.
-static func _faces_as_built(brush, built: Array) -> PackedInt32Array:
+## could dress one. `was` is where the piece stood when it was built, which a move
+## or a turn of the structure since has left behind (`_looks_as_built()`).
+static func _faces_as_built(brush, built: Array, was: Transform3D) -> PackedInt32Array:
 	var looks: Array = []
 	if built.size() == brush.faces.size():
 		for face in built:
@@ -1155,10 +1162,58 @@ static func _faces_as_built(brush, built: Array) -> PackedInt32Array:
 			continue
 		if not face.paint_layers.is_empty() or face.has_hand_layout():
 			continue
-		if face.uv_group != 0 or not face.appearance_matches(look):
+		if face.uv_group != 0 or not _looks_as_built(face, look, was, brush.global_transform):
 			continue
 		out.append(i)
 	return out
+
+
+## Where the piece `brush_id` of `record`, `brush`, stood when it was built: its
+## signature's place, or where it stands now when it has none.
+static func _built_at(record: HFGenerator, brush_id: String, brush) -> Transform3D:
+	var signature: Dictionary = record.brush_signatures.get(brush_id, {})
+	if signature.is_empty():
+		return brush.global_transform
+	return _signature_transform(record, signature)
+
+
+## Whether `face`, on a piece standing at `now`, has the look `look` gave it on the
+## piece built at `was`. Texture Lock, on by default, rewrites a face's offset,
+## turn and the sign of its scale through a move or a turn so the texture stays
+## where it was on the piece, and that is not work done on it (#1969). So where
+## the texture lies is read as what the face shows at its corners, in the piece's
+## own frame, as Compare reads it (#1989): the same picture, or the same picture a
+## whole number of repeats along. A face whose values are the look's is the other
+## way a texture stays put, in the level, as a move with Texture Lock off leaves it.
+static func _looks_as_built(face, look, was: Transform3D, now: Transform3D) -> bool:
+	if face.appearance_matches(look):
+		return true
+	var laid := FaceData.new()
+	laid.copy_appearance_from(face)
+	laid.uv_scale = look.uv_scale
+	laid.uv_offset = look.uv_offset
+	laid.uv_rotation = look.uv_rotation
+	if not laid.appearance_matches(look):
+		return false
+	var as_built := _shown_at(face, look, was)
+	var shown := _shown_at(face, face, now)
+	if as_built.is_empty() or as_built.size() != shown.size():
+		return false
+	var repeats := (shown[0] - as_built[0]).round()
+	for i in shown.size():
+		if (shown[i] - as_built[i] - repeats).length() > SHOWN_NEAR:
+			return false
+	return true
+
+
+## The UVs `look` lays at the corners of `face` on a piece standing at `place`.
+static func _shown_at(face, look, place: Transform3D) -> PackedVector2Array:
+	var probe := FaceData.new()
+	probe.local_verts = face.local_verts
+	probe.normal = face.normal
+	probe.copy_appearance_from(look)
+	probe.world_transform = place
+	return probe.projected_uvs()
 
 
 ## Delete only the brushes that still say they belong to this generator.

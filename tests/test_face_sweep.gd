@@ -144,6 +144,106 @@ func test_four_turns_of_a_quarter_arc_close_a_loop():
 	await rig.leave_level(level)
 
 
+static func _volume_of(pieces: Array) -> float:
+	var total := 0.0
+	for piece in pieces:
+		total += HFSolidMeasure.volume(piece["faces"])
+	return total
+
+
+## An arc turns as far as its Angle says, on past a half turn, as the field and
+## the end handle allow. The turn was read back off the two end frames, never more
+## than a half turn, so 270 ran the other way, 360 was no turn at all, and every
+## piece read as folding back (#1968).
+func test_an_arc_of_a_half_turn_or_more_turns_that_far():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _picked_face()
+	var level = made[0]
+	var cut := HFPluginFaceSweep.section(level)
+	var placement: Transform3D = cut["placement"]
+	for angle in [180.0, 270.0, 360.0]:
+		var values := _values(
+			{"path": HFFaceSweep.Path.ARC, "angle": angle, "radius": 4.0, "segments": 16}
+		)
+		var plan := HFPluginFaceSweep.plan(cut, values)
+		assert_eq(int(plan["folded"]), 0, "%d degrees builds" % angle)
+		var pieces: Array = plan["pieces"]
+		assert_eq(pieces.size(), 16)
+		# An arc of n pieces of a 1 x 1 section at radius r holds n sin(angle / n) r.
+		assert_almost_eq(
+			_volume_of(pieces),
+			16.0 * sin(deg_to_rad(angle) / 16.0) * 4.0,
+			0.001,
+			"%d degrees holds the volume of its path" % angle
+		)
+		var frames: Array = plan["frames"]
+		var halfway: Transform3D = frames[8]
+		var turn := Basis(
+			placement.basis * HFSweepBuilder.axis_of(HFPluginFaceSweep.settings_of(values)),
+			deg_to_rad(angle * 0.5)
+		)
+		assert_true(
+			halfway.basis.z.is_equal_approx(turn * placement.basis.z),
+			"%d degrees is turned half of it halfway" % angle
+		)
+		assert_almost_eq(
+			(frames[16] as Transform3D).origin,
+			placement * HFSweepBuilder.end_of(HFPluginFaceSweep.settings_of(values)),
+			Vector3.ONE * 0.001,
+			"%d degrees ends where the end handle shows it" % angle
+		)
+		if angle == 360.0:
+			assert_true(
+				_share_a_face(pieces[15]["faces"], pieces[0]["faces"]),
+				"a whole turn closes, the last piece meeting the first"
+			)
+	await rig.leave_level(level)
+
+
+## A negative Angle turns the other way round the pivot, back through the faces:
+## the mirror of the same angle forward, across the faces' plane. Every piece of
+## it read as folding back (#1968).
+func test_an_arc_of_a_negative_angle_is_the_mirror_of_the_positive_one():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _picked_face()
+	var level = made[0]
+	var cut := HFPluginFaceSweep.section(level)
+	var faces := Plane(
+		(cut["placement"] as Transform3D).basis.z.normalized(),
+		(cut["placement"] as Transform3D).origin
+	)
+	var forward := HFPluginFaceSweep.plan(
+		cut, _values({"path": HFFaceSweep.Path.ARC, "angle": 90.0, "radius": 4.0})
+	)
+	var back := HFPluginFaceSweep.plan(
+		cut, _values({"path": HFFaceSweep.Path.ARC, "angle": -90.0, "radius": 4.0})
+	)
+	assert_eq(int(back["folded"]), 0, "-90 builds")
+	assert_eq((back["pieces"] as Array).size(), 8)
+	assert_almost_eq(_volume_of(back["pieces"]), _volume_of(forward["pieces"]), 0.001)
+	for k in (forward["frames"] as Array).size():
+		var ahead: Vector3 = (forward["frames"][k] as Transform3D).origin
+		var mirrored := ahead - faces.normal * faces.distance_to(ahead) * 2.0
+		assert_almost_eq(
+			(back["frames"][k] as Transform3D).origin,
+			mirrored,
+			Vector3.ONE * 0.001,
+			"cut %d is the forward cut's mirror" % k
+		)
+	for i in (back["pieces"] as Array).size():
+		var piece_faces: Array = back["pieces"][i]["faces"]
+		assert_true(HFSolidMeasure.is_convex(piece_faces), "piece %d is convex" % i)
+		if i > 0:
+			assert_true(
+				_share_a_face(back["pieces"][i - 1]["faces"], piece_faces), "joined at %d" % i
+			)
+	await rig.leave_level(level)
+
+
 func test_a_bend_too_tight_for_the_face_folds_and_makes_nothing():
 	if rig.plugin == null:
 		fail_test(rig.error())
@@ -202,6 +302,61 @@ func test_the_pieces_carry_each_side_s_material_in_one_group_and_one_step():
 	rig.undo().press_undo()
 	await rig.frame()
 	assert_eq(level._iter_managed_brush_nodes().size(), before.size(), "one Ctrl+Z takes it back")
+	await rig.leave_level(level)
+
+
+## A side that tapers on a bend still takes the look of the face it ran along. It
+## is not flat, so the hull splits it into two triangles, and a side was only
+## matched to its edge when one face held all four of the edge's corners: every
+## top and bottom of a tapered arc or S bend came out in the swept face's look
+## (#1970).
+func test_a_side_that_tapers_on_a_bend_keeps_the_look_of_the_face_it_ran_along():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var made: Array = await _picked_face()
+	var level = made[0]
+	var box = made[1]
+	var slot_of := {
+		Vector3.RIGHT: 2, Vector3.UP: 3, Vector3.DOWN: 4, Vector3.BACK: 5, Vector3.FORWARD: 6
+	}
+	for face in box.faces:
+		for normal in slot_of:
+			if (face.normal as Vector3).is_equal_approx(normal):
+				face.material_idx = slot_of[normal]
+	var cut := HFPluginFaceSweep.section(level)
+	var placement: Transform3D = cut["placement"]
+	var cases := {
+		"straight, height 0.5": {"path": HFFaceSweep.Path.STRAIGHT, "end_height": 0.5},
+		"arc, no taper": {"path": HFFaceSweep.Path.ARC},
+		"arc, height 0.5": {"path": HFFaceSweep.Path.ARC, "end_height": 0.5},
+		"arc, width 0.5": {"path": HFFaceSweep.Path.ARC, "end_width": 0.5},
+		"arc, both 0.5": {"path": HFFaceSweep.Path.ARC, "end_width": 0.5, "end_height": 0.5},
+		"s bend, height 0.5": {"path": HFFaceSweep.Path.S_BEND, "end_height": 0.5},
+	}
+	for name in cases:
+		var settings := HFPluginFaceSweep.settings_of(_values(cases[name]))
+		var pieces: Array = HFSweepBuilder.build_along(settings, cut["run"])
+		assert_eq(pieces.size(), 8, "fixture: %s builds" % name)
+		var swept := 0
+		var tops := 0
+		for faces in pieces:
+			for face in faces:
+				if int(face.material_idx) == 2:
+					swept += 1
+				var up: float = (placement.basis * (face.normal as Vector3)).normalized().y
+				if absf(up) >= 0.7:
+					tops += 1
+					assert_eq(
+						int(face.material_idx),
+						3 if up > 0.0 else 4,
+						(
+							"%s: a face facing %s is the source's %s"
+							% [name, up, "top" if up > 0.0 else "bottom"]
+						)
+					)
+		assert_gt(tops, 0, "fixture: %s has tops and bottoms" % name)
+		assert_eq(swept, 2 * pieces.size(), "%s: only the ends take the swept face's look" % name)
 	await rig.leave_level(level)
 
 
@@ -565,6 +720,62 @@ func test_a_repick_dresses_the_pieces_in_the_new_wall_s_looks():
 	)
 	assert_eq(_slots_of(_pieces_of(level, record)), {5: true}, "the new wall's looks")
 	await rig.leave_level(level)
+
+
+## Texture Lock, on by default, rewrites a face's offset through a move and its
+## turn through a turn so the texture stays on the piece, and the faces of a sweep
+## moved or turned that way read as painted by hand: a Re-pick kept the old wall's
+## looks on them. A face painted after the move is still kept (#1969).
+func test_a_repick_after_a_move_or_a_turn_dresses_every_untouched_face_anew():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	for move in ["nudged", "turned"]:
+		var made: Array = await _picked_face()
+		var level = made[0]
+		var box = made[1]
+		assert_true(level.texture_lock, "fixture: Texture Lock is on, as by default")
+		for face in box.faces:
+			face.material_idx = 2
+		assert_true(
+			HFPluginFaceSweep.run(
+				rig.plugin, level, _values({"path": HFFaceSweep.Path.STRAIGHT, "segments": 3})
+			)
+		)
+		var record = _sweeps(level)[0]
+		var ids := Array(record.brush_ids)
+		var first: Node = _pieces_of(level, record)[0]
+		var looks_before: Array = []
+		for face in first.faces:
+			looks_before.append([face.uv_offset, face.uv_rotation])
+		if move == "nudged":
+			level.nudge_brushes_by_id(ids, Vector3(0.25, 0, 5))
+		else:
+			level.rotate_managed_nodes(ids, [], 1, 90.0, Vector3(0, 0.5, 0))
+		var rewritten := 0
+		for i in first.faces.size():
+			if [first.faces[i].uv_offset, first.faces[i].uv_rotation] != looks_before[i]:
+				rewritten += 1
+		assert_gt(rewritten, 0, "fixture: Texture Lock rewrote faces of the %s sweep" % move)
+		first.faces[0].material_idx = 9
+		_pick_other_wall(level, Vector3(0, 0.5, -20), 5)
+		var read: Dictionary = level.run_from_faces(record.type, level.face_selection)
+		assert_true(
+			(
+				level
+				. generator_system
+				. repick(str(record.generator_id), read["run"], read["placement"])
+				. ok
+			)
+		)
+		var slots := {}
+		for piece in _pieces_of(level, record):
+			for face in piece.faces:
+				slots[int(face.material_idx)] = int(slots.get(int(face.material_idx), 0)) + 1
+		assert_eq(
+			slots, {5: 17, 9: 1}, "the %s sweep wears the new wall's looks but for the paint" % move
+		)
+		await rig.leave_level(level)
 
 
 ## A sweep nobody has painted has nothing an Update could lose: the looks it
