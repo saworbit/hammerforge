@@ -408,8 +408,8 @@ func test_an_undone_detach_hides_the_pieces_under_the_structures_filter():
 	await rig.leave_level(level)
 
 
-## Merge, Hollow and Clip deleted the brushes they replace before they made the
-## new ones. Deleting a group's last brushes dropped the group, and each group
+## Merge, Hollow, Clip and Carve deleted the brushes they replace before they
+## made the new ones. Deleting a group's last brushes dropped the group, and each group
 ## round it left empty, so the new brushes named a group the level no longer had
 ## and were in none (#1975).
 func test_merging_a_groups_brushes_keeps_the_group_inside_its_parent():
@@ -453,7 +453,7 @@ func test_a_group_made_after_a_merge_takes_a_name_of_its_own():
 	await rig.leave_level(level)
 
 
-func test_hollow_and_clip_keep_the_group_of_the_only_brush_they_replace():
+func test_hollow_clip_and_carve_keep_the_group_of_the_only_brush_they_replace():
 	if rig.plugin == null:
 		fail_test(rig.error())
 		return
@@ -461,14 +461,21 @@ func test_hollow_and_clip_keep_the_group_of_the_only_brush_they_replace():
 	var system := _system(level)
 	var room = rig.box(level, "room", Vector3(0, 2, 0))
 	var slab = rig.box(level, "slab", Vector3(12, 2, 0))
+	var wall = rig.box(level, "wall", Vector3(24, 2, 0))
 	system.group_units("Room", [room])
 	system.group_units("Slab", [slab])
-	system.group_units("Block", [room, slab])
+	system.group_units("Wall", [wall])
+	system.group_units("Block", [room, slab, wall])
+	rig.box(level, "window", Vector3(24, 2, 0), Vector3(1, 1, 6))
+	assert_true(level.carve_with_brush("window").ok, "fixture: carved")
+	var pieces: int = system.get_group_members("Wall").size()
+	assert_gt(pieces, 1, "Wall holds the pieces")
+	assert_eq(system.parent_of_group("Wall"), "Block", "inside Block still")
 	assert_true(level.hollow_brush_by_id("room", 0.5).ok, "fixture: hollowed")
 	assert_eq(system.get_group_members("Room").size(), 6, "Room holds the six walls")
 	assert_eq(system.parent_of_group("Room"), "Block", "inside Block still")
 	assert_true(level.clip_brush_by_id("slab", 0, 12.0).ok, "fixture: clipped")
 	assert_eq(system.get_group_members("Slab").size(), 2, "Slab holds both pieces")
 	assert_eq(system.parent_of_group("Slab"), "Block", "inside Block still")
-	assert_eq(system.group_members_deep("Block").size(), 8, "Block holds all eight")
+	assert_eq(system.group_members_deep("Block").size(), 8 + pieces, "Block holds them all")
 	await rig.leave_level(level)

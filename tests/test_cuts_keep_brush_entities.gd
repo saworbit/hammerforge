@@ -187,12 +187,12 @@ func test_merge_refuses_a_door_leaf_and_plain_geometry():
 	_assert_one_gate(root, 1, "refused merge")
 
 
-## A wire aimed at the door from elsewhere stays aimed at it. Merge, Clip and
-## Hollow deleted the door's brushes before they made the new ones, so for a
+## A wire aimed at the door from elsewhere stays aimed at it. Merge, Clip, Hollow
+## and Carve deleted the door's brushes before they made the new ones, so for a
 ## moment nothing answered to its name, and the delete took every wire aimed at
 ## it along (#1975).
-func test_a_wire_aimed_at_the_door_outlasts_a_merge_a_clip_and_a_hollow():
-	for op in ["merge", "clip", "hollow"]:
+func test_a_wire_aimed_at_the_door_outlasts_a_merge_a_clip_a_hollow_and_a_carve():
+	for op in ["merge", "clip", "hollow", "carve"]:
 		var root := _fresh_root()
 		var leaves := [_leaf(root, Vector3(0, 1, 0))]
 		if op == "merge":
@@ -210,6 +210,9 @@ func test_a_wire_aimed_at_the_door_outlasts_a_merge_a_clip_and_a_hollow():
 				done = root.merge_brushes_by_ids(ids)
 			"clip":
 				done = root.clip_brush_by_id(ids[0], 1, 1.0)
+			"carve":
+				var window := _box(root, Vector3(0.4, 0.6, 1.0), Vector3(0, 1, 0))
+				done = root.carve_with_brush(_ids([window])[0])
 			_:
 				done = root.hollow_brush_by_id(ids[0], 0.2)
 		assert_true(done.ok, "%s: fixture: done" % op)
