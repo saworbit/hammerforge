@@ -11,7 +11,7 @@ extends RefCounted
 ## its own. A resize moves a corner within the brush's own space, and the end
 ## finds it again by the faces that meet there (#1898). An end whose brush has
 ## gone, or whose corner a Clip has cut away, is detached: it reads where it was
-## last seen.
+## last seen, and its check is not judged (#2004).
 
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -236,7 +236,9 @@ static func resolve(root: Node, end: Dictionary, holder: Node3D) -> Dictionary:
 
 
 ## A dimension now: `{a, b, length, detached, check, needs, passes}`. A detached
-## end reads where it was last seen; `passes` is false when the check fails.
+## end reads where it was last seen; `passes` is false when the check fails. A
+## detached dimension passes: its length is not a measurement, so its check is
+## not judged, and Validate says it is detached instead (#2004).
 static func measure(root: Node, dimension: Node) -> Dictionary:
 	var data: Dictionary = dimension.get("entity_data")
 	var holder := dimension as Node3D
@@ -263,7 +265,7 @@ static func measure(root: Node, dimension: Node) -> Dictionary:
 		"detached": detached,
 		"check": check,
 		"needs": needs,
-		"passes": passes(check, length, needs),
+		"passes": detached or passes(check, length, needs),
 	}
 
 
@@ -310,6 +312,15 @@ static func failure_text(dimension: Node, measured: Dictionary) -> String:
 			String.num(float(measured["needs"]), 2),
 			what
 		]
+	)
+
+
+## "Dimension the doorway has an end that came loose from its brush, ...", for
+## Validate (#2004).
+static func detached_text(dimension: Node) -> String:
+	var title := str(dimension.get("entity_data").get("title", dimension.name))
+	return (
+		"Dimension %s has an end that came loose from its brush, so its check is not judged" % title
 	)
 
 

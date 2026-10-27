@@ -235,3 +235,45 @@ func test_an_end_on_an_edge_or_a_face_follows_a_resize_too():
 	assert_almost_eq(
 		HFDimensions.resolve(root, on_face, holder)["point"], Vector3(0, 3, 0), Vector3.ONE * 0.0001
 	)
+
+
+## A doorway held to the player's width whose wall is deleted: Validate says the
+## dimension came loose, before a save and after a load, and claims no length. It
+## said nothing in the session, reading the last length seen, and after a load
+## failed it at 0.0 m, a length it made up (#2004).
+func test_validate_says_a_held_dimension_came_loose_rather_than_judge_its_length():
+	var dimension := _doorway(1.5)
+	dimension.entity_data["title"] = "front door"
+	dimension.entity_data["check"] = "At least player width"
+	root.delete_brush_by_id("right")
+	var measured := HFDimensions.measure(root, dimension)
+	assert_true(measured["detached"], "fixture: detached")
+	assert_true(measured["passes"], "not judged, so drawn amber, not red")
+	assert_eq(_dimension_issues(root), [HFDimensions.detached_text(dimension)])
+	assert_eq(root.save_hflevel(LEVEL, true), OK)
+	await _finish_saving(root)
+	var other := _level()
+	assert_true(other.load_hflevel(LEVEL))
+	var found := HFDimensions.dimensions(other)
+	assert_eq(found.size(), 1)
+	if found.size() == 1:
+		assert_eq(_dimension_issues(other), [HFDimensions.detached_text(found[0])])
+		assert_true(
+			_dimension_issues(other)[0].begins_with(
+				"Dimension front door has an end that came loose"
+			)
+		)
+
+
+## A detached dimension held to nothing is not a finding: there is no check to
+## judge.
+func test_validate_says_nothing_of_a_detached_dimension_with_no_check():
+	_doorway(1.5)
+	root.delete_brush_by_id("right")
+	assert_eq(_dimension_issues(root), [])
+
+
+func _dimension_issues(level: LevelRoot) -> Array:
+	return (level.validate_level().get("issues", []) as Array).filter(
+		func(issue): return str(issue).begins_with("Dimension")
+	)

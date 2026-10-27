@@ -1,0 +1,1 @@
+- Validate names a dimension whose end came loose and judges no length it made up. (issue [#2004](https://github.com/saworbit/hammerforge/issues/2004))
