@@ -229,6 +229,79 @@ func test_non_preview_brush_still_snaps_with_preview_present():
 
 
 # ===========================================================================
+# Hidden and locked brushes (#1963)
+# ===========================================================================
+
+## Just off the corner (1, 2, 1) of the second of `_two_boxes()`.
+const NEAR_CORNER := Vector3(1.04, 2.03, 0.98)
+
+
+## Two boxes 2 x 2 x 2, as a draw sees them with vertex snap on and the grid off.
+## Returns the second, whose corner is next to `NEAR_CORNER`.
+func _two_boxes() -> DraftBrush:
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	_make_brush(Vector3(-6, 1, 0), Vector3(2, 2, 2), "shown")
+	var other := _make_brush(Vector3(0, 1, 0), Vector3(2, 2, 2), "other")
+	assert_eq(snap.snap_point(NEAR_CORNER, 0.0), Vector3(1, 2, 1), "fixture: on it while shown")
+	return other
+
+
+func test_a_brush_in_a_hidden_visgroup_is_not_snapped_to():
+	var other := _two_boxes()
+	root.add_selection_to_visgroup("away", [other])
+	root.set_visgroup_visible("away", false)
+	assert_false(other.is_visible_in_tree(), "fixture: hidden")
+	assert_eq(snap.snap_point(NEAR_CORNER, 0.0), NEAR_CORNER, "the point stays where it was")
+
+
+func test_a_brush_hidden_with_hide_selection_is_not_snapped_to():
+	var other := _two_boxes()
+	snap.set_mode(HFSnapSystem.SnapMode.CENTER, true)
+	snap.set_mode(HFSnapSystem.SnapMode.EDGE, true)
+	snap.set_mode(HFSnapSystem.SnapMode.PERPENDICULAR, true)
+	root.visgroup_system.hide_from_view([other])
+	assert_false(other.is_visible_in_tree(), "fixture: hidden")
+	assert_eq(snap.snap_point(NEAR_CORNER, 0.0), NEAR_CORNER, "not its corner or its edges")
+	var near_centre := Vector3(0.1, 1.05, -0.1)
+	assert_eq(snap.snap_point(near_centre, 0.0), near_centre, "nor its centre")
+
+
+func test_a_point_by_a_hidden_brush_lands_on_the_grid():
+	var other := _two_boxes()
+	root.visgroup_system.hide_from_view([other])
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, true)
+	_assert_vector_near(
+		snap.snap_point(NEAR_CORNER, 0.3), Vector3(0.9, 2.1, 0.9), "the grid, not the corner"
+	)
+
+
+func test_a_locked_brush_is_still_snapped_to():
+	var other := _two_boxes()
+	root.create_visgroup("Done")
+	root.add_selection_to_visgroup("Done", [other])
+	root.visgroup_system.set_visgroup_locked("Done", true)
+	assert_true(root.visgroup_system.is_locked(other), "fixture: locked")
+	assert_eq(snap.snap_point(NEAR_CORNER, 0.0), Vector3(1, 2, 1), "it is drawn, so it is aimed at")
+
+
+func test_a_guide_does_not_meet_the_edge_of_a_hidden_brush():
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	snap.snap_threshold = 0.3
+	var slope := _make_brush(Vector3(10, 1, 0), Vector3(4, 2, 4), "slope")
+	snap.toggle_tracked(Vector3(9.3, 7, -6), HFSnapSystem.KIND_VERTEX)
+	var near := Vector3(9.4, 2.0, 2.05)
+	assert_eq(snap.snap_point(near, 0.0), Vector3(9.3, 2, 2), "fixture: where the guide meets it")
+	root.visgroup_system.hide_from_view([slope])
+	snap.snap_point(near, 0.0)
+	var kinds: Array = []
+	for choice in snap.last_choices:
+		kinds.append(choice["kind"])
+	assert_false(kinds.has(HFSnapSystem.KIND_GUIDE_EDGE), "no guide meets an edge not drawn")
+
+
+# ===========================================================================
 # Brush rotation and brush shape
 # ===========================================================================
 

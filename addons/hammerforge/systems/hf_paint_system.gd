@@ -704,7 +704,19 @@ func remove_active_paint_layer() -> void:
 	if root.paint_layers.layers.size() <= 1:
 		return
 	var idx = root.paint_layers.active_layer_index
+	var layer: HFPaintLayer = paint_layer_at(idx)
+	var shown := paint_layer_name(layer) if layer else ""
 	root.paint_layers.remove_layer(idx)
+	# The confirmed connectors name layers by their place in the list (#2009).
+	var dropped: int = root.paint_tool.forget_layer(idx) if root.paint_tool else 0
+	if dropped > 0:
+		root.user_message.emit(
+			(
+				'Paint layer "%s" took %d confirmed connector%s with it'
+				% [shown, dropped, "" if dropped == 1 else "s"]
+			),
+			1
+		)
 	regenerate_paint_layers()
 
 
@@ -713,18 +725,21 @@ func remove_active_paint_layer() -> void:
 ## layer's paint outlives it in the undo history, and in its region files so an
 ## undo of the removal can read it back (#1554), so a new layer given the id of
 ## one took that paint as its region streamed in (#1564). The files cover the
-## sessions before this one, a level saved or not.
+## sessions before this one, a level saved or not. A new layer's row shows its id,
+## so an id another row already shows as its name is skipped too, as a rename to
+## it would be refused (#2013).
 func next_paint_layer_id() -> String:
 	const MAX_LAYER_ID_SEARCH := 10_000
 	var base = "layer_"
 	var index = root.paint_layers.layers.size() if root.paint_layers else 0
 	var in_files := _layer_ids_in_region_files()
+	var shown: Array = get_paint_layer_names()
 	for _i in range(MAX_LAYER_ID_SEARCH):
 		var candidate = "%s%d" % [base, index]
 		var held: bool = (
 			root.paint_layers != null and root.paint_layers.has_held_layer_id(StringName(candidate))
 		)
-		if not held and not in_files.has(candidate):
+		if not held and not in_files.has(candidate) and not shown.has(candidate):
 			return candidate
 		index += 1
 	return "%s0" % base
@@ -1501,10 +1516,34 @@ func _sync_region_manager() -> void:
 	region_manager.base_grid = root.paint_layers.base_grid if root.paint_layers else null
 
 
-func _screen_to_cell(camera: Camera3D, screen_pos: Vector2) -> Variant:
-	if not camera or not root.paint_layers or not root.paint_layers.base_grid:
+## The grid the cursor is read on, for the regions a stroke loads and pins: the
+## active layer's, which is where `HFPaintTool` writes the stroke's cells. A
+## painted layer keeps its cell size when the snap changes (#2011), so the
+## template for new layers can be another size and would name other cells.
+func _cursor_grid() -> HFPaintGrid:
+	if not root.paint_layers:
 		return null
-	var grid = root.paint_layers.base_grid
+	var layer: HFPaintLayer = root.paint_layers.get_active_layer()
+	if layer and layer.grid:
+		return layer.grid
+	return root.paint_layers.base_grid
+
+
+## Whether `layer` holds paint: cells or a heightmap in memory, or cells in a
+## region file its region was streamed out to. Such a layer keeps its cell size
+## when the grid snap changes (#2011).
+func layer_holds_paint(layer: HFPaintLayer) -> bool:
+	if layer == null:
+		return false
+	if not layer.get_chunk_ids().is_empty() or layer.has_heightmap():
+		return true
+	return _layer_ids_in_region_files().has(str(layer.layer_id))
+
+
+func _screen_to_cell(camera: Camera3D, screen_pos: Vector2) -> Variant:
+	var grid := _cursor_grid()
+	if not camera or not grid:
+		return null
 	var plane_point = grid.origin + (grid.basis * Vector3(0.0, grid.layer_y, 0.0))
 	var plane_normal = grid.basis.y.normalized()
 	var ray_origin = camera.project_ray_origin(screen_pos)
@@ -1915,7 +1954,8 @@ func _update_region_overlay() -> void:
 	if not region_streaming_enabled or not region_show_grid:
 		root.generated_region_overlay.mesh = null
 		return
-	if not root.paint_layers or not root.paint_layers.base_grid:
+	var grid := _cursor_grid()
+	if not grid:
 		root.generated_region_overlay.mesh = null
 		return
 	if region_overlay_material == null:
@@ -1924,7 +1964,6 @@ func _update_region_overlay() -> void:
 		mat.albedo_color = Color(0.2, 0.9, 1.0, 0.7)
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		region_overlay_material = mat
-	var grid = root.paint_layers.base_grid
 	var mesh := ImmediateMesh.new()
 	mesh.surface_begin(Mesh.PRIMITIVE_LINES, region_overlay_material)
 	for rid in region_manager.loaded_regions.keys():

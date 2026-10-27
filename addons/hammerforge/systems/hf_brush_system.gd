@@ -3493,13 +3493,19 @@ const REFIT_MODES := ["fit", "fit_u", "fit_v", "tile"]
 
 
 ## Every face in texture group `group_id`, as `{"brush", "face"}`, in level order.
+##
+## A locked brush's faces are left out. Every edit of a group lays, fits and
+## selects through here, and nothing changes a locked brush, so scaling one face
+## of a group no longer scaled its mate on a locked brush too (#1978). The locked
+## face keeps the mapping it had, and is drawn faded, which says why.
 func _texture_group_refs(group_id: int) -> Array:
 	var refs: Array = []
 	if group_id == 0 or root.draft_brushes_node == null:
 		return refs
+	var locks = root.get("visgroup_system")
 	for child in root.draft_brushes_node.get_children():
 		var brush := child as DraftBrush
-		if brush == null:
+		if brush == null or (locks != null and locks.is_locked(brush)):
 			continue
 		for face in brush.faces:
 			if face != null and face.uv_group == group_id:

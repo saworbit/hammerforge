@@ -727,3 +727,40 @@ func test_a_prefab_names_what_of_its_selection_it_left_out():
 	watch_signals(level)
 	assert_ne(level.prefab_system.quick_save_prefab([kept], [], "piece"), "", "the prefab saves")
 	assert_has(_said(level), "Prefab 'piece' left out 1 visgroup", "its own visgroup only")
+
+
+## A brush entity of several brushes is one entity, with its wires once though
+## each of its brushes holds them. An export of a door of two leaves and one wire
+## said it left out the wires of 2 entities (#1958).
+func test_a_brush_entity_of_two_brushes_counts_once():
+	var level := _level()
+	(
+		level
+		. entity_system
+		. restore_entity_from_info(
+			{
+				"name": "lamp",
+				"entity_type": "light_point",
+				"properties": {},
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0, 2, 3)),
+			}
+		)
+	)
+	var left = level.create_brush_from_info(
+		{
+			"shape": 0,
+			"size": Vector3(1, 2, 0.2),
+			"center": Vector3(-0.5, 1, 0),
+			"brush_id": "leaf_l"
+		}
+	)
+	var right = level.create_brush_from_info(
+		{"shape": 0, "size": Vector3(1, 2, 0.2), "center": Vector3(0.5, 1, 0), "brush_id": "leaf_r"}
+	)
+	level.tie_brushes_to_entity(["leaf_l", "leaf_r"], "func_door", "double_door")
+	level.add_entity_output(left, "OnOpen", "lamp", "TurnOn")
+	assert_eq((right.get_meta("entity_io_outputs", []) as Array).size(), 1, "both hold the wire")
+	assert_eq(HFFormatCensus.count(level, "wires"), 1, "one wired entity")
+	assert_eq(HFFormatCensus.count(level, "brush_entities"), 1, "one door")
+	assert_eq(HFFormatCensus.count(level, "wires", [right]), 1, "one leaf of it, wired")
+	assert_string_contains(HFFormatCensus.left_out(level, ".glb"), "the wires of 1 entity")

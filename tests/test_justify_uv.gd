@@ -405,6 +405,57 @@ func test_an_edit_to_one_linked_face_is_an_edit_to_the_surface():
 	_assert_one_mapping(panels, "after a typed value on another")
 
 
+## Lock the visgroup of the third panel of `_linked_fitted_wall()`.
+func _lock_third(panels: Array) -> void:
+	root.create_visgroup("Done")
+	root.add_selection_to_visgroup("Done", [panels[2]])
+	root.visgroup_system.set_visgroup_locked("Done", true)
+
+
+## A face of the group on a locked brush keeps its mapping when another face of
+## it is scaled, and the faces that may change still change as one (#1978).
+func test_an_edit_to_a_linked_face_leaves_its_mate_on_a_locked_brush_alone():
+	var panels := _linked_fitted_wall()
+	_lock_third(panels)
+	var locked_before := _front(panels[2]).to_dict()
+	var scale_before := _front(panels[0]).uv_scale
+	_select_fronts([panels[0]])
+
+	root.edit_selected_face_uvs("scale_up")
+
+	assert_ne(_front(panels[0]).uv_scale, scale_before, "the picked face is scaled")
+	_assert_one_mapping([panels[0], panels[1]], "the unlocked faces, as one")
+	assert_eq(_front(panels[2]).to_dict(), locked_before, "the locked face keeps its mapping")
+
+
+func test_a_refit_after_a_move_leaves_a_face_on_a_locked_brush_alone():
+	root.texture_lock = true
+	var panels := _linked_fitted_wall()
+	_lock_third(panels)
+	var locked_before := _front(panels[2]).to_dict()
+	var free_before := _front(panels[0]).to_dict()
+
+	root.set_brush_transform_by_id("p1", PANEL, panels[1].global_position + Vector3(0, 8, 0))
+
+	assert_ne(_front(_panel(0)).to_dict(), free_before, "the unlocked faces are fitted again")
+	assert_eq(_front(_panel(2)).to_dict(), locked_before, "the locked face is not")
+
+
+func test_justify_and_select_group_leave_out_a_face_on_a_locked_brush():
+	var panels := _linked_fitted_wall()
+	_lock_third(panels)
+	var locked_before := _front(panels[2]).to_dict()
+	var free_before := _front(panels[0]).to_dict()
+	_select_fronts([panels[0]])
+
+	root.justify_selected_faces("right", false)
+	assert_ne(_front(panels[0]).to_dict(), free_before, "Justify moves the unlocked faces")
+	assert_eq(_front(panels[2]).to_dict(), locked_before, "and leaves the locked face")
+
+	assert_eq(root.select_texture_group(), 2, "Select Group picks the two unlocked faces")
+	assert_false(root.face_selection.has("p2"), "and not the locked one")
+
+
 func test_a_clipped_linked_panel_stays_part_of_the_surface():
 	_linked_fitted_wall()
 
