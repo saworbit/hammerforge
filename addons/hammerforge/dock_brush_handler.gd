@@ -804,10 +804,30 @@ static func _note_array(
 		"action": action,
 		"method": method,
 		"args": args,
+		"check": _array_check.bind(args, id),
 		"absolute_redo": false,
 		"dock": _array_to_dock.bind(dock, id),
 	}
 	dock.command_ran.emit(id, settings, recipe)
+
+
+## Whether the array `args` makes with `settings` is one to build, asked as the
+## level asks it before it makes one. Adjust Last asks before it undoes the array
+## it changes (#1995).
+static func _array_check(
+	settings: Dictionary, _level: Node, args: Callable, id: String
+) -> HFOpResult:
+	var made: Array = args.call(settings)
+	var sources: int = made[0].size()
+	match id:
+		"radial_array":
+			var layout := {"step_degrees": made[3], "pivot": made[4], "rise": made[5]}
+			layout["axis_index"] = made[2]
+			return HFDuplicator.can_generate(int(made[1]), sources, layout)
+		"grid_array":
+			var copies := HFDuplicator.grid_copy_count(made[1])
+			return HFDuplicator.can_generate(copies, sources, {"spacing": made[2]})
+	return HFDuplicator.can_generate(int(made[1]), sources, {"offset": made[2]})
 
 
 ## An array's settings changed in Adjust Last, on the dock's array controls too,

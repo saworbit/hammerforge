@@ -136,7 +136,7 @@ static func ask_for_script(plugin: Object) -> void:
 ## the bridge refused, as an agent is told. A coroutine: callers `await` it.
 static func run(plugin: Object, id: String, params: Dictionary, line: String) -> Dictionary:
 	HFConsoleLog.shared().info("> " + line, LOG_CATEGORY)
-	var outcome: Dictionary = await _run(plugin, id, params)
+	var outcome: Dictionary = await run_on_selection(plugin, id, params)
 	if outcome["ok"]:
 		HFConsoleLog.shared().info(outcome["message"], LOG_CATEGORY)
 	else:
@@ -144,7 +144,10 @@ static func run(plugin: Object, id: String, params: Dictionary, line: String) ->
 	return outcome
 
 
-static func _run(plugin: Object, id: String, params: Dictionary) -> Dictionary:
+## Run command `id` with `params` as the line runs it, and say nothing in the
+## Log: a key with settings runs its command this way too (#1997). `{ok,
+## message}`. A coroutine: callers `await` it.
+static func run_on_selection(plugin: Object, id: String, params: Dictionary) -> Dictionary:
 	var spec := HFCommandRegistry.bridge(id)
 	if spec.is_empty():
 		plugin.call("_on_hotkey_palette_action", id)
