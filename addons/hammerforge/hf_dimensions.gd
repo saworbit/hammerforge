@@ -10,7 +10,8 @@ extends RefCounted
 ## dimension follows a brush through a move, a turn and an undo with no step of
 ## its own. A resize moves a corner within the brush's own space, and the end
 ## finds it again by the faces that meet there (#1898). A Clip, Carve or Hollow
-## hands an end to the piece that keeps its corner (#2003). An end whose brush has
+## hands an end to the piece that keeps its corner (#2003), and a dimension copied
+## with the brushes it is on measures the copies (#2000). An end whose brush has
 ## gone, or whose corner a Clip has cut away, is detached: it reads where it was
 ## last seen, and its check is not judged (#2004).
 
@@ -249,6 +250,70 @@ static func resolve(root: Node, end: Dictionary, holder: Node3D) -> Dictionary:
 # ---------------------------------------------------------------------------
 # Copies and pieces
 # ---------------------------------------------------------------------------
+
+
+## Point the dimensions among `entity_infos` at the copies of the brushes their
+## ends are on, `copies` each old brush id to its copy's (#2000). An end on a brush
+## that was not copied stays on the original. Duplicate, Mirror Copy, the
+## clipboard and a prefab all copy a dimension with its brushes through here.
+static func follow_copies(entity_infos: Array, copies: Dictionary) -> void:
+	if copies.is_empty():
+		return
+	for info in entity_infos:
+		if not (info is Dictionary):
+			continue
+		if str(info.get("entity_type", info.get("entity_class", ""))) != CLASS:
+			continue
+		var data = info.get("properties")
+		if not (data is Dictionary):
+			continue
+		for key in [END_A, END_B]:
+			var end = data.get(key)
+			if end is Dictionary and copies.has(str(end.get("brush_id", ""))):
+				end["brush_id"] = copies[str(end["brush_id"])]
+
+
+## What a prefab or the clipboard calls the `index`th brush it holds, in place of
+## its id, for a dimension's end on it: the copy placed takes that brush's new id.
+static func piece_ref(index: int) -> String:
+	return "#%d" % index
+
+
+## The ends of `dimension` mirrored with it by a Flip (#2000): an end on a brush in
+## `brush_axes`, flipped in the same step, goes to the corner the mirror sent its
+## corner to, which is its place reflected through the local axis that brush was
+## folded on; a free end is reflected through `own_axis`, the dimension's. Mirror
+## Copy flips its copies so, and they measure the mirror image. An end on a brush
+## not flipped stays on its corner.
+static func mirror_ends(dimension: Node, own_axis: int, brush_axes: Dictionary) -> void:
+	var data: Dictionary = dimension.get("entity_data")
+	for key in [END_A, END_B]:
+		var end = data.get(key)
+		if not (end is Dictionary):
+			continue
+		if end.has("point"):
+			end["point"] = _reflected(end["point"], own_axis)
+			continue
+		var brush_id := str(end.get("brush_id", ""))
+		if not brush_axes.has(brush_id):
+			continue
+		var axis := int(brush_axes[brush_id])
+		end["local"] = _reflected(end.get("local"), axis)
+		if end.get("faces") is Array:
+			var normals: Array = []
+			for normal in end["faces"]:
+				normals.append(_reflected(normal, axis))
+			end["faces"] = normals
+
+
+## `value`, an `[x, y, z]`, with its `axis` component turned round.
+static func _reflected(value: Variant, axis: int) -> Variant:
+	var v = _vector(value)
+	if not (v is Vector3):
+		return value
+	var out: Vector3 = v
+	out[axis] = -out[axis]
+	return _array(out)
 
 
 ## Hand each end on `old` to the first of `pieces` that still has its vertex, edge

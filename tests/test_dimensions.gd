@@ -8,9 +8,11 @@ const HFNotes = preload("res://addons/hammerforge/hf_notes.gd")
 const HFUndoHelper = preload("res://addons/hammerforge/undo_helper.gd")
 const HFMcpTools = preload("res://addons/hammerforge/mcp/hf_mcp_tools.gd")
 const UndoStandIn = preload("res://tests/test_undo_collation.gd").FakeUndoRedo
+const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 
 const LEVEL := "user://hf_test_dimensions.hflevel"
 const SCENE := "user://hf_test_dimensions_playtest.tscn"
+const PREFAB := "user://hf_test_dimensions_doorway.hfprefab"
 
 var root: LevelRoot
 var undo
@@ -22,7 +24,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	for path in [LEVEL, SCENE]:
+	for path in [LEVEL, SCENE, PREFAB]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
@@ -297,6 +299,125 @@ func test_an_end_on_an_edge_or_a_face_follows_a_resize_too():
 	)
 
 
+## What Duplicate asks the plugin for: the entity a selected node belongs to.
+class _DuplicatingPlugin:
+	extends RefCounted
+
+	func _managed_entity_owner(level: Node, node: Node) -> Node:
+		return HFPluginSelectionState.managed_entity_owner(level, node)
+
+
+## The dimension among the level's that is not `original`, or null.
+func _copy_of(original: Node) -> Node:
+	for found in HFDimensions.dimensions(root):
+		if found != original:
+			return found
+	return null
+
+
+func _end_ids(dimension: Node) -> Array:
+	var data: Dictionary = dimension.entity_data
+	return [str(data[HFDimensions.END_A]["brush_id"]), str(data[HFDimensions.END_B]["brush_id"])]
+
+
+## Duplicate both walls of a doorway and its dimension, 5 along Z: the copy
+## measures the copied doorway and follows it. It kept measuring the original, its
+## ends still on the original walls (#2000).
+func test_a_dimension_duplicated_with_its_walls_measures_the_copies():
+	var dimension := _doorway(1.5)
+	var nodes := [root.find_brush_by_id("left"), root.find_brush_by_id("right"), dimension]
+	var infos: Array = HFPluginEditActions.duplicate_infos(
+		_DuplicatingPlugin.new(), root, nodes, Vector3(0, 0, 5)
+	)
+	root.create_managed_duplicates(infos[0], infos[1], infos[2])
+	var copy := _copy_of(dimension)
+	assert_not_null(copy, "fixture: copied")
+	if copy == null:
+		return
+	var copied_ids := [str(infos[0][0]["brush_id"]), str(infos[0][1]["brush_id"])]
+	assert_eq(_end_ids(copy), copied_ids, "its ends on the copied walls")
+	var measured := HFDimensions.measure(root, copy)
+	assert_false(measured["detached"])
+	assert_almost_eq(measured["a"], Vector3(-0.75, 0, 5.5), Vector3.ONE * 0.0001)
+	assert_almost_eq(measured["b"], Vector3(0.75, 0, 5.5), Vector3.ONE * 0.0001)
+	root.nudge_brushes_by_id([copied_ids[1]], Vector3(0.5, 0, 0))
+	assert_almost_eq(HFDimensions.measure(root, copy)["length"], 2.0, 0.0001, "it follows")
+	assert_almost_eq(
+		HFDimensions.measure(root, dimension)["length"], 1.5, 0.0001, "the original does not"
+	)
+	assert_eq(_end_ids(dimension), ["left", "right"], "and keeps its own walls")
+
+
+func test_a_dimension_duplicated_alone_still_measures_the_original_walls():
+	var dimension := _doorway(1.5)
+	var infos: Array = HFPluginEditActions.duplicate_infos(
+		_DuplicatingPlugin.new(), root, [dimension], Vector3(0, 0, 5)
+	)
+	root.create_managed_duplicates(infos[0], infos[1], infos[2])
+	var copy := _copy_of(dimension)
+	assert_not_null(copy, "fixture: copied")
+	if copy:
+		assert_eq(_end_ids(copy), ["left", "right"])
+		assert_almost_eq(
+			HFDimensions.measure(root, copy)["a"], Vector3(-0.75, 0, 0.5), Vector3.ONE * 0.0001
+		)
+
+
+## Mirror Copy of the doorway and its dimension across z = 3: the copy measures
+## the mirrored walls, on the mirror image of the corners the original is on, the
+## face of each wall toward the plane (#2000).
+func test_a_mirror_copy_of_a_doorway_measures_the_mirrored_walls():
+	var dimension := _doorway(1.5)
+	var made: Dictionary = root.mirror_copy_managed_nodes(
+		["left", "right"], [root.get_path_to(dimension)], 4, Vector3(0, 0, 3)
+	)
+	var copy := _copy_of(dimension)
+	assert_not_null(copy, "fixture: mirrored")
+	if copy == null:
+		return
+	assert_eq(_end_ids(copy), made["brush_ids"], "its ends on the mirrored walls")
+	var measured := HFDimensions.measure(root, copy)
+	assert_false(measured["detached"])
+	assert_almost_eq(measured["a"], Vector3(-0.75, 0, 5.5), Vector3.ONE * 0.0001)
+	assert_almost_eq(measured["b"], Vector3(0.75, 0, 5.5), Vector3.ONE * 0.0001)
+	root.nudge_brushes_by_id([made["brush_ids"][1]], Vector3(0.5, 0, 0))
+	assert_almost_eq(HFDimensions.measure(root, copy)["length"], 2.0, 0.0001, "it follows")
+	assert_almost_eq(HFDimensions.measure(root, dimension)["length"], 1.5, 0.0001)
+
+
+## A free end is mirrored with the dimension it belongs to.
+func test_a_flipped_dimension_mirrors_its_free_end():
+	var dimension := HFPluginDimensions.keep(root, Vector3(1, 5, 0), Vector3(4, 5, 0), undo)
+	root.flip_managed_nodes([], [root.get_path_to(dimension)], 0, Vector3.ZERO)
+	var measured := HFDimensions.measure(root, dimension)
+	assert_almost_eq(measured["a"], Vector3(-1, 5, 0), Vector3.ONE * 0.0001)
+	assert_almost_eq(measured["b"], Vector3(-4, 5, 0), Vector3.ONE * 0.0001)
+
+
+## Copy and Paste of the doorway and its dimension: the pasted dimension measures
+## the pasted walls (#2000).
+func test_a_pasted_dimension_measures_the_pasted_walls():
+	var dimension := _doorway(1.5)
+	assert_true(
+		root.prefab_system.copy_to_clipboard(
+			[root.find_brush_by_id("left"), root.find_brush_by_id("right")], [dimension]
+		),
+		"fixture: copied"
+	)
+	var pasted: Dictionary = root.prefab_system.paste_from_clipboard(Vector3(0, 0, 10))
+	var copy := _copy_of(dimension)
+	assert_not_null(copy, "fixture: pasted")
+	if copy == null:
+		return
+	assert_eq(_end_ids(copy), pasted["brush_ids"], "its ends on the pasted walls")
+	var measured := HFDimensions.measure(root, copy)
+	assert_false(measured["detached"])
+	assert_almost_eq(measured["length"], 1.5, 0.0001)
+	assert_almost_eq(measured["a"].z, 10.5, 0.0001, "across the pasted doorway")
+	root.nudge_brushes_by_id([pasted["brush_ids"][1]], Vector3(0.5, 0, 0))
+	assert_almost_eq(HFDimensions.measure(root, copy)["length"], 2.0, 0.0001, "it follows")
+
+
 ## A doorway held to the player's width whose wall is deleted: Validate says the
 ## dimension came loose, before a save and after a load, and claims no length. It
 ## said nothing in the session, reading the last length seen, and after a load
@@ -337,3 +458,47 @@ func _dimension_issues(level: LevelRoot) -> Array:
 	return (level.validate_level().get("issues", []) as Array).filter(
 		func(issue): return str(issue).begins_with("Dimension")
 	)
+
+
+## A doorway and its dimension saved as a prefab and placed twice, linked: each
+## copy's dimension measures its own walls, a fresh copy reads as unchanged, and a
+## Pull that builds the copies again keeps each on its own walls (#2000).
+func test_each_copy_of_a_doorway_prefab_measures_its_own_walls():
+	var dimension := _doorway(1.5)
+	var prefab = HFPrefabType.capture_from_selection(
+		root.brush_system,
+		root.entity_system,
+		[root.find_brush_by_id("left"), root.find_brush_by_id("right")],
+		[dimension]
+	)
+	assert_eq(prefab.save_to_file(PREFAB), OK, "fixture: saved")
+	var iids: Array = []
+	for z in [10.0, 20.0]:
+		var placed: Dictionary = prefab.instantiate(
+			root.brush_system, root.entity_system, root, Vector3(0, 1, z)
+		)
+		iids.append(
+			root.prefab_system.register_instance(
+				PREFAB, placed["brush_ids"], placed["entity_nodes"], true
+			)
+		)
+	for when in ["as placed", "after a Pull"]:
+		var seen: Array = []
+		for iid in iids:
+			var rec = root.prefab_system.get_instance(iid)
+			var copies: Array = root.prefab_system.pieces_of(rec).filter(
+				func(node): return HFDimensions.is_dimension(node)
+			)
+			assert_eq(copies.size(), 1, "%s: one dimension a copy" % when)
+			if copies.size() != 1:
+				continue
+			assert_eq(_end_ids(copies[0]), Array(rec.brush_ids), "%s: on its own walls" % when)
+			var measured := HFDimensions.measure(root, copies[0])
+			assert_false(measured["detached"], when)
+			assert_almost_eq(measured["length"], 1.5, 0.0001, when)
+			seen.append(snappedf((measured["a"] as Vector3).z, 0.001))
+			assert_eq(root.prefab_system.compute_instance_diff(iid), [], "%s: unchanged" % when)
+		assert_eq(seen.size(), 2)
+		if seen.size() == 2:
+			assert_almost_eq(float(seen[1]) - float(seen[0]), 10.0, 0.001, "each its own doorway")
+		assert_eq(root.prefab_system.propagate_from_source(PREFAB), 2, "fixture: pulled")

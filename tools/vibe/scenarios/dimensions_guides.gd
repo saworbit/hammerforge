@@ -15,7 +15,6 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 const HFDimensions = preload("res://addons/hammerforge/hf_dimensions.gd")
 const HFSnapSystem = preload("res://addons/hammerforge/hf_snap_system.gd")
-const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
 
 const LEVEL_PATH := "user://vibe_dimensions_guides.hflevel"
 
@@ -377,6 +376,17 @@ func _dimensions_through_edits() -> void:
 	await drop_root(root)
 
 
+## What Duplicate asks the plugin for: the entity a selected node belongs to. The
+## copies are then built by the plugin's own `duplicate_infos()`, which is where
+## a copied dimension is pointed at the copied walls (#2000); a copy built here by
+## hand skipped that and read as the bug forever.
+class _DuplicatingPlugin:
+	extends RefCounted
+
+	func _managed_entity_owner(level: Node, node: Node) -> Node:
+		return HFPluginSelectionState.managed_entity_owner(level, node)
+
+
 ## Ctrl+D on both walls and the dimension across them, as the plugin's Duplicate
 ## builds it: the copies one step along Z.
 func _a_doorway_copied_with_its_dimension() -> void:
@@ -386,12 +396,12 @@ func _a_doorway_copied_with_its_dimension() -> void:
 	var dims := _doorway(root, at)
 	await frame()
 	var shift := Vector3(0, 0, 5)
-	var brush_infos: Array = []
-	for brush_id in ["wall_l", "wall_r"]:
-		brush_infos.append(root.build_duplicate_info(root.find_brush_by_id(brush_id), shift))
-	var entity_infos: Array = [root.build_duplicate_entity_info(dims["corners"], shift)]
-	HFBrushEntity.fresh_identities(brush_infos, [], root.entity_system)
-	root.create_managed_duplicates(brush_infos, entity_infos, {})
+	var nodes := [root.find_brush_by_id("wall_l"), root.find_brush_by_id("wall_r"), dims["corners"]]
+	var infos: Array = HFPluginEditActions.duplicate_infos(
+		_DuplicatingPlugin.new(), root, nodes, shift
+	)
+	var brush_infos: Array = infos[0]
+	root.create_managed_duplicates(infos[0], infos[1], infos[2])
 	await frame()
 	var copy: Node = null
 	for d in HFDimensions.dimensions(root):
@@ -438,14 +448,39 @@ func _a_doorway_copied_with_its_dimension() -> void:
 		["wall_l", "wall_r"], [path], 4, at + Vector3(0, 0, 3)
 	)
 	await frame()
+	# The mirror image of where the original's ends are, across z = 3.
+	var original := HFDimensions.measure(root, dims["corners"])
+	var across := Vector3(1, 1, -1)
+	var want_a: Vector3 = (original["a"] as Vector3) * across + Vector3(0, 0, 6)
+	var want_b: Vector3 = (original["b"] as Vector3) * across + Vector3(0, 0, 6)
+	var mirrored_walls: Array = made.get("brush_ids", [])
 	for entity_path in made.get("entity_paths", []):
 		var mirrored: Node = root.get_node_or_null(NodePath(str(entity_path)))
 		if mirrored and HFDimensions.is_dimension(mirrored):
 			var mm := HFDimensions.measure(root, mirrored)
+			var mirrored_ids: Array = []
+			for key in [HFDimensions.END_A, HFDimensions.END_B]:
+				mirrored_ids.append(str(mirrored.entity_data[key].get("brush_id", "")))
 			note(
 				"Mirror Copy across z = 3: the mirrored dimension",
-				"from %s to %s, mirrored walls %s" % [mm["a"], mm["b"], made.get("brush_ids", [])]
+				(
+					"from %s to %s, its ends on %s, mirrored walls %s"
+					% [mm["a"], mm["b"], mirrored_ids, mirrored_walls]
+				)
 			)
+			if (
+				mirrored_ids != mirrored_walls
+				or (mm["a"] as Vector3).distance_to(want_a) > 0.001
+				or (mm["b"] as Vector3).distance_to(want_b) > 0.001
+			):
+				known(
+					2000,
+					"a Mirror Copy of a doorway and its dimension does not measure the mirrored walls",
+					(
+						"the mirrored dimension runs from %s to %s on brushes %s, where the mirror image is %s to %s on the mirrored walls %s"
+						% [mm["a"], mm["b"], mirrored_ids, want_a, want_b, mirrored_walls]
+					)
+				)
 	await drop_root(root)
 
 
