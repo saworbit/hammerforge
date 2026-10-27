@@ -2250,6 +2250,21 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 			)
 		)
 		return plan
+	# One sculpt over the faces a face grew from keeps their points only when its
+	# grid has them all. Three in a row, two of unequal widths, or two halves at
+	# the finest power have no such grid, and laid on another their relief moved
+	# under a message that said only how many brushes merged (#1972).
+	var moving := HFConvexClip.sculpts_a_union_would_move(union["faces"], union["parts"])
+	if moving > 0:
+		plan["result"] = HFOpResult.fail(
+			"Merge: %d sculpt%s would move" % [moving, "" if moving == 1 else "s"],
+			(
+				"One sculpt over the merged face has 4, 8 or 16 cells a side, and no such "
+				+ "grid has every point of these. Merge sculpted faces that halve evenly, "
+				+ "such as two halves at power 2 or 3, or take the sculpts off first"
+			)
+		)
+		return plan
 	plan["drafts"] = drafts
 	plan["placement"] = placement
 	plan["faces"] = union["faces"]
@@ -2419,10 +2434,6 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	# The entity they all are, with every wire and property any of them held.
 	var entity := HFBrushEntity.carried_by_all(brushes)
 
-	# Delete all original brushes
-	for brush in brushes:
-		delete_brush(brush)
-
 	# Create merged brush with full transform (not just center position)
 	var merged_info: Dictionary = {
 		"shape": root.BrushShape.CUSTOM,
@@ -2436,13 +2447,19 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	merged_info.merge(entity)
 	# The first brush's bake settings, as it gives its visgroups and group (#1660).
 	merged_info.merge(HFBakeSplit.fields(first))
+	if not src_visgroups.is_empty():
+		merged_info["visgroups"] = Array(src_visgroups)
+	if src_group_id != "":
+		merged_info["group_id"] = src_group_id
 
-	var merged = create_brush_from_info(merged_info)
-	if merged:
-		if src_visgroups.size() > 0:
-			merged.set_meta("visgroups", src_visgroups.duplicate())
-		if src_group_id != "":
-			merged.set_meta("group_id", src_group_id)
+	# Made before the brushes it replaces are deleted, as Intersect makes its own.
+	# Deleting a group's last brushes drops the group, and each group round it that
+	# is left empty, so a merged brush made after named a group the level no longer
+	# had (#1975). A brush that could not be made leaves every source where it was.
+	if create_brush_from_info(merged_info) == null:
+		return _op_fail("Merge: produced no geometry")
+	for brush in brushes:
+		delete_brush(brush)
 
 	var count: int = brushes.size()
 	root._log("Merge: combined %d brushes into one" % count)
@@ -2917,12 +2934,15 @@ func _piece_infos_from_faces(draft: DraftBrush, face_sets: Array) -> Array:
 	return infos
 
 
-## Delete a brush and put the pieces of it back in its place.
+## Put the pieces of a brush in its place and delete it.
+##
+## The pieces are made first, as Intersect makes its brush. Deleting a group's
+## last brush drops the group, and each group round it that is left empty, so
+## pieces made after named a group the level no longer had (#1975). Pieces that
+## could not be made leave the brush where it was.
 func _replace_brush_with_pieces(
 	brush_id: String, infos: Array, op_name: String, piece_noun: String = "pieces"
 ) -> HFOpResult:
-	delete_brush_by_id(brush_id)
-
 	var created: Array = []
 	for info in infos:
 		var piece = create_brush_from_info(info)
@@ -2930,6 +2950,7 @@ func _replace_brush_with_pieces(
 			created.append(piece)
 	if created.is_empty():
 		return _op_fail("%s: produced no geometry" % op_name)
+	delete_brush_by_id(brush_id)
 	# A piece of a face in a texture group is still that surface (#1437).
 	refit_texture_groups(created)
 	var message := "%s: %d %s" % [op_name, created.size(), piece_noun]
