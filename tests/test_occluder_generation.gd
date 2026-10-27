@@ -434,3 +434,81 @@ func test_a_stretched_slope_stands_on_the_plane_of_its_own_corners():
 			assert_almost_eq(
 				n.dot(tri[corner]), tri["dist"], 1e-3, "corner %s is off the plane" % corner
 			)
+
+
+# ---------------------------------------------------------------------------
+# Tests: only geometry that stays put occludes (#1961)
+#
+# An occluder culls what is behind it for the whole game. One made from a door
+# culled the room behind it once the door opened, one from a physbox stayed
+# where the crate was pushed from, and one from a func_illusionary curtain culled
+# what is seen through it.
+# ---------------------------------------------------------------------------
+
+const WALL := Vector3(4, 3, 0.2)
+
+
+## A wall standing on y 0 at `x`, tied to `entity_class` under `entity_name`.
+func _wall(x: float, entity_class: String, entity_name: String) -> DraftBrush:
+	var info := {
+		"shape": LevelRoot.BrushShape.BOX,
+		"size": WALL,
+		"center": Vector3(x, WALL.y * 0.5, 0),
+	}
+	var wall := root.create_brush_from_info(info) as DraftBrush
+	root.tie_brushes_to_entity([str(wall.brush_id)], entity_class, entity_name)
+	return wall
+
+
+## The occluder area whose triangles' middles lie in the wall at `x`, over the
+## floor.
+func _occluder_area_in_wall(x: float) -> float:
+	var inside := AABB(Vector3(x - 2.05, 0.1, -0.15), Vector3(4.1, 2.9, 0.3))
+	var area := 0.0
+	var occluders := root.baked_container.get_node_or_null("Occluders")
+	if occluders == null:
+		return area
+	for inst: OccluderInstance3D in occluders.get_children():
+		var occ := inst.occluder as ArrayOccluder3D
+		var verts := occ.vertices
+		var idx := occ.indices
+		for i in range(0, idx.size() - 2, 3):
+			var a: Vector3 = inst.global_transform * verts[idx[i]]
+			var b: Vector3 = inst.global_transform * verts[idx[i + 1]]
+			var c: Vector3 = inst.global_transform * verts[idx[i + 2]]
+			if inside.has_point((a + b + c) / 3.0):
+				area += (b - a).cross(c - a).length() * 0.5
+	return area
+
+
+func test_only_a_wall_that_stays_put_makes_an_occluder():
+	var floor_info := {
+		"shape": LevelRoot.BrushShape.BOX,
+		"size": Vector3(60, 0.2, 10),
+		"center": Vector3(0, -0.1, 0),
+	}
+	assert_not_null(root.create_brush_from_info(floor_info), "fixture: the floor")
+	var classes := ["func_detail", "func_door", "func_physbox", "func_illusionary", "func_wall"]
+	var walls: Array = []
+	for i in classes.size():
+		walls.append(
+			_wall(-20.0 + 10.0 * i, classes[i], (classes[i] as String).trim_prefix("func_"))
+		)
+	# A door with an output wired is a door all the same.
+	(walls[1] as DraftBrush).set_meta(
+		"entity_io_outputs",
+		[{"output_name": "OnOpen", "target_name": "detail", "input_name": "Trigger"}]
+	)
+	root.bake_occluder_min_area = 1.0
+	assert_true(await root.bake(true, false), "fixture: the level bakes")
+	assert_almost_eq(
+		_occluder_area_in_wall(-20.0), WALL.x * WALL.y * 2.0, 0.01, "the detail wall, both faces"
+	)
+	var moves := ["a door opens", "a physbox is pushed", "it is seen through", "Disable hides it"]
+	for i in range(1, classes.size()):
+		assert_almost_eq(
+			_occluder_area_in_wall(-20.0 + 10.0 * i),
+			0.0,
+			0.0001,
+			"%s makes no occluder: %s" % [classes[i], moves[i - 1]]
+		)

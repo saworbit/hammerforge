@@ -35,7 +35,7 @@ const MOVER_CLASSES := ["func_door", "door_basic"]
 ## one that is seen and walked through, baked with no collision (#1892). Hammer's
 ## names, so a `.map` round trip keeps them.
 const PHYSBOX_CLASS := "func_physbox"
-const ILLUSIONARY_CLASS := "func_illusionary"
+const ILLUSIONARY_CLASS := HFBrushEntity.ILLUSIONARY_CLASS
 
 const BAKED_CONTAINER_NAME := &"BakedGeometry"
 const BAKED_CONTAINER_META := &"_hammerforge_baked_container"
@@ -4187,14 +4187,15 @@ func _generate_occluders(container: Node3D) -> void:
 		occluder_container.free()
 
 
-## Every triangle of every baked mesh, in container space, with the plane it lies
-## on. One Dictionary per triangle: `a`, `b`, `c`, `normal`, `dist`, `area`.
+## Every triangle of every baked mesh that stays put, in container space, with the
+## plane it lies on. One Dictionary per triangle: `a`, `b`, `c`, `normal`, `dist`,
+## `area`.
 ##
 ## Triangles too small to have a reliable normal are dropped here rather than
 ## carried, because a degenerate one has no plane to be grouped by.
 func _collect_occluder_triangles(container: Node3D) -> Array:
 	var out: Array = []
-	for mi: MeshInstance3D in _collect_mesh_instances(container):
+	for mi: MeshInstance3D in _meshes_that_stay_put(container, {}):
 		var mesh: Mesh = mi.mesh
 		if not mesh:
 			continue
@@ -4343,6 +4344,48 @@ static func _collect_mesh_instances(node: Node) -> Array:
 		elif child is Node3D and child.name != "Occluders":
 			result.append_array(_collect_mesh_instances(child))
 	return result
+
+
+## The meshes under `node` an occluder can be made from: those of geometry that
+## stays where it is and stays drawn, walked as `_collect_mesh_instances()` walks.
+##
+## An occluder culls what is behind it for the whole game. Made from a door, it
+## culled the room behind the doorway once the door opened; from a physbox, it
+## stayed where the crate was pushed from; from a func_illusionary curtain, it
+## culled what the player sees through it (#1961). So the walk stops at the node
+## the bake made for a brush entity that moves, is seen through, or takes an
+## input, since an input such as Disable hides it. `known` holds each class's
+## answer for the walk.
+func _meshes_that_stay_put(node: Node, known: Dictionary) -> Array:
+	var result: Array = []
+	for child in node.get_children():
+		if not (child is Node3D) or child.name == "Occluders" or child is RigidBody3D:
+			continue
+		var entity_class := HFBrushEntity.entity_class(child)
+		if entity_class != "":
+			if not known.has(entity_class):
+				known[entity_class] = _class_stays_put(entity_class)
+			if not known[entity_class]:
+				continue
+		if child is MeshInstance3D:
+			result.append(child)
+		else:
+			result.append_array(_meshes_that_stay_put(child, known))
+	return result
+
+
+## Whether a brush entity class bakes to geometry that stays where it is and
+## stays drawn: not a mover, a physbox or func_illusionary, and declaring no
+## input. A class with no definition might take any input, as
+## `_class_takes_part_in_io()` reads one.
+func _class_stays_put(entity_class: String) -> bool:
+	if entity_class in MOVER_CLASSES or entity_class in [PHYSBOX_CLASS, ILLUSIONARY_CLASS]:
+		return false
+	var definition: Dictionary = root.get_entity_definition(entity_class)
+	if definition.is_empty():
+		return false
+	var inputs: Variant = definition.get("inputs", [])
+	return not (inputs is Array and not (inputs as Array).is_empty())
 
 
 func _root_bool(property_name: String, default_value: bool) -> bool:
