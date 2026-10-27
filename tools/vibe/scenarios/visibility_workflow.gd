@@ -166,19 +166,22 @@ func _hiding_survives_a_round_trip() -> void:
 			"%d visible before the save, %d after the load" % [before, after]
 		)
 
-	# And through the undo path, which rebuilds the level from a snapshot.
+	# And through the undo path, which rebuilds the level from a snapshot. Ctrl+Z
+	# never undoes a visibility change, so an undo keeps the wing as it is now
+	# (#1981): shown, though the snapshot was taken with it hidden.
 	var state: Dictionary = root.capture_state()
 	root.set_visgroup_visible("west_wing", true)
 	await frame()
-	note("visible with the wing shown again", _visible_count(root))
+	var shown_again := _visible_count(root)
+	note("visible with the wing shown again", shown_again)
 	root.restore_state(state)
 	await frame()
 	var restored := _visible_count(root)
 	note("visible after restore_state of the hidden snapshot", restored)
-	if restored != before:
+	if restored != shown_again:
 		flag(
-			"undoing back to a hidden visgroup does not re-hide it",
-			"%d visible in the snapshot, %d after restoring it" % [before, restored]
+			"an undo puts back a visibility change",
+			"%d visible before the restore, %d after it" % [shown_again, restored]
 		)
 
 
