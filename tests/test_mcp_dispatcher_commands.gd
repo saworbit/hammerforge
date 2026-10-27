@@ -749,6 +749,32 @@ func test_cycle_variant_refuses_a_prefab_with_one_variant():
 	)
 
 
+## A switch rebuilds the whole copy, so a locked piece holds it, as it holds a
+## Pull, even named through a piece that is not locked (#1977).
+func test_cycle_variant_refuses_a_copy_with_a_locked_piece():
+	var level := make_level()
+	var sources := [
+		box(level, "src_a", Vector3(0, 2, -20)), box(level, "src_b", Vector3(6, 2, -20))
+	]
+	var prefab = HFPrefab.capture_from_selection(
+		level.brush_system, level.entity_system, sources, []
+	)
+	var base: Dictionary = prefab.get_variant_data("base").duplicate(true)
+	prefab.set_variant_data("tall", base["brush_infos"], [])
+	assert_eq(prefab.save_to_file(PREFAB_PATH), OK)
+	var placed: Dictionary = prefab.instantiate(
+		level.brush_system, level.entity_system, level, Vector3(10, 0, 0)
+	)
+	var pieces: Array = placed["brush_ids"]
+	level.prefab_system.register_instance(PREFAB_PATH, pieces, [], true)
+	level.find_brush_by_id(pieces[1]).set_meta("_edit_lock_", true)
+	var before := snapshot(level)
+	var r := await run("cycle_variant", [pieces[0]])
+	assert_checked_refusal(r, "locked", before, "a locked piece")
+	if not r.get("ok", true):
+		assert_eq(r["error"]["message"], HFPrefabSystem.LOCKED_COPY)
+
+
 func test_propagate_rebuilds_every_linked_copy():
 	var level := make_level()
 	var iids := place_prefab(level, 2, true)

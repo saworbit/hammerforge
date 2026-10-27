@@ -390,7 +390,7 @@ Give every face that wears the material from the material to, what Replace Mater
 
 ### Cycle Prefab Variant (`cycle_variant`)
 
-Switch a placed prefab to its next variant, rebuilding its pieces. Name any one piece of it, a brush or an entity; hf_get_brushes and hf_get_entities give each piece's prefab. Refused for a prefab with one variant.
+Switch a placed prefab to its next variant, rebuilding its pieces. Name any one piece of it, a brush or an entity; hf_get_brushes and hf_get_entities give each piece's prefab. Refused for a prefab with one variant, and with locked for a copy any piece of which is locked.
 
 No parameters.
 
