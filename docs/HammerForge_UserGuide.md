@@ -2232,7 +2232,7 @@ When you save a prefab with **Save Linked**, all placed instances of that prefab
 - The context toolbar shows a `[linked]` badge on linked prefab instances. Hover the badge to see how many copies of that prefab the level holds.
 - **Copies** (Select Linked Copies in the palette) selects every copy of the selected copy's prefab in the level, and nothing else ([#1734](https://github.com/saworbit/hammerforge/issues/1734)).
 - **Unlink** (Unlink Prefab Copy) makes the selected copy ordinary brushes and entities, as one undo step. It keeps its look and names, and no later Pull, Push or variant switch touches it.
-- **Keep on this copy.** A copy can differ where it must: a button wired to another door, a light in a darker room. Select a piece of a linked copy and each property in the Entity panel has a **Keep** box. A kept value stays through a Pull and a variant switch, and Push leaves it out of the prefab file, writing the prefab's own value back in its place. **Keep wiring on this copy** does the same for the piece's outputs, and **Clear Kept** keeps nothing again and takes the prefab's values. What a copy keeps is saved with the level, and each change to it is an undo step.
+- **Keep on this copy.** A copy can differ where it must: a button wired to another door, a light in a darker room. Select a piece of a linked copy and each property in the Entity panel has a **Keep** box. A kept value stays on its piece through a Pull and a variant switch, and Push leaves it out of the prefab file, writing the prefab's own value back in its place. When another copy pushes the prefab without that piece, the next Pull lets the value go with it and says so ([#1976](https://github.com/saworbit/hammerforge/issues/1976)). **Keep wiring on this copy** does the same for the piece's outputs, and **Clear Kept** keeps nothing again and takes the prefab's values. What a copy keeps is saved with the level, and each change to it is an undo step.
 - **Changed copies.** A linked copy that differs from its prefab, outside what it keeps, shows `[changed]` in the badge. Hover it for the list of what changed. **Push** writes the changes into the prefab; **Discard** (Discard Prefab Changes) rebuilds the copy from its prefab as one undo step, keeping what it keeps. Names a copy gives its own entities, and wires between them, are not counted as changes.
 - **Duplicate keeps prefab link**, in the Console's Controls and off by default, makes Ctrl+D of a whole linked copy place another linked copy, with what the copy keeps, instead of ordinary geometry. The new copy is made from the prefab, as a Pull would make it.
 
@@ -2564,7 +2564,10 @@ changing the level ([#1697](https://github.com/saworbit/hammerforge/issues/1697)
   little, so new work lines up with them, but nothing selects or changes them:
   a click, a marquee or the Scene dock leaves them out of the selection, Face
   Select and Paint skip them, Replace Material passes them by, a Pull leaves a
-  locked prefab copy as it is, and an agent is refused with `locked`. The row
+  prefab copy with a locked piece as it is, and so do Discard, Clear Kept and a
+  variant switch, saying why
+  ([#1977](https://github.com/saworbit/hammerforge/issues/1977)), and an agent
+  is refused with `locked`. The row
   says `(locked)`. Godot's own lock, the padlock in the Scene dock, does the
   same for one brush or entity. Locking and unlocking are view changes, kept
   with the level and stepped back by **Previous**, not undo steps.
