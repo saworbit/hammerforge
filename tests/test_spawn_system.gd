@@ -602,6 +602,73 @@ func test_a_spawn_in_a_trigger_is_not_inside_a_brush():
 
 
 # ---------------------------------------------------------------------------
+# A func_illusionary brush bakes its mesh and no collision, so the player walks
+# through it as through a trigger (#1962). The spawn check read it as solid: a
+# spawn on a fake floor passed, and one in a light shaft was moved out of it.
+# ---------------------------------------------------------------------------
+
+
+func _illusionary(size: Vector3, at: Vector3) -> DraftBrush:
+	var brush := _box(size, at)
+	root.tie_brushes_to_entity([str(brush.brush_id)], "func_illusionary", "illusion")
+	return brush
+
+
+func test_a_spawn_on_an_illusionary_platform_is_told_what_one_in_the_air_is():
+	var x := 1400.0
+	# Two floors 20 apart, a fake floor 2.1 over the first and nothing over the
+	# second, and a spawn standing at that height over each.
+	var high := 2.1 + HFSpawnSystemScript.FEET_OFFSET + 1.0
+	_slab(0.2, Vector3(x, -0.1, 0))
+	_slab(0.2, Vector3(x + 20, -0.1, 0))
+	_illusionary(Vector3(3, 0.2, 3), Vector3(x, 2.0, 0))
+	var on_platform := _make_spawn(Vector3(x, high, 0))
+	var in_the_air := _make_spawn(Vector3(x + 20, high, 0))
+	assert_true(await root.bake(false, false), "fixture: the level bakes")
+	await wait_physics_frames(2)
+	var told: Dictionary = sys.validate_spawn(on_platform, 0)
+	var control: Dictionary = sys.validate_spawn(in_the_air, 0)
+	assert_false(
+		(control["issues"] as PackedStringArray).is_empty(),
+		"fixture: a spawn in the air is told something"
+	)
+	assert_eq(told["issues"], control["issues"], "the fake floor is no floor")
+	assert_eq(told["severity"], control["severity"])
+
+
+func test_a_spawn_in_an_illusionary_light_shaft_validates_clean():
+	var x := 1500.0
+	_slab(0.2, Vector3(x, -0.1, 0))
+	_illusionary(Vector3(2, 4, 2), Vector3(x, 2, 0))
+	var spawn := _make_spawn(Vector3(x, HFSpawnSystemScript.FEET_OFFSET + 1.0, 0))
+	assert_false(sys.spawn_is_blocked(spawn), "the player stands in it")
+	assert_true(await root.bake(false, false), "fixture: the level bakes")
+	await wait_physics_frames(2)
+	_assert_passes(sys.validate_spawn(spawn, 0), "a spawn in a light shaft")
+
+
+func test_a_created_spawn_stays_in_an_illusionary_light_shaft_at_the_middle():
+	var x := 1600.0
+	_slab(0.2, Vector3(x, -0.1, 0))
+	_illusionary(Vector3(2, 4, 2), Vector3(x, 2, 0))
+	var spawn: Node3D = sys.create_default_spawn()
+	var at := spawn.global_position
+	assert_almost_eq(at.x, x, 0.001, "in the middle, where the player stands fine")
+	assert_almost_eq(at.z, 0.0, 0.001)
+	assert_almost_eq(at.y, HFSpawnSystemScript.FEET_OFFSET + 1.0, 0.001, "on the floor")
+
+
+func test_a_created_spawn_does_not_stand_on_an_illusionary_platform():
+	var x := 1700.0
+	# A floor off to one side, and a fake floor 2.1 up over the middle of the level.
+	_slab(0.2, Vector3(x - 8, -0.1, 0))
+	_illusionary(Vector3(12, 0.2, 4), Vector3(x + 2, 2.0, 0))
+	var spawn: Node3D = sys.create_default_spawn()
+	assert_almost_eq(spawn.global_position.x, x - 2, 0.001, "fixture: over the fake floor")
+	assert_lt(spawn.global_position.y, 2.1, "not standing on it")
+
+
+# ---------------------------------------------------------------------------
 # The brushes stand in for the baked collision, so only the ones it takes count
 # (#1204)
 #

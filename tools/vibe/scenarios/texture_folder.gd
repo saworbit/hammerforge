@@ -56,14 +56,15 @@ func run() -> void:
 	_pack(
 		"plain albedo textures whose names end in a map word",
 		["sheet_metal.png", "concrete_rough.png", "stone_col.png"],
-		3
+		3,
+		true
 	)
 
 
 ## Feed `names` to `sets_of()` and say what it made; flag when the number of
 ## materials is not `expected`, or a map other than an albedo would be worn as
-## one.
-func _pack(label: String, names: Array, expected: int) -> void:
+## one. `plain` says each name is an albedo on purpose, whatever word ends it.
+func _pack(label: String, names: Array, expected: int, plain := false) -> void:
 	var found: Dictionary = HFTextureFolder.sets_of(names)
 	var sets: Array = found["sets"]
 	var albedos: Array = []
@@ -74,6 +75,8 @@ func _pack(label: String, names: Array, expected: int) -> void:
 	)
 	var map_as_albedo: Array = []
 	for albedo in albedos:
+		if plain and names.has(albedo):
+			continue
 		var lower := str(albedo).to_lower()
 		for word in ["nor", "normal", "rough", "ao", "occlusion", "metal", "disp"]:
 			if lower.contains("_" + word):

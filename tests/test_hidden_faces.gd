@@ -250,6 +250,39 @@ func test_hidden_goes_where_the_texture_goes_but_not_onto_a_cut_s_cap():
 	assert_eq(caps, 1, "the cut opens new surface, there to be seen")
 
 
+## Two 2 x 1 x 2 boxes side by side, merged in `order`, with the tops named in
+## `hidden` Hidden. The merged top, and the area of it the bake draws.
+func _merged_top(order: Array, hidden: Array) -> Dictionary:
+	var root := _fresh_root()
+	_box(root, "ha", Vector3(2, 1, 2), Vector3(-1, 0.5, 0))
+	_box(root, "hb", Vector3(2, 1, 2), Vector3(1, 0.5, 0))
+	var tops := {}
+	for brush_id in hidden:
+		var brush: DraftBrush = root.find_brush_by_id(brush_id)
+		tops[brush_id] = [_face_facing(brush, Vector3.UP)]
+	root.set_faces_hidden(tops, true)
+	assert_true(root.merge_brushes_by_ids(order).ok, "%s: fixture: merged" % [order])
+	var merged: DraftBrush = root._iter_managed_brush_nodes()[0]
+	await root.bake(true, false, 0)
+	return {
+		"face": merged.faces[_face_facing(merged, Vector3.UP)],
+		"drawn": _drawn_area_at(root.baked_container, 1.0),
+	}
+
+
+## Merge gave each face the look of the largest face it joined, the first picked
+## on a tie, and Hidden goes with the look. So a top that was Hidden in part came
+## out Hidden whole or drawn whole by the order of the pick (#2002).
+func test_a_merged_face_is_hidden_only_when_every_face_it_joins_was():
+	for order in [["ha", "hb"], ["hb", "ha"]]:
+		var top: Dictionary = await _merged_top(order, ["ha"])
+		assert_false((top["face"] as FaceData).is_hidden(), "%s: the top is Normal" % [order])
+		assert_almost_eq(top["drawn"], 8.0, 0.01, "%s: and drawn whole" % [order])
+	var both: Dictionary = await _merged_top(["ha", "hb"], ["ha", "hb"])
+	assert_true((both["face"] as FaceData).is_hidden(), "two Hidden tops make a Hidden one")
+	assert_almost_eq(both["drawn"], 0.0, 0.001, "drawn nowhere")
+
+
 func test_hidden_survives_a_save_and_a_load_and_an_older_file_has_none():
 	var data := FaceData.new()
 	data.face_type = FaceData.FaceType.HIDDEN

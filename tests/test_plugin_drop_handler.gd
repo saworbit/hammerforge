@@ -18,6 +18,8 @@ const SKY := Vector2(5, 5)
 const IMAGE_PATH := "res://icon.svg"
 const BRICK_ALBEDO_PATH := "res://tests/fixtures/texture_folder/brick_albedo.png"
 const BRICK_NORMAL_PATH := "res://tests/fixtures/texture_folder/brick_normal.png"
+## A plain texture alone in its folder, its name ending in a map word.
+const SHEET_METAL_PATH := "res://tests/fixtures/texture_folder_plain/sheet_metal.png"
 
 var rig := PluginRig.new()
 ## A material saved to a file for the FileSystem drops, and taken away again.
@@ -440,6 +442,25 @@ func test_a_dropped_image_paints_the_face_with_its_sets_material() -> void:
 	_drop(_files([BRICK_ALBEDO_PATH]))
 	assert_eq(level.get_materials().size(), 2, "another file of the set uses the same slot")
 	assert_eq(_brush(level, "target").faces[front].material_idx, 1)
+	await rig.leave_level(level)
+
+
+## A plain texture alone in its folder whose name ends in a map word is its own
+## albedo, so a drop of it paints the face. It was read as the metal map of a set
+## with no albedo, and the drop refused (#1960).
+func test_a_dropped_plain_texture_named_like_a_map_paints_the_face() -> void:
+	_empty_texture_folder_output()
+	var level = await rig.make_level()
+	level.set_materials([StandardMaterial3D.new()])
+	var brush = rig.box(level, "target", Vector3.ZERO, Vector3(8, 8, 8))
+	var front := _face_idx(brush, Vector3.BACK)
+	_drop(_files([SHEET_METAL_PATH]))
+	assert_eq(level.get_materials().size(), 2, "it joins the palette")
+	var sheet = level.get_materials()[1] as StandardMaterial3D
+	assert_eq(sheet.resource_name, "sheet_metal")
+	assert_eq(sheet.albedo_texture.resource_path, SHEET_METAL_PATH, "worn as its albedo")
+	assert_null(sheet.metallic_texture, "not as a metal map")
+	assert_eq(_brush(level, "target").faces[front].material_idx, 1, "and the face wears it")
 	await rig.leave_level(level)
 
 

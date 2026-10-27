@@ -130,17 +130,97 @@ func test_an_entity_cut_is_not_checked_at_all():
 	assert_eq(_types(val_sys.check_bake_issues(), "floating_subtract").size(), 0)
 
 
-func test_a_turned_cut_is_measured_by_its_own_size():
-	# The box is the brush's size at its origin, rotation and all. Widening it to
-	# the turned extent would change which levels report an issue.
+# ===========================================================================
+# A turned brush is read by its real extent (#1967)
+#
+# Each brush was its size placed at its origin, so a doorway cut into a wall
+# turned a quarter turn overlapped nothing, and cuts turned with a wall were read
+# across it rather than along it.
+# ===========================================================================
+
+
+## Turn `brushes` together about the vertical through `pivot`.
+func _turn(brushes: Array, degrees: float, pivot: Vector3 = Vector3.ZERO) -> void:
+	var turn := (
+		Transform3D(Basis(Vector3.UP, deg_to_rad(degrees)), pivot)
+		* Transform3D(Basis.IDENTITY, -pivot)
+	)
+	for brush: DraftBrush in brushes:
+		brush.global_transform = turn * brush.global_transform
+
+
+func test_a_turned_cut_whose_corner_reaches_a_solid_lands_on_it():
 	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(4, 4, 4))
 	var cut = _cut(root.draft_brushes_node, Vector3(3.5, 0, 0))
 	cut.rotation = Vector3(0, deg_to_rad(45), 0)
 	assert_eq(
 		_types(val_sys.check_bake_issues(), "floating_subtract").size(),
 		0,
-		"The unrotated box still overlaps, which is the answer it always gave"
+		"Its corner is 1.3 into the solid"
 	)
+
+
+func test_a_long_cut_turned_away_from_a_solid_is_floating():
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(4, 4, 4))
+	var cut = _cut(root.draft_brushes_node, Vector3(5.5, 0, 0), Vector3(8, 1, 1))
+	cut.rotation = Vector3(0, deg_to_rad(90), 0)
+	assert_eq(
+		_types(val_sys.check_bake_issues(), "floating_subtract").size(),
+		1,
+		"Turned, it runs along z beside the solid; its size at its origin reached in"
+	)
+
+
+func test_a_doorway_in_a_wall_turned_a_quarter_turn_is_not_floating():
+	var wall = root.create_brush_from_info(
+		{"size": Vector3(8, 3, 0.3), "center": Vector3(0, 1.5, 0), "brush_id": "wall"}
+	)
+	root.rotate_managed_nodes(["wall"], [], 1, 90.0, wall.global_position)
+	_cut(root.draft_brushes_node, Vector3(0, 1.1, 3), Vector3(0.6, 2.2, 1.2))
+	assert_eq(
+		_types(val_sys.check_bake_issues(), "floating_subtract"),
+		[],
+		"The wall runs along z, and the doorway is 3 along it"
+	)
+
+
+func test_a_cut_beside_a_turned_wall_touching_nothing_is_floating():
+	var wall = _make_brush(root.draft_brushes_node, Vector3(0, 1.5, 0), Vector3(8, 3, 0.3))
+	wall.rotation = Vector3(0, deg_to_rad(90), 0)
+	_cut(root.draft_brushes_node, Vector3(1, 1.1, 3), Vector3(0.6, 2.2, 1.2))
+	assert_eq(_types(val_sys.check_bake_issues(), "floating_subtract").size(), 1)
+
+
+func test_a_cut_inside_a_diagonal_wall_s_box_but_off_the_wall_is_floating():
+	# The wall runs along z = -x. Its box in the level takes in the cut, which
+	# stands on the other diagonal, 2.8 from it. The boxes meet; the brushes do not.
+	var wall = _make_brush(root.draft_brushes_node, Vector3(0, 1.5, 0), Vector3(8, 3, 0.3))
+	wall.rotation = Vector3(0, deg_to_rad(45), 0)
+	_cut(root.draft_brushes_node, Vector3(2, 1.1, 2), Vector3(0.6, 2.2, 0.6))
+	assert_eq(_types(val_sys.check_bake_issues(), "floating_subtract").size(), 1)
+
+
+func test_two_cuts_overlapping_in_a_turned_wall_are_reported():
+	# Drawn along x they overlap by 0.2, and turned with the wall they run along z.
+	var wall = _make_brush(root.draft_brushes_node, Vector3(0, 1.5, 0), Vector3(8, 3, 0.3))
+	var first = _cut(root.draft_brushes_node, Vector3(-0.5, 1.1, 0), Vector3(1.2, 2.2, 0.6))
+	var second = _cut(root.draft_brushes_node, Vector3(0.5, 1.1, 0), Vector3(1.2, 2.2, 0.6))
+	_turn([wall, first, second], 90.0)
+	var issues = val_sys.check_bake_issues()
+	assert_eq(_types(issues, "overlapping_subtract").size(), 1)
+	assert_eq(_types(issues, "floating_subtract").size(), 0, "both are in the wall")
+
+
+func test_two_cuts_apart_in_a_turned_wall_are_not_reported():
+	# Drawn along x with 0.2 between them, then turned with the wall. Their boxes
+	# in the level meet; the cuts do not.
+	var wall = _make_brush(root.draft_brushes_node, Vector3(0, 1.5, 0), Vector3(8, 3, 0.3))
+	var first = _cut(root.draft_brushes_node, Vector3(-0.4, 1.1, 0), Vector3(0.6, 2.2, 1.2))
+	var second = _cut(root.draft_brushes_node, Vector3(0.4, 1.1, 0), Vector3(0.6, 2.2, 1.2))
+	_turn([wall, first, second], 45.0)
+	var issues = val_sys.check_bake_issues()
+	assert_eq(_types(issues, "overlapping_subtract").size(), 0)
+	assert_eq(_types(issues, "floating_subtract").size(), 0, "both are in the wall")
 
 
 func test_overlapping_cuts_are_reported_once_per_pair():
