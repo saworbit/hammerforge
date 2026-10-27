@@ -128,6 +128,37 @@ func test_streamed_region_preserves_raised_wall_heights():
 	_clean_region_dir()
 
 
+func test_a_layer_streamed_out_keeps_its_cell_size_when_the_snap_changes():
+	# Its paint is in a region file and none of it in memory, and it is still
+	# paint the snap would resize (#2011).
+	_streaming_system()
+	_paint_cell(Vector2i(1, 1))
+	var layer = _floor_layer()
+	var painted_at: float = layer.grid.cell_size
+	sys.region_manager.mark_loaded(Vector2i.ZERO)
+	assert_true(sys._unload_region(Vector2i.ZERO))
+	assert_eq(layer.get_chunk_ids().size(), 0, "none of it is in memory")
+	root.grid_snap = painted_at * 4.0
+	assert_eq(layer.grid.cell_size, painted_at)
+	_clean_region_dir()
+
+
+func test_the_cursor_reads_the_cells_the_active_layer_paints():
+	# The regions a stroke loads and pins are found from the cursor's cell. Read
+	# on the template, which follows the snap, it named other cells than the
+	# layer, which keeps its size, paints (#2011).
+	var layer = _floor_layer()
+	layer.set_cell(Vector2i.ZERO, true)
+	root.grid_snap = 4.0
+	assert_eq(layer.grid.cell_size, 0.5, "painted at the starting snap")
+	var camera := Camera3D.new()
+	add_child_autoqfree(camera)
+	camera.look_at_from_position(Vector3(5.25, 10, 5.25), Vector3(5.25, 0, 5.25), Vector3.FORWARD)
+	var centre: Vector2 = camera.get_viewport().get_visible_rect().size * 0.5
+	assert_eq(sys._screen_to_cell(camera, centre), Vector2i(10, 10), "cells of 0.5, not of 4")
+	assert_eq(sys._screen_to_cell(camera, centre), root.paint_tool._screen_to_cell(camera, centre))
+
+
 func test_unload_keeps_the_region_when_the_write_fails():
 	_streaming_system()
 	_paint_cell(Vector2i(1, 1))
@@ -248,6 +279,18 @@ func test_a_rename_is_trimmed_before_it_is_compared():
 	assert_false(sys.rename_paint_layer(0, "  Walkway  "), "Padding does not make it a new name")
 	assert_true(sys.rename_paint_layer(0, "  Basement  "))
 	assert_eq(sys.get_paint_layer_names()[0], "Basement", "The stored name is trimmed")
+
+
+func test_a_new_layer_skips_an_id_another_row_shows_as_its_name():
+	# A rename to "layer_2" is allowed while no row shows it, and Add then gave
+	# the next layer that id, so two rows read "layer_2" (#2013).
+	root.paint_layers.create_layer(&"layer_0", 0.0)
+	root.paint_layers.create_layer(&"layer_1", 1.0)
+	assert_true(sys.rename_paint_layer(0, "layer_2"), "no row shows layer_2 yet")
+	sys.add_paint_layer()
+	assert_eq(str(root.paint_layers.layers[2].layer_id), "layer_3")
+	assert_eq(sys.get_paint_layer_names(), ["layer_2", "layer_1", "layer_3"])
+	assert_eq(sys.find_paint_layer("layer_3"), 2, "the new row is found by its name")
 
 
 # ===========================================================================

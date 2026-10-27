@@ -131,6 +131,52 @@ func test_a_named_view_is_kept_with_the_level_and_restored():
 	await rig.leave_level(s.level)
 
 
+## A rename moved the members and the current visgroup and left the saved views
+## on the old name, so Show left the renamed visgroup as it was (#1979).
+func test_a_renamed_visgroup_keeps_its_place_in_the_saved_views():
+	var s: Dictionary = await _level()
+	s.vg.set_visgroup_visible("Upper", false)
+	assert_true(s.level.save_visibility_view("Ground only"))
+	s.vg.set_visgroup_visible("Upper", true)
+	assert_true(s.vg.rename_visgroup("Upper", "Loft"))
+	assert_true(s.vg.restore_saved_view("Ground only"))
+	assert_eq(_shown([s.a, s.b]), [true, false], "the view hides the renamed visgroup")
+	assert_true(s.vg.previous_view(), "and Previous steps back")
+	assert_eq(_shown([s.a, s.b]), [true, true], "to the visgroup shown, under its new name")
+	await rig.leave_level(s.level)
+
+
+## Ctrl+Z never undoes a visibility change. A whole level undo put back each
+## visgroup's eye and lock as the step found them, and lost Hide Selection on a
+## brush it rebuilt (#1981).
+func test_an_undo_keeps_the_eyes_the_locks_and_the_hides_of_now():
+	var s: Dictionary = await _level()
+	var before: Dictionary = s.level.capture_undo_state()
+	s.level.nudge_brushes_by_id([str(s.crate.brush_id)], Vector3(0, 0, 2))
+	var after: Dictionary = s.level.capture_undo_state()
+	s.vg.set_visgroup_locked("Ground", true)
+	s.vg.set_visgroup_visible("Upper", false)
+	s.vg.hide_from_view([s.crate])
+	for state in [before, after]:
+		s.level.restore_state(state)
+		var crate: Node3D = s.level.find_brush_by_id(str(s.crate.brush_id))
+		assert_true(s.vg.is_visgroup_locked("Ground"), "Ground stays locked")
+		assert_false(s.vg.is_visgroup_visible("Upper"), "Upper stays hidden")
+		assert_false(crate.visible, "the crate stays hidden, rebuilt or not")
+	await rig.leave_level(s.level)
+
+
+## A load is not an undo: the level's own file says what is shown.
+func test_a_load_takes_the_visibility_of_the_file():
+	var s: Dictionary = await _level()
+	s.vg.set_visgroup_visible("Upper", false)
+	var saved: Dictionary = s.level.capture_state(false)
+	s.vg.set_visgroup_visible("Upper", true)
+	s.level.restore_state(saved)
+	assert_false(s.vg.is_visgroup_visible("Upper"), "the file's Upper is hidden")
+	await rig.leave_level(s.level)
+
+
 func test_alt_h_hides_the_selection_and_alt_shift_h_shows_it():
 	var s: Dictionary = await _level()
 	rig.select([s.a])
@@ -141,6 +187,22 @@ func test_alt_h_hides_the_selection_and_alt_shift_h_shows_it():
 	)
 	rig.forward(PluginRig.key(KEY_H, false, true, true))
 	assert_true(s.a.visible, "shown again")
+	await rig.leave_level(s.level)
+
+
+## Select All takes what is in view: not a hidden visgroup's brush, not one
+## hidden with Hide Selection. Its toast says how many it left out, so a Delete
+## after it deletes nothing the mapper cannot see (#1974).
+func test_select_all_leaves_out_what_is_hidden_and_says_how_many():
+	var s: Dictionary = await _level()
+	s.vg.hide_from_view([s.crate])
+	rig.clear_toasts()
+	rig.plugin._on_hotkey_palette_action("select_all")
+	var selected: Array = rig.plugin.stand_in_editor.selection.get_selected_nodes()
+	assert_eq(selected.size(), 2, "the two shown")
+	assert_true(selected.has(s.a) and selected.has(s.b), "a and b")
+	assert_has(rig.toasts(), "Selected 2 objects, left out 2 hidden")
+	rig.select([])
 	await rig.leave_level(s.level)
 
 

@@ -1,0 +1,3 @@
+- The Entity Census and an export's left out note count a brush entity of several brushes once, with its wires once. (issue [#1958](https://github.com/saworbit/hammerforge/issues/1958))
+- The Entity Census names a point entity with no name of its own by its node name and counts the wires aimed at either name. (issue [#1984](https://github.com/saworbit/hammerforge/issues/1984))
+- The Entity Census CSV puts a property named like one of its columns under `property:`, so no column name is there twice. (issue [#1988](https://github.com/saworbit/hammerforge/issues/1988))

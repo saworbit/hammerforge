@@ -342,12 +342,16 @@ func capture_registries() -> Dictionary:
 ## caller holding half a payload -- a scene written before an entry existed --
 ## restores the half it has rather than clearing the rest.
 ## With `made`, the nodes a restore built, so the visibility walk can be theirs
-## alone when nothing else it reads has changed (#1866).
-func restore_registries(state: Dictionary, made: Variant = null) -> void:
+## alone when nothing else it reads has changed (#1866). With `view`, what
+## `HFVisgroupSystem.capture_view()` took before an undo or a redo cleared the
+## level, which it keeps (#1981).
+func restore_registries(state: Dictionary, made: Variant = null, view: Variant = null) -> void:
 	if root.visgroup_system:
 		root.visgroup_system.restore_visgroups(
 			state.get("visgroups", {}), state.get("visgroup_order", []), made, false
 		)
+		if view is Dictionary:
+			root.visgroup_system.keep_view(view)
 		root.visgroup_system.restore_groups(state.get("groups", {}), state.get("group_order", []))
 		root.visgroup_system.restore_group_parents(state.get("group_parents", {}))
 		root.visgroup_system.restore_saved_views(state.get("visibility_views", {}))
@@ -711,6 +715,13 @@ func restore_state(state: Dictionary) -> void:
 	# Before the clear below empties it, so the end can tell whether the selection
 	# put back is another one.
 	var selection_before: Dictionary = root.face_selection.duplicate(true)
+	# Ctrl+Z never undoes a visibility change: an undo or a redo keeps which
+	# visgroups are shown and locked, and what Hide Selection or an isolate hid,
+	# as they are now (#1981). A load takes the file's. Only a snapshot an undo
+	# step took carries the face selection.
+	var view: Variant = null
+	if root.visgroup_system and state.has("face_selection"):
+		view = root.visgroup_system.capture_view_kept()
 	root.clear_brushes(reusable)
 	root.entity_system.clear_entities()
 	restore_floor_paint(state)
@@ -795,7 +806,7 @@ func restore_state(state: Dictionary) -> void:
 	if not renamed.is_empty():
 		for node in root.entity_system._iter_io_sources():
 			root.entity_system.remap_io_connections(node, renamed)
-	restore_registries(state, made)
+	restore_registries(state, made, view)
 	restore_floor_info(state.get("floor", {}))
 	restore_sun_info(state.get("sun", {}))
 	if root.draft_brushes_node:

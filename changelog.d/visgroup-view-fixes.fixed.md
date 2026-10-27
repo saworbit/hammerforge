@@ -1,0 +1,2 @@
+- A renamed visgroup keeps its place in each saved view and in Previous. (issue [#1979](https://github.com/saworbit/hammerforge/issues/1979))
+- An undo keeps each visgroup's eye and lock, and each hidden brush, as they are now. (issue [#1981](https://github.com/saworbit/hammerforge/issues/1981))

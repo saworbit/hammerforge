@@ -19,6 +19,7 @@ const HFTransformSystem = preload("systems/hf_transform_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFViewAxes = preload("hf_view_axes.gd")
 const HFHiddenFaceSearch = preload("hf_hidden_face_search.gd")
+const HFTranslationType = preload("hf_translation.gd")
 ## The axes by index, as the settings Adjust Last shows name them.
 const AXES := ["x", "y", "z"]
 
@@ -1035,16 +1036,27 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 	if root.carve_preview:
 		root.carve_preview.show_preview(carve_ids[0])
 	var hidden := 0
+	var locked := 0
 	for brush_id in carve_ids:
 		hidden += root.carve_system.hidden_overlaps(brush_id)
+		locked += root.carve_system.locked_overlaps(brush_id)
 	var hidden_line := ""
 	if hidden > 0:
 		hidden_line = "%d hidden brush(es) overlap and are left alone.\n" % hidden
+	# Carve leaves a locked brush whole, and says so before the yes (#1973).
+	var locked_line := ""
+	if locked > 0:
+		var said := HFTranslationType.tn(
+			"{count} locked brush overlaps and is left alone.",
+			"{count} locked brushes overlap and are left alone.",
+			locked
+		)
+		locked_line = said.format({"count": locked}) + "\n"
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Carve"
 	dlg.dialog_text = (
-		"Carve %d brush(es)?\n%s%s(Green wireframe shows resulting pieces)"
-		% [carve_ids.size(), hidden_line, _dropped_sculpts_line(root.carve_preview)]
+		"Carve %d brush(es)?\n%s%s%s(Green wireframe shows resulting pieces)"
+		% [carve_ids.size(), hidden_line, locked_line, _dropped_sculpts_line(root.carve_preview)]
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
