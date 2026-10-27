@@ -769,19 +769,33 @@ func test_propagate_with_no_linked_copy_is_refused():
 	assert_eq(r["error"]["message"], "No linked instances to propagate")
 
 
-func test_move_to_floor_reports_only_targets_that_changed():
+func test_a_command_reports_only_targets_that_changed():
+	# Snap to Grid moves each brush on its own, so one on the grid already stays.
+	var level := make_level()
+	box(level, "on_grid", Vector3(0.5, 0.5, 0.5), Vector3.ONE)
+	box(level, "off_grid", Vector3(4.3, 0.5, 0.1), Vector3.ONE)
+	var answer := await run("snap_to_grid", ["on_grid", "off_grid"])
+	assert_true(answer.get("ok", false), str(answer))
+	var changed: Array = answer["result"]["changed"]
+	assert_eq(changed.size(), 1)
+	assert_eq(changed[0]["brush_id"], "off_grid")
+
+
+func test_move_to_floor_moves_its_targets_as_one_piece():
+	# One target already on the floor holds the other where it is (#1964).
 	var level := make_level()
 	box(level, "floor", Vector3(0, -1, 0), Vector3(30, 2, 30))
 	box(level, "already_down", Vector3(-4, 1, 0), Vector3(2, 2, 2))
 	box(level, "above", Vector3(4, 10, 0), Vector3(2, 2, 2))
 	var answer := await run("move_to_floor", ["already_down", "above"])
 	assert_true(answer.get("ok", false), str(answer))
-	var changed: Array = answer["result"]["changed"]
-	assert_eq(changed.size(), 1)
-	assert_eq(changed[0]["brush_id"], "above")
-	assert_almost_eq(brush_node(level, "above").global_position.y, 1.0, 0.01)
+	assert_true(answer["result"].get("no_change", false), str(answer))
+	assert_eq(answer["result"]["changed"], [])
+	assert_almost_eq(brush_node(level, "above").global_position.y, 10.0, 0.01)
 	brush_node(level, "already_down").global_position.y = 7
 	brush_node(level, "above").global_position.y = 9
 	answer = await run("move_to_floor", ["already_down", "above"])
-	changed = answer["result"]["changed"]
-	assert_eq(changed.size(), 2, "Every moved target is still listed")
+	var changed: Array = answer["result"]["changed"]
+	assert_eq(changed.size(), 2, "Every moved target is listed")
+	assert_almost_eq(brush_node(level, "already_down").global_position.y, 1.0, 0.01)
+	assert_almost_eq(brush_node(level, "above").global_position.y, 3.0, 0.01, "the same 6 down")

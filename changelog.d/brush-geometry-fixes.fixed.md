@@ -1,0 +1,4 @@
+- A face pushed on a scaled custom brush moves the distance asked. (issue [#1998](https://github.com/saworbit/hammerforge/issues/1998))
+- Move to Floor and Ceiling leave a brush touching the surface, turned or not. (issue [#1966](https://github.com/saworbit/hammerforge/issues/1966))
+- Move to Floor drops a selection as one piece, so a table's top stays on its legs. (issue [#1964](https://github.com/saworbit/hammerforge/issues/1964))
+- Move to Floor stops at shown brushes, not hidden ones, cuts, triggers or an old bake. (issue [#1965](https://github.com/saworbit/hammerforge/issues/1965))
