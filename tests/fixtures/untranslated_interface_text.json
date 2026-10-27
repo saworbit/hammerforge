@@ -12,7 +12,7 @@
 	"res://addons/hammerforge/plugin_paint_input.gd": 1,
 	"res://addons/hammerforge/plugin_prefab_commands.gd": 3,
 	"res://addons/hammerforge/plugin_run.gd": 1,
-	"res://addons/hammerforge/plugin_selection_commands.gd": 13,
+	"res://addons/hammerforge/plugin_selection_commands.gd": 12,
 	"res://addons/hammerforge/plugin_selection_state.gd": 1,
 	"res://addons/hammerforge/plugin_transform_tools.gd": 1,
 	"res://addons/hammerforge/plugin_uv_wrap.gd": 1,

@@ -6,10 +6,13 @@ extends RefCounted
 ## on a click, Export Entities writes the CSV, `tools/export_entities.gd` writes
 ## the same CSV from a `.hflevel` with no editor, and `hf_get_entities` answers
 ## `count_by_class` from `counts()`. Point entities and brush entities both count:
-## a trigger is a brush made an entity, and it is what a designer counts.
+## a trigger is a brush made an entity, and it is what a designer counts. A brush
+## entity of several brushes is one entity, by `HFBrushEntity.entities_in()`
+## (#1958).
 ##
 ## The CSV has one row per entity and one column per property, the union of every
-## class's, blank where a class has none. Numbers use a decimal point whatever
+## class's, blank where a class has none. A property named like a column of its
+## own goes under `PROPERTY_PREFIX` (#1988). Numbers use a decimal point whatever
 ## the system says, a colour is "#rrggbb", a vector "x y z", and a value with a
 ## comma or a quote in it is quoted, by `FileAccess.store_csv_line()`.
 
@@ -44,20 +47,38 @@ const FIXED_COLUMNS := [
 	"outputs",
 	"inputs",
 ]
+## What a property named like one of `FIXED_COLUMNS` goes under in the header,
+## as the note's `kind` goes under "property:kind" (#1988).
+const PROPERTY_PREFIX := "property:"
 
 
 ## The point entities and brush entities in `scope`: "" for the whole level, a
-## `VISGROUP_SCOPE` name, or `SCOPE_CORDONS`.
+## `VISGROUP_SCOPE` name, or `SCOPE_CORDONS`. A brush entity is in it when one of
+## its brushes is, and is given by the first of those.
 static func entities(root: Node, scope: String = "") -> Array:
+	return _entity_nodes(root, scope).map(func(nodes: Array): return nodes[0])
+
+
+## Each entity in `scope` as its nodes: a point entity alone, or every brush of a
+## brush entity, the one `entities()` gives first. Each of a trigger's brushes was
+## an entity of its own (#1958).
+static func _entity_nodes(root: Node, scope: String) -> Array:
 	var out: Array = []
 	if root.entities_node:
 		for node in root.entities_node.get_children():
-			if node is DraftEntity:
-				out.append(node)
-	for brush in root._iter_managed_brush_nodes():
-		if brush.get_parent() != root.committed_node and HFBrushEntity.entity_class(brush) != "":
-			out.append(brush)
-	return out.filter(func(node): return _in_scope(root, node, scope))
+			if node is DraftEntity and _in_scope(root, node, scope):
+				out.append([node])
+	for brushes in HFBrushEntity.entities_in(_brushes(root)):
+		var inside: Array = brushes.filter(func(brush): return _in_scope(root, brush, scope))
+		if not inside.is_empty():
+			out.append([inside[0]] + brushes.filter(func(brush): return brush != inside[0]))
+	return out
+
+
+static func _brushes(root: Node) -> Array:
+	return root._iter_managed_brush_nodes().filter(
+		func(brush): return brush.get_parent() != root.committed_node
+	)
 
 
 ## `{class: count}` for the entities in `scope`.
@@ -87,29 +108,43 @@ static func class_of(node: Node) -> String:
 	return HFBrushEntity.entity_class(node)
 
 
-## The entities in `scope` that are of `entity_class`, for the tab's click.
+## The entities in `scope` that are of `entity_class`, for the tab's click, a
+## brush entity by one of its brushes as `entities()` gives it.
 static func of_class(root: Node, entity_class: String, scope: String = "") -> Array:
 	return entities(root, scope).filter(func(node): return class_of(node) == entity_class)
 
 
 ## The whole table, header first, each row a PackedStringArray.
 static func csv_rows(root: Node, scope: String = "") -> Array:
-	var nodes := entities(root, scope)
+	var each := _entity_nodes(root, scope)
 	var targeted := _input_counts(root)
 	var property_names: Dictionary = {}
-	for node in nodes:
-		for key in _properties(root, node):
+	for nodes in each:
+		for key in _properties(root, nodes[0]):
 			property_names[str(key)] = true
 	var properties: Array = property_names.keys()
 	properties.sort()
-	var rows: Array = [PackedStringArray(FIXED_COLUMNS + properties)]
-	for node in nodes:
-		var values := _properties(root, node)
-		var row := _fixed(root, node, targeted)
+	var rows: Array = [_header(properties)]
+	for nodes in each:
+		var values := _properties(root, nodes[0])
+		var row := _fixed(root, nodes, targeted)
 		for key in properties:
 			row.append(cell(values[key]) if values.has(key) else "")
 		rows.append(row)
 	return rows
+
+
+## `FIXED_COLUMNS` and then `properties`, each name once: a property named like a
+## column already there goes under `PROPERTY_PREFIX`. The note's `kind` and the
+## census's own were both "kind", and a reader by header kept one (#1988).
+static func _header(properties: Array) -> PackedStringArray:
+	var header := PackedStringArray(FIXED_COLUMNS)
+	for key in properties:
+		var column := str(key)
+		while header.has(column):
+			column = PROPERTY_PREFIX + column
+		header.append(column)
+	return header
 
 
 ## Write the table to `path`. OK, or the error the file gave.
@@ -143,7 +178,9 @@ static func cell(value: Variant) -> String:
 	return str(value)
 
 
-static func _fixed(root: Node, node: Node, targeted: Dictionary) -> PackedStringArray:
+## The fixed columns of the entity `nodes` make, as `_entity_nodes()` gives it.
+static func _fixed(root: Node, nodes: Array, targeted: Dictionary) -> PackedStringArray:
+	var node: Node = nodes[0]
 	var spatial := node as Node3D
 	var at := spatial.global_position
 	# The turn, in the Inspector's order, read off the basis without its scale:
@@ -152,20 +189,27 @@ static func _fixed(root: Node, node: Node, targeted: Dictionary) -> PackedString
 	var bounds_min := ""
 	var bounds_max := ""
 	var kind := "point"
+	var outputs: Array = root.get_entity_outputs(node)
 	if not (node is DraftEntity):
 		kind = "brush"
+		# Every brush of it, and each wire every brush holds once (#1958).
 		var box: AABB = root.brush_system.world_bounds_of(node)
+		for brush in nodes.slice(1):
+			box = box.merge(root.brush_system.world_bounds_of(brush))
 		bounds_min = cell(box.position)
 		bounds_max = cell(box.end)
-	var named := _name_of(node)
+		outputs = HFBrushEntity.wires_of(nodes)
 	var visgroups := PackedStringArray()
 	if root.visgroup_system:
-		visgroups = root.visgroup_system.get_visgroups_of(node)
+		for each in nodes:
+			for visgroup in root.visgroup_system.get_visgroups_of(each):
+				if not visgroups.has(visgroup):
+					visgroups.append(visgroup)
 	return PackedStringArray(
 		[
 			kind,
 			class_of(node),
-			named,
+			_name_of(node),
 			cell(at.x),
 			cell(at.y),
 			cell(at.z),
@@ -175,16 +219,35 @@ static func _fixed(root: Node, node: Node, targeted: Dictionary) -> PackedString
 			bounds_min,
 			bounds_max,
 			";".join(visgroups),
-			str(root.get_entity_outputs(node).size()),
-			str(int(targeted.get(named, 0)) if named != "" else 0),
+			str(outputs.size()),
+			str(_inputs(nodes, targeted)),
 		]
 	)
 
 
+## A point entity's authored name, or its node name when it has none, as the
+## wiring panel lists it and `find_entities_by_name()` finds it (#1984). A brush
+## entity's authored name.
 static func _name_of(node: Node) -> String:
 	if node is DraftEntity:
-		return str(node.get_meta("entity_name", ""))
+		var authored := str(node.get_meta("entity_name", ""))
+		return authored if authored != "" else str(node.name)
 	return HFBakeSystemType.authored_entity_name(node)
+
+
+## How many wires aim at the entity `nodes` make, by any name one of them answers
+## to, its node name or its authored name, as `find_entities_by_name()` resolves a
+## wire. A name it answers to twice counts once (#1984).
+static func _inputs(nodes: Array, targeted: Dictionary) -> int:
+	var addresses: Dictionary = {}
+	for node in nodes:
+		addresses[str(node.name)] = true
+		addresses[str(node.get_meta("entity_name", ""))] = true
+	addresses.erase("")
+	var many := 0
+	for address in addresses:
+		many += int(targeted.get(address, 0))
+	return many
 
 
 ## A point entity's properties as set, or a brush entity's as the bake reads them.
@@ -196,15 +259,18 @@ static func _properties(root: Node, node: Node) -> Dictionary:
 	return HFBrushEntity.properties(root.get_entity_definition(entity_class), node)
 
 
-## How many outputs aim at each entity name.
+## How many wires aim at each name: a point entity's, and a brush entity's once
+## however many of its brushes hold them (#1958).
 static func _input_counts(root: Node) -> Dictionary:
 	var out: Dictionary = {}
-	var sources: Array = []
+	var held: Array = []
 	if root.entities_node:
-		sources.append_array(root.entities_node.get_children())
-	sources.append_array(root._iter_managed_brush_nodes())
-	for source in sources:
-		for connection in root.get_entity_outputs(source):
+		for node in root.entities_node.get_children():
+			held.append(root.get_entity_outputs(node))
+	for brushes in HFBrushEntity.entities_in(_brushes(root)):
+		held.append(HFBrushEntity.wires_of(brushes))
+	for wires in held:
+		for connection in wires:
 			if connection is Dictionary:
 				var target := str(connection.get("target_name", ""))
 				out[target] = int(out.get(target, 0)) + 1

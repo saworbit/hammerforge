@@ -63,6 +63,55 @@ func test_two_floors_give_two_plans():
 	)
 
 
+## Storeys built on the grid meet on the band's edge: the ground floor's walls
+## end where the upper floor's begin. Each storey's plan drew the other's walls
+## too (#1983).
+func test_a_storey_s_plan_leaves_out_what_only_touches_its_band():
+	var level := make_level()
+	_box(level, "ground", Vector3(8, 3, 0.5), Vector3(0, 1.5, 0))
+	_box(level, "upper", Vector3(8, 3, 0.5), Vector3(0, 4.5, 4))
+	assert_eq(HFLevelPlan.shapes(level, 0.0, 3.0)["solids"].size(), 1, "the ground floor alone")
+	assert_eq(HFLevelPlan.shapes(level, 3.0, 6.0)["solids"].size(), 1, "the upper floor alone")
+	assert_eq(HFLevelPlan.shapes(level, 2.0, 4.0)["solids"].size(), 2, "a band across both")
+
+
+## A wire from or to a brush entity was left out of the plan, and a trigger of
+## two brushes holds its wire on each of them (#1959).
+func test_wires_of_brush_entities_are_drawn_once_each():
+	var level := make_level()
+	var lamp: Node = level._create_entity_from_map(
+		{"classname": "light_point", "origin": Vector3(6, 2, 0)}
+	)
+	lamp.name = "lamp"
+	_box(level, "t1", Vector3(1, 1, 1), Vector3(-4, 0.5, 0))
+	_box(level, "t2", Vector3(1, 1, 1), Vector3(-2, 0.5, 0))
+	level.tie_brushes_to_entity(["t1", "t2"], "trigger_once", "trig")
+	_box(level, "d", Vector3(2, 2.5, 0.2), Vector3(0, 1.25, 4))
+	level.tie_brushes_to_entity(["d"], "func_door", "door")
+	# A wire added to one brush of a trigger is held by each of them.
+	var trigger: Node = level.find_brush_by_id("t1")
+	level.add_entity_output(trigger, "OnTrigger", "lamp", "TurnOn")
+	level.add_entity_output(trigger, "OnTrigger", "door", "Open")
+	var wires: Array = HFLevelPlan.shapes(level)["wires"]
+	assert_eq(wires.size(), 2, "one wire to the lamp and one to the door")
+	for wire in wires:
+		assert_almost_eq(wire[0].x, -3.0, 0.01, "each from the middle of the trigger")
+
+
+## The scale bar, the arrow and their labels were sized in metres, so on a big
+## level they shrank to a few pixels (#1990).
+func test_the_marks_are_the_same_share_of_a_small_and_a_big_plan():
+	var shares: Array = []
+	for width in [10.0, 200.0]:
+		var level := make_level()
+		_box(level, "floor", Vector3(width, 0.2, width), Vector3(0, -0.1, 0))
+		var svg := HFLevelPlan.svg(HFLevelPlan.shapes(level))
+		var view := RegEx.create_from_string('viewBox="\\S+ \\S+ (\\S+)').search(svg)
+		var label := RegEx.create_from_string('font-size="(\\S+)"[^>]*>-Z<').search(svg)
+		shares.append(label.get_string(1).to_float() / view.get_string(1).to_float())
+	assert_almost_eq(shares[1], shares[0], shares[0] * 0.2, "the -Z label is the same share")
+
+
 func test_a_turned_brush_crossing_the_band_is_cut_at_its_edges():
 	var level := make_level()
 	var ramp := _box(level, "ramp", Vector3(4, 0.5, 2), Vector3(0, 1, 0))

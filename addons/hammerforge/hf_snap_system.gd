@@ -188,6 +188,10 @@ var _typed: Variant = null
 ## The point X and Z are taken from for the next pick, or null: a point built from
 ## two others, in plan from one and at the height of another.
 var _filter_xz: Variant = null
+## Whether the left press that began the drag under way took one of those points
+## as its pick. The drag's motion then snaps as the pointer goes, so a Draw's far
+## corner is not pinned to the corner the press took (#2001).
+var _pending_taken_by_press := false
 ## The point the pointer last rested on, and whether that rest has been counted,
 ## so one rest toggles a point once. `rest_serial` tells a timer that started for
 ## an earlier rest it is too late.
@@ -470,6 +474,7 @@ func guide_choices(point: Vector3) -> Array:
 
 ## Where a guide meets an edge of a brush in reach: the point on the edge level
 ## with a tracked point one way. Ranked between a crossing and a guide alone.
+## A hidden brush's edges are left out, as `_collect_kinded()` leaves them (#1963).
 func _guide_on_edge(point: Vector3, near: Dictionary) -> Dictionary:
 	var best := {}
 	if root == null or not root.has_method("_iter_pick_nodes"):
@@ -479,6 +484,8 @@ func _guide_on_edge(point: Vector3, near: Dictionary) -> Dictionary:
 		if not (node is DraftBrush) or node == root.get("preview_brush"):
 			continue
 		var brush := node as DraftBrush
+		if not brush.is_visible_in_tree():
+			continue
 		var xform := brush.global_transform
 		var reach := _world_reach(xform.basis, _snap_half_extent(brush))
 		if point.distance_to(brush.global_position) > snap_threshold + reach:
@@ -589,6 +596,7 @@ func cancel_pending_point() -> bool:
 		return false
 	_typed = null
 	_filter_xz = null
+	_pending_taken_by_press = false
 	revision += 1
 	return true
 
@@ -651,10 +659,30 @@ func next_pick_limit() -> String:
 func pick_taken() -> void:
 	_typed = null
 	_filter_xz = null
+	_pending_taken_by_press = false
 	if _only_kind == "" and _stepped_kind == "":
 		return
 	_only_kind = ""
 	_stepped_kind = ""
+	revision += 1
+
+
+## A left press has snapped. A typed point or a point X and Z were taken from that
+## it used is the pick it stood for: the press took it.
+func press_taken() -> void:
+	if _picked_in_event and has_pending_point():
+		_pending_taken_by_press = true
+
+
+## The pointer moved with the left button held. A pending point the press already
+## took is spent, so the drag snaps as the pointer goes (#2001). One typed during
+## the drag stands for the corner being dragged, and stays.
+func drag_moved() -> void:
+	if not _pending_taken_by_press:
+		return
+	_pending_taken_by_press = false
+	_typed = null
+	_filter_xz = null
 	revision += 1
 
 
@@ -830,6 +858,11 @@ func _collect_candidates(
 
 
 ## `_collect_candidates()` with what each one is: `[point, kind]` pairs.
+##
+## A hidden brush gives none, whether a visgroup, Hide Selection, a View Filter
+## or an isolate hid it: nothing is drawn there to aim at, so a point that jumped
+## to it landed on what the mapper could not see (#1963). A locked brush is drawn,
+## so it is still a target.
 func _collect_kinded(
 	exclude_ids: Array, point: Vector3 = Vector3.ZERO, max_distance: float = INF
 ) -> Array:
@@ -848,7 +881,7 @@ func _collect_kinded(
 		if node == preview:
 			continue
 		var brush := node as DraftBrush
-		if exclude_ids.has(str(brush.brush_id)):
+		if exclude_ids.has(str(brush.brush_id)) or not brush.is_visible_in_tree():
 			continue
 		var origin := brush.global_position
 		var origin_distance := point.distance_to(origin)

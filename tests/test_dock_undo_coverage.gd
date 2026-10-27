@@ -255,6 +255,9 @@ func test_every_level_changing_dock_command_registers_an_undo_step() -> void:
 		"on_material_library_load_selected": "load_material_library",
 		"on_terrain_slot_texture_selected": "set_terrain_slot_texture",
 		"on_terrain_slot_scale_changed": "set_terrain_slot_uv_scale",
+		"on_height_scale_changed": "set_heightmap_scale",
+		"on_layer_y_changed": "set_layer_y",
+		"on_paint_layer_rename_confirmed": "rename_paint_layer",
 	}
 	for function_name in commands:
 		var body := _body(function_name)
@@ -368,6 +371,56 @@ func test_the_dock_buttons_leave_no_step_for_a_move_or_reset_that_changes_nothin
 	dock._on_reset_rotation()
 	assert_eq(undo.step_count(), 2, "a turned one is a step")
 	assert_eq(dock.status_label.text, "Rotation cleared")
+	undo.free_histories()
+
+
+func test_height_scale_layer_y_and_rename_are_undo_steps() -> void:
+	# They called the level straight, so an undo and redo of the step before them
+	# put back the values from before them (#2012).
+	var root := _fresh_root()
+	var dock = DockScene.instantiate()
+	add_child_autoqfree(dock)
+	dock.level_root = root
+	var undo = EditorPluginStandIn.FakeUndoRedoManager.new()
+	dock.undo_redo = undo
+	dock._refresh_paint_layers()
+	dock._commit_state_action("Generate Noise", "generate_heightmap_noise", [{"seed": 5}])
+	var read := func() -> Array:
+		var active = root.paint_layers.get_active_layer()
+		return [active.height_scale, active.grid.layer_y, active.display_name]
+	var start: Array = read.call()
+
+	dock._on_height_scale_changed(2.0)
+	dock._on_height_scale_changed(2.5)
+	assert_eq(undo.step_count(), 2, "a run of spin changes is one step")
+	dock._on_height_scale_changed(2.5)
+	assert_eq(undo.step_count(), 2, "the value it has already is no step")
+	dock._on_layer_y_changed(1.5)
+	assert_eq(undo.step_count(), 3)
+	# The Rename dialog's OK, which the dialog hands what was typed.
+	assert_true(_body("on_paint_layer_rename").contains("on_paint_layer_rename_confirmed("))
+	HFDockPaintHandler.on_paint_layer_rename_confirmed(dock, 0, "Hills")
+	assert_eq(undo.step_count(), 4)
+	var set_to := [2.5, 1.5, "Hills"]
+	assert_eq(read.call(), set_to)
+
+	undo.press_undo()
+	assert_eq(read.call(), [2.5, 1.5, ""], "the rename alone is undone")
+	undo.press_undo()
+	assert_eq(read.call(), [2.5, start[1], ""], "then the Layer Y")
+	undo.press_undo()
+	assert_eq(read.call(), start, "then the whole Height Scale run")
+	undo.press_undo()
+	for _i in 4:
+		undo.press_redo()
+	assert_eq(read.call(), set_to, "an undo and redo of the step before keep them as set")
+
+	root.paint_layers.create_layer(&"layer_1", 0.0).display_name = "Cliffs"
+	HFLog.begin_test_capture(["already called"])
+	HFDockPaintHandler.on_paint_layer_rename_confirmed(dock, 0, "Cliffs")
+	HFLog.end_test_capture()
+	assert_eq(root.paint_layers.layers[0].display_name, "Hills", "a refused name changes nothing")
+	assert_eq(undo.step_count(), 4, "and leaves no step")
 	undo.free_histories()
 
 

@@ -205,7 +205,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Command | Key | Needs | Palette | What it does |
 |---|---|---|---|---|
 | Select Linked Faces (`uv_select_group`) | none | - | yes | Select every face linked with the selected face. |
-| Select All (`select_all`) | A | a level | yes | Select every brush and entity. |
+| Select All (`select_all`) | A | a level | yes | Select every brush and entity in view. |
 | Invert Selection (`invert_selection`) | none | a level | yes | Select what is not selected, and drop what is. |
 | Select Inside (`select_inside`) | none | 1 brush, a level | yes | Select every brush wholly inside the selected brush, and every entity in it. |
 | Select Partly Inside (`select_partly_inside`) | none | 1 brush, a level | yes | Select every brush at least partly inside the selected brush. |

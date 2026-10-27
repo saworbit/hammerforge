@@ -259,6 +259,78 @@ func test_the_tool_s_ghosts_still_confirm_through_the_shared_add():
 	assert_eq(root.paint_tool.connector_defs.size(), 1)
 
 
+## A scratch layer 0 away from the rest, and a connector confirmed between
+## layer_1 at y 1 and layer_2 at y 2.
+func _connector_past_a_scratch_layer() -> void:
+	sys.paint_cells(0, cell(-20, -20), cell(-17, -17), true)
+	root.paint_layers.create_layer(&"layer_1", 1.0)
+	sys.paint_cells(1, cell(0, 0), cell(3, 3), true)
+	root.paint_layers.create_layer(&"layer_2", 2.0)
+	sys.paint_cells(2, cell(4, 0), cell(7, 3), true)
+	var r: Dictionary = sys.confirm_connectors(2, cell(4, 0), cell(4, 3), 1)
+	assert_true(r["ok"], str(r))
+	assert_eq(r["added"], 1)
+
+
+## How many connector meshes a bake would add, from the same list it reads.
+func _baked_connector_meshes() -> int:
+	var definitions: Array = root.bake_system.connector_definitions(root.paint_layers)
+	var meshes := 0
+	for entry in HFAutoConnector.new().generate_definitions(definitions, root.paint_layers):
+		if entry.get("mesh") != null:
+			meshes += 1
+	return meshes
+
+
+func _messages_from(fn: Callable) -> Array:
+	var heard: Array = []
+	var sink := func(text: String, _level: int): heard.append(text)
+	root.user_message.connect(sink)
+	fn.call()
+	root.user_message.disconnect(sink)
+	return heard
+
+
+func test_a_connector_keeps_its_layers_when_an_earlier_layer_is_removed():
+	_connector_past_a_scratch_layer()
+	assert_eq(_baked_connector_meshes(), 1)
+	var before: Dictionary = root.capture_state()
+	root.set_active_paint_layer(0)
+	var heard := _messages_from(func(): root.remove_active_paint_layer())
+	# The connector numbered its layers 2 and 1, which after the removal named
+	# layer_2 and nothing, so it built nothing and the bake dropped it (#2009).
+	assert_eq(_baked_connector_meshes(), 1, "it still bakes")
+	var definition = root.paint_tool.connector_defs[0]
+	var layers: Array = root.paint_layers.layers
+	assert_eq(str(layers[definition.from_layer_index].layer_id), "layer_2")
+	assert_eq(str(layers[definition.to_layer_index].layer_id), "layer_1")
+	assert_eq(heard, [], "nothing was lost, so nothing to say")
+	root.restore_state(before)
+	assert_eq(_baked_connector_meshes(), 1, "an undo puts the old numbers back with the layer")
+	assert_eq(root.paint_tool.connector_defs[0].from_layer_index, 2)
+
+
+func test_removing_a_connector_s_layer_drops_it_and_says_so():
+	_connector_past_a_scratch_layer()
+	root.set_active_paint_layer(1)
+	var heard := _messages_from(func(): root.remove_active_paint_layer())
+	assert_eq(root.paint_tool.connector_defs.size(), 0, "it joined the removed layer")
+	assert_eq(heard.size(), 1)
+	assert_string_contains(heard[0], '"layer_1" took 1 confirmed connector')
+	assert_eq(_baked_connector_meshes(), 0)
+
+
+func test_a_layer_removal_drops_the_last_stroke_s_ghosts():
+	_connector_past_a_scratch_layer()
+	var ghost := HFConnectorTool.ConnectorDef.new()
+	ghost.from_layer_index = 2
+	ghost.to_layer_index = 1
+	root.paint_tool._pending_connector_defs = [ghost]
+	root.set_active_paint_layer(0)
+	root.remove_active_paint_layer()
+	assert_eq(root.paint_tool.confirm_connector_ghosts(), 0, "Enter has no old numbers to keep")
+
+
 # ===========================================================================
 # Refusals and lookups
 # ===========================================================================

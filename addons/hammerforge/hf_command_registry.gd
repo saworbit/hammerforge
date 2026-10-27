@@ -1752,7 +1752,7 @@ const COMMANDS := [
 	{
 		"id": "select_all",
 		"label": "Select All",
-		"help": "Select every brush and entity.",
+		"help": "Select every brush and entity in view.",
 		"category": "Selection",
 		"needs_level": true,
 		"selection": {}

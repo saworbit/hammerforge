@@ -20,6 +20,7 @@ const HFCommandRegistry = preload("hf_command_registry.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 const DraftEntity = preload("draft_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("hf_translation.gd")
 
 # ---------------------------------------------------------------------------
 # Face selection
@@ -94,6 +95,9 @@ static func apply_last_texture(plugin: Object, root: Node) -> void:
 # ---------------------------------------------------------------------------
 
 
+## Select every brush and entity in view. What is hidden stays out, as Invert
+## Selection leaves it out, so Select All then Delete deletes only what the
+## mapper can see, and the toast says how many hidden ones it left (#1974).
 static func select_all(plugin: Object, root: Node) -> void:
 	if not root:
 		return
@@ -103,17 +107,31 @@ static func select_all(plugin: Object, root: Node) -> void:
 	# Clear face selection first so context toolbar switches to object context
 	if root.has_method("clear_face_selection"):
 		root.clear_face_selection()
-	var all_nodes: Array = root._iter_pick_nodes()
+	var hidden := 0
 	plugin.hf_selection.clear()
-	for node in all_nodes:
-		if is_instance_valid(node):
+	for node in root._iter_pick_nodes():
+		if not is_instance_valid(node):
+			continue
+		if node is Node3D and not (node as Node3D).is_visible_in_tree():
+			hidden += 1
+		else:
 			plugin.hf_selection.append(node)
 	plugin._apply_hf_selection(selection)
 	plugin._update_hud_context()
 	if plugin.dock:
-		plugin.dock.set_selection_count(plugin.hf_selection.size())
+		var count: int = plugin.hf_selection.size()
+		plugin.dock.set_selection_count(count)
 		plugin.dock.set_selection_nodes(plugin.hf_selection)
-		plugin.dock.show_toast("Selected %d objects" % plugin.hf_selection.size(), 0)
+		var said := HFTranslationType.tn(
+			"Selected {count} object", "Selected {count} objects", count
+		)
+		said = said.format({"count": count})
+		if hidden > 0:
+			var left := HFTranslationType.tn(
+				"left out {count} hidden", "left out {count} hidden", hidden
+			)
+			said += ", " + left.format({"count": hidden})
+		plugin.dock.show_toast(said, 0)
 
 
 ## Select every visible brush and entity that is not selected, and none of what
