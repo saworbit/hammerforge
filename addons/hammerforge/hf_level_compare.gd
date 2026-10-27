@@ -384,9 +384,9 @@ static func _texture_fields_differ(old: Dictionary, now: Dictionary) -> bool:
 ## as a move with Texture Lock off leaves it.
 ##
 ## A texture repeats every whole UV, so every corner moved by the same whole
-## number of repeats shows the same picture. A turn needs that: Texture Lock turns
-## the texture about the level's origin rather than the brush's, which moves it
-## by whole repeats about a pivot on whole metres.
+## number of repeats shows the same picture. A turn needs that: Texture Lock holds
+## the texture through a turn up to whole repeats, and leaves those in the UVs
+## rather than in the offset (#2022).
 static func _shows_the_same(old: Dictionary, now: Dictionary, placements: Array) -> bool:
 	var was := _shown_uvs(old, placements[0])
 	var is_now := _shown_uvs(now, placements[1])

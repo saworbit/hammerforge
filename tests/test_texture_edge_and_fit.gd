@@ -90,6 +90,37 @@ func test_align_to_edge_runs_the_texture_along_a_23_degree_edge_then_the_next():
 	await _leave(level)
 
 
+## A wall and a ramp sheared with Texture Lock on, the default, carry a layout of
+## their own. Align to Edge worked from the projection under it, and left V
+## running along the sloped edge, not on a whole repeat (#1993).
+func test_align_to_edge_lays_the_texture_along_each_edge_of_a_sheared_face():
+	var level = await _enter()
+	for case in [["wall", 0, 1, 0.4, 0.0], ["ramp", 1, 0, 0.5, -2.0]]:
+		var id: String = case[0]
+		rig.box(level, id, Vector3(0, 1, 0), Vector3(4, 2, 1))
+		level.shear_managed_nodes([id], [], case[1], case[2], case[3], case[4])
+		var front := _facing(level.find_brush_by_id(id), Vector3.BACK)
+		var face = level.find_brush_by_id(id).faces[front]
+		assert_true(face.has_uv_layout(), "%s: Texture Lock laid one on" % id)
+		_pick(level, {id: [front]})
+		var count: int = face.local_verts.size()
+		for step in count:
+			assert_eq(level.align_selected_faces_to_edge(), 1)
+			face = level.find_brush_by_id(id).faces[front]
+			var edge: int = level.brush_system._aligned_edges[face.get_instance_id()]
+			var a := _uv_at_corner(face, edge)
+			var b := _uv_at_corner(face, (edge + 1) % count)
+			var at := "%s edge %d" % [id, edge]
+			assert_almost_eq(a.y, b.y, 0.001, "%s: V stays put along it" % at)
+			assert_almost_eq(a.y, roundf(a.y), 0.001, "%s: a repeat starts on it" % at)
+			var middle := Vector3.ZERO
+			for corner in face.local_verts:
+				middle += corner
+			var mid_uv: Vector2 = face.shown_uvs_at(PackedVector3Array([middle / float(count)]))[0]
+			assert_lt(mid_uv.y, a.y, "%s: the texture's top faces the middle" % at)
+	await _leave(level)
+
+
 func test_fit_repeats_shows_exactly_three_across_on_several_faces():
 	var level = await _enter()
 	var a = rig.box(level, "a", Vector3(0, 2, 0), Vector3(4, 2, 1))

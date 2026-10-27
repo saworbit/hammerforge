@@ -387,9 +387,10 @@ func rotate(
 		if draft == null:
 			continue
 		var local_rot := local_rotation(draft.global_transform.basis, rot)
+		var shown := shown_corner_uvs(draft) if lock_textures else []
 		draft.global_transform = rotated_transform(draft.global_transform, rot, pivot)
 		if lock_textures:
-			adjust_face_uvs_for_rotation(draft, local_rot)
+			adjust_face_uvs_for_rotation(draft, local_rot, shown)
 			draft.rebuild_preview()
 		_refit_texture_groups(draft)
 		# A door's angle turns with it, as a point entity's does below. Left
@@ -431,11 +432,12 @@ func set_rotation(brush_ids: Array, rotation: Basis) -> int:
 		if _same_basis(rot, Basis.IDENTITY):
 			continue
 		var local_rot := local_rotation(draft.global_transform.basis, rot)
+		var shown := shown_corner_uvs(draft) if lock_textures else []
 		draft.global_transform = rotated_transform(
 			draft.global_transform, rot, draft.global_transform.origin
 		)
 		if lock_textures:
-			adjust_face_uvs_for_rotation(draft, local_rot)
+			adjust_face_uvs_for_rotation(draft, local_rot, shown)
 			draft.rebuild_preview()
 		_refit_texture_groups(draft)
 		# The Agent Bridge turns a brush through here, and a door it turned slid
@@ -1254,14 +1256,29 @@ static func mirrored_local_axis(draft: DraftBrush) -> int:
 # ---------------------------------------------------------------------------
 
 
-## Compensate every face's UV rotation so the texture stays put in world space,
+## Compensate every face's UV rotation so the texture stays put on the brush,
 ## matching what `texture_lock` already means for moving and resizing a brush.
-static func adjust_face_uvs_for_rotation(draft: DraftBrush, local_rot: Basis) -> void:
-	for face in draft.faces:
+## `shown` is `shown_corner_uvs()` from before the turn: the turn is held about the
+## level's origin, and the slide that leaves about any other pivot is taken back
+## out (#2022).
+static func adjust_face_uvs_for_rotation(draft: DraftBrush, local_rot: Basis, shown: Array) -> void:
+	for i in draft.faces.size():
+		var face: FaceData = draft.faces[i]
 		# A face in a texture group keeps its group's mapping (#1437).
 		if face == null or face.uv_group != 0:
 			continue
 		face.adjust_uvs_for_rotation(local_rot)
+		if i < shown.size():
+			face.take_back_slide(shown[i])
+
+
+## What each of `draft`'s faces shows at its corners, for
+## `adjust_face_uvs_for_rotation()` to hold through a turn.
+static func shown_corner_uvs(draft: DraftBrush) -> Array:
+	var out: Array = []
+	for face in draft.faces:
+		out.append(face.shown_uvs() if face != null else PackedVector2Array())
+	return out
 
 
 # ---------------------------------------------------------------------------

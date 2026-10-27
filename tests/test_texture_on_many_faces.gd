@@ -166,6 +166,51 @@ func test_shift_turns_the_texture_about_the_face_middle():
 	await _leave(level)
 
 
+## What `face` shows at `local`, a point on it in its brush's space.
+func _shown_at(face: Object, local: Vector3) -> Vector2:
+	return face.shown_uvs_at(PackedVector3Array([local]))[0]
+
+
+## A wall and a ramp sheared with Texture Lock on, the default, carry a layout of
+## their own. The keys worked from the projection under it, so a turn moved the
+## texture at the middle and a slide went off at a slant (#1993).
+func test_the_keys_turn_and_slide_a_sheared_face_from_what_it_shows():
+	var level = await _enter()
+	for case in [["wall", 0, 1, 0.4, 0.0], ["ramp", 1, 0, 0.5, -2.0]]:
+		var id: String = case[0]
+		rig.box(level, id, Vector3(0, 1, 0), Vector3(4, 2, 1))
+		level.shear_managed_nodes([id], [], case[1], case[2], case[3], case[4])
+		var front := _facing(level.find_brush_by_id(id), Vector3.BACK)
+		var face = level.find_brush_by_id(id).faces[front]
+		assert_true(face.has_uv_layout(), "%s: Texture Lock laid one on" % id)
+		level.face_selection = {id: [front]}
+		var middle := Vector3.ZERO
+		for corner in face.local_verts:
+			middle += corner
+		middle /= float(face.local_verts.size())
+		var before := _shown_at(face, middle)
+		var turn: Dictionary = HFUVMulti.turn_changes(HFUVMulti.picked(level), 15.0)
+		level.set_uv_params_on_faces(turn["changes"])
+		face = level.find_brush_by_id(id).faces[front]
+		assert_true(face.has_uv_layout(), "%s: the layout turns with it" % id)
+		assert_lt(_shown_at(face, middle).distance_to(before), 0.001, "%s: the middle stays" % id)
+		var at_middle := _shown_at(face, middle)
+		var slide: Dictionary = HFUVMulti.slide_changes(
+			HFUVMulti.picked(level), Vector3.RIGHT, Vector3.UP, Vector2(1, 0), 0.5
+		)
+		level.set_uv_params_on_faces(slide["changes"])
+		face = level.find_brush_by_id(id).faces[front]
+		var place: Transform3D = face.world_transform
+		var along: Vector3 = place.affine_inverse() * (place * middle + Vector3.RIGHT * 0.5)
+		assert_lt(
+			_shown_at(face, along).distance_to(at_middle),
+			0.001,
+			"%s: what showed at the middle shows 0.5 m to the right" % id
+		)
+		level.face_selection = {}
+	await _leave(level)
+
+
 func test_the_hud_shows_the_steps_and_the_arrows_still_nudge_objects_outside_face_select():
 	var level = await _enter()
 	var brush = rig.box(level, "h", Vector3(0, 1, 0), Vector3(2, 2, 2))
