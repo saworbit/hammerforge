@@ -124,7 +124,14 @@ static func slide_changes(
 			skipped += 1
 			continue
 		var moved := on_face.normalized() * step
-		var raw := Vector2(moved.dot(axes[0]), moved.dot(axes[1]))
+		# Read off what the face shows from its middle to `moved` along, so a face
+		# with a layout of its own slides the way the key points (#1993).
+		var middle := _middle_of(face)
+		var there: Vector3 = (
+			face.world_transform.affine_inverse() * (face.world_transform * middle + moved)
+		)
+		var reading := face.raw_uvs_at(PackedVector3Array([middle, there]))
+		var raw: Vector2 = reading[1] - reading[0]
 		var offset := face.uv_offset - raw.rotated(face.uv_rotation) * face.uv_scale
 		out.append([record["brush_id"], record["index"], face.uv_scale, offset, face.uv_rotation])
 	return {"changes": out, "skipped": skipped}
@@ -141,11 +148,9 @@ static func turn_changes(records: Array, degrees: float) -> Dictionary:
 		if axes.is_empty() or face.local_verts.is_empty():
 			skipped += 1
 			continue
-		var middle := Vector3.ZERO
-		for corner in face.local_verts:
-			middle += corner
-		middle = face.world_transform * (middle / float(face.local_verts.size()))
-		var raw := Vector2(middle.dot(axes[0]), middle.dot(axes[1]))
+		# What the face shows at its middle, so one with a layout of its own turns
+		# about its middle too (#1993).
+		var raw: Vector2 = face.raw_uvs_at(PackedVector3Array([_middle_of(face)]))[0]
 		var turn := wrapf(face.uv_rotation + deg_to_rad(degrees), -PI, PI)
 		var offset := (
 			face.uv_offset
@@ -154,6 +159,14 @@ static func turn_changes(records: Array, degrees: float) -> Dictionary:
 		)
 		out.append([record["brush_id"], record["index"], face.uv_scale, offset, turn])
 	return {"changes": out, "skipped": skipped}
+
+
+## The middle of `face`'s corners, in its brush's space.
+static func _middle_of(face: FaceData) -> Vector3:
+	var middle := Vector3.ZERO
+	for corner in face.local_verts:
+		middle += corner
+	return middle / maxf(1.0, float(face.local_verts.size()))
 
 
 ## The brush ids `changes` touch, for an undo step's scope.

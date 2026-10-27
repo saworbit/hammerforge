@@ -3,9 +3,11 @@ extends GutTest
 ## Merge keeps the relief of the displaced faces it joins into one (#1906). It
 ## used to drop both sculpts with a warning in the Output panel, since a sculpt is
 ## laid on its face's four corners and the merged face has four new ones. Now the
-## merged face takes one sculpt over all of them, a power finer, so every point of
-## their grids is a point of its own. A merge that would still lose a sculpt, on a
-## face that grows into one with more than four corners, is refused.
+## merged face takes one sculpt over all of them, at the coarsest power whose grid
+## has every point of theirs as a point of its own. A merge that would still lose
+## a sculpt, on a face that grows into one with more than four corners, is
+## refused, and so is one that would move a sculpt's points, on faces no grid of
+## up to 16 cells a side holds (#1972).
 
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const HFConvexClipScript = preload("res://addons/hammerforge/hf_convex_clip.gd")
@@ -164,3 +166,122 @@ func test_a_union_face_with_more_than_four_corners_counts_its_sculpts_as_lost():
 		0,
 		"a four-cornered face holds it"
 	)
+
+
+## A box 1 tall and 4 deep, `width` wide, its left side at `left`, with its top
+## sculpted at `power` in a pattern between 0 and 0.5 and put in sew group 1.
+func _sculpted(brush_id: String, left: float, width: float, power: int) -> DraftBrush:
+	var brush: DraftBrush = (
+		root
+		. create_brush_from_info(
+			{
+				"size": Vector3(width, 1, 4),
+				"center": Vector3(left + width * 0.5, 0.5, 0),
+				"brush_id": brush_id,
+			}
+		)
+	)
+	for index in brush.faces.size():
+		if brush.faces[index].normal.y < 0.9:
+			continue
+		root.create_displacement(brush_id, index, power)
+		var sculpt: HFDisplacementData = brush.faces[index].displacement
+		for row in sculpt.get_dim():
+			for col in sculpt.get_dim():
+				sculpt.set_distance(row, col, 0.05 * float((row * 7 + col * 3) % 11))
+		root.set_displacement_sew_group(brush_id, index, 1)
+	return brush
+
+
+func _top_of(brush: DraftBrush) -> FaceData:
+	for face in brush.faces:
+		if face.normal.y > 0.9:
+			return face
+	return null
+
+
+## Merge laid one sculpt a power finer than the finest it joined. That grid has
+## every point of two equal halves, and of no other split, so the relief moved
+## and Merge said only how many brushes it merged (#1972). The power now comes
+## from the faces' widths: the coarsest grid with every point of theirs.
+func test_the_merged_power_is_the_coarsest_grid_with_every_point():
+	var whole := PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(8, 0, 4), Vector3(0, 0, 4)]
+	)
+	var at := func(left: float, right: float) -> PackedVector3Array:
+		return PackedVector3Array(
+			[Vector3(left, 0, 0), Vector3(right, 0, 0), Vector3(right, 0, 4), Vector3(left, 0, 4)]
+		)
+	var sculpt := func(power: int) -> HFDisplacementData:
+		var made := HFDisplacementDataScript.new()
+		made.init_flat(power)
+		return made
+	var holding := func(widths: Array, powers: Array) -> int:
+		var parts: Array = []
+		var left := 0.0
+		for i in widths.size():
+			var power: int = powers[i]
+			parts.append(
+				[sculpt.call(power) if power > 0 else null, at.call(left, left + widths[i])]
+			)
+			left += float(widths[i])
+		return HFDisplacementDataScript.power_holding(parts, whole, 2)
+	assert_eq(holding.call([4.0, 4.0], [2, 2]), 3, "two halves at power 2: a power finer")
+	assert_eq(holding.call([4.0, 4.0], [2, 3]), 4, "halves at 2 and 3: one finer than 3")
+	assert_eq(holding.call([4.0, 4.0], [2, 0]), 3, "a flat half asks nothing")
+	assert_eq(holding.call([2.0, 6.0], [2, 2]), 4, "a 2 and a 6 at power 2: two finer")
+	assert_eq(holding.call([4.0, 4.0], [4, 4]), -1, "halves at power 4: no finer grid")
+	assert_eq(holding.call([6.0, 2.0], [3, 3]), -1, "a 6 at power 3 has points 0.75 apart")
+	var thirds := PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(12, 0, 0), Vector3(12, 0, 4), Vector3(0, 0, 4)]
+	)
+	var three: Array = []
+	for left in [0.0, 4.0, 8.0]:
+		three.append([sculpt.call(2), at.call(left, left + 4.0)])
+	assert_eq(
+		HFDisplacementDataScript.power_holding(three, thirds, 2),
+		-1,
+		"three in a row: a grid's cells come in twos, so none has points 1 apart over 12"
+	)
+
+
+func test_a_2_and_a_6_merge_at_the_power_that_keeps_every_point():
+	var narrow := _sculpted("narrow", 0.0, 2.0, 2)
+	var wide := _sculpted("wide", 2.0, 6.0, 2)
+	root.sew_all_displacements()
+	var before := _top_points(narrow)
+	before.append_array(_top_points(wide))
+	assert_true(root.merge_brushes_by_ids(["narrow", "wide"]).ok, "merged")
+	var merged: DraftBrush = root._iter_managed_brush_nodes()[0]
+	assert_eq(_top_of(merged).displacement.power, 4, "a grid with every point of both")
+	var after := _top_points(merged)
+	var missing := 0
+	for point in before:
+		if not _has_point(after, point):
+			missing += 1
+	assert_eq(missing, 0, "every point of both old surfaces is a point of the new one")
+
+
+func test_three_sculpted_tops_in_a_row_are_refused_with_the_reason():
+	var ids := ["one", "two", "three"]
+	for i in ids.size():
+		_sculpted(ids[i], 4.0 * i, 4.0, 2)
+	root.sew_all_displacements()
+	var check: HFOpResult = root.can_merge_brushes(ids)
+	assert_false(check.ok, "refused")
+	assert_eq(check.message, "Merge: 3 sculpts would move")
+	assert_string_contains(check.fix_hint, "4, 8 or 16 cells a side")
+	var done: HFOpResult = root.merge_brushes_by_ids(ids)
+	assert_false(done.ok, "and refused on a redo as well")
+	assert_eq(root._iter_managed_brush_nodes().size(), 3, "nothing was merged")
+	for brush in root._iter_managed_brush_nodes():
+		assert_eq(_top_of(brush).displacement.power, 2, "each top keeps its own sculpt")
+
+
+func test_two_halves_at_the_finest_power_are_refused():
+	_sculpted("left", 0.0, 4.0, 4)
+	_sculpted("right", 4.0, 4.0, 4)
+	root.sew_all_displacements()
+	var check: HFOpResult = root.can_merge_brushes(["left", "right"])
+	assert_false(check.ok, "no grid finer than 16 cells a side")
+	assert_eq(check.message, "Merge: 2 sculpts would move")

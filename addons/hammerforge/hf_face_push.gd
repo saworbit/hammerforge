@@ -207,11 +207,19 @@ static func _pushed_planes(brush: DraftBrush, face_idx: int, distance: float) ->
 			return _refused("the brush has a face missing")
 		planes.append(HFConvexClip.face_plane(face))
 		corners.append_array((face as FaceData).local_verts)
-	planes[face_idx] = HFConvexClip.offset_plane(planes[face_idx], distance)
+	var basis := brush.global_transform.basis
+	if is_zero_approx(basis.determinant()):
+		return _refused("the brush is flattened")
+	# The distance is in metres in the level and the planes are the brush's own,
+	# so a brush the gizmo scaled moved its face by the scale times it (#1998).
+	# Measured across the plane, as the box path divides by its world step.
+	var across: Vector3 = basis.inverse().transposed() * (planes[face_idx] as Plane).normal
+	var local_distance := distance * across.length()
+	planes[face_idx] = HFConvexClip.offset_plane(planes[face_idx], local_distance)
 	var bounds := AABB(corners[0], Vector3.ZERO)
 	for corner in corners:
 		bounds = bounds.expand(corner)
-	var reach := maxf(bounds.size.length(), 1.0) + absf(distance) * 2.0
+	var reach := maxf(bounds.size.length(), 1.0) + absf(local_distance) * 2.0
 	var outer := _box_faces(bounds.get_center(), reach)
 	var cut := HFConvexClip.progressive_remainder(outer, planes)
 	var built: Array = cut["remainder"]

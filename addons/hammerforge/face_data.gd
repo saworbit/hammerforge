@@ -17,6 +17,9 @@ const UV_AXIS_EPSILON := 0.0001
 ## How far a change of UV axes may stray from a turn, or a turn and a mirror,
 ## before it counts as a stretch, which no stored field can hold.
 const UV_TURN_TOLERANCE := 0.001
+## How far apart, in UV, the moves of a face's corners may be and still be one
+## slide of the whole texture. See `take_back_slide()`.
+const UV_SLIDE_TOLERANCE := 0.001
 ## How far off a face's plane a `.map` texture axis may lean and still lie in it.
 ## The axes are written to four places.
 const MAP_AXIS_IN_PLANE := 0.01
@@ -654,6 +657,22 @@ func projected_points(points: PackedVector3Array, projection: int = -1) -> Packe
 	return out
 
 
+## Where this face reads `points`, on it in its brush's space, before its rotation,
+## scale and offset: what it shows there with those taken back out. On a face with
+## no layout of its own that is `projected_points()`. A layout, as Texture Lock
+## writes on a sheared wall, shows something its projection does not, and
+## `LevelRoot.set_face_uv_params()` carries it through a change of values as if it
+## were this reading, so Align to Edge and the turn and slide keys work from this
+## and not from the projection (#1993). Empty for Cylindrical.
+func raw_uvs_at(points: PackedVector3Array) -> PackedVector2Array:
+	if texture_axes().is_empty():
+		return PackedVector2Array()
+	var values := uv_transform()
+	if not has_uv_layout() or local_verts.size() < 3 or is_zero_approx(values.determinant()):
+		return projected_points(points)
+	return values.affine_inverse() * shown_uvs_at(points)
+
+
 ## Whether `projection` lays a texture flat on this face: Cylindrical does not, nor
 ## does a planar axis the face is seen edge on from, whose two axes leave the face.
 func projection_lies_on_face(projection: int) -> bool:
@@ -805,6 +824,29 @@ func adjust_uvs_for_rotation(local_rot: Basis) -> bool:
 		uv_rotation = wrapf(-(uv_rotation + turn), -PI, PI)
 		uv_scale.y = -uv_scale.y
 	custom_uvs = PackedVector2Array()
+	return true
+
+
+## Slide this face's texture back to where its corners showed `was`, less whole
+## repeats, when every corner has moved by one amount since. `adjust_uvs_for_rotation()`
+## turns the texture about the level's origin, since a projection reads positions
+## from there, so a turn about any other pivot slides it too: a whole number of
+## repeats about a pivot on whole metres, and a visible slide about any other
+## (#2022). A face whose corners moved by different amounts shows a different
+## picture, not the same one slid, and is left alone. Returns true when the offset
+## changed.
+func take_back_slide(was: PackedVector2Array) -> bool:
+	var now := shown_uvs()
+	if was.is_empty() or was.size() != now.size() or has_uv_layout():
+		return false
+	var slide: Vector2 = was[0] - now[0]
+	for i in now.size():
+		if (was[i] - now[i] - slide).length() > UV_SLIDE_TOLERANCE:
+			return false
+	slide -= slide.round()
+	if slide.length() <= UV_SLIDE_TOLERANCE:
+		return false
+	uv_offset += slide
 	return true
 
 

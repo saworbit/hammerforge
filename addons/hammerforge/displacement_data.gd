@@ -46,6 +46,12 @@ const CORNER_CELLS: Array[Vector2i] = [
 	Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 0)
 ]
 
+## The finest power a sculpt has, 16 cells a side.
+const MAX_POWER := 4
+## How far from a grid point of its own, in cells, a point may lie and still be
+## on it, for `power_holding()`.
+const ON_GRID := 0.001
+
 ## Subdivision dimension: 2^power + 1 vertices per side.
 var _dim: int = 0
 
@@ -485,6 +491,47 @@ static func merged_onto(
 				if any_offsets and sculpt.offsets.size() == count:
 					out.offsets[target] += sculpt.offsets[source] * weight
 	return out
+
+
+## The coarsest power from `from_power` up to `MAX_POWER` whose grid over the quad
+## `corners` has every grid point of each sculpt in `parts` among its own points,
+## or -1 when none has. `parts` is as `merged_onto()` takes it. Laid at that power,
+## one sculpt over them keeps their relief point for point. Laid at any other it
+## is resampled and its relief moves: three faces in a row, or two of unequal
+## widths, have no such grid at all, as a grid's cells come in powers of two
+## (#1972). Also -1 unless the quad and every part are quads.
+static func power_holding(parts: Array, corners: PackedVector3Array, from_power: int) -> int:
+	if corners.size() != 4:
+		return -1
+	var places: Array[Vector2] = []
+	for part in parts:
+		var quad: PackedVector3Array = part[1]
+		if quad.size() != 4:
+			return -1
+		var sculpt: HFDisplacementData = part[0]
+		if sculpt == null:
+			continue
+		var last := sculpt.get_dim() - 1
+		for row in range(last + 1):
+			for col in range(last + 1):
+				var u := float(col) / float(last)
+				var top: Vector3 = quad[0].lerp(quad[1], u)
+				var bottom: Vector3 = quad[3].lerp(quad[2], u)
+				places.append(_place_on_quad(corners, top.lerp(bottom, float(row) / float(last))))
+	for candidate in range(maxi(from_power, 2), MAX_POWER + 1):
+		var cells := float(1 << candidate)
+		var holds := true
+		for at in places:
+			var on_grid: Vector2 = at * cells
+			if (
+				absf(on_grid.x - roundf(on_grid.x)) > ON_GRID
+				or absf(on_grid.y - roundf(on_grid.y)) > ON_GRID
+			):
+				holds = false
+				break
+		if holds:
+			return candidate
+	return -1
 
 
 ## The part of `parts` that `point` lies in, or the nearest when it lies in none,

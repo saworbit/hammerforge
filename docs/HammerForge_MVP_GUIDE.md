@@ -124,7 +124,7 @@ See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPME
 - **Convert to Brushes** (`hf_brush_conversion.gd`): a convex mesh or a CSG primitive becomes a brush where it stands.
 - **Grow and Shrink** (Ctrl+] and Ctrl+[, `hf_selection_grow.gd`): faces by shared edges, brushes by touching shapes.
 - **Tie/Untie**: tag brushes as brush entity classes (`func_detail`, `func_wall`, `func_clip`, `func_door`, `func_button`, `door_basic`, `trigger_once`, `trigger_multiple`). Tagged brushes get color-coded overlays and may be excluded from structural bake.
-- **Move to Floor/Ceiling** (Ctrl+Shift+F/C): raycasts against other brush AABBs to snap vertically.
+- **Move to Floor/Ceiling** (Ctrl+Shift+F/C): moves the selection straight down or up as one piece until it touches a shown brush.
 - **UV Justify**: fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
 
 ### Persistence (`HFFileSystem` + `HFStateSystem`)

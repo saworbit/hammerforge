@@ -339,6 +339,8 @@ func build(parent: Control) -> void:
 	dock.bake_generate_occluders_check.tooltip_text = (
 		"Auto-generate OccluderInstance3D nodes from large flat surfaces"
 		+ "\nReduces draw calls via occlusion culling without manual placement"
+		+ "\nOnly geometry that stays put gets one: not a door, a physbox, a func_illusionary"
+		+ " brush or a brush that takes inputs"
 	)
 	adv.add_child(dock.bake_generate_occluders_check)
 
