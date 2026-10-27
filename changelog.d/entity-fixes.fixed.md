@@ -1,1 +1,2 @@
 - A left out visgroup's entities stay out of Test Level and both scene exports. (issue [#1980](https://github.com/saworbit/hammerforge/issues/1980))
+- Pasted .map text renames names the level has, like gate to gate_2, and its wires follow. (issue [#1994](https://github.com/saworbit/hammerforge/issues/1994))
