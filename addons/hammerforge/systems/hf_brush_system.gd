@@ -1853,14 +1853,27 @@ func can_hollow_brush(brush_id: String, wall_thickness: float) -> HFOpResult:
 	return _plan_hollow(brush as DraftBrush, wall_thickness)["result"]
 
 
+## Whether a brush with these faces, in its own space, hollows at
+## `wall_thickness`: `can_hollow_brush()` for a solid the level no longer holds.
+## Adjust Last asks it of the solid a Hollow took away before it undoes the
+## Hollow (#1995).
+func can_hollow_faces(faces: Array, wall_thickness: float) -> HFOpResult:
+	return _plan_hollow_faces(faces, wall_thickness)["result"]
+
+
 func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
 	if brush_id == "":
 		return HFOpResult.fail("Clip: no brush ID provided")
 	var brush = _find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
 		return HFOpResult.fail("Clip: brush not found")
-	var draft := brush as DraftBrush
-	var bounds := world_bounds_of(draft)
+	return can_clip_bounds(world_bounds_of(brush as DraftBrush), axis, split_pos)
+
+
+## Whether a cut at `split_pos` on `axis` splits a brush whose world bounds are
+## `bounds`: `can_clip_brush()` for a brush the level no longer holds whole.
+## Adjust Last asks it of the brush a Clip cut before it undoes the Clip (#1995).
+func can_clip_bounds(bounds: AABB, axis: int, split_pos: float) -> HFOpResult:
 	# The same refusal the operation makes, so the ghost and the cut agree.
 	if not HFTransformSystem.is_valid_axis(axis):
 		return HFOpResult.fail(
@@ -1949,6 +1962,12 @@ func hollow_brush_by_id(
 ## comparing twice the thickness against the smallest dimension only ever meant
 ## anything for a box.
 func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
+	_ensure_faces(draft)
+	return _plan_hollow_faces(draft.get_faces(), wall_thickness)
+
+
+## `_plan_hollow()` for a brush's faces, in its own space.
+func _plan_hollow_faces(faces: Array, wall_thickness: float) -> Dictionary:
 	var empty: Array = []
 	if wall_thickness <= 0.0:
 		return {
@@ -1959,8 +1978,6 @@ func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
 			),
 			"walls": empty
 		}
-	_ensure_faces(draft)
-	var faces: Array = draft.get_faces()
 	if faces.size() < 4:
 		return {
 			"result":
@@ -3142,31 +3159,34 @@ func align_selected_faces_to_edge(near: Variant = null) -> int:
 	for ref in _selected_face_refs():
 		var face: FaceData = ref["face"]
 		var count := face.local_verts.size()
-		var axes := face.texture_axes()
-		if count < 3 or axes.is_empty():
+		if count < 3 or face.texture_axes().is_empty():
 			continue
-		var place: Transform3D = face.world_transform
 		var edge := -1
 		if near is Vector3:
-			edge = _nearest_edge(face, place, near)
+			edge = _nearest_edge(face, face.world_transform, near)
 		else:
 			edge = (int(_aligned_edges.get(face.get_instance_id(), -1)) + 1) % count
-		var start: Vector3 = place * face.local_verts[edge]
-		var finish: Vector3 = place * face.local_verts[(edge + 1) % count]
 		var middle := Vector3.ZERO
 		for corner in face.local_verts:
-			middle += place * corner
+			middle += corner
 		middle /= float(count)
-		var along := _raw_uv(finish - start, axes)
+		# Read off what the face shows, so a face with a layout of its own, as a
+		# wall sheared with Texture Lock has, lines up as one without does (#1993).
+		var raw := face.raw_uvs_at(
+			PackedVector3Array(
+				[face.local_verts[edge], face.local_verts[(edge + 1) % count], middle]
+			)
+		)
+		var at_start: Vector2 = raw[0]
+		var along: Vector2 = raw[1] - at_start
 		if along.length() < 0.0001:
 			continue
 		var turn := -along.angle()
 		# The top of the texture, v going down from it, faces the middle.
-		var inward := (_raw_uv(middle - start, axes).rotated(turn) * face.uv_scale).y
+		var inward := ((raw[2] - at_start).rotated(turn) * face.uv_scale).y
 		if inward > 0.0:
 			turn += PI
 		turn = wrapf(turn, -PI, PI)
-		var at_start := _raw_uv(start, axes)
 		var showing := at_start.rotated(face.uv_rotation) * face.uv_scale + face.uv_offset
 		var offset := showing.round() - at_start.rotated(turn) * face.uv_scale
 		_set_uv_on(ref, face.uv_scale, offset, turn)
@@ -3241,10 +3261,6 @@ static func _shown_uv_bounds(face: FaceData) -> Dictionary:
 		low = low.min(uv)
 		high = high.max(uv)
 	return {"min": low, "max": high}
-
-
-static func _raw_uv(point: Vector3, axes: Array) -> Vector2:
-	return Vector2(point.dot(axes[0]), point.dot(axes[1]))
 
 
 ## The edge of `face`, by its first corner, nearest the world point `near`.

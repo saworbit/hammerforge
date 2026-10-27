@@ -398,3 +398,107 @@ func test_a_yaw_carries_every_face_texture_round_with_the_brush():
 		var now: Vector3 = _world_u_direction(face, turn)
 		var carried: Vector3 = turn * was
 		assert_almost_eq(now.dot(carried), 1.0, 0.0001, "face %d did not carry its texture" % i)
+
+
+# ===========================================================================
+# A turn about a pivot off whole metres (#2022)
+# ===========================================================================
+
+
+## A level with texture lock on and a 2 x 2 x 2 box centred at `centre`.
+func _locked_box(centre: Vector3) -> Array:
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	root.texture_lock = true
+	var brush = root.create_brush_from_info(
+		{"shape": 0, "size": Vector3(2, 2, 2), "center": centre, "brush_id": "box"}
+	)
+	return [root, brush]
+
+
+## The UVs each face of `brush` shows at its corners.
+func _corner_uvs(brush) -> Array:
+	var out: Array = []
+	for face in brush.faces:
+		out.append(face.shown_uvs())
+	return out
+
+
+## How far the texture moved on the worst of `faces` (every face when empty), less
+## whole repeats: 0 when every corner shows the picture it did. The corners of a
+## face have to move together, by one amount, for the picture to be the same.
+func _slid(was: Array, now: Array, faces: Array = []) -> float:
+	var worst := 0.0
+	for f in was.size():
+		if not faces.is_empty() and not faces.has(f):
+			continue
+		var a: PackedVector2Array = was[f]
+		var b: PackedVector2Array = now[f]
+		var moved: Vector2 = b[0] - a[0]
+		worst = maxf(worst, (moved - moved.round()).length())
+		for i in a.size():
+			worst = maxf(worst, (b[i] - a[i] - moved).length())
+	return worst
+
+
+## Texture Lock turned the texture about the level's origin, not about the pivot,
+## so about a pivot off whole metres it slid: a box at (4.3, 1, 2.2) turned a
+## quarter about its centre moved its corners by (-2.1, 0) and (-6.5, 2.1).
+func test_a_turn_about_a_pivot_off_whole_metres_keeps_the_texture_on_the_brush():
+	for turn in [[1, 90.0], [0, 90.0], [2, 180.0]]:
+		var built := _locked_box(Vector3(4.3, 1, 2.2))
+		var root: LevelRoot = built[0]
+		var brush = built[1]
+		for face in brush.faces:
+			face.uv_scale = Vector2(0.5, 0.25)
+			face.uv_offset = Vector2(0.1, 0.3)
+		var was := _corner_uvs(brush)
+		root.rotate_managed_nodes(["box"], [], turn[0], turn[1], Vector3(4.3, 1, 2.2))
+		assert_lt(_slid(was, _corner_uvs(brush)), 0.001, "turned %s" % [turn])
+		var other := _locked_box(Vector3(-3.7, 2.45, 0.6))
+		var off_brush = other[1]
+		var off_was := _corner_uvs(off_brush)
+		other[0].rotate_managed_nodes(["box"], [], turn[0], turn[1], Vector3(1.15, 0.3, -2.9))
+		assert_lt(_slid(off_was, _corner_uvs(off_brush)), 0.001, "about a pivot off the brush")
+
+
+## A yaw that is no quarter turn leaves the walls to their projection, as a turn
+## no stored field can hold always has. The floor and the ceiling keep their
+## texture, about a pivot off whole metres too.
+func test_a_yaw_off_the_quarter_keeps_the_texture_on_the_top_and_bottom():
+	var built := _locked_box(Vector3(4.3, 1, 2.2))
+	var root: LevelRoot = built[0]
+	var brush = built[1]
+	var level: Array = []
+	for i in brush.faces.size():
+		if absf(brush.faces[i].normal.y) > 0.99:
+			level.append(i)
+	assert_eq(level.size(), 2, "a top and a bottom")
+	var was := _corner_uvs(brush)
+	root.rotate_managed_nodes(["box"], [], 1, -37.0, Vector3(4.3, 1, 2.2))
+	assert_lt(_slid(was, _corner_uvs(brush), level), 0.001)
+
+
+## About whole metres the texture moved by whole repeats, the same picture, and
+## the turn writes the offsets it wrote then.
+func test_a_turn_about_whole_metres_writes_the_offsets_it_did():
+	var built := _locked_box(Vector3(4, 1, 2))
+	var root: LevelRoot = built[0]
+	var brush = built[1]
+	var was := _corner_uvs(brush)
+	root.rotate_managed_nodes(["box"], [], 1, 90.0, Vector3(4, 1, 2))
+	assert_lt(_slid(was, _corner_uvs(brush)), 0.001)
+	for face in brush.faces:
+		assert_eq(face.uv_offset, Vector2.ZERO, "no offset to slide back")
+
+
+## Set Rotation turns a brush about its own centre through the same path.
+func test_set_rotation_keeps_the_texture_on_a_brush_off_whole_metres():
+	var built := _locked_box(Vector3(4.3, 1, 2.2))
+	var root: LevelRoot = built[0]
+	var brush = built[1]
+	var was := _corner_uvs(brush)
+	root.set_brush_rotation_by_id("box", Vector3(0, 90, 0))
+	assert_lt(_slid(was, _corner_uvs(brush)), 0.001)

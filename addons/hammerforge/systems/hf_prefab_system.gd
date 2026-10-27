@@ -76,6 +76,9 @@ const VARIANT_META := &"hf_prefab_variant"
 const ENTITY_ID_META := &"hf_prefab_entity_id"
 const LINK_META := [ENTITY_ID_META, INSTANCE_META, SOURCE_META, VARIANT_META]
 
+## Why a copy with a locked piece is not rebuilt (#1977).
+const LOCKED_COPY := "A piece of this prefab copy is locked, so the copy is left as it is"
+
 
 class PrefabInstanceRecord:
 	var instance_id: String = ""
@@ -83,10 +86,17 @@ class PrefabInstanceRecord:
 	var variant_name: String = "base"  # active variant
 	var brush_ids: Array = []  # String brush IDs belonging to this instance
 	var entity_uids: Array = []  # stable IDs ("pent_N") belonging to this instance
+	## The piece of the prefab each brush and entity was placed from
+	## (`HFPrefab.piece_of()`), by the same index as `brush_ids` and `entity_uids`.
+	## What pairs a node with its record. They paired by index, so after a Push
+	## that dropped an earlier piece each later node took the record before its
+	## own (#1976).
+	var brush_pieces: Array = []
+	var entity_pieces: Array = []
 	var linked: bool = false  # if true, propagation applies
 	## What this copy keeps of its own through a Pull and a variant switch, and
 	## Push leaves out of the prefab (#1734): a piece's key, "b" or "e" and its
-	## index (`piece_key()`), to `{"properties": [names], "wiring": bool}`.
+	## piece (`piece_key()`), to `{"properties": [names], "wiring": bool}`.
 	var kept: Dictionary = {}
 
 
@@ -144,6 +154,10 @@ func register_instance(
 			node.set_meta(ENTITY_ID_META, uid)
 			uids.append(uid)
 	rec.entity_uids = uids
+	# Each node is the piece its place says, as in a prefab no Push renumbered.
+	# `place()` gives them the pieces their records name.
+	rec.brush_pieces = range(rec.brush_ids.size())
+	rec.entity_pieces = range(uids.size())
 
 	# Overwriting silently is what turns a stale counter into orphaned nodes, so
 	# say so rather than replace. The counter is derived from the restored records
@@ -185,6 +199,9 @@ func place(
 	result["instance_id"] = register_instance(
 		source_path, result["brush_ids"], result["entity_nodes"], linked, variant
 	)
+	var rec: PrefabInstanceRecord = _instances[result["instance_id"]]
+	rec.brush_pieces = result["brush_pieces"]
+	rec.entity_pieces = result["entity_pieces"]
 	return result
 
 
@@ -347,7 +364,7 @@ func _find_brush_by_id(brush_id: String) -> Node3D:
 ## Returns the new variant name, or "" if not applicable.
 func cycle_variant(instance_id: String) -> String:
 	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec or _instance_is_gone(rec):
+	if not rec or _instance_is_gone(rec) or _refuse_locked(rec):
 		return ""
 	var prefab = HFPrefabType.load_from_file(rec.source_path)
 	if not prefab:
@@ -358,25 +375,27 @@ func cycle_variant(instance_id: String) -> String:
 	var idx := variant_names.find(rec.variant_name)
 	idx = (idx + 1) % variant_names.size()
 	var new_variant: String = variant_names[idx]
-	_apply_variant(rec, prefab, new_variant)
+	_say_dropped(_apply_variant(rec, prefab, new_variant))
 	return new_variant
 
 
 ## Apply a specific variant to an instance.
 func set_variant(instance_id: String, variant_name: String) -> bool:
 	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec or _instance_is_gone(rec):
+	if not rec or _instance_is_gone(rec) or _refuse_locked(rec):
 		return false
 	var prefab = HFPrefabType.load_from_file(rec.source_path)
 	if not prefab:
 		return false
 	if not prefab.has_variant(variant_name):
 		return false
-	_apply_variant(rec, prefab, variant_name)
+	_say_dropped(_apply_variant(rec, prefab, variant_name))
 	return true
 
 
-func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_name: String) -> void:
+## Rebuild the copy as `variant_name` of `prefab`, keeping what it keeps. How many
+## kept values it let go of, as their pieces are not in the prefab now.
+func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_name: String) -> int:
 	# Where the instance is, measured the way the file format measures it.
 	#
 	# A prefab's brush transforms are stored relative to the merged visual AABB
@@ -466,22 +485,27 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 		pair[0][HFBrushEntity.NAME_META] = pair[1]
 
 	var new_brush_ids: Array = []
+	var new_brush_pieces: Array = []
 	var new_nodes: Array = []
 	# Each node made, with the name it was captured under.
 	var made: Array = []
-	for placed in placed_brushes:
+	for i in placed_brushes.size():
+		var placed: Dictionary = placed_brushes[i]
 		var captured := str(placed.get(NODE_NAME, ""))
 		if kept_nodes.has(captured):
 			placed[NODE_NAME] = kept_nodes[captured]
 		var brush = root.brush_system.create_brush_from_info(placed)
 		if brush:
 			new_brush_ids.append(str(placed.get("brush_id", "")))
+			new_brush_pieces.append(HFPrefabType.piece_of(brush_infos[i], i))
 			new_nodes.append(brush)
 			made.append([captured, brush])
 
 	var new_entity_uids: Array = []
+	var new_entity_pieces: Array = []
 	var new_entities: Array = []
-	for placed in placed_entities:
+	for i in placed_entities.size():
+		var placed: Dictionary = placed_entities[i]
 		var captured := str(placed.get(NODE_NAME, ""))
 		if kept_nodes.has(captured):
 			placed[NODE_NAME] = kept_nodes[captured]
@@ -490,6 +514,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 			var uid := _assign_entity_uid()
 			entity.set_meta(ENTITY_ID_META, uid)
 			new_entity_uids.append(uid)
+			new_entity_pieces.append(HFPrefabType.piece_of(entity_infos[i], i))
 			new_entities.append(entity)
 			new_nodes.append(entity)
 			made.append([captured, entity])
@@ -509,35 +534,81 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 
 	# Update record
 	rec.brush_ids = new_brush_ids
+	rec.brush_pieces = new_brush_pieces
 	rec.entity_uids = new_entity_uids
+	rec.entity_pieces = new_entity_pieces
 	rec.variant_name = variant_name
 	_tag_nodes(rec)
 	_give_kept(rec, kept_values)
+	return _drop_kept_without_piece(rec)
 
 
-## A piece's key in its copy: "b" and its brush's index, or "e" and its entity's.
-## The index pairs the piece with its record in the prefab, through a Pull and a
-## Push alike. "" for a node that is no piece of `rec`.
+## A piece's key in its copy: "b" and the piece of the prefab its brush was placed
+## from, or "e" and its entity's (`brush_pieces`, `entity_pieces`). The piece
+## pairs it with its record, through a Pull and a Push alike, where its index
+## stopped doing so once a Push dropped an earlier piece (#1976). "" for a node
+## that is no piece of `rec`.
 func piece_key(rec: PrefabInstanceRecord, node: Node) -> String:
 	if rec == null or node == null:
 		return ""
 	if node is DraftBrush:
 		var at := rec.brush_ids.find(str(node.get("brush_id")))
-		return "b%d" % at if at >= 0 else ""
+		return "b%d" % _piece_at(rec.brush_pieces, at) if at >= 0 else ""
 	var uid_at := rec.entity_uids.find(str(node.get_meta(ENTITY_ID_META, "")))
-	return "e%d" % uid_at if uid_at >= 0 else ""
+	return "e%d" % _piece_at(rec.entity_pieces, uid_at) if uid_at >= 0 else ""
 
 
 ## The piece of `rec` a key names, or null.
 func node_of_piece(rec: PrefabInstanceRecord, key: String) -> Node:
 	if key.length() < 2 or not key.substr(1).is_valid_int():
 		return null
-	var at := key.substr(1).to_int()
-	if key.begins_with("b") and at < rec.brush_ids.size():
-		return _find_brush_by_id(str(rec.brush_ids[at]))
-	if key.begins_with("e") and at < rec.entity_uids.size():
-		return _find_entity_by_uid(str(rec.entity_uids[at]))
+	var piece := key.substr(1).to_int()
+	if key.begins_with("b"):
+		var at := _index_of_piece(rec.brush_pieces, rec.brush_ids.size(), piece)
+		return _find_brush_by_id(str(rec.brush_ids[at])) if at >= 0 else null
+	if key.begins_with("e"):
+		var at := _index_of_piece(rec.entity_pieces, rec.entity_uids.size(), piece)
+		return _find_entity_by_uid(str(rec.entity_uids[at])) if at >= 0 else null
 	return null
+
+
+## The piece at `at` in a copy's `pieces`, or `at` itself past their end, as for
+## a record that was given its nodes and not their pieces.
+static func _piece_at(pieces: Array, at: int) -> int:
+	return int(pieces[at]) if at < pieces.size() else at
+
+
+## Where `piece` is among a copy's `count` nodes, or -1.
+static func _index_of_piece(pieces: Array, count: int, piece: int) -> int:
+	for at in count:
+		if _piece_at(pieces, at) == piece:
+			return at
+	return -1
+
+
+## Let go of what the copy keeps of a piece it no longer has, as after a Pull of a
+## prefab a Push took that piece out of (#1976). How many values went.
+func _drop_kept_without_piece(rec: PrefabInstanceRecord) -> int:
+	var dropped := 0
+	for key in rec.kept.keys():
+		if node_of_piece(rec, key) == null:
+			var entry: Dictionary = rec.kept[key]
+			dropped += (entry.get("properties", []) as Array).size()
+			dropped += 1 if bool(entry.get("wiring", false)) else 0
+			rec.kept.erase(key)
+	return dropped
+
+
+## Say that a rebuild let go of kept values whose pieces the prefab no longer has.
+func _say_dropped(count: int) -> void:
+	if count > 0:
+		_report(
+			(
+				"%d kept value%s no longer had a piece in the prefab, and %s dropped"
+				% [count, "" if count == 1 else "s", "was" if count == 1 else "were"]
+			),
+			1
+		)
 
 
 ## Keep `prop_name` of `node`'s value on its copy, or stop. False when `node` is
@@ -588,10 +659,11 @@ func kept_of(node: Node) -> Dictionary:
 
 
 ## Forget everything the copy keeps, and give it the prefab's values again by
-## rebuilding it from its file. False when there was nothing kept.
+## rebuilding it from its file. False when there was nothing kept, or a piece of
+## the copy is locked.
 func clear_kept(node: Node) -> bool:
 	var rec := instance_of(node)
-	if rec == null or rec.kept.is_empty():
+	if rec == null or rec.kept.is_empty() or _refuse_locked(rec):
 		return false
 	rec.kept.clear()
 	return set_variant(rec.instance_id, rec.variant_name)
@@ -635,11 +707,12 @@ func duplicate_linked(instance_id: String, offset: Vector3) -> String:
 	var copy: PrefabInstanceRecord = _instances[iid]
 	copy.kept = rec.kept.duplicate(true)
 	_give_kept(copy, _read_kept(rec))
+	_drop_kept_without_piece(copy)
 	return iid
 
 
 ## Rebuild a copy from its prefab, throwing away what it changed outside what it
-## keeps. False when the prefab cannot be read.
+## keeps. False when the prefab cannot be read, or a piece of the copy is locked.
 func discard_changes(instance_id: String) -> bool:
 	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
 	return rec != null and set_variant(instance_id, rec.variant_name)
@@ -683,12 +756,22 @@ func _give_kept(rec: PrefabInstanceRecord, values: Dictionary) -> void:
 
 
 ## A copy's dimension's `data` with each end on a brush of the copy naming that
-## brush as the prefab does, by its place in it, so an end on its own brush is not
-## a change (#2000).
-static func _ends_as_pieces(rec: PrefabInstanceRecord, data: Dictionary) -> Dictionary:
+## brush as the prefab does, by the place of its record in `source_brushes`, so an
+## end on its own brush is not a change (#2000). A brush is paired with its record
+## by piece, as the rest of the diff pairs them; after a Push dropped an earlier
+## piece, its place in the copy is not its record's place in the file (#1976).
+static func _ends_as_pieces(
+	rec: PrefabInstanceRecord, source_brushes: Array, data: Dictionary
+) -> Dictionary:
+	var place_of_piece: Dictionary = {}
+	for k in source_brushes.size():
+		if source_brushes[k] is Dictionary:
+			place_of_piece[HFPrefabType.piece_of(source_brushes[k], k)] = k
 	var pieces: Dictionary = {}
 	for i in rec.brush_ids.size():
-		pieces[str(rec.brush_ids[i])] = HFDimensions.piece_ref(i)
+		var piece := _piece_at(rec.brush_pieces, i)
+		if place_of_piece.has(piece):
+			pieces[str(rec.brush_ids[i])] = HFDimensions.piece_ref(int(place_of_piece[piece]))
 	var as_info := {"entity_type": HFDimensions.CLASS, "properties": data.duplicate(true)}
 	HFDimensions.follow_copies([as_info], pieces)
 	return as_info["properties"]
@@ -705,10 +788,11 @@ static func _entity_data_of(node: Node) -> Dictionary:
 ## Each node of the instance still there, with the record it was placed from, as
 ## `[info, node]`, brushes first. `info` is empty for a node no record pairs with.
 ##
-## A record and the node placed from it share an index, as `brush_ids` and
-## `entity_uids` are in placement order. A propagation reads the prefab as just
-## pushed, which was captured from a copy in that same order. A node whose class
-## is not its record's is not paired, in case the two have drifted apart.
+## A node pairs with the record of the piece it was placed from (`brush_pieces`,
+## `entity_pieces`), which a Push writes on each record it captures. They paired
+## by index, so after a Push that dropped an earlier piece each later node took
+## the record before its own, with its place and its names (#1976). A node whose
+## class is not its record's is not paired, in case the two have drifted apart.
 ##
 ## A rebuild keys what it keeps by the records, so the names come back as they
 ## were. It used to ask for the lowest free name instead, so with the second copy
@@ -716,19 +800,27 @@ static func _entity_data_of(node: Node) -> Dictionary:
 ## became `Box_4` (#1178), and a wire aimed at either reached nothing.
 func _instance_pieces(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Array:
 	var pieces: Array = []
-	var brush_infos: Array = placed_from.get("brush_infos", [])
+	var brush_infos := _by_piece(placed_from.get("brush_infos", []))
 	for i in rec.brush_ids.size():
 		var brush := _find_brush_by_id(str(rec.brush_ids[i]))
 		if brush:
-			var info: Dictionary = brush_infos[i] if i < brush_infos.size() else {}
+			var info: Dictionary = brush_infos.get(_piece_at(rec.brush_pieces, i), {})
 			pieces.append([info if _brush_matches(brush, info) else {}, brush])
-	var entity_infos: Array = placed_from.get("entity_infos", [])
+	var entity_infos := _by_piece(placed_from.get("entity_infos", []))
 	for i in rec.entity_uids.size():
 		var entity := _find_entity_by_uid(str(rec.entity_uids[i]))
 		if entity:
-			var info: Dictionary = entity_infos[i] if i < entity_infos.size() else {}
+			var info: Dictionary = entity_infos.get(_piece_at(rec.entity_pieces, i), {})
 			pieces.append([info if _entity_matches(entity, info) else {}, entity])
 	return pieces
+
+
+## A prefab's records by the piece each one is.
+static func _by_piece(infos: Array) -> Dictionary:
+	var out: Dictionary = {}
+	for i in infos.size():
+		out[HFPrefabType.piece_of(infos[i], i)] = infos[i]
+	return out
 
 
 ## What a node's own authored name is kept under when its record gives it none:
@@ -913,12 +1005,30 @@ func propagate_from_source(source_path: String) -> int:
 		return 0
 	var instances = get_instances_for_source(source_path)
 	var count := 0
+	var dropped := 0
 	for rec in instances:
 		if not rec.linked or _instance_is_gone(rec) or _instance_is_locked(rec):
 			continue
-		_apply_variant(rec, prefab, rec.variant_name)
+		dropped += _apply_variant(rec, prefab, rec.variant_name)
 		count += 1
+	_say_dropped(dropped)
 	return count
+
+
+## Whether a piece of the copy `instance_id` is locked, so nothing rebuilds it.
+func copy_is_locked(instance_id: String) -> bool:
+	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
+	return rec != null and _instance_is_locked(rec)
+
+
+## True, saying why, when a piece of the copy is locked. Discard Changes, Clear
+## Kept and a variant switch rebuild the whole copy as a Pull does, so they pass a
+## locked one by as a Pull does (#1977).
+func _refuse_locked(rec: PrefabInstanceRecord) -> bool:
+	if not _instance_is_locked(rec):
+		return false
+	_report(LOCKED_COPY, 1)
+	return true
 
 
 ## Whether a piece of the copy is locked, so a Pull leaves the copy as it is
@@ -949,12 +1059,15 @@ func push_instance_to_source(instance_id: String) -> bool:
 		prefab = HFPrefabType.new()
 		prefab.prefab_name = rec.source_path.get_file().get_basename()
 
-	# Gather current nodes
+	# Gather current nodes, and the piece each is
 	var brush_nodes: Array = []
-	for bid in rec.brush_ids:
+	var brush_pieces: Array = []
+	for i in rec.brush_ids.size():
+		var bid = rec.brush_ids[i]
 		var brush = _find_brush_by_id(bid)
 		if brush:
 			brush_nodes.append(brush)
+			brush_pieces.append(_piece_at(rec.brush_pieces, i))
 		else:
 			push_warning(
 				(
@@ -963,10 +1076,13 @@ func push_instance_to_source(instance_id: String) -> bool:
 				)
 			)
 	var entity_nodes: Array = []
-	for uid in rec.entity_uids:
+	var entity_pieces: Array = []
+	for i in rec.entity_uids.size():
+		var uid = rec.entity_uids[i]
 		var ent = _find_entity_by_uid(uid)
 		if ent:
 			entity_nodes.append(ent)
+			entity_pieces.append(_piece_at(rec.entity_pieces, i))
 		else:
 			push_warning(
 				(
@@ -979,6 +1095,10 @@ func push_instance_to_source(instance_id: String) -> bool:
 	var captured = HFPrefabType.capture_from_selection(
 		root.brush_system, root.entity_system, brush_nodes, entity_nodes
 	)
+	# Each record says which piece it is, so every copy pairs its nodes with the
+	# records they were placed from after a piece before them is gone (#1976).
+	_write_pieces(captured.brush_infos, brush_pieces)
+	_write_pieces(captured.entity_infos, entity_pieces)
 	_leave_kept_out(rec, captured, prefab.get_variant_data(rec.variant_name))
 	prefab.set_variant_data(
 		rec.variant_name, captured.brush_infos, captured.entity_infos, captured.groups
@@ -988,18 +1108,32 @@ func push_instance_to_source(instance_id: String) -> bool:
 	return err == OK
 
 
+## Write on each captured record the piece it is, where that is not its place in
+## the list (`HFPrefab.PIECE`). Not when the capture left a node out, as then the
+## two lists no longer line up.
+static func _write_pieces(infos: Array, pieces: Array) -> void:
+	if infos.size() != pieces.size():
+		return
+	for i in infos.size():
+		if int(pieces[i]) != i:
+			infos[i][HFPrefabType.PIECE] = int(pieces[i])
+
+
 ## What a copy keeps is its own, so Push writes the prefab's value back in its
-## place, and drops it where the prefab has none (#1734).
+## place, and drops it where the prefab has none (#1734). By piece, so a copy
+## missing an earlier piece leaves out the value of the piece it was kept on.
 func _leave_kept_out(rec: PrefabInstanceRecord, captured, before: Dictionary) -> void:
+	var now := [_by_piece(captured.brush_infos), _by_piece(captured.entity_infos)]
+	var then := [
+		_by_piece(before.get("brush_infos", [])), _by_piece(before.get("entity_infos", []))
+	]
 	for key in rec.kept:
-		var at := str(key).substr(1).to_int()
+		var piece := str(key).substr(1).to_int()
 		var brush := str(key).begins_with("b")
-		var infos: Array = captured.brush_infos if brush else captured.entity_infos
-		var old_infos: Array = before.get("brush_infos" if brush else "entity_infos", [])
-		if at >= infos.size():
+		var info: Dictionary = now[0 if brush else 1].get(piece, {})
+		if info.is_empty():
 			continue
-		var info: Dictionary = infos[at]
-		var old: Dictionary = old_infos[at] if at < old_infos.size() else {}
+		var old: Dictionary = then[0 if brush else 1].get(piece, {})
 		var data_key := HFBrushEntity.DATA_META if brush else "properties"
 		var wires_key := HFBrushEntity.OUTPUTS_META if brush else "io_outputs"
 		var entry: Dictionary = rec.kept[key]
@@ -1081,7 +1215,7 @@ func compute_instance_diff(instance_id: String) -> Array:
 		)
 		var own_data := _entity_data_of(node)
 		if HFDimensions.is_dimension(node):
-			own_data = _ends_as_pieces(rec, own_data)
+			own_data = _ends_as_pieces(rec, source_brushes, own_data)
 		var props: Array = source_data.keys()
 		for prop_name in own_data:
 			if not props.has(prop_name):
@@ -1406,6 +1540,14 @@ static func _id_number(id: String) -> int:
 	return int(tail) if tail.is_valid_int() else 0
 
 
+## A copy's pieces as saved, or each node's index for a level saved before they
+## were, which is the piece it was then (#1976).
+static func _restored_pieces(saved: Variant, count: int) -> Array:
+	if saved is Array and (saved as Array).size() == count:
+		return (saved as Array).map(func(piece): return int(piece))
+	return range(count)
+
+
 func capture_state() -> Dictionary:
 	var data: Dictionary = {}
 	data["next_instance_id"] = _next_instance_id
@@ -1422,6 +1564,8 @@ func capture_state() -> Dictionary:
 					"variant_name": rec.variant_name,
 					"brush_ids": rec.brush_ids.duplicate(),
 					"entity_uids": rec.entity_uids.duplicate(),
+					"brush_pieces": rec.brush_pieces.duplicate(),
+					"entity_pieces": rec.entity_pieces.duplicate(),
 					"linked": rec.linked,
 					"kept": rec.kept.duplicate(true),
 				}
@@ -1449,6 +1593,8 @@ func restore_state(data: Dictionary) -> void:
 		rec.variant_name = str(entry.get("variant_name", "base"))
 		rec.brush_ids = entry.get("brush_ids", [])
 		rec.entity_uids = entry.get("entity_uids", [])
+		rec.brush_pieces = _restored_pieces(entry.get("brush_pieces"), rec.brush_ids.size())
+		rec.entity_pieces = _restored_pieces(entry.get("entity_pieces"), rec.entity_uids.size())
 		# "overrides" in an older payload is read past: the mechanism it belonged
 		# to had no way in from the editor and wrote a meta nothing read.
 		rec.linked = bool(entry.get("linked", false))

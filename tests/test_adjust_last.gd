@@ -5,7 +5,11 @@ extends GutTest
 
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const HFPluginAdjustLast = preload("res://addons/hammerforge/plugin_adjust_last.gd")
+const HFPluginRun = preload("res://addons/hammerforge/plugin_run.gd")
+const HFPluginCommands = preload("res://addons/hammerforge/plugin_commands.gd")
 const HFCommandRegistry = preload("res://addons/hammerforge/hf_command_registry.gd")
+const McpDispatcher = preload("res://addons/hammerforge/mcp/hf_mcp_dispatcher.gd")
+const McpHost = preload("res://tests/mcp/mcp_test_host.gd")
 const HFSolidMeasure = preload("res://addons/hammerforge/hf_solid_measure.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
@@ -73,6 +77,118 @@ func test_hollow_then_a_new_thickness_rebuilds_the_walls_and_one_undo_gives_the_
 	await rig.leave_level(level)
 
 
+func _said(text: String) -> bool:
+	return Array(rig.toasts()).any(func(t): return str(t).contains(text))
+
+
+## A thickness Hollow refuses is asked about before the hollow is undone: the
+## room stays hollow, no empty step takes its place, the panel goes back to the
+## thickness the walls have, and the refusal says why. The hollow was undone and
+## a Hollow that changed nothing took its place (#1995).
+func test_a_thickness_hollow_refuses_leaves_the_hollow_and_says_why():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	rig.plugin.dock.hollow_thickness.value = 0.25
+	rig.plugin._hollow_selected(level)
+	await rig.accept_dialogs()
+	var walls: int = level._iter_managed_brush_nodes().size()
+	var steps: int = rig.undo().step_count()
+	rig.clear_toasts()
+	# As the panel asks, from its spin box: 3.0 is in its range, and no 4 m box
+	# holds a room with 3 m walls.
+	(_panel().control_for("thickness") as SpinBox).value = 3.0
+	await rig.frame()
+	assert_eq(level._iter_managed_brush_nodes().size(), walls, "the walls are still there")
+	assert_almost_eq(_thinnest_wall(level), 0.25, 0.01, "at the thickness they had")
+	assert_eq(rig.undo().step_count(), steps, "no step was added or taken away")
+	assert_eq(rig.undo().scene_history.get_current_action_name(), "Hollow")
+	assert_almost_eq(float(_panel().value_of("thickness")), 0.25, 0.001, "the panel goes back")
+	assert_almost_eq(float(rig.plugin.last_run["settings"]["thickness"]), 0.25, 0.001)
+	assert_almost_eq(rig.plugin.dock.get_hollow_thickness(), 0.25, 0.001, "the dock keeps 0.25")
+	assert_true(_said("leaves no room"), "and says why: %s" % [rig.toasts()])
+	assert_false(await HFPluginAdjustLast.adjust(rig.plugin, "thickness", 3.0), "refused")
+	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "thickness", 0.5), "a fit is taken")
+	await rig.frame()
+	assert_almost_eq(_thinnest_wall(level), 0.5, 0.01)
+	rig.undo().press_undo()
+	await rig.frame()
+	assert_eq(level._iter_managed_brush_nodes().size(), 1, "one Ctrl+Z still gives the solid")
+	await rig.leave_level(level)
+
+
+## A grid array the cap of 256 copies refuses is asked about before the array is
+## undone: the array stays and the refusal names the cap. It was undone, nothing
+## replaced it, and nothing was said (#1995).
+func test_an_array_past_the_cap_leaves_the_array_and_names_the_cap():
+	var level = await rig.make_level()
+	rig.undo().clear()
+	var tile: DraftBrush = rig.box(level, "tile", Vector3(0, 0.5, 0), Vector3(1, 1, 1))
+	rig.select([tile])
+	await rig.frame()
+	var dock = rig.plugin.dock
+	dock.dup_mode_opt.selected = 2
+	dock.dup_grid_x.value = 2
+	dock.dup_grid_y.value = 1
+	dock.dup_grid_z.value = 2
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_eq(str(rig.plugin.last_run.get("id")), "grid_array", "fixture: a grid")
+	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "count_x", 20), "20 x 1 x 2 is 39")
+	await rig.frame()
+	assert_eq(level._iter_managed_brush_nodes().size(), 40)
+	var steps: int = rig.undo().step_count()
+	rig.clear_toasts()
+	assert_false(await HFPluginAdjustLast.adjust(rig.plugin, "count_z", 20), "20 x 1 x 20 is 399")
+	await rig.frame()
+	assert_eq(level._iter_managed_brush_nodes().size(), 40, "the 20 x 1 x 2 array stays")
+	assert_eq(rig.undo().step_count(), steps, "and no empty step takes its place")
+	assert_eq(int(rig.plugin.last_run["settings"]["count_z"]), 2)
+	assert_true(_said("256"), "the refusal names the cap: %s" % [rig.toasts()])
+	await rig.leave_level(level)
+
+
+## The same for a line of copies of two brushes: 150 copies is in the panel's
+## range, and 300 brushes is past the cap.
+func test_a_line_of_copies_past_the_cap_is_refused_before_the_undo():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	var other: DraftBrush = rig.box(level, "other", Vector3(6, 2, 0))
+	rig.select([made[1], other])
+	await rig.frame()
+	var dock = rig.plugin.dock
+	dock.dup_mode_opt.selected = 0
+	dock.dup_count_spin.value = 2
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_eq(level._iter_managed_brush_nodes().size(), 6, "fixture: two brushes, twice")
+	var steps: int = rig.undo().step_count()
+	rig.clear_toasts()
+	assert_false(await HFPluginAdjustLast.adjust(rig.plugin, "count", 150))
+	await rig.frame()
+	assert_eq(level._iter_managed_brush_nodes().size(), 6, "the array stays")
+	assert_eq(rig.undo().step_count(), steps)
+	assert_true(_said("256"), "%s" % [rig.toasts()])
+	await rig.leave_level(level)
+
+
+## A cut moved out of the brush is asked about before the clip is undone.
+func test_a_cut_moved_out_of_the_brush_leaves_the_clip():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	rig.plugin._clip_selected(level)
+	await rig.accept_dialogs()
+	assert_eq(level._iter_managed_brush_nodes().size(), 2, "fixture: two pieces")
+	var steps: int = rig.undo().step_count()
+	rig.clear_toasts()
+	assert_false(await HFPluginAdjustLast.adjust(rig.plugin, "position", 10.0))
+	await rig.frame()
+	assert_eq(level._iter_managed_brush_nodes().size(), 2, "the pieces stay")
+	assert_eq(rig.undo().step_count(), steps)
+	assert_eq(rig.undo().scene_history.get_current_action_name(), "Clip Brush")
+	assert_true(_said("outside brush bounds"), "%s" % [rig.toasts()])
+	await rig.leave_level(level)
+
+
 func test_clip_shows_its_axis_and_place():
 	var made: Array = await _level_with_box()
 	var level: Node = made[0]
@@ -128,6 +244,57 @@ func test_an_array_shows_its_count_and_a_new_count_makes_that_many():
 	assert_eq(
 		int(dock.dup_count_spin.value), 4, "the dock's count follows, for the next one (#1896)"
 	)
+	await rig.leave_level(level)
+
+
+## A count past 100 reaches the dock as it is, and the next array makes it. The
+## dock's count stopped at 100, so the next array made 100 (#1996).
+func test_a_count_of_150_reaches_the_dock_and_the_next_array():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	var dock = rig.plugin.dock
+	dock.dup_mode_opt.selected = 0
+	dock.dup_count_spin.value = 2
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "count", 150))
+	await rig.frame()
+	assert_eq(level._iter_managed_brush_nodes().size(), 151, "the box and 150 copies")
+	assert_eq(int(dock.dup_count_spin.value), 150, "the dock holds 150")
+	var post: DraftBrush = rig.box(level, "post", Vector3(0, 2, 40))
+	rig.select([post])
+	await rig.frame()
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_eq(level._iter_managed_brush_nodes().size(), 302, "and the next array makes 150")
+	await rig.leave_level(level)
+
+
+## An offset of 2.5 and a rise of 0.5 reach the dock as they are. Its offset and
+## rise spins stepped by 1 and held 3 and 1, so the next array was not this one
+## (#1996).
+func test_an_offset_and_a_rise_between_whole_metres_reach_the_dock_as_they_are():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	var dock = rig.plugin.dock
+	dock.dup_mode_opt.selected = 0
+	dock.dup_count_spin.value = 2
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "offset", Vector3(2.5, 0, 0)))
+	await rig.frame()
+	assert_almost_eq(float(dock.dup_offset_x.value), 2.5, 0.0001, "the dock's offset is 2.5")
+	var post: DraftBrush = rig.box(level, "post", Vector3(0, 2, 40))
+	rig.select([post])
+	await rig.frame()
+	dock.dup_mode_opt.selected = 1
+	dock.dup_count_spin.value = 3
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_eq(str(rig.plugin.last_run.get("id")), "radial_array", "fixture: a ring")
+	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "rise", 0.5))
+	await rig.frame()
+	assert_almost_eq(float(dock.dup_rise_spin.value), 0.5, 0.0001, "the dock's rise is 0.5")
 	await rig.leave_level(level)
 
 
@@ -223,6 +390,70 @@ func test_shift_e_runs_extrude_down_and_an_old_keymap_still_works():
 	assert_eq(keymap.args_for("tool_extrude_down_alt"), {}, "an old id needs none")
 	assert_true(keymap.matches("tool_extrude_down_alt", PluginRig.key(KEY_X, false, true)))
 	assert_eq(HFCommandRegistry.runs("tool_extrude_down_alt")["id"], "tool_extrude")
+	await rig.leave_level(level)
+
+
+## The plugin's bridge over the rig's scene and undo, as the editor's is over
+## its own, which cannot be asked headless. Gives back the one it replaced.
+func _bridge_over_the_rig() -> Variant:
+	var kept = rig.plugin.mcp_dispatcher
+	var host := McpHost.new()
+	host.scene = rig.scene_root
+	host.undo = rig.undo()
+	host.tree = get_tree()
+	rig.plugin.mcp_dispatcher = McpDispatcher.new(host)
+	return kept
+
+
+func _put_back_bridge(kept: Variant) -> void:
+	rig.plugin.mcp_dispatcher.shutdown()
+	rig.plugin.mcp_dispatcher = kept
+
+
+## Ctrl+H with a thickness in its keymap entry hollows with it, as the command
+## line does: one step named Hollow, with 0.5 m walls and not the dock's 0.25,
+## and Repeat Run holds it with them. Only Extrude read a key's settings (#1997).
+func test_a_key_with_a_thickness_hollows_with_it():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	var kept = _bridge_over_the_rig()
+	rig.plugin.dock.hollow_thickness.value = 0.25
+	var file := FileAccess.open(KEYMAP_FILE, FileAccess.WRITE)
+	var entry := {"keycode": "H", "ctrl": true, "args": {"thickness": 0.5}}
+	file.store_string(JSON.stringify({"hollow": entry}))
+	file.close()
+	var keymap = rig.plugin._keymap
+	assert_true(keymap.import_from(KEYMAP_FILE), "fixture: Ctrl+H carries a thickness")
+	HFPluginRun.clear(rig.plugin)
+	var steps: int = rig.undo().step_count()
+	assert_eq(rig.forward(PluginRig.key(KEY_H, true)), EditorPlugin.AFTER_GUI_INPUT_STOP)
+	await rig.frame()
+	await rig.frame()
+	keymap.reset_all()
+	assert_eq(rig.open_dialogs().size(), 0, "nothing to ask: the key gave the thickness")
+	assert_almost_eq(_thinnest_wall(level), 0.5, 0.01, "0.5 m walls")
+	assert_eq(rig.undo().step_count(), steps + 1, "one step")
+	assert_eq(rig.undo().scene_history.get_current_action_name(), "Hollow")
+	var run: Array = HFPluginRun.steps_of(rig.plugin)
+	assert_eq(run.size(), 1, "the run holds it")
+	if run.size() == 1:
+		assert_eq(str(run[0]["id"]), "hollow")
+		assert_almost_eq(float(run[0]["settings"]["thickness"]), 0.5, 0.001)
+	_put_back_bridge(kept)
+	await rig.leave_level(level)
+
+
+## The same through `execute()`, as the palette, a menu and a bound command run.
+func test_execute_with_a_thickness_hollows_with_it():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	var kept = _bridge_over_the_rig()
+	rig.plugin.dock.hollow_thickness.value = 0.25
+	HFPluginCommands.execute(rig.plugin, "hollow", [], {"thickness": 0.5})
+	await rig.frame()
+	await rig.frame()
+	assert_almost_eq(_thinnest_wall(level), 0.5, 0.01, "0.5 m walls")
+	_put_back_bridge(kept)
 	await rig.leave_level(level)
 
 

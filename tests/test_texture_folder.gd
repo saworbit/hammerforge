@@ -66,6 +66,146 @@ func test_two_word_suffixes_are_read_as_one():
 	assert_eq(HFTextureFolder.split_name("brick_NormalDX.png"), ["brick", "normal", true])
 
 
+func test_a_resolution_or_format_after_the_suffix_is_passed_over_and_kept_in_the_name():
+	# How texture packs name their files, the resolution after the map word. Kept
+	# in the name, so a pack's 2k and 4k sets of one texture are two sets (#1960).
+	assert_eq(
+		HFTextureFolder.split_name("brick_wall_diff_2k.png"), ["brick_wall_2k", "albedo", false]
+	)
+	assert_eq(
+		HFTextureFolder.split_name("brick_wall_nor_gl_2k.png"), ["brick_wall_2k", "normal", false]
+	)
+	assert_eq(
+		HFTextureFolder.split_name("brick_wall_nor_dx_4K.jpg"), ["brick_wall_4K", "normal", true]
+	)
+	assert_eq(
+		HFTextureFolder.split_name("rock_rough_16k-png.png"), ["rock_16k-png", "roughness", false]
+	)
+	assert_eq(HFTextureFolder.split_name("tile_2k.png"), ["tile_2k", "albedo", false])
+	assert_eq(HFTextureFolder.split_name("normal_2k.png"), ["normal_2k", "albedo", false])
+
+
+func test_longer_map_words_name_their_maps():
+	assert_eq(
+		HFTextureFolder.split_name("Bricks059_1K-PNG_Color.png"),
+		["Bricks059_1K-PNG", "albedo", false]
+	)
+	assert_eq(
+		HFTextureFolder.split_name("Bricks059_1K-PNG_AmbientOcclusion.png"),
+		["Bricks059_1K-PNG", "ao", false]
+	)
+	assert_eq(
+		HFTextureFolder.split_name("Bricks059_1K-PNG_Metalness.png"),
+		["Bricks059_1K-PNG", "metallic", false]
+	)
+	assert_eq(
+		HFTextureFolder.split_name("Bricks059_1K-PNG_NormalDX.png"),
+		["Bricks059_1K-PNG", "normal", true]
+	)
+	assert_eq(HFTextureFolder.split_name("rock_Displacement.png"), ["rock", "unused", false])
+	assert_eq(HFTextureFolder.split_name("rock_arm_2k.png"), ["rock_2k", "unused", false])
+
+
+func test_a_pack_with_a_resolution_after_the_map_word_makes_one_material():
+	var found := (
+		HFTextureFolder
+		. sets_of(
+			[
+				"brick_wall_diff_2k.png",
+				"brick_wall_nor_gl_2k.png",
+				"brick_wall_rough_2k.png",
+				"brick_wall_ao_2k.png",
+				"brick_wall_disp_2k.png",
+			]
+		)
+	)
+	assert_eq(found["sets"].size(), 1, "one material, not one a file")
+	var brick: Dictionary = found["sets"][0]
+	assert_eq(brick["name"], "brick_wall_2k")
+	assert_eq(brick["albedo"], "brick_wall_diff_2k.png")
+	assert_eq(brick["normal"], "brick_wall_nor_gl_2k.png")
+	assert_eq(brick["roughness"], "brick_wall_rough_2k.png")
+	assert_eq(brick["ao"], "brick_wall_ao_2k.png")
+	assert_eq(found["unplaced"], [])
+	assert_eq(found["unused"], ["brick_wall_disp_2k.png"], "a height map is seen and not used")
+
+
+func test_a_pack_with_long_map_words_makes_one_material_with_all_four_maps():
+	var found := (
+		HFTextureFolder
+		. sets_of(
+			[
+				"Bricks059_1K-PNG_Color.png",
+				"Bricks059_1K-PNG_NormalGL.png",
+				"Bricks059_1K-PNG_NormalDX.png",
+				"Bricks059_1K-PNG_Roughness.png",
+				"Bricks059_1K-PNG_AmbientOcclusion.png",
+				"Bricks059_1K-PNG_Metalness.png",
+				"Bricks059_1K-PNG_Displacement.png",
+			]
+		)
+	)
+	assert_eq(found["sets"].size(), 1)
+	var brick: Dictionary = found["sets"][0]
+	assert_eq(brick["albedo"], "Bricks059_1K-PNG_Color.png")
+	assert_eq(brick["normal"], "Bricks059_1K-PNG_NormalGL.png", "the OpenGL normal map")
+	assert_eq(brick["roughness"], "Bricks059_1K-PNG_Roughness.png")
+	assert_eq(brick["ao"], "Bricks059_1K-PNG_AmbientOcclusion.png")
+	assert_eq(brick["metallic"], "Bricks059_1K-PNG_Metalness.png")
+	assert_eq(found["unplaced"], [])
+	assert_eq(
+		found["unused"],
+		["Bricks059_1K-PNG_Displacement.png", "Bricks059_1K-PNG_NormalDX.png"],
+		"the height map and the DirectX normal map are seen and not used"
+	)
+	assert_eq(found["directx"], [], "so there is no DirectX map to warn of")
+	var other_way := HFTextureFolder.sets_of(["rock.png", "rock_normal.png", "rock_normal_dx.png"])
+	assert_eq(other_way["sets"][0]["normal"], "rock_normal.png", "whichever comes first")
+	assert_eq(other_way["unused"], ["rock_normal_dx.png"])
+
+
+func test_a_plain_texture_whose_name_ends_in_a_map_word_is_an_albedo():
+	var alone := HFTextureFolder.sets_of(["sheet_metal.png"])
+	assert_eq(alone["sets"], [{"name": "sheet_metal", "albedo": "sheet_metal.png"}])
+	assert_eq(alone["unplaced"], [])
+	var several := HFTextureFolder.sets_of(
+		["sheet_metal.png", "concrete_rough.png", "stone_col.png"]
+	)
+	assert_eq(several["sets"].size(), 3, "one material each")
+	var named: Array = []
+	for set_of in several["sets"]:
+		named.append(set_of["name"])
+	assert_eq(named, ["concrete_rough", "sheet_metal", "stone"], "each named for its file")
+	var with_its_maps := HFTextureFolder.sets_of(
+		["sheet_metal.png", "sheet_metal_normal.png", "sheet_metal_rough.png"]
+	)
+	assert_eq(with_its_maps["sets"].size(), 1, "a plain texture with maps of its own")
+	var sheet: Dictionary = with_its_maps["sets"][0]
+	assert_eq(sheet["name"], "sheet_metal")
+	assert_eq(sheet["albedo"], "sheet_metal.png")
+	assert_eq(sheet["normal"], "sheet_metal_normal.png")
+	assert_eq(sheet["roughness"], "sheet_metal_rough.png")
+
+
+func test_the_report_names_the_maps_not_used():
+	assert_eq(
+		(
+			HFTextureFolder
+			. report(
+				{
+					"made": 1,
+					"reused": 0,
+					"unplaced": [],
+					"unused": ["brick_disp.png", "brick_arm.png"],
+					"directx": [],
+					"error": "",
+				}
+			)
+		),
+		"Add Texture Folder: 1 material made, 0 reused. Maps not used: brick_disp.png, brick_arm.png"
+	)
+
+
 func test_a_file_with_no_known_suffix_is_an_albedo_named_for_the_whole_file():
 	assert_eq(HFTextureFolder.split_name("tile.png"), ["tile", "albedo", false])
 	assert_eq(HFTextureFolder.split_name("tile_02.png"), ["tile_02", "albedo", false])

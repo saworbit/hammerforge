@@ -460,6 +460,24 @@ func _dimension_issues(level: LevelRoot) -> Array:
 	)
 
 
+## The drift diff reads a copy's dimension end by the place of its brush's record
+## in the file, found by piece. A copy still holding a piece a Push dropped has its
+## later brushes one place past their records, and an end on one read as a change
+## (#2000, #1976).
+func test_the_diff_names_a_copys_end_by_its_records_place_in_the_file():
+	var rec := HFPrefabSystem.PrefabInstanceRecord.new()
+	rec.brush_ids = ["kept_0", "wall_1", "wall_2"]
+	rec.brush_pieces = [0, 1, 2]
+	var file_brushes := [{HFPrefabType.PIECE: 1}, {HFPrefabType.PIECE: 2}]
+	var data := {
+		HFDimensions.END_A: {"brush_id": "wall_1"},
+		HFDimensions.END_B: {"brush_id": "wall_2"},
+	}
+	var named: Dictionary = HFPrefabSystem._ends_as_pieces(rec, file_brushes, data)
+	assert_eq(named[HFDimensions.END_A]["brush_id"], "#0", "wall_1's record is first in the file")
+	assert_eq(named[HFDimensions.END_B]["brush_id"], "#1", "and wall_2's second")
+
+
 ## A doorway and its dimension saved as a prefab and placed twice, linked: each
 ## copy's dimension measures its own walls, a fresh copy reads as unchanged, and a
 ## Pull that builds the copies again keeps each on its own walls (#2000).
