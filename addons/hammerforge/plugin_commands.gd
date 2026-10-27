@@ -247,10 +247,22 @@ static func key_settings(action: String, keymap: Object) -> Dictionary:
 	return settings
 
 
+## Whether `action` runs with settings it is handed: it has `params`, and the
+## bridge has a form that takes them, as the command line hands them over (#1997).
+## Extrude reads its Direction in its own arm.
+static func takes_settings(action: String) -> bool:
+	return (
+		not HFCommandRegistry.params(action).is_empty()
+		and not HFCommandRegistry.bridge(action).is_empty()
+	)
+
+
 ## Run `action` from any surface. `settings` are values for its `params`, as a
-## keymap entry's `args` or Adjust Last give them; a setting left out is what the
-## dock says, as before (#1867). An id kept for a keymap runs the command it
-## stands for, with its own settings under those given.
+## keymap entry's `args` give them (#1867). A command that `takes_settings()`
+## runs with them as the command line runs it, a setting left out at its default
+## there (#1997); Extrude reads its Direction in its arm. With none, a command
+## runs with what the dock says, as before. An id kept for a keymap runs the
+## command it stands for, with its own settings under those given.
 static func execute(
 	plugin: Object, action: String, args: Array = [], settings: Dictionary = {}
 ) -> void:
@@ -266,6 +278,14 @@ static func execute(
 	# the match and do nothing, with nothing said.
 	if not HFCommandRegistry.dispatches(action):
 		HFLog.warn("HammerForge has no command '%s'" % action)
+		return
+	# Settings reach a command the one way the command line hands them over, so a
+	# key's `args`, the line and Adjust Last mean the same thing. Its arm below
+	# would run it with the dock's (#1997).
+	if not settings.is_empty() and takes_settings(action):
+		note_command(plugin, action)
+		plugin._show_coach_mark_for_action(action)
+		_run_with_settings(plugin, action, settings)
 		return
 	var root: Node = plugin.active_root if plugin.get("active_root") else plugin._get_level_root()
 	var dock = plugin.get("dock")
@@ -801,6 +821,24 @@ static func execute(
 	plugin._update_hud_context()
 
 
+## Run `action` with `settings` as the command line runs it: through the
+## bridge's form for it, on the selection, with its checks and one undo step
+## named for it (#1997). A refusal is said; a step that landed goes into Repeat
+## Run with its settings, as one from a dialog does. A coroutine, which
+## `execute()` does not wait for.
+static func _run_with_settings(plugin: Object, action: String, settings: Dictionary) -> void:
+	var outcome: Dictionary = await HFPluginCommandLine.run_on_selection(plugin, action, settings)
+	if not is_instance_valid(plugin):
+		return
+	if bool(outcome["ok"]):
+		HFPluginRun.note(plugin, action, settings)
+	else:
+		var dock = plugin.get("dock")
+		if dock:
+			dock.show_toast(str(outcome["message"]), 1)
+	plugin._update_hud_context()
+
+
 ## Note `action` as run, for Repeat Last Command and the palette's recent list
 ## (#1694). Repeat itself is never noted, so it never repeats itself.
 static func note_command(plugin: Object, action: String) -> void:
@@ -819,24 +857,29 @@ static func note_command(plugin: Object, action: String) -> void:
 
 
 ## Note the command a key ran. The key router runs most commands itself rather
-## than through `execute()`, so it asks which command the key is, the mode's own
-## keys first as the router asks them.
+## than through `execute()`, so it asks which command the key is.
 static func note_key_command(plugin: Object, event: InputEventKey, mode: String) -> void:
+	var found := key_command(plugin, event, mode)
+	if found != "":
+		note_command(plugin, found)
+
+
+## The command a key press runs in `mode`, the mode's own keys first as the
+## router asks them, or "".
+static func key_command(plugin: Object, event: InputEventKey, mode: String) -> String:
 	var keymap = plugin.get("_keymap")
 	if keymap == null:
-		return
+		return ""
 	var found := ""
 	for action in keymap.get_actions():
 		if not HFCommandRegistry.dispatches(action) or not keymap.matches(action, event):
 			continue
 		var its: String = keymap.action_mode(action)
 		if its == mode:
-			found = action
-			break
+			return action
 		if its == "general" and found == "":
 			found = action
-	if found != "":
-		note_command(plugin, found)
+	return found
 
 
 ## The command Repeat Last Command would run, or "".

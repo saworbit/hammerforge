@@ -27,6 +27,8 @@ const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_s
 const HFUserPrefsType = preload("res://addons/hammerforge/hf_user_prefs.gd")
 const HFTextureFolderType = preload("res://addons/hammerforge/hf_texture_folder.gd")
 const HFSolidMeasure = preload("res://addons/hammerforge/hf_solid_measure.gd")
+const McpDispatcher = preload("res://addons/hammerforge/mcp/hf_mcp_dispatcher.gd")
+const McpHost = preload("res://tests/mcp/mcp_test_host.gd")
 
 var rig = null
 var _host: Node = null
@@ -529,9 +531,21 @@ func _key_args() -> void:
 	rig.plugin.dock.hollow_thickness.value = 0.25
 	var dock_thickness: float = rig.plugin.dock.get_hollow_thickness()
 	# What `plugin_input_router.gd` does for a bound key: execute with the
-	# keymap entry's `args`.
+	# keymap entry's `args`. Those run through the bridge, as the command line
+	# does, and the editor's bridge host cannot run headless, so the rig's scene
+	# and undo get one of their own for this.
+	var kept = rig.plugin.mcp_dispatcher
+	var host := McpHost.new()
+	host.scene = rig.scene_root
+	host.undo = rig.undo()
+	host.tree = _tree
+	rig.plugin.mcp_dispatcher = McpDispatcher.new(host)
 	HFPluginCommands.execute(rig.plugin, "hollow", [], {"thickness": 0.5})
+	await rig.frame()
+	await rig.frame()
 	await rig.accept_dialogs()
+	rig.plugin.mcp_dispatcher.shutdown()
+	rig.plugin.mcp_dispatcher = kept
 	var thinnest := _thinnest(level)
 	note(
 		"Hollow run with args {thickness: 0.5}",

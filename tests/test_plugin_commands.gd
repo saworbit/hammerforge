@@ -70,6 +70,66 @@ func test_an_id_in_the_command_table_runs_its_arm():
 	assert_eq(plugin.calls, ["coach:toggle_grid", "hud"])
 
 
+## A bridge that keeps what it is asked and says yes.
+class AskedBridge:
+	extends RefCounted
+
+	var asked: Array = []
+	var last_changed := {}
+
+	func handle_for_person(request: Dictionary) -> Dictionary:
+		asked.append(request)
+		return {"id": request.get("id"), "result": {"label": "Done"}}
+
+
+## RecordingPlugin with a level and that bridge, as the command line reads them.
+class BridgedPlugin:
+	extends RecordingPlugin
+
+	var mcp_dispatcher := AskedBridge.new()
+	var hf_selection: Array = []
+	var level: Node = null
+
+	func _get_level_root():
+		return level
+
+
+## Extrude reads its Direction in its own arm. Rotate has no bridge form, so the
+## command line takes no values for it and nor does a key.
+const SETTINGS_READ_ELSEWHERE := ["tool_extrude", "rotate_ccw", "rotate_cw"]
+
+
+## Every command with settings that `execute()` is handed runs with them, through
+## the bridge as the command line runs it: what the bridge is asked carries the
+## settings given. Only Extrude read them, and a key bound to Hollow with a
+## thickness hollowed with the dock's (#1997).
+func test_every_command_with_settings_runs_with_those_execute_is_given():
+	var plugin := BridgedPlugin.new()
+	plugin.level = Node.new()
+	add_child_autoqfree(plugin.level)
+	var ran := 0
+	for id in HFCommandRegistry.dispatched_ids():
+		var params: Array = HFCommandRegistry.params(id)
+		if params.is_empty():
+			continue
+		if id in SETTINGS_READ_ELSEWHERE:
+			assert_false(HFPluginCommands.takes_settings(id), id)
+			continue
+		var settings := {}
+		for field_def in params:
+			settings[str(field_def["key"])] = "given to %s" % id
+		plugin.mcp_dispatcher.asked.clear()
+		HFPluginCommands.execute(plugin, id, [], settings)
+		var asked: Array = plugin.mcp_dispatcher.asked
+		assert_eq(asked.size(), 1, "%s went to the bridge" % id)
+		if asked.size() == 1:
+			assert_eq(asked[0]["method"], "hf_run_command", id)
+			assert_eq(asked[0]["params"]["command"], id)
+			assert_eq(asked[0]["params"]["params"], settings, "%s took the settings given" % id)
+		ran += 1
+	assert_gt(ran, 10, "Hollow, Clip, the structures, Replace Material and the paint commands")
+
+
 ## The three surfaces that reach the shared dispatcher, each by the signal it
 ## fires when a user picks an action on it.
 const SURFACES := ["context toolbar", "command palette", "viewport menu"]
