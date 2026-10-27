@@ -5,7 +5,11 @@ extends GutTest
 
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const HFPluginAdjustLast = preload("res://addons/hammerforge/plugin_adjust_last.gd")
+const HFPluginRun = preload("res://addons/hammerforge/plugin_run.gd")
+const HFPluginCommands = preload("res://addons/hammerforge/plugin_commands.gd")
 const HFCommandRegistry = preload("res://addons/hammerforge/hf_command_registry.gd")
+const McpDispatcher = preload("res://addons/hammerforge/mcp/hf_mcp_dispatcher.gd")
+const McpHost = preload("res://tests/mcp/mcp_test_host.gd")
 const HFSolidMeasure = preload("res://addons/hammerforge/hf_solid_measure.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
@@ -358,6 +362,70 @@ func test_shift_e_runs_extrude_down_and_an_old_keymap_still_works():
 	assert_eq(keymap.args_for("tool_extrude_down_alt"), {}, "an old id needs none")
 	assert_true(keymap.matches("tool_extrude_down_alt", PluginRig.key(KEY_X, false, true)))
 	assert_eq(HFCommandRegistry.runs("tool_extrude_down_alt")["id"], "tool_extrude")
+	await rig.leave_level(level)
+
+
+## The plugin's bridge over the rig's scene and undo, as the editor's is over
+## its own, which cannot be asked headless. Gives back the one it replaced.
+func _bridge_over_the_rig() -> Variant:
+	var kept = rig.plugin.mcp_dispatcher
+	var host := McpHost.new()
+	host.scene = rig.scene_root
+	host.undo = rig.undo()
+	host.tree = get_tree()
+	rig.plugin.mcp_dispatcher = McpDispatcher.new(host)
+	return kept
+
+
+func _put_back_bridge(kept: Variant) -> void:
+	rig.plugin.mcp_dispatcher.shutdown()
+	rig.plugin.mcp_dispatcher = kept
+
+
+## Ctrl+H with a thickness in its keymap entry hollows with it, as the command
+## line does: one step named Hollow, with 0.5 m walls and not the dock's 0.25,
+## and Repeat Run holds it with them. Only Extrude read a key's settings (#1997).
+func test_a_key_with_a_thickness_hollows_with_it():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	var kept = _bridge_over_the_rig()
+	rig.plugin.dock.hollow_thickness.value = 0.25
+	var file := FileAccess.open(KEYMAP_FILE, FileAccess.WRITE)
+	var entry := {"keycode": "H", "ctrl": true, "args": {"thickness": 0.5}}
+	file.store_string(JSON.stringify({"hollow": entry}))
+	file.close()
+	var keymap = rig.plugin._keymap
+	assert_true(keymap.import_from(KEYMAP_FILE), "fixture: Ctrl+H carries a thickness")
+	HFPluginRun.clear(rig.plugin)
+	var steps: int = rig.undo().step_count()
+	assert_eq(rig.forward(PluginRig.key(KEY_H, true)), EditorPlugin.AFTER_GUI_INPUT_STOP)
+	await rig.frame()
+	await rig.frame()
+	keymap.reset_all()
+	assert_eq(rig.open_dialogs().size(), 0, "nothing to ask: the key gave the thickness")
+	assert_almost_eq(_thinnest_wall(level), 0.5, 0.01, "0.5 m walls")
+	assert_eq(rig.undo().step_count(), steps + 1, "one step")
+	assert_eq(rig.undo().scene_history.get_current_action_name(), "Hollow")
+	var run: Array = HFPluginRun.steps_of(rig.plugin)
+	assert_eq(run.size(), 1, "the run holds it")
+	if run.size() == 1:
+		assert_eq(str(run[0]["id"]), "hollow")
+		assert_almost_eq(float(run[0]["settings"]["thickness"]), 0.5, 0.001)
+	_put_back_bridge(kept)
+	await rig.leave_level(level)
+
+
+## The same through `execute()`, as the palette, a menu and a bound command run.
+func test_execute_with_a_thickness_hollows_with_it():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	var kept = _bridge_over_the_rig()
+	rig.plugin.dock.hollow_thickness.value = 0.25
+	HFPluginCommands.execute(rig.plugin, "hollow", [], {"thickness": 0.5})
+	await rig.frame()
+	await rig.frame()
+	assert_almost_eq(_thinnest_wall(level), 0.5, 0.01, "0.5 m walls")
+	_put_back_bridge(kept)
 	await rig.leave_level(level)
 
 

@@ -62,6 +62,31 @@ static func _registry_guard(plugin: Object, root: Node, action: String) -> int:
 	)
 
 
+## Run the command a key is with the settings its keymap entry carries, past the
+## same selection guard as its arm, as a bound command runs (#1997). The
+## command's mode is asked as the router asks it, so a paint key in paint mode
+## comes first. SHORTCUT_APPLY when the key carries none, for its arm to run it.
+static func _run_with_key_settings(
+	plugin: Object, event: InputEventKey, root: Node, paint_mode: bool
+) -> int:
+	var keymap = plugin.get("_keymap")
+	if keymap == null or not keymap.has_method("args_for"):
+		return SHORTCUT_APPLY
+	var mode := "vertex" if plugin.get("_vertex_mode") else ("paint" if paint_mode else "general")
+	var action := HFPluginCommands.key_command(plugin, event, mode)
+	if action == "" or not HFPluginCommands.takes_settings(action):
+		return SHORTCUT_APPLY
+	var settings: Dictionary = keymap.args_for(action)
+	if settings.is_empty():
+		return SHORTCUT_APPLY
+	if not HFCommandRegistryType.selection(action).is_empty():
+		var guard = _registry_guard(plugin, root, action)
+		if guard != SHORTCUT_APPLY:
+			return guard
+	HFPluginCommands.execute(plugin, action, [], settings)
+	return STOP
+
+
 ## Extrude from a key, the way its settings say.
 static func _extrude(plugin: Object, root: Node, dock: Object, settings: Dictionary) -> void:
 	plugin._prepare_tool_transition(root)
@@ -206,6 +231,12 @@ static func _handle_keyboard(
 				return STOP
 		plugin._last_tap_keycode = event.keycode
 		plugin._last_tap_time = tap_now
+
+	# A key whose keymap entry carries settings runs its command with them, ahead
+	# of the arms below, which run it with the dock's (#1997).
+	var with_settings := _run_with_key_settings(plugin, event, root, paint_mode)
+	if with_settings != SHORTCUT_APPLY:
+		return with_settings
 
 	# Paint tool shortcuts, ahead of every general action below: paint mode owns
 	# its keys while it is on, as vertex mode does, so a general action sharing a
