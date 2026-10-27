@@ -35,8 +35,10 @@ const PRESETS_PREF := "command_presets"
 ## Note that `id` ran with `settings` and its step has landed. `recipe` says how
 ## to make the step again with other settings: `{action, method, args, scope_ids,
 ## scope_paths, absolute_redo}`, `args` a Callable taking the settings and giving
-## the method's arguments. A repeat of the same command on the same targets that
-## collated into the step before adds to it.
+## the method's arguments. A command that can refuse a value adds `check`, a
+## Callable taking the settings and the level and giving an `HFOpResult`, which is
+## asked before the step is undone (#1995). A repeat of the same command on the
+## same targets that collated into the step before adds to it.
 static func note(plugin: Object, id: String, settings: Dictionary, recipe: Dictionary) -> void:
 	if plugin == null or HFCommandRegistry.params(id).is_empty():
 		return
@@ -103,10 +105,11 @@ static func on_version_changed(plugin: Object) -> void:
 
 ## Make the last run's step again with `key` at `value`: undo it, and run it with
 ## the new settings, as one step in its place. False when the last step is not
-## the run's own, and nothing changes. A coroutine: the undo frees what it takes
-## away at the end of the frame, so the step is made again on the next one. A
-## change asked for while one is being made is made after it, the last one
-## asked for winning, as a dragged spin box asks many times.
+## the run's own, or the command refuses the value, and nothing changes. A
+## coroutine: the undo frees what it takes away at the end of the frame, so the
+## step is made again on the next one. A change asked for while one is being
+## made is made after it, the last one asked for winning, as a dragged spin box
+## asks many times.
 static func adjust(plugin: Object, key: String, value: Variant) -> bool:
 	var run: Dictionary = plugin.get("last_run") if plugin.get("last_run") is Dictionary else {}
 	if run.is_empty():
@@ -170,6 +173,16 @@ static func _run_again(
 	plugin: Object, root: Node, history: UndoRedo, run: Dictionary, settings: Dictionary
 ) -> bool:
 	var recipe: Dictionary = run["recipe"]
+	# Asked before the undo. A value the command refuses would take its step away
+	# and leave an empty one in its place, so the level and the panel keep what
+	# they had, and the refusal says why (#1995).
+	var refusal := _refusal(recipe, settings, root)
+	if refusal != "":
+		_say(plugin, refusal, 1)
+		var shown = plugin.get("_adjust_last_panel")
+		if shown is Control and is_instance_valid(shown):
+			shown.fill(run["settings"])
+		return false
 	plugin.set("_adjusting_last", true)
 	history.undo()
 	# What the undo took away is freed at the end of this frame, and a capture
@@ -213,6 +226,18 @@ static func _run_again(
 		if next != settings:
 			return await _run_again(plugin, root, history, run, next)
 	return true
+
+
+## Why the recipe's command refuses `settings`, or "" when it takes them or the
+## recipe has no check to ask.
+static func _refusal(recipe: Dictionary, settings: Dictionary, root: Node) -> String:
+	var check: Variant = recipe.get("check")
+	if not (check is Callable and (check as Callable).is_valid()):
+		return ""
+	var verdict: Variant = (check as Callable).call(settings, root)
+	if verdict is Object and not bool(verdict.get("ok")):
+		return str(verdict.call("user_text"))
+	return ""
 
 
 static func _panel(plugin: Object) -> Control:

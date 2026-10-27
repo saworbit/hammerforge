@@ -205,3 +205,26 @@ func test_the_dock_offers_hollow_the_range_the_bridge_does():
 		[spin.min_value, spin.max_value, spin.step, spin.value],
 		[wall["min"], wall["max"], wall["step"], wall["default"]]
 	)
+
+
+## The dock's array counts hold the range Adjust Last offers, so a count it sets
+## and hands to the dock is the count the next array makes. The count stopped at
+## 100 and the grid's at 32 (#1996).
+func test_the_dock_s_array_counts_take_the_range_adjust_last_offers():
+	var dock = DockScene.instantiate()
+	add_child_autoqfree(dock)
+	var spins := [
+		["duplicate_array", "count", dock.dup_count_spin],
+		["radial_array", "count", dock.dup_count_spin],
+		["grid_array", "count_x", dock.dup_grid_x],
+		["grid_array", "count_y", dock.dup_grid_y],
+		["grid_array", "count_z", dock.dup_grid_z],
+	]
+	for entry in spins:
+		var setting := HFCommandRegistry.field(entry[0], entry[1])
+		var spin: SpinBox = entry[2]
+		assert_eq(
+			[spin.min_value, spin.max_value, spin.step],
+			[float(setting["min"]), float(setting["max"]), float(setting["step"])],
+			"%s.%s" % [entry[0], entry[1]]
+		)

@@ -62,10 +62,17 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 		# the target for its material, visgroups, group and brush entity.
 		var infos: Array = root.brush_system._piece_infos_from_faces(target_draft, pieces)
 
-		root.brush_system.delete_brush_by_id(target_id)
+		# The pieces are made before the target is deleted, as Merge makes its
+		# brush. Deleting a group's last brush dropped the group, and every wire
+		# aimed at its entity, so pieces made after lost both (#1975). A target
+		# that gave no pieces stays where it was.
+		var made := 0
 		for info in infos:
 			if root.brush_system.create_brush_from_info(info):
-				total_pieces += 1
+				made += 1
+		if made > 0:
+			root.brush_system.delete_brush_by_id(target_id)
+		total_pieces += made
 
 	# Delete the carver brush
 	root.brush_system.delete_brush_by_id(brush_id)

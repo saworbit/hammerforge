@@ -234,7 +234,9 @@ func build(parent: Control) -> void:
 	var count_lbl = Label.new()
 	count_lbl.text = "Count:"
 	dup_row1.add_child(count_lbl)
-	dock.dup_count_spin = HFUIFactoryType.make_spin(1, 100, 1, 3)
+	# The counts' ranges are the command table's, so the dock holds any count
+	# Adjust Last can set and hands back to it (#1996).
+	dock.dup_count_spin = _setting_spin("duplicate_array", "count")
 	dock.dup_count_spin.tooltip_text = "Number of copies to create"
 	dup_row1.add_child(dock.dup_count_spin)
 
@@ -244,13 +246,13 @@ func build(parent: Control) -> void:
 	var off_lbl = Label.new()
 	off_lbl.text = "Offset:"
 	dup_row2.add_child(off_lbl)
-	dock.dup_offset_x = HFUIFactoryType.make_spin(-1000, 1000, 1, 8)
+	dock.dup_offset_x = _offset_spin(8)
 	dock.dup_offset_x.tooltip_text = "X offset per copy"
 	dup_row2.add_child(dock.dup_offset_x)
-	dock.dup_offset_y = HFUIFactoryType.make_spin(-1000, 1000, 1, 0)
+	dock.dup_offset_y = _offset_spin(0)
 	dock.dup_offset_y.tooltip_text = "Y offset per copy"
 	dup_row2.add_child(dock.dup_offset_y)
-	dock.dup_offset_z = HFUIFactoryType.make_spin(-1000, 1000, 1, 0)
+	dock.dup_offset_z = _offset_spin(0)
 	dock.dup_offset_z.tooltip_text = "Z offset per copy"
 	dup_row2.add_child(dock.dup_offset_z)
 
@@ -273,7 +275,7 @@ func build(parent: Control) -> void:
 	var rise_lbl = Label.new()
 	rise_lbl.text = "Rise:"
 	dock.dup_radial_row.add_child(rise_lbl)
-	dock.dup_rise_spin = HFUIFactoryType.make_spin(-1024.0, 1024.0, 1.0, 0.0)
+	dock.dup_rise_spin = _setting_spin("radial_array", "rise")
 	dock.dup_rise_spin.tooltip_text = ("How far each copy climbs along the axis. Zero is a flat ring; anything else is a helix, and with a step box, a spiral stair.")
 	dock.dup_radial_row.add_child(dock.dup_rise_spin)
 	dock.dup_fill_check = HFUIFactoryType.make_check("Fill 360°", false)
@@ -286,13 +288,13 @@ func build(parent: Control) -> void:
 	var grid_lbl = Label.new()
 	grid_lbl.text = "Cells:"
 	dock.dup_grid_row.add_child(grid_lbl)
-	dock.dup_grid_x = HFUIFactoryType.make_spin(1, 32, 1, 2)
+	dock.dup_grid_x = _setting_spin("grid_array", "count_x")
 	dock.dup_grid_x.tooltip_text = "Cells along X, counting the original"
 	dock.dup_grid_row.add_child(dock.dup_grid_x)
-	dock.dup_grid_y = HFUIFactoryType.make_spin(1, 32, 1, 1)
+	dock.dup_grid_y = _setting_spin("grid_array", "count_y")
 	dock.dup_grid_y.tooltip_text = "Cells along Y, counting the original"
 	dock.dup_grid_row.add_child(dock.dup_grid_y)
-	dock.dup_grid_z = HFUIFactoryType.make_spin(1, 32, 1, 2)
+	dock.dup_grid_z = _setting_spin("grid_array", "count_z")
 	dock.dup_grid_z.tooltip_text = "Cells along Z, counting the original"
 	dock.dup_grid_row.add_child(dock.dup_grid_z)
 	var grid_hint = Label.new()
@@ -332,6 +334,27 @@ func build(parent: Control) -> void:
 	dock.dup_detach_btn.visible = false
 	dock.dup_detach_btn.pressed.connect(dock._on_detach_duplicate_array)
 	dup_btns.add_child(dock.dup_detach_btn)
+
+
+## A spin box for setting `key` of command `id`, with the range, step and
+## default the command table gives it.
+static func _setting_spin(id: String, key: String) -> SpinBox:
+	var setting: Dictionary = HFCommandRegistryType.field(id, key)
+	return HFUIFactoryType.make_spin(
+		float(setting["min"]),
+		float(setting["max"]),
+		float(setting["step"]),
+		float(setting["default"])
+	)
+
+
+## A spin box for an array's offset along one axis. Its arrows go a metre at a
+## time, but it holds a value between, as Adjust Last hands it one: a step of 1
+## held an offset of 2.5 as 3, and the next array took 3 (#1996).
+static func _offset_spin(default_val: float) -> SpinBox:
+	var spin := HFUIFactoryType.make_spin(-1000, 1000, 0.001, default_val)
+	spin.custom_arrow_step = 1.0
+	return spin
 
 
 func _add_sub_header(parent: Control, text: String) -> void:
