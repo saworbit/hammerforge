@@ -498,11 +498,19 @@ func _camera() -> Camera3D:
 	return cam
 
 
-## One pointer event's worth of snap, as `plugin_snap_feedback` wraps every event.
-func _pointer(root: Node3D, call: Callable, release: bool = false) -> void:
+## One pointer event's worth of snap, as `plugin_snap_feedback` wraps every event:
+## a motion with the left button `held` spends a point a press took, a left
+## `press` takes the point it used, and a left `release` spends the pick (#2001).
+func _pointer(
+	root: Node3D, call: Callable, release: bool = false, press: bool = false, held: bool = false
+) -> void:
 	var snap = root.snap_system
+	if held:
+		snap.drag_moved()
 	snap.begin_pointer_event()
 	call.call()
+	if press:
+		snap.press_taken()
 	snap.end_pointer_event(true)
 	if release:
 		snap.pick_taken()
@@ -541,11 +549,19 @@ func _a_typed_guide_point_starts_a_draw() -> void:
 			func():
 				began[0] = root.drag_system.begin_drag(
 					cam, start_mouse, CSGShape3D.OPERATION_UNION, Vector3(1, 1, 1), 0
-				)
+				),
+			false,
+			true
 		)
 		var ends: Array = []
 		for p in [Vector3(4.5, 0, 5), Vector3(5.5, 0, 6.5), far]:
-			_pointer(root, func(): root.drag_system.update_drag(cam, cam.unproject_position(p)))
+			_pointer(
+				root,
+				func(): root.drag_system.update_drag(cam, cam.unproject_position(p)),
+				false,
+				false,
+				true
+			)
 			ends.append(root.input_state.drag_end)
 		# The release ends the base stage and spends the pick; a move sets the
 		# height and a second click places the brush, as the Draw tool runs them.
