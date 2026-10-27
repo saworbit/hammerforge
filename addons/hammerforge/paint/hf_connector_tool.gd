@@ -57,6 +57,13 @@ class ConnectorDef:
 		return Vector2i.ZERO
 
 
+## Whether two paint layers' cells line up. A connector names its two cells by
+## index, which is one place in the world only on layers of one cell size, and a
+## painted layer keeps its own when the grid snap changes (#2011).
+static func same_cell_size(a: HFPaintLayer, b: HFPaintLayer) -> bool:
+	return is_equal_approx(a.grid.cell_size, b.grid.cell_size)
+
+
 func generate_connector(def: ConnectorDef, layers: HFPaintLayerManager) -> ArrayMesh:
 	if def.from_layer_index < 0 or def.from_layer_index >= layers.layers.size():
 		return null
@@ -65,6 +72,8 @@ func generate_connector(def: ConnectorDef, layers: HFPaintLayerManager) -> Array
 	var from_layer: HFPaintLayer = layers.layers[def.from_layer_index]
 	var to_layer: HFPaintLayer = layers.layers[def.to_layer_index]
 	if not from_layer or not from_layer.grid or not to_layer or not to_layer.grid:
+		return null
+	if not same_cell_size(from_layer, to_layer):
 		return null
 	if not from_layer.get_cell(def.from_cell) or not to_layer.get_cell(def.to_cell):
 		return null

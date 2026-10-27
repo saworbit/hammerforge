@@ -118,6 +118,34 @@ func test_a_distance_typed_on_a_guide_puts_the_point_that_far_from_its_source():
 	await rig.leave_level(level)
 
 
+## A distance typed on a guide stands for the next pick, and the press that
+## starts a Draw is that pick. Every motion of the drag after it snapped to the
+## typed point too, so the far corner never left it (#2001).
+func test_the_press_that_takes_a_typed_point_leaves_the_drag_free():
+	if rig.plugin == null:
+		fail_test(rig.error())
+		return
+	var level = await _level()
+	var snap = level.snap_system
+	snap.toggle_tracked(Vector3(1, 0, 4), HFSnapSystemScript.KIND_VERTEX)
+	_hover(level, Vector3(3.3, 0, 4.1))
+	assert_true(snap.type_along_guide(2.5), "typed on the guide")
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	HFPluginSnapFeedbackScript.begin(rig.plugin, press)
+	var start: Vector3 = level._snap_point(Vector3(9, 0, 9))
+	HFPluginSnapFeedbackScript.end(rig.plugin, press)
+	assert_eq(start, Vector3(3.5, 0, 4), "the press takes the typed point")
+	var drag := InputEventMouseMotion.new()
+	drag.button_mask = MOUSE_BUTTON_MASK_LEFT
+	HFPluginSnapFeedbackScript.begin(rig.plugin, drag)
+	var far: Vector3 = level._snap_point(Vector3(6.3, 0, 7.2))
+	HFPluginSnapFeedbackScript.end(rig.plugin, drag)
+	assert_eq(far, Vector3(6.3, 0, 7.2), "the drag follows the pointer")
+	await rig.leave_level(level)
+
+
 func test_a_filtered_point_takes_x_and_z_from_one_pick_and_its_height_from_another():
 	if rig.plugin == null:
 		fail_test(rig.error())

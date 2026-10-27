@@ -217,6 +217,13 @@ func _read_class(
 			and tokens[at + 1]["kind"] == "("
 		):
 			var close := _closing(tokens, at + 1)
+			if tokens[close]["kind"] != ")":
+				_warnings.append(
+					(
+						"HammerForge: %s, line %d: %s( is not closed, so the class is left out"
+						% [file, tokens[at]["line"], tokens[at]["text"]]
+					)
+				)
 			_helper(
 				record,
 				str(tokens[at]["text"]).to_lower(),
@@ -494,12 +501,17 @@ static func _strings(tokens: Array, at: int) -> Dictionary:
 	return {"text": text, "at": at}
 
 
-## The index of the bracket that closes the one at `open`, or the last token.
+## The index of the bracket that closes the one at `open`, or the token before
+## the next `@`, or the last token. An `@` is always the next class, since a
+## string is a token of its own. Searching on to the end of the file, one
+## unclosed bracket took every class after it out (#1987).
 static func _closing(tokens: Array, open: int) -> int:
 	var depth := 0
 	var at := open
 	while at < tokens.size():
 		var kind: String = tokens[at]["kind"]
+		if kind == "@":
+			return at - 1
 		if kind == "(" or kind == "[":
 			depth += 1
 		elif kind == ")" or kind == "]":

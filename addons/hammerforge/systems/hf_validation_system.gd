@@ -1327,6 +1327,9 @@ func _connector_builds(definition: Object, layer_list: Array) -> bool:
 		return false
 	if to_layer == null or to_layer.grid == null:
 		return false
+	# Its cells are by index, so on two cell sizes they name no place (#2011).
+	if not is_equal_approx(from_layer.grid.cell_size, to_layer.grid.cell_size):
+		return false
 	if not from_layer.get_cell(definition.from_cell):
 		return false
 	if not to_layer.get_cell(definition.to_cell):

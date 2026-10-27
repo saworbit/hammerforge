@@ -48,6 +48,7 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 	var cuts: Array = plan["cuts"]
 	var total_pieces := 0
 	var hidden := hidden_overlaps(brush_id)
+	var locked := locked_overlaps(brush_id)
 
 	for cut in cuts:
 		var target_draft: DraftBrush = cut["target"]
@@ -72,6 +73,8 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 	var msg := "Carve: carved %d brush(es), created %d pieces" % [cuts.size(), total_pieces]
 	if hidden > 0:
 		msg += ", left %d hidden brush(es) alone" % hidden
+	if locked > 0:
+		msg += ", left %d locked brush(es) alone" % locked
 	root._log(msg)
 	return HFOpResult.success(msg)
 
@@ -130,9 +133,13 @@ func _plan_carve(brush_id: String, first_cut_only: bool = false) -> Dictionary:
 	var targets: Array = overlapping["shown"]
 	if targets.is_empty():
 		var hidden: int = (overlapping["hidden"] as Array).size()
+		var locked: int = (overlapping["locked"] as Array).size()
 		var hint := "Move the carver so it overlaps other brushes"
 		if hidden > 0:
 			hint = "It overlaps %d hidden brush(es). Show them to carve them" % hidden
+		if locked > 0:
+			var unlock := "It overlaps %d locked brush(es). Unlock them to carve them" % locked
+			hint = unlock if hidden == 0 else hint + ". " + unlock
 		return _refusal("Carve: no overlapping brushes found", hint)
 
 	var cuts: Array = []
@@ -238,33 +245,53 @@ static func _brush_id_of(brush: Node) -> String:
 ##
 ## A hidden brush is left alone. A mapper hides the outer walls to work inside a
 ## room, and a doorway carved through an inner wall must not cut the wall they
-## cannot see (#1710).
+## cannot see (#1710). A locked brush is left alone too: the carver reaches past
+## the selection to what it overlaps, and nothing changes a locked brush (#1973).
 func _find_overlapping_brushes(exclude_id: String, aabb: AABB) -> Array:
 	return _overlapping_brushes(exclude_id, aabb)["shown"]
 
 
 ## How many hidden brushes the carver `brush_id` overlaps and leaves alone.
 func hidden_overlaps(brush_id: String) -> int:
+	return (_overlaps_of(brush_id).get("hidden", []) as Array).size()
+
+
+## How many locked brushes the carver `brush_id` overlaps and leaves alone. A
+## brush both hidden and locked is counted as hidden.
+func locked_overlaps(brush_id: String) -> int:
+	return (_overlaps_of(brush_id).get("locked", []) as Array).size()
+
+
+## `_overlapping_brushes()` for the carver `brush_id`, or empty when it is not there.
+func _overlaps_of(brush_id: String) -> Dictionary:
 	var carver = root.brush_system.find_brush_by_id(brush_id)
 	if not carver or not (carver is DraftBrush):
-		return 0
-	var aabb: AABB = root.brush_system.world_bounds_of(carver)
-	return (_overlapping_brushes(brush_id, aabb)["hidden"] as Array).size()
+		return {}
+	return _overlapping_brushes(brush_id, root.brush_system.world_bounds_of(carver))
 
 
-## `{"shown": Array, "hidden": Array}`: the brushes whose bounds overlap `aabb`.
+## `{"shown": Array, "hidden": Array, "locked": Array}`: the brushes whose bounds
+## overlap `aabb`, those Carve may cut apart from those it leaves alone.
 func _overlapping_brushes(exclude_id: String, aabb: AABB) -> Dictionary:
 	var shown: Array = []
 	var hidden: Array = []
+	var locked: Array = []
+	var locks = root.get("visgroup_system")
 	for node in root._iter_pick_nodes():
 		if not (node is DraftBrush):
 			continue
 		var draft := node as DraftBrush
 		if _brush_id_of(draft) == exclude_id:
 			continue
-		if aabb.intersects(root.brush_system.world_bounds_of(draft)):
-			(hidden if _is_hidden(draft) else shown).append(draft)
-	return {"shown": shown, "hidden": hidden}
+		if not aabb.intersects(root.brush_system.world_bounds_of(draft)):
+			continue
+		if _is_hidden(draft):
+			hidden.append(draft)
+		elif locks != null and locks.is_locked(draft):
+			locked.append(draft)
+		else:
+			shown.append(draft)
+	return {"shown": shown, "hidden": hidden, "locked": locked}
 
 
 func _is_hidden(draft: DraftBrush) -> bool:

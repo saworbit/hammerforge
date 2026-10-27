@@ -5011,9 +5011,15 @@ func _sync_paint_grid_from_root() -> void:
 	# anything scattered on it at a world position the brushes no longer use,
 	# and a layer created after the move lands on a different grid from the ones
 	# beside it. layer_y is the layer's own and stays.
+	#
+	# So is the cell size of a layer with paint on it. Its cells are kept by
+	# index, so the snap written here resized every floor painted on it the next
+	# time it was built (#2011). An empty layer still takes the snap, as a new
+	# layer does, so the snap set before painting is the size painted at.
 	for layer in paint_layers.layers:
 		if layer and layer.grid:
-			layer.grid.cell_size = cell_size
+			if paint_system == null or not paint_system.layer_holds_paint(layer):
+				layer.grid.cell_size = cell_size
 			layer.grid.origin = paint_layers.base_grid.origin
 			layer.grid.basis = paint_layers.base_grid.basis
 
