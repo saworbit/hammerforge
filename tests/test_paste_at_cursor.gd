@@ -162,3 +162,81 @@ func test_a_copy_within_hammerforge_keeps_its_paint():
 	if pasted.size() == 1:
 		assert_eq(pasted[0].faces[0].paint_layers.size(), 1, "the buffer, which keeps paint")
 	await rig.leave_level(level)
+
+
+func _point_entity(level: Node, entity_class: String, authored: String, at: Vector3) -> Node3D:
+	var entity := DraftEntity.new()
+	entity.entity_type = entity_class
+	entity.entity_class = entity_class
+	entity.name = authored
+	level.add_entity(entity)
+	entity.global_position = at
+	entity.set_meta("entity_name", authored)
+	return entity
+
+
+## The addresses more than one entity answers to, a door's leaves counted as one.
+static func _shared_addresses(level: Node) -> Array:
+	var shared: Array = []
+	var index: Dictionary = level.entity_system.build_name_index()
+	for address in index:
+		var owners := {}
+		for node in index[address]:
+			var tie := str(node.get_meta("brush_entity_group", ""))
+			owners[tie if tie != "" else str(node.get_instance_id())] = true
+		if owners.size() > 1:
+			shared.append(address)
+	return shared
+
+
+## `.map` text pasted into a level that already has its names is a copy, as the
+## buffer's paste is: renamed, and wired to itself. It kept the names, so two
+## entities answered to each and the pasted button opened the old door (#1994).
+func test_map_text_pasted_over_its_own_names_is_renamed_and_wired_to_itself():
+	var level = await _enter()
+	var leaves: Array = [
+		rig.box(level, "leaf_a", Vector3(-0.3, 1, 0), Vector3(0.6, 2, 0.15)),
+		rig.box(level, "leaf_b", Vector3(0.3, 1, 0), Vector3(0.6, 2, 0.15)),
+	]
+	level.tie_brushes_to_entity(["leaf_a", "leaf_b"], "func_door", "gate")
+	var button = rig.box(level, "button", Vector3(1.2, 1.2, 0), Vector3(0.2, 0.2, 0.1))
+	level.tie_brushes_to_entity(["button"], "func_button", "btn")
+	level.add_entity_output(button, "OnPressed", "gate", "Open")
+	var relay := _point_entity(level, "logic_relay", "relay", Vector3(2, 0.5, 0))
+	level.add_entity_output(relay, "OnTrigger", "btn", "Press", "", 0.5)
+	var lamp := _point_entity(level, "light_point", "lamp", Vector3(0, 2.5, -1))
+	assert_true(level.prefab_system.copy_to_clipboard(leaves + [button], [relay, lamp]))
+	var text := str(HFPrefabSystem.system_clipboard_stand_in)
+	var made: Dictionary = level.file_system.paste_map_text(text, Vector3(0, 0, 8))
+	var pasted: Array = (made["brushes"] as Array) + (made["entities"] as Array)
+	assert_eq(pasted.size(), 5, "fixture: three brushes and two entities")
+	var names := {}
+	for node in pasted:
+		names[str(node.get_meta("entity_name", ""))] = true
+	var got: Array = names.keys()
+	got.sort()
+	assert_eq(got, ["btn_2", "gate_2", "lamp_2", "relay_2"], "each copy has a name of its own")
+	assert_eq(_shared_addresses(level), [], "and each name is one entity's")
+	var reach_old := 0
+	var wires := 0
+	for source in pasted:
+		for wire in source.get_meta("entity_io_outputs", []):
+			wires += 1
+			for hit in level.find_entities_by_name(str(wire.get("target_name", ""))):
+				if not pasted.has(hit):
+					reach_old += 1
+	assert_eq(wires, 2, "fixture: the button's wire and the relay's")
+	assert_eq(reach_old, 0, "the pasted button opens the pasted door only")
+	assert_eq(button.get_meta("entity_io_outputs")[0]["target_name"], "gate", "the old one too")
+	# Copied again, the copy's text aims at the copy alone. The import kept each
+	# output line as a property too, and that copy went out still aimed at gate.
+	var again := MapIO.parse_map_text(
+		level.file_system.map_text_of(pasted), MapIO.QUAKE_UNITS_PER_METRE, true
+	)
+	var aimed: Array = []
+	for info in (again["brushes"] as Array) + (again["entities"] as Array):
+		for wire in info.get("entity_io_outputs", []):
+			aimed.append(str(wire["target_name"]))
+	aimed.sort()
+	assert_eq(aimed, ["btn_2", "gate_2"], "a copy of the copy is wired to itself")
+	await rig.leave_level(level)
