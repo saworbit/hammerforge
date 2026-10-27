@@ -270,6 +270,34 @@ func test_a_count_of_150_reaches_the_dock_and_the_next_array():
 	await rig.leave_level(level)
 
 
+## An offset of 2.5 and a rise of 0.5 reach the dock as they are. Its offset and
+## rise spins stepped by 1 and held 3 and 1, so the next array was not this one
+## (#1996).
+func test_an_offset_and_a_rise_between_whole_metres_reach_the_dock_as_they_are():
+	var made: Array = await _level_with_box()
+	var level: Node = made[0]
+	var dock = rig.plugin.dock
+	dock.dup_mode_opt.selected = 0
+	dock.dup_count_spin.value = 2
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "offset", Vector3(2.5, 0, 0)))
+	await rig.frame()
+	assert_almost_eq(float(dock.dup_offset_x.value), 2.5, 0.0001, "the dock's offset is 2.5")
+	var post: DraftBrush = rig.box(level, "post", Vector3(0, 2, 40))
+	rig.select([post])
+	await rig.frame()
+	dock.dup_mode_opt.selected = 1
+	dock.dup_count_spin.value = 3
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	await rig.frame()
+	assert_eq(str(rig.plugin.last_run.get("id")), "radial_array", "fixture: a ring")
+	assert_true(await HFPluginAdjustLast.adjust(rig.plugin, "rise", 0.5))
+	await rig.frame()
+	assert_almost_eq(float(dock.dup_rise_spin.value), 0.5, 0.0001, "the dock's rise is 0.5")
+	await rig.leave_level(level)
+
+
 ## A ring's new step from Adjust Last reaches the dock as the step, with Fill 360
 ## off, even when Fill 360 was ticked again for the next ring. Fill 360 stayed
 ## ticked and the next ring threw the step away (#1931).
