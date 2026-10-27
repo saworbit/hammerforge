@@ -49,16 +49,24 @@ static func on_paint_layer_rename(dock: Object) -> void:
 				return
 			var new_name = line_edit.text.strip_edges()
 			if new_name != "" and new_name != current_name:
-				if dock.level_root.rename_paint_layer(idx, new_name):
-					dock._refresh_paint_layers()
-				elif dock.has_method("show_toast"):
-					dock.show_toast('A layer is already called "%s"' % new_name, 2)
+				on_paint_layer_rename_confirmed(dock, idx, new_name)
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())
 	dialog.confirmed.connect(func(): dialog.queue_free(), CONNECT_DEFERRED)
 	dock.add_child(dialog)
 	dialog.popup_centered(Vector2i(300, 80))
 	line_edit.grab_focus()
+
+
+## The Rename dialog's OK. A step, so an undo of an earlier one keeps the name
+## (#2012). A refused name changes nothing and leaves none.
+static func on_paint_layer_rename_confirmed(dock: Object, idx: int, new_name: String) -> void:
+	if dock._commit_state_action_if_changed(
+		"Rename Paint Layer", "rename_paint_layer", [idx, new_name]
+	):
+		dock._refresh_paint_layers()
+	elif dock.has_method("show_toast"):
+		dock.show_toast('A layer is already called "%s"' % new_name, 2)
 
 
 static func on_paint_layer_remove(dock: Object) -> void:
@@ -424,16 +432,35 @@ static func on_sculpt_falloff_changed(dock: Object, value: float) -> void:
 		dock.level_root.paint_tool.sculpt_falloff = value
 
 
+## Height Scale and Layer Y are steps of their own, one for a run of spin changes
+## on one layer. Called straight, an undo of an earlier step and its redo put back
+## the value from before them (#2012).
 static func on_height_scale_changed(dock: Object, value: float) -> void:
-	if dock == null or not dock.level_root:
+	var layer = _active_paint_layer(dock)
+	if layer == null or is_equal_approx(layer.height_scale, value):
 		return
-	dock.level_root.set_heightmap_scale(value)
+	dock._commit_state_action(
+		"Set Height Scale",
+		"set_heightmap_scale",
+		[value],
+		false,
+		"paint_height_scale_%s" % layer.layer_id
+	)
 
 
 static func on_layer_y_changed(dock: Object, value: float) -> void:
-	if dock == null or not dock.level_root:
+	var layer = _active_paint_layer(dock)
+	if layer == null or not layer.grid or is_equal_approx(layer.grid.layer_y, value):
 		return
-	dock.level_root.set_layer_y(value)
+	dock._commit_state_action(
+		"Set Layer Y", "set_layer_y", [value], false, "paint_layer_y_%s" % layer.layer_id
+	)
+
+
+static func _active_paint_layer(dock: Object) -> HFPaintLayer:
+	if dock == null or not dock.level_root or not dock.level_root.paint_layers:
+		return null
+	return dock.level_root.paint_layers.get_active_layer()
 
 
 static func on_blend_strength_changed(dock: Object, value: float) -> void:
