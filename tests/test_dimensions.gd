@@ -102,16 +102,76 @@ func test_moving_a_brush_moves_the_dimension_in_the_same_step_and_undo_puts_both
 	)
 
 
-func test_clipping_away_its_corner_detaches_that_end():
+## The right wall runs from 0.75 to 1.75 with the end on its corner at 0.75. A cut
+## at 1.25 keeps that corner on the 0.75 to 1.25 piece, and the end goes with it;
+## it used to come loose, under a test named for a cut that took the corner away
+## (#2003).
+func test_a_clip_that_keeps_its_corner_hands_the_end_to_that_piece():
+	var dimension := _doorway(1.5)
+	root.grid_snap = 0.25
+	HFUndoHelper.commit(
+		undo, root, "Clip Brush", "clip_brush_by_id", ["right", 0, 1.25], false, Callable()
+	)
+	assert_null(root.find_brush_by_id("right"), "fixture: the wall is cut into pieces")
+	await get_tree().process_frame
+	var measured := HFDimensions.measure(root, dimension)
+	assert_false(measured["detached"], "still on its corner")
+	assert_almost_eq(measured["b"], Vector3(0.75, 0, 0.5), Vector3.ONE * 0.0001)
+	var held: Node = root.find_brush_by_id(
+		str(dimension.entity_data[HFDimensions.END_B]["brush_id"])
+	)
+	assert_not_null(held, "on a piece")
+	if held:
+		assert_almost_eq(
+			root.brush_system.world_bounds_of(held).end.x, 1.25, 0.0001, "the doorway side"
+		)
+	# The piece follows a move, and the undo puts the end back on the wall.
+	root.nudge_brushes_by_id([str(held.brush_id)] if held else [], Vector3(0.5, 0, 0))
+	assert_almost_eq(HFDimensions.measure(root, dimension)["length"], 2.0, 0.0001)
+	undo.undo()
+	await get_tree().process_frame
+	var back := HFDimensions.measure(root, HFDimensions.dimensions(root)[0])
+	assert_false(back["detached"], "attached after the undo")
+	assert_eq(
+		str(HFDimensions.dimensions(root)[0].entity_data[HFDimensions.END_B]["brush_id"]), "right"
+	)
+
+
+func test_a_clip_that_cuts_its_corner_away_detaches_that_end():
 	var dimension := _doorway(1.5)
 	var before: float = HFDimensions.measure(root, dimension)["length"]
-	root.grid_snap = 0.25
-	var cut: HFOpResult = root.clip_brush_by_id("right", 0, 1.25)
+	# Only the far side of the cut is kept, so the corner at 0.75 goes.
+	var cut: HFOpResult = root.brush_system.clip_brush_keeping(
+		"right", Plane(Vector3.RIGHT, 1.25), 1
+	)
 	assert_true(cut.ok, "fixture: the wall is cut: %s" % cut.user_text())
 	await get_tree().process_frame
 	var measured := HFDimensions.measure(root, dimension)
 	assert_true(measured["detached"], "drawn amber")
 	assert_almost_eq(measured["length"], before, 0.0001, "reading where the end was last")
+
+
+## A notch carved from the far top of the right wall leaves the doorway's bottom
+## corner alone, and the end stays on it (#2003).
+func test_a_carve_that_keeps_its_corner_hands_the_end_to_that_piece():
+	var dimension := _doorway(1.5)
+	_box("notch", Vector3(1.55, 1.9, 0), Vector3(0.4, 0.4, 2))
+	var carve: HFOpResult = root.carve_with_brush("notch")
+	assert_true(carve.ok, "fixture: carved: %s" % carve.user_text())
+	assert_null(root.find_brush_by_id("right"), "fixture: the wall is in pieces")
+	var measured := HFDimensions.measure(root, dimension)
+	assert_false(measured["detached"], "still on its corner")
+	assert_almost_eq(measured["length"], 1.5, 0.0001)
+
+
+func test_a_hollow_hands_the_end_to_the_wall_that_keeps_its_corner():
+	var dimension := _doorway(1.5)
+	var hollow: HFOpResult = root.hollow_brush_by_id("right", 0.2)
+	assert_true(hollow.ok, "fixture: hollowed: %s" % hollow.user_text())
+	assert_null(root.find_brush_by_id("right"), "fixture: the wall is in walls")
+	var measured := HFDimensions.measure(root, dimension)
+	assert_false(measured["detached"], "still on its corner")
+	assert_almost_eq(measured["b"], Vector3(0.75, 0, 0.5), Vector3.ONE * 0.0001)
 
 
 func test_a_doorway_held_to_the_player_turns_red_when_narrowed_and_validate_names_it():
