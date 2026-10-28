@@ -1,3 +1,0 @@
-- Add Texture Folder reads the file names texture packs use. (issue [#1960](https://github.com/saworbit/hammerforge/issues/1960))
-- Align to Edge and the texture keys work on a face with a layout of its own. (issue [#1993](https://github.com/saworbit/hammerforge/issues/1993))
-- Texture Lock keeps the texture still on a brush turned about any pivot. (issue [#2022](https://github.com/saworbit/hammerforge/issues/2022))

@@ -1,1 +1,0 @@
-- Compare reports a brush's Cast Shadows, Lightmap Scale and whole material. (issue [#2023](https://github.com/saworbit/hammerforge/issues/2023))

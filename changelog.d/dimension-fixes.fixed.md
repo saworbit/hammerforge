@@ -1,3 +1,0 @@
-- A dimension copied with the walls it measures measures the copies. (issue [#2000](https://github.com/saworbit/hammerforge/issues/2000))
-- A Clip, Carve or Hollow keeps a dimension's end on the piece that keeps its corner. (issue [#2003](https://github.com/saworbit/hammerforge/issues/2003))
-- Validate names a dimension whose end came loose and judges no length it made up. (issue [#2004](https://github.com/saworbit/hammerforge/issues/2004))
