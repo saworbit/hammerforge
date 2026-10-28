@@ -286,12 +286,15 @@ func test_create_default_spawn_stands_on_the_floor_of_the_level():
 	var spawn = sys.create_default_spawn()
 	assert_not_null(spawn)
 	# Two unit cubes at (10,0,0) and (0,0,10) span x -0.5..10.5, y -0.5..0.5,
-	# z -0.5..10.5. Neither is under the centre, so it stands on the top of the
-	# lowest, 0.5, at the height `validate_spawn()` asks for: FEET_OFFSET and the
-	# 1.0 height offset `entities.json` gives `player_start` above it.
-	assert_almost_eq(spawn.global_position.x, 5.0, 0.1)
-	assert_almost_eq(spawn.global_position.y, 0.5 + HFSpawnSystemScript.FEET_OFFSET + 1.0, 0.001)
-	assert_almost_eq(spawn.global_position.z, 5.0, 0.1)
+	# z -0.5..10.5. Neither is under the centre, so it moves out onto the top of
+	# one of them, 0.5, and not over the gap between them (#2033). It stands at
+	# the height `validate_spawn()` asks for: FEET_OFFSET and the 1.0 height
+	# offset `entities.json` gives `player_start` above it.
+	var at: Vector3 = spawn.global_position
+	var on_first := Vector2(at.x - 10.0, at.z).length() < 0.2
+	var on_second := Vector2(at.x, at.z - 10.0).length() < 0.2
+	assert_true(on_first or on_second, "on one of the cubes, not at %s" % at)
+	assert_almost_eq(at.y, 0.5 + HFSpawnSystemScript.FEET_OFFSET + 1.0, 0.001)
 
 
 # ---------------------------------------------------------------------------
@@ -459,6 +462,42 @@ func test_a_created_spawn_with_no_clear_place_keeps_to_the_middle():
 	var spawn: Node3D = sys.create_default_spawn()
 	assert_almost_eq(spawn.global_position.x, 500.0, 0.001)
 	assert_almost_eq(spawn.global_position.z, 0.0, 0.001)
+
+
+func test_a_created_spawn_stands_on_a_floor_when_the_middle_has_none():
+	# Two floors with a gap between them at the middle of the level. The spawn
+	# stood over the gap, and Validate Spawn called the spawn just made floating
+	# (#2033).
+	var x := 2000.0
+	_slab(0.2, Vector3(x - 10, -0.1, 0))
+	_slab(0.2, Vector3(x + 10, -0.1, 0))
+	_assert_passes(await _validate_created_spawn(), "a spawn beside a gap")
+	var at: Vector3 = sys.get_active_spawn().global_position
+	var radius := HFSpawnSystemScript.PLAYER_RADIUS
+	assert_between(absf(at.x - x), 6.0 + radius, 14.0 - radius, "the whole player on a floor")
+	assert_almost_eq(at.y, HFSpawnSystemScript.FEET_OFFSET + 1.0, 0.001, "standing on it")
+
+
+func test_a_created_spawn_between_two_standard_rooms_stands_in_one():
+	# Moved off the gap by the floor under its middle alone, it would stand on top
+	# of a room's wall. Searched for with the default height offset, it would find
+	# no room inside a standard room, where only a lower one fits (#2033).
+	var x := 2100.0
+	for side in [-10.0, 10.0]:
+		var block := _slab(3.0, Vector3(x + side, 1.5, 0))
+		assert_true(root.hollow_brush_by_id(block.brush_id, 0.25).ok, "fixture: a room")
+	_assert_passes(await _validate_created_spawn(), "a spawn between two rooms")
+	var spawn: Node3D = sys.get_active_spawn()
+	var inside := 4.0 - 0.25 - HFSpawnSystemScript.PLAYER_RADIUS
+	assert_lt(absf(absf(spawn.global_position.x - x) - 10.0), inside, "inside a room")
+	var offset := float(spawn.entity_data.get("height_offset", -1.0))
+	assert_between(offset, 0.0, 0.99, "with a lower height offset of its own")
+	assert_almost_eq(
+		spawn.global_position.y,
+		0.25 + HFSpawnSystemScript.FEET_OFFSET + offset,
+		0.001,
+		"on the room's floor, not on its wall"
+	)
 
 
 # ---------------------------------------------------------------------------
@@ -677,9 +716,13 @@ func test_a_created_spawn_does_not_stand_on_an_illusionary_platform():
 	# A floor off to one side, and a fake floor 2.1 up over the middle of the level.
 	_slab(0.2, Vector3(x - 8, -0.1, 0))
 	_illusionary(Vector3(12, 0.2, 4), Vector3(x + 2, 2.0, 0))
+	# The middle of the level is under the fake floor, with nothing real below it,
+	# so the spawn moves out onto the real floor (#2033).
 	var spawn: Node3D = sys.create_default_spawn()
-	assert_almost_eq(spawn.global_position.x, x - 2, 0.001, "fixture: over the fake floor")
-	assert_lt(spawn.global_position.y, 2.1, "not standing on it")
+	var at := spawn.global_position
+	assert_lt(at.y, 2.1, "not standing on it")
+	assert_almost_eq(at.y, HFSpawnSystemScript.FEET_OFFSET + 1.0, 0.001, "on the real floor")
+	assert_lt(at.x, x - 4 - HFSpawnSystemScript.PLAYER_RADIUS, "the whole player on it")
 
 
 # ---------------------------------------------------------------------------

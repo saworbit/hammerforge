@@ -302,6 +302,11 @@ const SPAWN_SEARCH_RINGS := 24
 ## it (#974). So the player's column over the floor is checked against what is
 ## built, and when it is not clear the spawn moves out from the middle a grid
 ## step at a time until it is.
+##
+## With no floor under the middle, as between two rooms, it stood over the gap
+## (#2033). So it moves out from there too, to where a player fits at the least
+## height offset, and takes the most offset that fits there. Searching with the
+## middle's own offset would find no room inside a standard room.
 func create_default_spawn() -> Node3D:
 	var centroid := Vector3.ZERO
 	var height_offset := DEFAULT_SPAWN_HEIGHT_OFFSET
@@ -309,8 +314,9 @@ func create_default_spawn() -> Node3D:
 	if bounds.size != Vector3.ZERO or bounds.position != Vector3.ZERO:
 		centroid = bounds.get_center()
 		centroid.y = _floor_top_under(centroid, bounds)
+		var least := float(LOWER_SPAWN_OFFSETS.back())
+		centroid = _clear_place_near(centroid, bounds, false, least)
 		height_offset = _offset_that_fits(centroid)
-		centroid = _clear_place_near(centroid, bounds, false, height_offset)
 	centroid.y += FEET_OFFSET + height_offset
 
 	var entity := DraftEntity.new()
@@ -704,16 +710,15 @@ func _offset_that_fits(stand: Vector3) -> float:
 ## `stand` if a player standing there has room, or else the nearest place in
 ## rings of grid steps round it, over a floor and inside `bounds`, that has. With
 ## none, `stand` as it was. `same_floor` keeps the search on the floor `stand` is
-## on, for moving a spawn sideways; without it each place stands on the lowest
-## floor under it, as a new spawn does.
+## on, for moving a spawn sideways. Without it, as for a new spawn, `stand` needs
+## a floor under it too, and each place stands on the lowest floor under it with
+## floor under the whole player.
 func _clear_place_near(
 	stand: Vector3,
 	bounds: AABB,
 	same_floor: bool = false,
 	height_offset: float = DEFAULT_SPAWN_HEIGHT_OFFSET
 ) -> Vector3:
-	if _column_is_clear(_brush_solids(_column_at(stand, height_offset)), stand, height_offset):
-		return stand
 	var snap: Variant = root.get("grid_snap")
 	var step := clampf(float(snap) if snap is float or snap is int else 0.5, 0.25, 4.0)
 	var rings := mini(ceili(maxf(bounds.size.x, bounds.size.z) / step), SPAWN_SEARCH_RINGS)
@@ -726,6 +731,13 @@ func _clear_place_near(
 	near.size.x = half * 2.0
 	near.size.z = half * 2.0
 	var brushes := _brush_solids(near)
+	# A new spawn with no floor under it is no more in place than a blocked one,
+	# so over a gap at the middle it looks further out too. It stood over the gap
+	# and Validate Spawn called it floating (#2033). One moved along its own floor
+	# starts on that floor.
+	var floored := same_floor or _floor_at(brushes, stand, stand.y, near) < INF
+	if floored and _column_is_clear(brushes, stand, height_offset):
+		return stand
 	for ring in range(1, rings + 1):
 		var places: Array[Vector3] = []
 		for i in range(-ring, ring + 1):
@@ -751,9 +763,25 @@ func _clear_place_near(
 				)
 		)
 		for place in places:
-			if _column_is_clear(brushes, place, height_offset):
+			if not _column_is_clear(brushes, place, height_offset):
+				continue
+			if same_floor or _floor_under_player(brushes, place, near):
 				return place
 	return stand
+
+
+## Whether there is floor under the whole of a player standing on `stand`, out to
+## their radius each way, within a walkable slope of `stand`. A new spawn moved
+## off a gap by the floor under its middle alone would stand on the brink of the
+## floor, or on top of a room's wall (#2033).
+static func _floor_under_player(brushes: Dictionary, stand: Vector3, span: AABB) -> bool:
+	for side: Vector3 in [Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]:
+		var under := false
+		for top in _floors_at(brushes, stand + side * PLAYER_RADIUS, span):
+			under = under or absf(top - stand.y) <= PLAYER_RADIUS
+		if not under:
+			return false
+	return true
 
 
 ## `height` if a floor at `point` is there, or INF: a place on the same floor.
