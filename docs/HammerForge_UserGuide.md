@@ -871,6 +871,10 @@ A hidden brush is left alone too. A mapper who hides the outer walls to work ins
 a room can carve a doorway through an inner wall without cutting the wall they cannot
 see, and the confirmation counts the hidden brushes the carve skips ([#1710](https://github.com/saworbit/hammerforge/issues/1710)).
 
+A brush in a locked visgroup is left whole the same way. The message after the
+carve says how many it left alone, and a carver that overlaps only locked brushes
+says to unlock them ([#1973](https://github.com/saworbit/hammerforge/issues/1973)).
+
 ### Intersecting
 
 Intersect (`Ctrl+Shift+I`) keeps only the volume the selected brushes share, as one
@@ -1445,7 +1449,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Test Level**: **Test Level (Bake + Play)** is the one-click default. **Check Only** validates without baking and **Bake Only** produces geometry without launching. **Play from Camera** and **Play Selected Area** remain available for focused testing.
 - **Advanced Bake**: Bake Selected/Changed, dry run, mesh, LOD, lightmap, navmesh, face material, preview, collision, chunking, occluder, and connector controls are collapsed until needed.
 - **Actions**: Create Starter, Create Empty/Create Floor, Apply/Clear/Commit/Restore Cuts, and Clear Brushes.
-- **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` over the middle of the level, on the top of the floor there, at the height Validate Spawn checks for: 0.1 for the feet plus the `height_offset` default of one metre. Under a ceiling too low for that, such as a standard 3 metre room, it takes the most height offset that still leaves the player room, written into its own **Height Offset**, rather than going out onto the roof), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
+- **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` over the middle of the level, or the nearest place with floor when the middle has none, on the top of the floor there, at the height Validate Spawn checks for: 0.1 for the feet plus the `height_offset` default of one metre. Under a ceiling too low for that, such as a standard 3 metre room, it takes the most height offset that still leaves the player room, written into its own **Height Offset**, rather than going out onto the roof), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
 - **File**: Save/Load .hflevel, **Compare With...** (what changed since another `.hflevel`; see [Compare](#compare)), Import/Export .map (Classic Quake / Valve 220), Export .glb, and **Export Plan...**. A `.map` or `.glb` export, and a prefab saved from the selection, says in the Console what it left out, such as "left out 2 cordons, paint on 14 faces"; [What Each Format Keeps](HammerForge_Data_Portability.md#what-each-format-keeps) is the whole table ([#1706](https://github.com/saworbit/hammerforge/issues/1706)). **Export Plan...** which writes a top down plan of the level as an `.svg` and a `.png` beside it: solid brushes filled, cut brushes hatched, entities by kind, I/O wires (a brush entity's from the middle of its brushes, once), cordons dashed, a scale bar and an arrow to -Z the same share of the picture on any size of level, drawn from the brushes so it needs no window ([#1705](https://github.com/saworbit/hammerforge/issues/1705)). For one floor of several, or for CI, `godot --headless -s res://tools/export_plan.gd --path . -- level.hflevel plans/upper --y-min=3 --y-max=6` writes the same plan for a height band; a brush that only touches the band, as the walls below end on the floor above, is left out of it.
 - **Presets**: Save/rename presets grid. Presets are saved in `res://hammerforge_presets/`, so replacing the addon folder on an upgrade keeps them.
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
@@ -1633,7 +1637,7 @@ The Test tab shows an estimated bake time: the last bake's time divided by the b
 
 **Test tab → Spawn section**:
 - **Validate Spawn** -- triggers a bake, then runs validation against real collision geometry and shows debug overlay (green/red capsule, floor ray, ceiling ray) for 10 seconds.
-- **Create Default Spawn** -- places a `player_start` over the middle of the level, standing on the floor under it, if none exists. Fully undoable and redoable.
+- **Create Default Spawn** -- places a `player_start` over the middle of the level, standing on the floor under it, or at the nearest place with floor when the middle has none ([#2033](https://github.com/saworbit/hammerforge/issues/2033)), if none exists. Fully undoable and redoable.
 - **Preview Spawn Debug** -- triggers a bake, then shows persistent overlay toggle (stays visible until unchecked).
 
 ### Toast Notifications
@@ -1881,7 +1885,7 @@ HammerForge supports five snap modes that can be combined:
 | **Edge** | E | Snap to the midpoint of an existing brush's edge |
 | **Perpendicular** | P | Snap to the closest perpendicular projection on a brush's edge |
 
-A brush of more than 64 faces snaps to the corners and edges of its box instead.
+A brush of more than 64 faces snaps to the corners and edges of its box instead. A hidden brush is no target for any of them, so a snap never lands on a wall you cannot see ([#1963](https://github.com/saworbit/hammerforge/issues/1963)).
 
 Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row in the Build tab. The toggles are kept with your preferences and every level you open snaps with them. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 0.1 m) determines how close you need to be to a geometry candidate for it to take effect.
 
