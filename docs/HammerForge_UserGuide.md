@@ -1233,9 +1233,10 @@ Array, a small **Adjust** panel in the bottom right corner of the viewport shows
 the settings the command ran with. Change one and the command's step is undone
 and made again with the new value, so the history still holds one step for it and
 one Ctrl+Z gives back what was there before the command. A value the command
-refuses, such as walls too thick for the room or an array past 256 brushes, is
-asked about first: the step stays as it was, the panel goes back to its value and
-a message says why ([#1995](https://github.com/saworbit/hammerforge/issues/1995)). Held arrow keys or
+refuses, such as walls too thick for the room, an array past 256 brushes or a
+Replace Material scope with nothing in it, is asked about first: the step stays as
+it was, the panel goes back to its value and a message says why
+([#1995](https://github.com/saworbit/hammerforge/issues/1995), [#2036](https://github.com/saworbit/hammerforge/issues/2036)). Held arrow keys or
 repeated R presses that make one step show their total. **Save** keeps the
 settings under a name, and the list beside it puts a saved set back on the last
 step. The names are kept with your preferences, by command.

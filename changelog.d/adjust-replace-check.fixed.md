@@ -1,0 +1,1 @@
+- Adjust Last refuses a Replace Material scope that finds nothing, and keeps the replace. (issue [#2036](https://github.com/saworbit/hammerforge/issues/2036))
