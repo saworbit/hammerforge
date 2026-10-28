@@ -866,7 +866,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press **Escape**; confirm all rulers are cleared.
 - Draw a ruler between the corners of two walls and press **K**. Confirm the dimension stays after the Measure tool is left, drawn as a line with a tick at each end and its length at the middle (#1699).
 - Move one wall. Confirm the dimension follows it, with no undo step of its own. Set its Check to **At least player width** in Entity Properties and narrow the gap below the player's width. Confirm it turns red and Validate names it.
-- Clip away the corner one end is on. Confirm that end comes loose and the dimension is drawn amber.
+- Clip the wall one end is on, keeping both sides. Confirm the end stays on its corner (#2003). Undo, clip again keeping only the side away from the corner, and confirm that end comes loose and the dimension is drawn amber.
 
 ### 22. Undo History Browser
 - Open **Test → History** section.

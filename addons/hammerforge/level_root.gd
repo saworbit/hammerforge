@@ -4194,10 +4194,12 @@ func export_playtest_scene(
 				dup.transform = child.global_transform
 				_own_tree(dup, scene_root)
 
-	# Copy entities (spawn points, lights, etc.). A note stays in the editor (#1700).
+	# Copy entities (spawn points, lights, etc.). A note stays in the editor (#1700),
+	# and so does an entity in a visgroup left out of the bake, as the .map leaves it
+	# out (#1980).
 	if entities_node:
 		for child in entities_node.get_children():
-			if child is Node3D and not HFNotes.is_editor_only(self, child):
+			if child is Node3D and not _stays_in_the_editor(child):
 				var built := _playtest_node_for_entity(child as Node3D)
 				var dup: Node = built if built else child.duplicate()
 				if built == null and child is DraftEntity:
@@ -4283,7 +4285,22 @@ func export_playtest_scene(
 		push_error("HammerForge: Failed to save playtest scene: %s" % error_string(err))
 		return false
 
+	# Said as the .map and .glb exports say it. The bake left the brushes out (#1980).
+	var left_out: int = visgroup_system.left_out_count() if visgroup_system else 0
+	if left_out > 0:
+		var export_name := "Playtest" if include_debug_rig else "Game scene"
+		user_message.emit(
+			"%s export left out %d in visgroups kept out of the bake" % [export_name, left_out], 0
+		)
 	return true
+
+
+## A note, and an entity in a visgroup left out of the bake: neither goes into a
+## scene that runs (#1700, #1980).
+func _stays_in_the_editor(entity: Node) -> bool:
+	if HFNotes.is_editor_only(self, entity):
+		return true
+	return visgroup_system != null and visgroup_system.is_left_out_of_bake(entity)
 
 
 ## Build the node an entity definition names, or null to ship the editor's marker.
@@ -5395,10 +5412,12 @@ func _run_entities_as_nodes() -> void:
 	for child in entities_node.get_children():
 		if not (child is Node3D):
 			continue
-		# A note has no place in a running game (#1700).
-		if HFNotes.is_editor_only(self, child):
+		# A note has no place in a running game (#1700), nor a left out visgroup's
+		# entity (#1980). The dispatcher may hold one, so it wires again.
+		if _stays_in_the_editor(child):
 			entities_node.remove_child(child)
 			child.free()
+			swapped = true
 			continue
 		var built := _playtest_node_for_entity(child as Node3D)
 		if built == null:

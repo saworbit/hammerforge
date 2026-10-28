@@ -2099,7 +2099,7 @@ const COMMANDS := [
 		{
 			"form": "cycle_variant",
 			"description":
-			"Switch a placed prefab to its next variant, rebuilding its pieces. Name any one piece of it, a brush or an entity; hf_get_brushes and hf_get_entities give each piece's prefab. Refused for a prefab with one variant.",
+			"Switch a placed prefab to its next variant, rebuilding its pieces. Name any one piece of it, a brush or an entity; hf_get_brushes and hf_get_entities give each piece's prefab. Refused for a prefab with one variant, and with locked for a copy any piece of which is locked.",
 			"targets": {"min": 1, "max": 1, "entities": true},
 			"undo": "level"
 		},

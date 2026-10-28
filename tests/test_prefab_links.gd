@@ -137,6 +137,35 @@ func test_the_badge_counts_the_copies():
 	await rig.leave_level(level)
 
 
+## Clear Kept on a copy with a locked piece leaves the copy as it is, and the
+## history too. It recorded an empty "Clear Kept" step (#1977).
+func test_clear_kept_on_a_locked_copy_records_no_step():
+	var level = await rig.make_level()
+	var crate := _prefab(level, CRATE, Vector3(-30, 1, 0))
+	var iid := _place(level, crate, CRATE, Vector3(0, 1, 0))
+	var pieces: Array = level.prefab_system.pieces_of(level.prefab_system.get_instance(iid))
+	var lamp: Node3D = null
+	for piece in pieces:
+		if level.is_entity_node(piece):
+			lamp = piece
+	assert_not_null(lamp, "fixture: the copy's lamp")
+	assert_true(level.set_prefab_wiring_kept(lamp, true), "fixture: its wiring is kept")
+	rig.select([lamp])
+	await rig.frame()
+	level.create_visgroup("Done")
+	level.add_selection_to_visgroup("Done", [lamp])
+	level.visgroup_system.set_visgroup_locked("Done", true)
+	var steps: int = rig.undo().step_count()
+	HFDockEntityHandler.on_entity_clear_kept(rig.plugin.dock, lamp)
+	assert_eq(rig.undo().step_count(), steps, "no step")
+	assert_true(level.prefab_system.kept_of(lamp).get("wiring", false), "the wiring is still kept")
+	level.visgroup_system.set_visgroup_locked("Done", false)
+	HFDockEntityHandler.on_entity_clear_kept(rig.plugin.dock, lamp)
+	assert_eq(rig.undo().step_count(), steps + 1, "unlocked, Clear Kept is one step")
+	rig.select([])
+	await rig.leave_level(level)
+
+
 func test_ctrl_d_of_a_whole_copy_makes_another_linked_copy_when_asked():
 	var level = await rig.make_level()
 	var crate := _prefab(level, CRATE, Vector3(-30, 1, 0))

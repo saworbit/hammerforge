@@ -280,6 +280,45 @@ func test_parse_map_text_worldspawn_and_point_entity():
 	assert_eq(str(entities[0]["properties"]["origin"]), "32 32 8")
 
 
+## Copy writes a `worldspawn` with no brushes for a selection of entities alone,
+## and a paste of it made an entity called worldspawn beside them.
+func test_a_worldspawn_with_no_brushes_is_no_entity():
+	var map_text := (
+		'{\n"classname" "worldspawn"\n"wad" "base.wad"\n}\n'
+		+ '{\n"classname" "light"\n"origin" "32 32 8"\n}\n'
+	)
+	var parsed: Dictionary = MapIO.parse_map_text(map_text)
+	var classes: Array = (parsed["entities"] as Array).map(func(e): return e["classname"])
+	assert_eq(classes, ["light"])
+	assert_eq(str(parsed["worldspawn"].get("wad", "")), "base.wad", "its keys still read")
+
+
+## A brush entity's output lines are its wires, not its properties as well. The
+## property copy went out again beside the wire, aimed where it was before a
+## paste renamed its target (#1994).
+func test_a_brush_entitys_output_lines_are_wires_only():
+	var map_text := (
+		'{\n"classname" "worldspawn"\n}\n'
+		+ '{\n"classname" "func_button"\n"targetname" "btn"\n"wait" "2"\n'
+		+ '"OnPressed" "gate,Open,,0,-1"\n'
+		+ "{\n"
+		+ "( -32 -32 0 ) ( -32 32 0 ) ( 32 32 0 ) btn 0 0 0 1 1\n"
+		+ "( -32 -32 64 ) ( 32 -32 64 ) ( 32 32 64 ) btn 0 0 0 1 1\n"
+		+ "( -32 -32 0 ) ( 32 -32 0 ) ( 32 -32 64 ) btn 0 0 0 1 1\n"
+		+ "( -32 32 0 ) ( -32 32 64 ) ( 32 32 64 ) btn 0 0 0 1 1\n"
+		+ "( -32 -32 0 ) ( -32 -32 64 ) ( -32 32 64 ) btn 0 0 0 1 1\n"
+		+ "( 32 -32 0 ) ( 32 32 0 ) ( 32 32 64 ) btn 0 0 0 1 1\n"
+		+ "}\n}\n"
+	)
+	var parsed: Dictionary = MapIO.parse_map_text(map_text)
+	assert_eq((parsed["brushes"] as Array).size(), 1, "fixture: the button's brush")
+	if (parsed["brushes"] as Array).size() != 1:
+		return
+	var info: Dictionary = parsed["brushes"][0]
+	assert_eq((info.get("entity_io_outputs", []) as Array).size(), 1, "one wire")
+	assert_eq(info.get("brush_entity_data", {}), {"wait": "2"}, "and its properties, no wire")
+
+
 func test_entity_export_includes_entity_data_keys():
 	var entity = DraftEntity.new()
 	add_child_autoqfree(entity)
