@@ -45,6 +45,7 @@ const FaceData = preload("face_data.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
 const HFVisgroupSystem = preload("systems/hf_visgroup_system.gd")
 const HFDisplacementData = preload("displacement_data.gd")
+const HFBakeSplit = preload("hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -320,6 +321,7 @@ static func _brush_changes(
 	if not wires.is_empty():
 		lines.append(wires["line"])
 	lines.append_array(_membership_changes(old, now))
+	lines.append_array(_bake_changes(old, now))
 	var old_faces: Array = old.get("faces", [])
 	var new_faces: Array = now.get("faces", [])
 	var faces_changed := 0
@@ -340,6 +342,89 @@ static func _brush_changes(
 			for line in said:
 				lines.append("face %s: %s" % [face_name, line])
 	return {"lines": lines, "faces": faces_changed, "wires": int(wires.get("count", 0))}
+
+
+## What a brush's record carries for the bake as a whole, as changes: its own
+## Cast Shadows and Lightmap Scale (`HFBakeSplit.fields()`) and the material it
+## wears whole. A bake reads all three, and Compare said "No changes" (#2023).
+static func _bake_changes(old: Dictionary, now: Dictionary) -> PackedStringArray:
+	var lines: PackedStringArray = []
+	var old_cast := _cast_shadow_text(old)
+	var new_cast := _cast_shadow_text(now)
+	if old_cast != new_cast:
+		lines.append("cast shadows changed from %s to %s" % [old_cast, new_cast])
+	var old_scale := _lightmap_scale_of(old)
+	var new_scale := _lightmap_scale_of(now)
+	if not is_equal_approx(old_scale, new_scale):
+		lines.append(
+			(
+				"lightmap scale changed from %s to %s"
+				% [_scale_text(old_scale), _scale_text(new_scale)]
+			)
+		)
+	var old_material: Variant = old.get("material")
+	var new_material: Variant = now.get("material")
+	if _material_key(old_material) != _material_key(new_material):
+		lines.append(
+			(
+				"material changed from %s to %s"
+				% [_whole_material_text(old_material), _whole_material_text(new_material)]
+			)
+		)
+	return lines
+
+
+## A brush record's own Cast Shadows by name, lower case: "level default" when it
+## leaves the choice to its visgroups and the level.
+static func _cast_shadow_text(record: Dictionary) -> String:
+	var value: Variant = record.get(HFBakeSplit.CAST_SHADOW_META, HFBakeSplit.LEVEL_DEFAULT)
+	var held := int(value) if HFBakeSplit.is_cast_shadow(value) else HFBakeSplit.LEVEL_DEFAULT
+	return HFBakeSplit.cast_shadow_name(held).to_lower()
+
+
+## A Lightmap Scale as the dock shows it: 4, 0.5 or 0.125, not rounded to
+## hundredths as `_number()` rounds a distance.
+static func _scale_text(value: float) -> String:
+	if is_equal_approx(value, roundf(value)):
+		return str(int(roundf(value)))
+	return str(snappedf(value, 0.001))
+
+
+static func _lightmap_scale_of(record: Dictionary) -> float:
+	var value: Variant = record.get(
+		HFBakeSplit.LIGHTMAP_SCALE_META, HFBakeSplit.DEFAULT_LIGHTMAP_SCALE
+	)
+	if not (value is float or value is int) or not is_finite(float(value)):
+		return HFBakeSplit.DEFAULT_LIGHTMAP_SCALE
+	return float(value)
+
+
+## What tells a brush's whole material from another, live or as the file writes
+## it: its path, or for one with no file its class and name, which is all the file
+## keeps of it, so a level reads the same against its own save.
+static func _material_key(value: Variant) -> String:
+	if value == null:
+		return ""
+	if value is Resource:
+		var resource := value as Resource
+		if resource.resource_path != "":
+			return resource.resource_path
+		return "%s:%s" % [resource.get_class(), resource.resource_name]
+	if value is Dictionary:
+		var record := value as Dictionary
+		var path := str(record.get("path", ""))
+		if path != "":
+			return path
+		return "%s:%s" % [record.get("class", ""), record.get("name", "")]
+	return str(value)
+
+
+## A brush's whole material by name, or "none".
+static func _whole_material_text(value: Variant) -> String:
+	if value == null:
+		return "none"
+	var named := _name_of_material(value)
+	return named if named != "" else "a material of its own"
 
 
 ## What changed on one face. `palettes` is the two levels' materials and
@@ -460,23 +545,29 @@ static func _corners_turned_to(old: Dictionary, now: Dictionary) -> Dictionary:
 static func material_name(palette: Array, face: Dictionary) -> String:
 	var index := int(face.get("material_idx", -1))
 	if index >= 0 and index < palette.size():
-		var entry = palette[index]
-		if entry is Resource:
-			var resource := entry as Resource
-			if resource.resource_name != "":
-				return resource.resource_name
-			if resource.resource_path != "":
-				return resource.resource_path.get_file().get_basename()
-		elif entry is Dictionary:
-			var path := str((entry as Dictionary).get("path", ""))
-			if path != "":
-				return path.get_file().get_basename()
-			return str((entry as Dictionary).get("name", "slot %d" % index))
-		elif entry is String and str(entry) != "":
-			return str(entry).get_file().get_basename()
-		return "slot %d" % index
+		var named := _name_of_material(palette[index])
+		return named if named != "" else "slot %d" % index
 	var texture := str(face.get("map_texture", ""))
 	return texture if texture != "" else "none"
+
+
+## A material by name, as a palette slot or a brush's whole material is held, live
+## or as the file writes it: its resource name or file name, or "".
+static func _name_of_material(entry: Variant) -> String:
+	if entry is Resource:
+		var resource := entry as Resource
+		if resource.resource_name != "":
+			return resource.resource_name
+		if resource.resource_path != "":
+			return resource.resource_path.get_file().get_basename()
+	elif entry is Dictionary:
+		var path := str((entry as Dictionary).get("path", ""))
+		if path != "":
+			return path.get_file().get_basename()
+		return str((entry as Dictionary).get("name", ""))
+	elif entry is String:
+		return str(entry).get_file().get_basename()
+	return ""
 
 
 ## A face by the way it faces: "+x", "top", "bottom", or its number when it

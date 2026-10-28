@@ -1,0 +1,2 @@
+- Hull of Selection makes one closed brush from turned brushes kilometres out. (issue [#1971](https://github.com/saworbit/hammerforge/issues/1971))
+- Hull of Selection on two spheres takes a fifth of a second, not eleven. (issue [#1999](https://github.com/saworbit/hammerforge/issues/1999))
