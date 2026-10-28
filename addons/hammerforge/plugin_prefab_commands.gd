@@ -15,6 +15,7 @@ const HFPrefabSystem = preload("systems/hf_prefab_system.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("hf_translation.gd")
 
 # ---------------------------------------------------------------------------
 # Commands
@@ -41,7 +42,12 @@ static func quick_save(plugin: Object, root: Node, linked: bool) -> void:
 		return
 	_refresh_prefab_library(plugin)
 	if plugin.dock:
-		plugin.dock.show_toast("Saved prefab: %s%s" % [suggested, " (linked)" if linked else ""], 0)
+		var said := (
+			HFTranslationType.t("Saved prefab: {name} (linked)")
+			if linked
+			else HFTranslationType.t("Saved prefab: {name}")
+		)
+		plugin.dock.show_toast(said.format({"name": suggested}), 0)
 
 
 ## Save the brushes and entities among `nodes` as the prefab `prefab_name`, and
@@ -76,7 +82,8 @@ static func cycle_variant(plugin: Object, root: Node) -> void:
 	if new_variant == "":
 		return
 	if plugin.dock:
-		plugin.dock.show_toast("Variant: %s" % new_variant, 0)
+		var said := HFTranslationType.t("Variant: {variant}")
+		plugin.dock.show_toast(said.format({"variant": new_variant}), 0)
 	_commit_state_change(plugin, root, "Cycle Prefab Variant", before_state)
 	plugin._update_hud_context()
 
@@ -106,9 +113,10 @@ static func propagate(plugin: Object, root: Node) -> void:
 			plugin.dock.show_toast("No linked instances to propagate", 1)
 		return
 	if plugin.dock:
-		plugin.dock.show_toast(
-			"Propagated to %d linked instance%s" % [count, "" if count == 1 else "s"], 0
+		var said := HFTranslationType.tn(
+			"Propagated to {count} linked instance", "Propagated to {count} linked instances", count
 		)
+		plugin.dock.show_toast(said.format({"count": count}), 0)
 	_commit_state_change(plugin, root, "Propagate Prefab", before_state)
 
 

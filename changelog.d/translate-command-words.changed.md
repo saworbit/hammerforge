@@ -1,0 +1,1 @@
+- Selection, Grow, Carve, Hull, Hide Faces, material and prefab messages go through the translation catalogs, and Carve asks "Carve 1 brush?". (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))
