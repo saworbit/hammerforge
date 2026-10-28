@@ -266,10 +266,10 @@ func _carve_result(root: Node3D, cutter_id: String, made, expected: float, label
 
 
 ## Two 1 x 1 x 1 boxes 3 apart, turned together about the first's foot: their hull
-## is a 4 x 1 x 1 box, six faces, closed. Hull carries the second box's corners
-## into the first's space through the two world transforms; 3 km out a float
-## carries a few ten-thousandths of rounding, more than the hull's ON_FACE of
-## 0.0001, and the faces it finds no longer close.
+## is a 4 x 1 x 1 box, six faces, closed. 3 km out a float's step is a few
+## ten-thousandths, more than the hull's ON_FACE of 0.0001. Hull carried the
+## second box's corners through the product of the two world transforms, which
+## added that much again, and the faces it found no longer closed (#1971).
 func _hull_far_and_turned() -> void:
 	var broken: Array = []
 	for c in [
@@ -286,7 +286,7 @@ func _hull_far_and_turned() -> void:
 		if c[1] != 0.0:
 			root.rotate_managed_nodes([_bid(a), _bid(b)], [], 1, c[1], at)
 		# Where the hull reads the second box: carried into the first's space.
-		var carried: Vector3 = (a.global_transform.affine_inverse() * b.global_transform).origin
+		var carried: Vector3 = root.carve_system._in_space_of(a, b).origin
 		var drift := carried.distance_to(Vector3(3, 0, 0))
 		var made = root.hull_brushes_by_ids([_bid(a), _bid(b)])
 		var line := ""
