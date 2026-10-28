@@ -125,3 +125,41 @@ func test_carving_a_hull_gives_pieces_a_restore_keeps():
 		kept.append(str(brush.brush_id))
 	kept.sort()
 	assert_eq(kept, ids, "a restore leaves none of the pieces out")
+
+
+func _shape(root: LevelRoot, brush_id: String, shape: int, size: Vector3, at: Vector3) -> Node:
+	return root.create_brush_from_info(
+		{"shape": shape, "size": size, "center": at, "brush_id": brush_id}
+	)
+
+
+## The hull walks from face to face (#1999). A capsule turned beside a cone has
+## corners a hair over 0.0001 off one plane and a hair under off another, and the
+## walk leaves a seam there that the search through every three corners closes,
+## so that search decides when the walk does not close.
+func test_a_turned_capsule_beside_a_cone_wraps_closed():
+	var root := _fresh_root()
+	_shape(root, "cone", root.BrushShape.CONE, Vector3(2, 2, 2), Vector3(0, 1, 0))
+	_shape(root, "capsule", root.BrushShape.CAPSULE, Vector3(1, 3, 1), Vector3(3, 0.5, 1.5))
+	root.rotate_managed_nodes(["capsule"], [], 1, 30.0, Vector3(3, 0, 1.5))
+	var made: HFOpResult = root.hull_brushes_by_ids(["cone", "capsule"])
+	assert_true(made.ok, made.message)
+	var brushes: Array = root._iter_managed_brush_nodes()
+	assert_eq(brushes.size(), 1, "one brush")
+	for hull in brushes:
+		assert_eq(_open_edges(hull.faces), 0, "every edge on two faces")
+
+
+## A sphere beside a box: the search through every three corners left a face out
+## here and the brush had seams open, which a restore drops (#1769). The walk
+## closes it.
+func test_a_sphere_beside_a_box_wraps_closed():
+	var root := _fresh_root()
+	_shape(root, "ball", root.BrushShape.SPHERE, Vector3(2, 2, 2), Vector3(0, 1, 0))
+	_shape(root, "crate", root.BrushShape.BOX, Vector3(1, 2, 3), Vector3(3, 0.5, 1.5))
+	var made: HFOpResult = root.hull_brushes_by_ids(["ball", "crate"])
+	assert_true(made.ok, made.message)
+	var brushes: Array = root._iter_managed_brush_nodes()
+	assert_eq(brushes.size(), 1, "one brush")
+	for hull in brushes:
+		assert_eq(_open_edges(hull.faces), 0, "every edge on two faces")

@@ -6,6 +6,7 @@ extends GutTest
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const HFHull = preload("res://addons/hammerforge/hf_hull.gd")
 const HFConvexClip = preload("res://addons/hammerforge/hf_convex_clip.gd")
+const HFSolidMeasure = preload("res://addons/hammerforge/hf_solid_measure.gd")
 
 var rig := PluginRig.new()
 var said: Array = []
@@ -213,3 +214,76 @@ func test_clicks_double_clicks_and_a_pull_place_the_points():
 		assert_true(box.size.is_equal_approx(Vector3(2, 2, 2)), str(box))
 	rig.plugin._hotkey_palette.action_invoked.emit("tool_draw")
 	await _leave(level)
+
+
+## A press on two default spheres took 11 s: the check, the preview, the check at
+## OK and the hull each tried every three of their 130 corners against every face
+## found so far (#1999). It walks from face to face now, and makes the same brush.
+func test_a_press_on_two_spheres_is_quick_and_makes_the_same_brush():
+	var level = await _enter()
+	var spheres: Array = []
+	for at in [Vector3(0, 1, 0), Vector3(4, 1, 0)]:
+		spheres.append(
+			level.create_brush_from_info(
+				{"shape": level.BrushShape.SPHERE, "size": Vector3(2, 2, 2), "center": at}
+			)
+		)
+	rig.select(spheres)
+	var started := Time.get_ticks_msec()
+	rig.plugin._hotkey_palette.action_invoked.emit("hull")
+	var dialogs: Array = rig.open_dialogs()
+	for dialog in dialogs:
+		dialog.get_ok_button().pressed.emit()
+	var took := Time.get_ticks_msec() - started
+	await rig.frame()
+	gut.p("Hull of Selection on two spheres: %d ms" % took)
+	assert_eq(dialogs.size(), 1, "the hull is asked about")
+	assert_lt(took, 2000, "the press, the preview and OK take %d ms" % took)
+	assert_eq(level.draft_brushes_node.get_child_count(), 1, "one brush")
+	var hull = level.draft_brushes_node.get_child(0)
+	assert_eq(hull.faces.size(), 144, "the faces the search through every three found")
+	assert_eq(HFSolidMeasure.open_edge_count(hull.faces), 0, "closed")
+	assert_almost_eq(HFSolidMeasure.volume(hull.faces), 16.1725, 0.001)
+	await _leave(level)
+
+
+## The walk finds the faces the search through every three found, in its order,
+## each on the plane it found.
+func test_the_walk_finds_what_the_search_through_every_three_found():
+	var sets := {}
+	var cylinders := PackedVector3Array()
+	for side in 16:
+		var turn := TAU * side / 16.0
+		for y in [0.0, 3.0]:
+			cylinders.append(Vector3(cos(turn) * 0.5, y, sin(turn) * 0.5))
+		for y in [0.0, 0.5]:
+			cylinders.append(Vector3(cos(turn), y, sin(turn) + 3.0))
+	sets["two cylinders"] = cylinders
+	var gem := PackedVector3Array()
+	var golden := (1.0 + sqrt(5.0)) / 2.0
+	for a in [-1.0, 1.0]:
+		for b in [-golden, golden]:
+			gem.append(Vector3(0, a, b))
+			gem.append(Vector3(a, b, 0))
+			gem.append(Vector3(b, 0, a))
+	for x in [2.5, 3.5]:
+		for y in [-0.5, 0.5]:
+			for z in [0.5, 1.5]:
+				gem.append(Vector3(x, y, z))
+	sets["an icosahedron and a box"] = gem
+	var slab := PackedVector3Array()
+	for x in [-2.0, 2.0]:
+		for y in [-0.5, 0.5]:
+			for z in [-2.0, 2.0]:
+				slab.append(Vector3(x, y, z))
+				slab.append(Vector3(x * 0.25, y + 1.0, z * 0.25))
+	sets["a block on a slab"] = slab
+	for label in sets:
+		var corners := HFHull._corners(HFHull.unique_points(sets[label]))
+		var walked: Array = HFHull._walk(corners, HFHull.ON_FACE)
+		var searched: Array = HFHull._every_three(corners, HFHull.ON_FACE)
+		assert_eq(walked.size(), searched.size(), label)
+		for i in mini(walked.size(), searched.size()):
+			assert_eq(walked[i].local_verts, searched[i].local_verts, "%s face %d" % [label, i])
+			assert_eq(walked[i].normal, searched[i].normal, "%s face %d" % [label, i])
+		assert_eq(HFSolidMeasure.open_edge_count(walked), 0, "%s closes" % label)

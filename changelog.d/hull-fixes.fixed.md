@@ -1,0 +1,1 @@
+- Hull of Selection on two spheres takes a fifth of a second, not eleven. (issue [#1999](https://github.com/saworbit/hammerforge/issues/1999))
