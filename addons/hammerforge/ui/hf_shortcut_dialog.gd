@@ -15,6 +15,7 @@ const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 @warning_ignore_start("shadowed_global_identifier")
 const HFCommandRegistry = preload("res://addons/hammerforge/hf_command_registry.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## A change was made, after the keymap was written.
 signal bindings_changed
@@ -230,12 +231,12 @@ func start_capture(action: String, slot: int) -> void:
 		return
 	_capture_action = action
 	_capture_slot = slot
-	_say(
-		(
-			"Press the new %s for %s. Escape stops."
-			% ["key" if slot == 0 else "second key", HFKeymapType.get_action_label(action)]
-		)
+	var press := (
+		HFTranslationType.t("Press the new key for {command}. Escape stops.")
+		if slot == 0
+		else HFTranslationType.t("Press the new second key for {command}. Escape stops.")
 	)
+	_say(press.format({"command": HFKeymapType.get_action_label(action)}))
 
 
 func is_capturing() -> bool:
@@ -294,15 +295,19 @@ func _ask_about_clash() -> void:
 		_clash_dialog.custom_action.connect(resolve_clash)
 	if not taken_ahead.is_empty():
 		_clash_dialog.dialog_text = (
-			"%s is taken by %s ahead of every binding. Choose another key."
-			% [chord_text, _labels(taken_ahead)]
+			HFTranslationType
+			. t("{chord} is taken by {commands} ahead of every binding. Choose another key.")
+			. format({"chord": chord_text, "commands": _labels(taken_ahead)})
 		)
 		_clash_dialog.get_ok_button().visible = false
 		_clash_dialog.get_cancel_button().text = "OK"
 	else:
 		_clash_dialog.dialog_text = (
-			"%s is already %s. Swap the keys, take it off %s, or leave it as it was."
-			% [chord_text, _labels(commands), _labels(commands)]
+			HFTranslationType
+			. t(
+				"{chord} is already {commands}. Swap the keys, take it off {commands}, or leave it as it was."
+			)
+			. format({"chord": chord_text, "commands": _labels(commands)})
 		)
 		_clash_dialog.get_ok_button().visible = true
 		_clash_dialog.get_ok_button().text = "Swap"
@@ -360,7 +365,8 @@ func _change(edit: Callable) -> void:
 	edit.call()
 	var err := _keymap.save_changes()
 	_refresh()
-	_say("Saved." if err == OK else "Not saved: %s" % error_string(err))
+	var failed := HFTranslationType.t("Not saved: {error}").format({"error": error_string(err)})
+	_say(HFTranslationType.t("Saved.") if err == OK else failed)
 	bindings_changed.emit()
 
 
@@ -393,7 +399,9 @@ func _on_file_chosen(path: String) -> void:
 ## Write the changed keys to `path`. OK, or why not.
 func export_keymap(path: String) -> int:
 	var err := _keymap.export_to(path)
-	_say("Exported to %s." % path if err == OK else "Not exported: %s" % error_string(err))
+	var exported := HFTranslationType.t("Exported to {file}.").format({"file": path})
+	var failed := HFTranslationType.t("Not exported: {error}").format({"error": error_string(err)})
+	_say(exported if err == OK else failed)
 	return err
 
 
@@ -401,7 +409,7 @@ func export_keymap(path: String) -> int:
 ## not a keymap.
 func import_keymap(path: String) -> bool:
 	if not _keymap.import_from(path):
-		_say("%s is not a keymap file." % path)
+		_say(HFTranslationType.t("{file} is not a keymap file.").format({"file": path}))
 		return false
 	# Taken already; this writes it and redraws.
 	_change(func(): pass)

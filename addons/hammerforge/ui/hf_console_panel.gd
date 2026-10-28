@@ -24,6 +24,7 @@ const HFConsoleControlsType = preload("hf_console_controls.gd")
 const HFConsoleLogViewType = preload("hf_console_log_view.gd")
 const HFEntityCensusType = preload("../hf_entity_census.gd")
 const HFCommandLineViewType = preload("hf_command_line_view.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 const LOCKUP_DARK := "res://addons/hammerforge/branding/hf_lockup_dark.svg"
 const LOCKUP_LIGHT := "res://addons/hammerforge/branding/hf_lockup_light.svg"
@@ -466,8 +467,11 @@ func show_compare(file_name: String, result: Dictionary) -> void:
 	if _compare_tree == null:
 		return
 	var rows: Array = result.get("rows", [])
-	_compare_label.text = (
-		"Against %s: %s" % [file_name, rows[0]["text"] if not rows.is_empty() else "No changes"]
+	var change: String = (
+		rows[0]["text"] if not rows.is_empty() else HFTranslationType.t("No changes")
+	)
+	_compare_label.text = HFTranslationType.t("Against {file}: {change}").format(
+		{"file": file_name, "change": change}
 	)
 	_compare_end.disabled = false
 	_compare_tree.clear()
@@ -740,7 +744,9 @@ func _render_summary(summary: Dictionary, ctx: Dictionary, deep: bool) -> void:
 	_scope_label.add_theme_color_override("font_color", HFThemeUtils.muted_text(_base_control))
 
 	if deep:
-		_checked_label.text = "Checked %s" % Time.get_time_string_from_system()
+		_checked_label.text = HFTranslationType.t("Checked {time}").format(
+			{"time": Time.get_time_string_from_system()}
+		)
 		_checked_label.add_theme_color_override(
 			"font_color", HFThemeUtils.muted_text(_base_control)
 		)

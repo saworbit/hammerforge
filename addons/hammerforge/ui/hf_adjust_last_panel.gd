@@ -9,6 +9,7 @@ extends PanelContainer
 ## `plugin_adjust_last.gd`, which undoes, runs again and keeps the names.
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## One setting of the shown command took `value`.
 signal setting_changed(key: String, value: Variant)
@@ -75,7 +76,7 @@ func show_command(
 	label: String, params: Array, values: Dictionary, preset_names: PackedStringArray
 ) -> void:
 	_filling = true
-	_title.text = "Adjust %s" % label
+	_title.text = HFTranslationType.t("Adjust {command}").format({"command": label})
 	for child in _fields.get_children():
 		_fields.remove_child(child)
 		child.queue_free()
