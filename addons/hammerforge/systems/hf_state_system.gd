@@ -831,6 +831,10 @@ func restore_state(state: Dictionary) -> void:
 		HFLog.warn("HFStateSystem: skipped %d entry this level could not use" % skipped)
 		if root.has_signal("user_message"):
 			root.user_message.emit("Skipped %d unreadable entry in this level" % skipped, 1)
+	# The paint layers went back above, and the Paint tab reads them only when
+	# told, as the layer commands tell it. An undo of Rename left the new name on
+	# its row, and of Height Scale the value typed in its spin (#2029, #2030).
+	root._emit_or_batch("paint_layer_changed", [root.paint_system.get_active_paint_layer_index()])
 	# Last, once the brushes it names are back. The dock's Surface Paint panel and
 	# selection count read the selection when told it changed, and an undo that
 	# put back another one said nothing, so they showed the one it replaced

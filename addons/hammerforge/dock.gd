@@ -2761,6 +2761,10 @@ func _sync_paint_layers_from_root() -> void:
 	if sig != paint_layers_signature:
 		paint_layers_signature = sig
 		_refresh_paint_layers()
+	else:
+		# An undo of Height Scale or of a terrain slot changes nothing a row says,
+		# and the controls showing the value went on showing the one typed (#2030).
+		_refresh_paint_layer_values()
 	_sync_region_settings_from_root()
 
 
@@ -5277,7 +5281,14 @@ func _refresh_paint_layers() -> void:
 		paint_layer_select.add_item(label, i)
 	if names.size() > 0:
 		paint_layer_select.select(clamp(active_index, 0, names.size() - 1))
+	_refresh_paint_layer_values()
+
+
+## What the Paint tab shows of the active layer: its terrain slots, its Height
+## Scale and its Layer Y.
+func _refresh_paint_layer_values() -> void:
 	_refresh_terrain_slots()
+	HFDockPaintHandler.refresh_layer_spins(self)
 
 
 func _refresh_materials_list(names: Array) -> void:
