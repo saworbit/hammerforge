@@ -156,7 +156,10 @@ Each call's timeout covers connecting, attaching, waiting to write and waiting
 for the answer, including a reconnect. Cancelling a call stops waiting; it does
 not roll back a change already sent to the editor. The server remembers that
 change's retry id for the same arguments on the same target. Undo, redo and bake
-still need an explicit `operation_id` for a retry.
+still need an explicit `operation_id` for a retry. When identical edits can
+interleave, give each intended edit its own explicit id and retain it for
+retries: a separate successful edit can clear an earlier automatic retry id
+([#2058](https://github.com/saworbit/hammerforge/issues/2058)).
 
 Malformed replies produce a bridge error and close the connection; a sent
 change's error includes its `operation_id` for recovery. The JSON codec accepts

@@ -1,3 +1,0 @@
-- Agent Bridge calls time out while connecting or waiting to write, and cancelled edits keep their retry id.
-- Agent Bridge retries stay on their original scene; delayed replies no longer attach to an older scene.
-- Agent Bridge reports malformed replies and discovery files cleanly and closes failed handshakes.

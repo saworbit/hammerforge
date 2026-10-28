@@ -425,7 +425,10 @@ waiting to write. Cancelling it stops the wait, but an edit already sent can
 still finish. Sending the same edit again uses the remembered retry id on the
 same scene; undo, redo and bake require an explicit `operation_id` for a retry.
 A reconnect keeps the original scene for an edit in flight. Delayed replies
-cannot replace the target from a newer status answer.
+cannot replace the target from a newer status answer. For identical edits that
+can interleave, assign an explicit `operation_id` to each intended edit and
+reuse it for its retries; a separate success can clear an earlier automatic
+retry id ([#2058](https://github.com/saworbit/hammerforge/issues/2058)).
 
 A malformed reply closes the connection and gives `bad_request` rather than
 leaving calls waiting for a timeout. An error after an edit was sent carries

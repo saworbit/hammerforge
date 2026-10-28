@@ -136,7 +136,9 @@ class Bridge:
         A change's response carries the `operation_id` it went with, made here
         when the caller gave none. Raises `BridgeError` when there is no response
         to return: the bridge is off, the token is wrong, the editor went away,
-        or it took too long.
+        or it took too long. The timeout covers attachment, connection, writes,
+        reconnect and response. Cancellation stops waiting, not an edit already
+        sent. Use explicit ids for identical edits that can interleave.
         """
         by_arguments = mutating and method not in NOT_RETRIED_BY_ARGUMENTS
         key = _change_key(method, params) if by_arguments else ""

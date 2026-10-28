@@ -299,6 +299,12 @@ target. An unsent change and a change on another target get fresh ids. Not for
 are, so a second undo gets a new id and undoes
 another step. A caller that means a retry passes the id the timeout gave.
 
+Known limit ([#2058](https://github.com/saworbit/hammerforge/issues/2058)): the
+automatic retry map holds one unanswered id per method and argument set. A
+successful separate operation with identical arguments currently clears that
+entry. Callers interleaving identical edits must assign a separate explicit id
+to each intended edit and retain it for retries.
+
 The dispatcher keeps the last 256 successful mutating responses keyed by
 `operation_id`, with a fingerprint of `{method, params, expect_target}`
 (`JSON.stringify(..., "", true).sha256_text()` on the parsed values, so
