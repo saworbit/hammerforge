@@ -786,6 +786,37 @@ func test_a_spawn_on_a_floor_in_the_cordon_is_fine_before_a_bake():
 	_assert_passes(sys.validate_spawn(spawn, 0), "the floor the bake is going to take")
 
 
+# ---------------------------------------------------------------------------
+# Before a bake the floor is read under the room's ceiling (#2046)
+#
+# With nothing baked the floor ray starts a full lift over the spawn, and the
+# brushes were read up to there, so in a standard room the ceiling's top was the
+# floor and a spawn on the real one was inside solid geometry and too low. The
+# Agent Bridge's hf_set_spawn validates without a bake.
+# ---------------------------------------------------------------------------
+
+
+func test_a_spawn_on_a_room_floor_is_fine_before_a_bake_as_after_one():
+	var block := _slab(3.0, Vector3(1400, 1.5, 0))
+	assert_true(root.hollow_brush_by_id(block.brush_id, 0.25).ok, "fixture: the room hollows")
+	var spawn: Node3D = sys.create_default_spawn()
+	assert_lt(spawn.global_position.y, 2.75, "fixture: the spawn is under the ceiling")
+	_assert_passes(sys.validate_spawn(spawn, 0), "before a bake")
+	assert_true(await root.bake(false, false), "fixture: the room bakes")
+	await wait_physics_frames(2)
+	_assert_passes(sys.validate_spawn(spawn, 0), "after a bake")
+
+
+func test_a_spawn_inside_a_block_is_still_buried_before_a_bake():
+	_slab(3.0, Vector3(1500, 1.5, 0))
+	var validation: Dictionary = sys.validate_spawn(_make_spawn(Vector3(1500, 1.1, 0)), 0)
+	assert_eq(int(validation.get("severity", -1)), HFSpawnSystemScript.Severity.ERROR)
+	assert_true(
+		HFSpawnSystemScript.IN_BRUSH_ISSUE in validation.get("issues", PackedStringArray()),
+		"said to be in the brush: %s" % [validation.get("issues")]
+	)
+
+
 # ===========================================================================
 # Debug visualisation tests
 # ===========================================================================
