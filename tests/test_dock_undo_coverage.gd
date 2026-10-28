@@ -521,17 +521,17 @@ func test_the_terrain_slot_controls_follow_an_undo_and_a_redo() -> void:
 	var root := _fresh_root()
 	var dock = _bound_dock(root)
 	var undo = dock.undo_redo
-	# Its steps start at 0.01, so it shows 1.0 as 1.01.
 	var slot_spin: SpinBox = dock.terrain_slot_scales[0]
-	slot_spin.value = 2.01
+	assert_almost_eq(slot_spin.value, 1.0, 0.0001, "the spin shows the default of 1, not 1.01")
+	slot_spin.value = 2.0
 	var slot_scale := func() -> float:
 		return float(root.paint_layers.get_active_layer().terrain_slot_uv_scales[0])
-	assert_almost_eq(slot_scale.call(), 2.01, 0.0001, "fixture: the slot spin sets the layer")
+	assert_almost_eq(slot_scale.call(), 2.0, 0.0001, "a typed 2 sets 2, not 2.01")
 	undo.press_undo()
 	assert_almost_eq(slot_scale.call(), 1.0, 0.0001, "fixture: the undo puts the scale back")
-	assert_almost_eq(slot_spin.value, 1.0, 0.02, "an undo of a slot scale")
+	assert_almost_eq(slot_spin.value, 1.0, 0.0001, "an undo of a slot scale")
 	undo.press_redo()
-	assert_almost_eq(slot_spin.value, 2.01, 0.0001, "and its redo")
+	assert_almost_eq(slot_spin.value, 2.0, 0.0001, "and its redo")
 
 	var slot_button: Button = dock.terrain_slot_buttons[1]
 	dock._terrain_slot_pick_index = 1
