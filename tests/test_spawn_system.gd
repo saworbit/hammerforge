@@ -197,6 +197,20 @@ func test_a_spawn_under_a_low_ceiling_is_not_inside_it():
 	assert_almost_eq(result.floor_hit.position.y, 0.0, 0.001, "the floor is the floor")
 
 
+func test_a_spawn_too_high_is_above_and_one_too_low_is_below():
+	# It took the size of the difference alone, so a spawn too low was said to be
+	# above as well, which points the mapper the wrong way (#2032).
+	var x := 1800.0
+	_slab(0.2, Vector3(x, -0.1, 0))
+	var standing := HFSpawnSystemScript.FEET_OFFSET + 1.0
+	var high: Dictionary = sys.validate_spawn(_make_spawn(Vector3(x, standing + 1.0, 0)), 0)
+	var low: Dictionary = sys.validate_spawn(_make_spawn(Vector3(x + 2, standing - 1.0, 0)), 0)
+	assert_eq(high.issues, PackedStringArray(["Spawn not on floor (1.00 units above)"]))
+	assert_eq(low.issues, PackedStringArray(["Spawn not on floor (1.00 units below)"]))
+	assert_almost_eq(high.suggested_position.y, standing, 0.001, "down onto the floor")
+	assert_almost_eq(low.suggested_position.y, standing, 0.001, "up onto the floor")
+
+
 func test_validate_spawn_in_tree_no_physics():
 	# Spawn is in the tree but no physics bodies exist = no floor.
 	# In headless mode without a physics world, the validator should detect

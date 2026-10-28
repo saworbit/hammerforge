@@ -173,9 +173,12 @@ func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 			result.severity = Severity.ERROR
 			result.valid = false
 		var floor_y: float = floor_hit.position.y + FEET_OFFSET + height_offset
-		var height_diff := absf(pos.y - floor_y)
-		if height_diff > 0.3:
-			result.issues.append("Spawn not on floor (%.2f units above)" % height_diff)
+		# Signed, so a spawn too low is said to be below. It took the size alone
+		# and called a low spawn above as well (#2032).
+		var height_diff := pos.y - floor_y
+		if absf(height_diff) > 0.3:
+			var side := "above" if height_diff > 0.0 else "below"
+			result.issues.append("Spawn not on floor (%.2f units %s)" % [absf(height_diff), side])
 			result.suggested_position.y = floor_y
 			if result.severity < Severity.WARNING:
 				result.severity = Severity.WARNING
