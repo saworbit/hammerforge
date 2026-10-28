@@ -9,9 +9,11 @@ extends RefCounted
 ## a point of its own, and are worked out from that whenever they are read. So a
 ## dimension follows a brush through a move, a turn and an undo with no step of
 ## its own. A resize moves a corner within the brush's own space, and the end
-## finds it again by the faces that meet there (#1898). An end whose brush has
+## finds it again by the faces that meet there (#1898). A Clip, Carve or Hollow
+## hands an end to the piece that keeps its corner (#2003), and a dimension copied
+## with the brushes it is on measures the copies (#2000). An end whose brush has
 ## gone, or whose corner a Clip has cut away, is detached: it reads where it was
-## last seen.
+## last seen, and its check is not judged (#2004).
 
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -70,10 +72,19 @@ static func dimensions(root: Node) -> Array:
 ## again after a resize has moved it (#1898); or a point of its own in the space
 ## of `space`, the dimension's transform.
 static func attach(root: Node, point: Vector3, space: Transform3D) -> Dictionary:
+	var best := _attached_on(root._iter_managed_brush_nodes(), point, RANKS.keys())
+	if not best.is_empty():
+		return best
+	return {"point": _array(space.affine_inverse() * point)}
+
+
+## The feature of one of `brushes` at `point` (world), of one of `kinds`, nearest
+## in rank first, held as `attach()` holds it; empty when none is there.
+static func _attached_on(brushes: Array, point: Vector3, kinds: Array) -> Dictionary:
 	var best := {}
 	var best_rank := 99
 	var best_brush: Node = null
-	for brush in root._iter_managed_brush_nodes():
+	for brush in brushes:
 		if not (brush is DraftBrush) or str(brush.brush_id) == "":
 			continue
 		var xform: Transform3D = (brush as Node3D).global_transform
@@ -81,6 +92,7 @@ static func attach(root: Node, point: Vector3, space: Transform3D) -> Dictionary
 			var rank := int(RANKS[feature[0]])
 			if (
 				rank < best_rank
+				and kinds.has(feature[0])
 				and (xform * (feature[1] as Vector3)).distance_to(point) <= ATTACH_REACH
 			):
 				best = {
@@ -90,13 +102,13 @@ static func attach(root: Node, point: Vector3, space: Transform3D) -> Dictionary
 				best_brush = brush
 		if best_rank == 0:
 			break
-	if not best.is_empty():
-		var normals: Array = []
-		for normal in _meeting(best_brush, best["kind"], _vector(best["local"])):
-			normals.append(_array(normal))
-		best["faces"] = normals
+	if best.is_empty():
 		return best
-	return {"point": _array(space.affine_inverse() * point)}
+	var normals: Array = []
+	for normal in _meeting(best_brush, best["kind"], _vector(best["local"])):
+		normals.append(_array(normal))
+	best["faces"] = normals
+	return best
 
 
 ## The normals of the faces of `brush` that meet at the `kind` feature at `local`:
@@ -235,8 +247,102 @@ static func resolve(root: Node, end: Dictionary, holder: Node3D) -> Dictionary:
 	return {"point": null, "attached": false}
 
 
+# ---------------------------------------------------------------------------
+# Copies and pieces
+# ---------------------------------------------------------------------------
+
+
+## Point the dimensions among `entity_infos` at the copies of the brushes their
+## ends are on, `copies` each old brush id to its copy's (#2000). An end on a brush
+## that was not copied stays on the original. Duplicate, Mirror Copy, the
+## clipboard and a prefab all copy a dimension with its brushes through here.
+static func follow_copies(entity_infos: Array, copies: Dictionary) -> void:
+	if copies.is_empty():
+		return
+	for info in entity_infos:
+		if not (info is Dictionary):
+			continue
+		if str(info.get("entity_type", info.get("entity_class", ""))) != CLASS:
+			continue
+		var data = info.get("properties")
+		if not (data is Dictionary):
+			continue
+		for key in [END_A, END_B]:
+			var end = data.get(key)
+			if end is Dictionary and copies.has(str(end.get("brush_id", ""))):
+				end["brush_id"] = copies[str(end["brush_id"])]
+
+
+## What a prefab or the clipboard calls the `index`th brush it holds, in place of
+## its id, for a dimension's end on it: the copy placed takes that brush's new id.
+static func piece_ref(index: int) -> String:
+	return "#%d" % index
+
+
+## The ends of `dimension` mirrored with it by a Flip (#2000): an end on a brush in
+## `brush_axes`, flipped in the same step, goes to the corner the mirror sent its
+## corner to, which is its place reflected through the local axis that brush was
+## folded on; a free end is reflected through `own_axis`, the dimension's. Mirror
+## Copy flips its copies so, and they measure the mirror image. An end on a brush
+## not flipped stays on its corner.
+static func mirror_ends(dimension: Node, own_axis: int, brush_axes: Dictionary) -> void:
+	var data: Dictionary = dimension.get("entity_data")
+	for key in [END_A, END_B]:
+		var end = data.get(key)
+		if not (end is Dictionary):
+			continue
+		if end.has("point"):
+			end["point"] = _reflected(end["point"], own_axis)
+			continue
+		var brush_id := str(end.get("brush_id", ""))
+		if not brush_axes.has(brush_id):
+			continue
+		var axis := int(brush_axes[brush_id])
+		end["local"] = _reflected(end.get("local"), axis)
+		if end.get("faces") is Array:
+			var normals: Array = []
+			for normal in end["faces"]:
+				normals.append(_reflected(normal, axis))
+			end["faces"] = normals
+
+
+## `value`, an `[x, y, z]`, with its `axis` component turned round.
+static func _reflected(value: Variant, axis: int) -> Variant:
+	var v = _vector(value)
+	if not (v is Vector3):
+		return value
+	var out: Vector3 = v
+	out[axis] = -out[axis]
+	return _array(out)
+
+
+## Hand each end on `old` to the first of `pieces` that still has its vertex, edge
+## middle or face centre where it is, as a Clip, Carve or Hollow replaces a brush
+## with pieces of it (#2003). Called with `old` still in the level. An end whose
+## feature is on no piece stays on `old`, and detaches when it goes.
+static func carry_to_pieces(root: Node, old: Node, pieces: Array) -> void:
+	var old_id := str(old.get("brush_id")) if old else ""
+	if old_id == "" or pieces.is_empty():
+		return
+	for dimension in dimensions(root):
+		var data: Dictionary = dimension.get("entity_data")
+		for key in [END_A, END_B]:
+			var end = data.get(key)
+			if not (end is Dictionary) or str(end.get("brush_id", "")) != old_id:
+				continue
+			var where := resolve(root, end, dimension as Node3D)
+			if not (where["point"] is Vector3):
+				continue
+			var kind := str(end.get("kind", "vertex"))
+			var moved := _attached_on(pieces, where["point"], [kind])
+			if not moved.is_empty():
+				data[key] = moved
+
+
 ## A dimension now: `{a, b, length, detached, check, needs, passes}`. A detached
-## end reads where it was last seen; `passes` is false when the check fails.
+## end reads where it was last seen; `passes` is false when the check fails. A
+## detached dimension passes: its length is not a measurement, so its check is
+## not judged, and Validate says it is detached instead (#2004).
 static func measure(root: Node, dimension: Node) -> Dictionary:
 	var data: Dictionary = dimension.get("entity_data")
 	var holder := dimension as Node3D
@@ -263,7 +369,7 @@ static func measure(root: Node, dimension: Node) -> Dictionary:
 		"detached": detached,
 		"check": check,
 		"needs": needs,
-		"passes": passes(check, length, needs),
+		"passes": detached or passes(check, length, needs),
 	}
 
 
@@ -310,6 +416,15 @@ static func failure_text(dimension: Node, measured: Dictionary) -> String:
 			String.num(float(measured["needs"]), 2),
 			what
 		]
+	)
+
+
+## "Dimension the doorway has an end that came loose from its brush, ...", for
+## Validate (#2004).
+static func detached_text(dimension: Node) -> String:
+	var title := str(dimension.get("entity_data").get("title", dimension.name))
+	return (
+		"Dimension %s has an end that came loose from its brush, so its check is not judged" % title
 	)
 
 

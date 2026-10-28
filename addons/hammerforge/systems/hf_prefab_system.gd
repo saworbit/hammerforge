@@ -19,6 +19,7 @@ const HFFileNames = preload("res://addons/hammerforge/hf_file_names.gd")
 const HFRebuildCarry = preload("res://addons/hammerforge/hf_rebuild_carry.gd")
 const HFFormatCensus = preload("res://addons/hammerforge/hf_format_census.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFDimensions = preload("res://addons/hammerforge/hf_dimensions.gd")
 
 var root: Node3D  # LevelRoot — untyped to avoid circular preload
 
@@ -447,12 +448,15 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 		root.begin_signal_batch()
 
 	var placed_brushes: Array = []
-	for info in brush_infos:
-		var placed: Dictionary = info.duplicate(true)
+	# What the prefab calls each brush to the id its copy is given (#2000).
+	var copies: Dictionary = {}
+	for i in brush_infos.size():
+		var placed: Dictionary = brush_infos[i].duplicate(true)
 		if placed.has("transform"):
 			placed["transform"] = frame * (placed["transform"] as Transform3D)
 		if root.brush_system.has_method("next_brush_id"):
 			placed["brush_id"] = root.brush_system.next_brush_id()
+			copies[HFDimensions.piece_ref(i)] = placed["brush_id"]
 		placed_brushes.append(placed)
 	var placed_entities: Array = []
 	for info in entity_infos:
@@ -460,6 +464,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 		if placed.has("transform"):
 			placed["transform"] = frame * (placed["transform"] as Transform3D)
 		placed_entities.append(placed)
+	HFDimensions.follow_copies(placed_entities, copies)
 	# The copy keeps the groups it is in, carried over by node name below. The
 	# names a prefab's own groups have in it are not this level's (#1897).
 	for placed in placed_brushes + placed_entities:
@@ -748,6 +753,28 @@ func _give_kept(rec: PrefabInstanceRecord, values: Dictionary) -> void:
 				holder.set_meta(
 					HFBrushEntity.OUTPUTS_META, (entry["wiring"] as Array).duplicate(true)
 				)
+
+
+## A copy's dimension's `data` with each end on a brush of the copy naming that
+## brush as the prefab does, by the place of its record in `source_brushes`, so an
+## end on its own brush is not a change (#2000). A brush is paired with its record
+## by piece, as the rest of the diff pairs them; after a Push dropped an earlier
+## piece, its place in the copy is not its record's place in the file (#1976).
+static func _ends_as_pieces(
+	rec: PrefabInstanceRecord, source_brushes: Array, data: Dictionary
+) -> Dictionary:
+	var place_of_piece: Dictionary = {}
+	for k in source_brushes.size():
+		if source_brushes[k] is Dictionary:
+			place_of_piece[HFPrefabType.piece_of(source_brushes[k], k)] = k
+	var pieces: Dictionary = {}
+	for i in rec.brush_ids.size():
+		var piece := _piece_at(rec.brush_pieces, i)
+		if place_of_piece.has(piece):
+			pieces[str(rec.brush_ids[i])] = HFDimensions.piece_ref(int(place_of_piece[piece]))
+	var as_info := {"entity_type": HFDimensions.CLASS, "properties": data.duplicate(true)}
+	HFDimensions.follow_copies([as_info], pieces)
+	return as_info["properties"]
 
 
 ## A point entity's properties, or a brush entity's.
@@ -1187,6 +1214,8 @@ func compute_instance_diff(instance_id: String) -> Array:
 			HFBrushEntity.DATA_META if brush else "properties", {}
 		)
 		var own_data := _entity_data_of(node)
+		if HFDimensions.is_dimension(node):
+			own_data = _ends_as_pieces(rec, source_brushes, own_data)
 		var props: Array = source_data.keys()
 		for prop_name in own_data:
 			if not props.has(prop_name):

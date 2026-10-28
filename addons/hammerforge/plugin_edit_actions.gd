@@ -20,6 +20,7 @@ const HFTransformSystem = preload("systems/hf_transform_system.gd")
 const HFViewAxes = preload("hf_view_axes.gd")
 const HFHiddenFaceSearch = preload("hf_hidden_face_search.gd")
 const HFTranslationType = preload("hf_translation.gd")
+const HFDimensions = preload("hf_dimensions.gd")
 ## The axes by index, as the settings Adjust Last shows name them.
 const AXES := ["x", "y", "z"]
 
@@ -320,11 +321,14 @@ static func duplicate_shift(root: Node) -> Vector3:
 static func duplicate_infos(plugin: Object, root: Node, nodes: Array, shift: Vector3) -> Array:
 	var brush_infos: Array = []
 	var entity_infos: Array = []
+	# Each brush's id to its copy's, for a dimension copied with it (#2000).
+	var copies: Dictionary = {}
 	for node in nodes:
 		if root.is_brush_node(node):
 			var info = root.build_duplicate_info(node, shift)
 			if not info.is_empty():
 				brush_infos.append(info)
+				copies[str(node.get("brush_id"))] = str(info.get("brush_id", ""))
 		elif root.is_entity_node(node):
 			var entity: Node = plugin._managed_entity_owner(root, node)
 			if entity:
@@ -336,6 +340,8 @@ static func duplicate_infos(plugin: Object, root: Node, nodes: Array, shift: Vec
 	# (#1161). Its wires are left as they are, as a point entity's are.
 	if not brush_infos.is_empty():
 		HFBrushEntity.fresh_identities(brush_infos, [], root.entity_system)
+	# A dimension copied with the walls it measures measures the copies (#2000).
+	HFDimensions.follow_copies(entity_infos, copies)
 	# A whole group copied is a new group of its own (#1723).
 	var groups: Dictionary = (
 		root.visgroup_system.regroup_copies(nodes, brush_infos, entity_infos)

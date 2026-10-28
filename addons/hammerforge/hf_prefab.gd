@@ -18,6 +18,7 @@ const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
 const HFSettingsFile = preload("res://addons/hammerforge/hf_settings_file.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFDimensions = preload("res://addons/hammerforge/hf_dimensions.gd")
 
 ## The record key that says which piece of the prefab a record is, so a placed
 ## copy pairs each of its pieces with the record it was placed from through a
@@ -109,6 +110,8 @@ static func capture_from_selection(
 			if not whole.has(str(record["parent"])):
 				record["parent"] = ""
 
+	# Each brush's id to what the prefab calls it, for a dimension on it (#2000).
+	var pieces: Dictionary = {}
 	# Capture brushes
 	for brush in brush_nodes:
 		var info: Dictionary = brush_system.get_brush_info_from_node(brush)
@@ -119,6 +122,7 @@ static func capture_from_selection(
 			var t: Transform3D = info["transform"]
 			t.origin -= centroid
 			info["transform"] = t
+		pieces[str(info.get("brush_id", ""))] = HFDimensions.piece_ref(prefab.brush_infos.size())
 		# Clear brush_id so new ones are assigned on instantiation
 		info.erase("brush_id")
 		# A group taken whole stays named, for the copy's own group to take its
@@ -150,6 +154,10 @@ static func capture_from_selection(
 		# Carried in the prefab, every copy placed from it would share one uid.
 		info.erase("prefab_entity_id")
 		prefab.entity_infos.append(info)
+	# A dimension's end on a brush it holds names that brush by its place in the
+	# prefab, so a copy placed measures its own brushes (#2000).
+	pieces.erase("")
+	HFDimensions.follow_copies(prefab.entity_infos, pieces)
 
 	prefab.material_slots = _record_material_slots(prefab.brush_infos, _palette_of(brush_system))
 	return prefab
@@ -307,6 +315,8 @@ func instantiate(
 	var slot_map: Dictionary = _resolve_material_slots(root)
 
 	var placed_brushes: Array = []
+	# What the prefab calls each brush to the id its copy is given (#2000).
+	var copies: Dictionary = {}
 	for i in b_infos.size():
 		var info = b_infos[i]
 		if not (info is Dictionary):
@@ -318,6 +328,7 @@ func instantiate(
 		# Assign new brush_id
 		if brush_system.has_method("next_brush_id"):
 			placed_info["brush_id"] = brush_system.next_brush_id()
+			copies[HFDimensions.piece_ref(i)] = placed_info["brush_id"]
 		placed_info[PIECE] = piece_of(info, i)
 		placed_brushes.append(placed_info)
 	var placed_entities: Array = []
@@ -330,6 +341,7 @@ func instantiate(
 			placed_info["transform"] = _placed(placed_info["transform"], placement_pos, turn)
 		placed_info[PIECE] = piece_of(info, i)
 		placed_entities.append(placed_info)
+	HFDimensions.follow_copies(placed_entities, copies)
 	# Each group it took whole is a group of its own, nested as it was (#1897). A
 	# paste back into the level it was copied from keeps the groups it took only
 	# part of, as Duplicate does.

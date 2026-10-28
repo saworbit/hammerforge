@@ -20,6 +20,7 @@ const HFUVWrap = preload("../hf_uv_wrap.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOverlayColors = preload("../hf_overlay_colors.gd")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
+const HFDimensions = preload("../hf_dimensions.gd")
 const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
 const ROLE_PENDING := "pending"
@@ -2967,6 +2968,8 @@ func _replace_brush_with_pieces(
 			created.append(piece)
 	if created.is_empty():
 		return _op_fail("%s: produced no geometry" % op_name)
+	# A dimension's end goes to the piece that keeps its corner (#2003).
+	HFDimensions.carry_to_pieces(root, _find_brush_by_id(brush_id), created)
 	delete_brush_by_id(brush_id)
 	# A piece of a face in a texture group is still that surface (#1437).
 	refit_texture_groups(created)
