@@ -278,6 +278,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Draw a box at a finer snap so it sits off the grid, and turn a second one 30 degrees. Select both and press **Ctrl+B**. Confirm each one's bounds' minimum corner lands on the grid with its size and turn kept, as one undo step, and that pressing it again records nothing. In vertex mode, Ctrl+B moves the selected vertices to the grid instead, and a snap that would dent the brush is refused with the reason (#1398).
 - Rest the pointer on a box's corner for half a second. Confirm a small plus marks it and dotted guides run from it along X, Y and Z. Start a draw near one of its guides across the room and confirm the point lands on the guide, marked with a bar, and the word beside the marker says how far along it is (#1692).
 - Mark a second point and place near where the two points' guides cross. Confirm the crossing wins, marked with an X. Rest on a marked point again and confirm it lets go; switch tool and confirm every guide goes.
+- With V, C and E on, hide one of two boxes and drag near its corner, centre and an edge's middle. Confirm no marker lands on the hidden box (#1963).
 
 ### 3. Guided Step Flow
 - Step 1: draw an additive room brush; confirm the tutorial advances.
@@ -380,6 +381,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Create two brushes, rotate one 90 degrees, then merge. Confirm the rotated brush's geometry is correctly oriented in the merged result.
 - Try merging a single brush; confirm an error toast appears ("Select at least 2 brushes").
 - Try merging a solid brush with a cut brush; confirm rejection ("all brushes must have the same operation type").
+- Put two touching boxes in a group and merge them. Confirm the merged brush is still in the group. Carve a doorway through a grouped wall and confirm both pieces stay in the group (#1975).
+- Draw two default spheres apart, select both and run **Hull of Selection**. Confirm the preview shows and the hull lands each within about a second, as one closed brush (#1999).
 
 ### 7c-2. Free Transform (Rotate, Flip, Reset)
 - Draw a box that is clearly not a cube (say 64 x 32 x 16) and select it.
@@ -403,6 +406,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Select a brush turned 30 degrees and press **Alt+G**. Type 2 in X, choose **Local** and press Enter. Confirm it moves 2 along its own X as one undo step. Press Alt+G then Enter again: it repeats. In vertex mode, offset a selected vertex the same way, and confirm an offset that would dent the brush is refused with the reason (#1441).
 - Press **Alt+P** and click a corner of another brush. Confirm a cross marks the point, Pivot reads **Pick**, and **R** and **Shift+M** turn and flip about it. Save and reload: the cross is still there. Press **Shift+Alt+P**: the cross goes and the pivot is the selection again. Arm Pick, then press Escape: nothing is picked (#1442).
 - Turn a box 90 degrees and stretch it with Godot's scale gizmo, then press **Apply Rotation and Scale** in the Transform row. Confirm nothing moves, the Inspector reads no rotation and a scale of 1, the size reads in metres, and it is still a box with handles. Do the same on a sphere stretched along X: it becomes an ellipsoid. On a box turned 30 degrees it becomes Custom and the toast says so. Each is one undo step (#1435).
+- Stand a 2 x 0.2 x 2 table top on four legs, select all five and lift them a metre. Press **Move to Floor**. Confirm they land as one piece with the top still on the legs (#1964).
 
 ### 7c-3. Array Layouts
 - Select a brush offset from the origin. In Selection Tools, set **Layout** to **Radial**.
@@ -662,6 +666,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Open **Test → Spawn** section.
 - Click **Validate Spawn**; confirm the debug overlay appears (capsule, floor ray, markers) for ~10 seconds.
 - Build an 8 x 4 x 8 block and cut a 6 x 3 x 6 room out of its middle with a cut brush. Delete every `player_start` and click **Test Level**. Confirm the player starts on the room's floor, not on the block's roof (#1008).
+- Build two rooms with a gap between them at the middle of the level. Delete every `player_start` and click **Test Level**. Confirm the player starts on a floor, not in the gap (#2033).
 - Check **Preview Spawn Debug**; confirm the overlay stays persistent.
 - Uncheck **Preview Spawn Debug**; confirm the overlay is cleaned up.
 - Place two `player_start` entities. Set `primary = true` on the second one via Entity Properties.
