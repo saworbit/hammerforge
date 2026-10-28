@@ -6074,8 +6074,31 @@ func _on_replace_material_requested(
 		"method": "replace_material",
 		"args": again,
 		"scope_ids": either.keys(),
+		"check": _replace_check.bind(again, found),
 	}
 	command_ran.emit("replace_material", settings, recipe)
+
+
+## Whether Replace Material made again with `settings` finds a face, asked before
+## Adjust Last undoes the step (#2036). After the undo, the faces the step changed,
+## `replaced`, wear the old material again, so they count where the new scope
+## reaches them, beside those that wore it all along. A scope that finds none
+## undid the replace and left an empty step in its place.
+static func _replace_check(
+	settings: Dictionary, level: Node, again: Callable, replaced: Dictionary
+) -> HFOpResult:
+	var args: Array = again.call(settings)
+	var from_index: int = args[0]
+	var scope: Dictionary = args[2]
+	for hits in level.faces_wearing_material(from_index, scope).values():
+		if not (hits as Array).is_empty():
+			return HFOpResult.success()
+	var wearing_new: Dictionary = level.faces_wearing_material(int(args[1]), scope)
+	for key in replaced:
+		for index in replaced[key]:
+			if (wearing_new.get(key, []) as Array).has(index):
+				return HFOpResult.success()
+	return HFOpResult.fail("Nothing to replace", "No face in that scope wears the material")
 
 
 ## A palette slot as the bridge names a material: by its name when no other slot
