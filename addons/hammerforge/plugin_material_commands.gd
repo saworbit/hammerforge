@@ -18,6 +18,7 @@ const FaceData = preload("face_data.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFMaterialBrowserType = preload("ui/hf_material_browser.gd")
+const HFTranslationType = preload("hf_translation.gd")
 
 
 ## Assign a material to one brush as an undoable action.
@@ -145,7 +146,7 @@ static func pick_face_material(plugin: Object, root: Node) -> void:
 	dock.remember_picked_look(face)
 	if dock.material_browser:
 		dock.material_browser.set_selected_index(mat_idx)
-	dock.show_toast("Picked material #%d" % mat_idx, 0)
+	dock.show_toast(HFTranslationType.t("Picked material #{index}").format({"index": mat_idx}), 0)
 
 
 ## Apply one of the context toolbar's material swatches.
@@ -174,12 +175,11 @@ static func apply_context_material(plugin: Object, mat_index: int) -> void:
 	# on three brushes took three Ctrl+Z to take back.
 	var painted := paint_brushes_with_undo(plugin, root, brushes, mat)
 	if painted > 0:
+		var said := HFTranslationType.tn(
+			"Applied {material} to {count} brush", "Applied {material} to {count} brushes", painted
+		)
 		dock.show_toast(
-			(
-				"Applied %s to %d brush%s"
-				% [MaterialManager.material_label(mat), painted, "" if painted == 1 else "es"]
-			),
-			0
+			said.format({"material": MaterialManager.material_label(mat), "count": painted}), 0
 		)
 
 
@@ -197,8 +197,9 @@ static func apply_favorite(plugin: Object, slot: int) -> void:
 		else []
 	)
 	if slot < 1 or slot > favourites.size():
-		dock.show_toast(
-			"Favorite %d is empty: star a material in Paint > Materials to fill it" % slot, 1
+		var empty := HFTranslationType.t(
+			"Favorite {slot} is empty: star a material in Paint > Materials to fill it"
 		)
+		dock.show_toast(empty.format({"slot": slot}), 1)
 		return
 	apply_context_material(plugin, int(favourites[slot - 1].get("index", -1)))

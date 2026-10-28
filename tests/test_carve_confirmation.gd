@@ -96,7 +96,7 @@ func test_a_carve_that_cuts_still_asks_and_carves():
 	HFPluginEditActions.carve_selected(plugin, root)
 	assert_eq(plugin.dialogs.size(), 1, "the carve is asked about")
 	if plugin.dialogs.size() == 1:
-		assert_string_contains(plugin.dialogs[0].dialog_text, "Carve 1 brush(es)?")
+		assert_string_contains(plugin.dialogs[0].dialog_text, "Carve 1 brush?")
 	_confirm_all()
 
 	assert_eq(plugin.history, ["Carve"], "one step")
@@ -114,7 +114,7 @@ func test_only_the_carvers_that_cut_are_asked_about_and_committed():
 	HFPluginEditActions.carve_selected(plugin, root)
 	assert_eq(plugin.dialogs.size(), 1)
 	if plugin.dialogs.size() == 1:
-		assert_string_contains(plugin.dialogs[0].dialog_text, "Carve 1 brush(es)?")
+		assert_string_contains(plugin.dialogs[0].dialog_text, "Carve 1 brush?")
 	_confirm_all()
 
 	assert_eq(plugin.history, ["Carve"], "a step for the carver that cut, none for the other")
@@ -137,7 +137,7 @@ func test_the_question_names_a_locked_brush_and_the_carve_leaves_it_whole():
 	HFPluginEditActions.carve_selected(plugin, root)
 	assert_eq(plugin.dialogs.size(), 1, "the carve is asked about")
 	if plugin.dialogs.size() == 1:
-		assert_string_contains(plugin.dialogs[0].dialog_text, "Carve 1 brush(es)?")
+		assert_string_contains(plugin.dialogs[0].dialog_text, "Carve 1 brush?")
 		assert_string_contains(
 			plugin.dialogs[0].dialog_text, "1 locked brush overlaps and is left alone."
 		)
@@ -162,7 +162,7 @@ func test_a_carver_an_earlier_one_cut_up_is_not_committed():
 	HFPluginEditActions.carve_selected(plugin, root)
 	assert_eq(plugin.dialogs.size(), 1)
 	if plugin.dialogs.size() == 1:
-		assert_string_contains(plugin.dialogs[0].dialog_text, "Carve 2 brush(es)?")
+		assert_string_contains(plugin.dialogs[0].dialog_text, "Carve 2 brushes?")
 	_confirm_all()
 
 	assert_null(root.brush_system.find_brush_by_id("second"), "the first carver cut the second up")

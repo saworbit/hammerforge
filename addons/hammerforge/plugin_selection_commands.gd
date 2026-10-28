@@ -60,9 +60,12 @@ static func apply_last_texture(plugin: Object, root: Node) -> void:
 	var face_count = plugin.dock._count_selected_faces()
 	if face_count > 0:
 		plugin.dock._on_face_assign_material()
-		plugin.dock.show_toast(
-			"Applied last texture to %d face%s" % [face_count, "" if face_count == 1 else "s"], 0
+		var applied := HFTranslationType.tn(
+			"Applied last texture to {count} face",
+			"Applied last texture to {count} faces",
+			face_count
 		)
+		plugin.dock.show_toast(applied.format({"count": face_count}), 0)
 		return
 	var applied_count := 0
 	var mat = (
@@ -79,13 +82,12 @@ static func apply_last_texture(plugin: Object, root: Node) -> void:
 		# brushes took three Ctrl+Z to take back (#1565).
 		applied_count = plugin._paint_brushes_with_undo(root, brushes, mat)
 	if applied_count > 0:
-		plugin.dock.show_toast(
-			(
-				"Applied last texture to %d brush%s"
-				% [applied_count, "" if applied_count == 1 else "es"]
-			),
-			0
+		var applied := HFTranslationType.tn(
+			"Applied last texture to {count} brush",
+			"Applied last texture to {count} brushes",
+			applied_count
 		)
+		plugin.dock.show_toast(applied.format({"count": applied_count}), 0)
 	else:
 		plugin.dock.show_toast("No brushes or faces selected", 1)
 
@@ -169,7 +171,8 @@ static func select_with_brush(plugin: Object, root: Node, action: String) -> voi
 	var dock = plugin.get("dock")
 	if nodes.size() != 1 or not root.is_brush_node(nodes[0]):
 		if dock:
-			dock.show_toast("%s: select the one brush to select with" % label, 1)
+			var ask := HFTranslationType.t("{command}: select the one brush to select with")
+			dock.show_toast(ask.format({"command": label}), 1)
 		return
 	var volume: Node3D = nodes[0]
 	var picked := HFSelectByVolume.pick(root, volume, WITH_BRUSH[action])
@@ -183,7 +186,8 @@ static func select_with_brush(plugin: Object, root: Node, action: String) -> voi
 		false,
 		Callable(plugin, "_record_history")
 	)
-	select_nodes(plugin, root, picked, "%s: %d selected" % [label, picked.size()])
+	var said := HFTranslationType.t("{command}: {count} selected")
+	select_nodes(plugin, root, picked, said.format({"command": label, "count": picked.size()}))
 
 
 ## Make `nodes` the selection, as Select All does, and say so. Select Linked
@@ -254,21 +258,23 @@ static func select_similar(plugin: Object, root: Node) -> void:
 static func select_similar_faces(plugin: Object, root: Node) -> void:
 	var keys := HFSimilarType.keys_for(plugin.get("_user_prefs"), "face")
 	if keys.is_empty():
-		_ask_for_keys(plugin, "faces")
+		_ask_for_keys(plugin, "face")
 		return
 	var face_sel := similar_face_selection(root, keys)
 	if face_sel.is_empty():
 		if plugin.dock:
-			plugin.dock.show_toast(
-				"No visible face matches the selected one on %s" % HFSimilarType.describe(keys), 1
-			)
+			var none := HFTranslationType.t("No visible face matches the selected one on {keys}")
+			plugin.dock.show_toast(none.format({"keys": HFSimilarType.describe(keys)}), 1)
 		return
 	var total := 0
 	for key in face_sel:
 		total += (face_sel[key] as Array).size()
 	apply_face_selection(plugin, root, face_sel)
 	if plugin.dock:
-		plugin.dock.show_toast("Selected %d similar face%s" % [total, "" if total == 1 else "s"], 0)
+		var said := HFTranslationType.tn(
+			"Selected {count} similar face", "Selected {count} similar faces", total
+		)
+		plugin.dock.show_toast(said.format({"count": total}), 0)
 
 
 ## The faces Similar Faces selects for the faces selected now, keyed the way
@@ -302,7 +308,7 @@ static func select_similar_nodes(plugin: Object, root: Node) -> void:
 	for kind in kinds:
 		var keys := HFSimilarType.keys_for(prefs, kind)
 		if keys.is_empty():
-			_ask_for_keys(plugin, "brushes" if kind == "brush" else "entities")
+			_ask_for_keys(plugin, kind)
 			return
 		for key in keys:
 			if not asked.has(key):
@@ -313,31 +319,48 @@ static func select_similar_nodes(plugin: Object, root: Node) -> void:
 			picked.append_array(
 				HFSimilarType.entities(root, seeds, keys, HFSimilarType.property_for(prefs))
 			)
-	var noun := _similar_noun(kinds, 2)
+	var kind: String = (
+		"object" if kinds.size() > 1 else ("entity" if kinds.has("entity") else "brush")
+	)
 	if picked.is_empty():
 		if plugin.dock:
-			plugin.dock.show_toast(
-				"No visible %s match on %s" % [noun, HFSimilarType.describe(asked)], 1
-			)
+			var none: String = {
+				"object": HFTranslationType.t("No visible objects match on {keys}"),
+				"entity": HFTranslationType.t("No visible entities match on {keys}"),
+				"brush": HFTranslationType.t("No visible brushes match on {keys}"),
+			}[kind]
+			plugin.dock.show_toast(none.format({"keys": HFSimilarType.describe(asked)}), 1)
 		return
 	plugin._apply_selection_list(picked, false)
 	if plugin.dock:
-		plugin.dock.show_toast(
-			"Selected %d similar %s" % [picked.size(), _similar_noun(kinds, picked.size())], 0
-		)
+		var count := picked.size()
+		var said: String = {
+			"object":
+			HFTranslationType.tn(
+				"Selected {count} similar object", "Selected {count} similar objects", count
+			),
+			"entity":
+			HFTranslationType.tn(
+				"Selected {count} similar entity", "Selected {count} similar entities", count
+			),
+			"brush":
+			HFTranslationType.tn(
+				"Selected {count} similar brush", "Selected {count} similar brushes", count
+			),
+		}[kind]
+		plugin.dock.show_toast(said.format({"count": count}), 0)
 
 
-static func _similar_noun(kinds: Array, count: int) -> String:
-	if kinds.size() > 1:
-		return "object" if count == 1 else "objects"
-	if kinds.has("entity"):
-		return "entity" if count == 1 else "entities"
-	return "brush" if count == 1 else "brushes"
-
-
-static func _ask_for_keys(plugin: Object, what: String) -> void:
+## Ask for the keys Select Similar matches `kind` on, "face", "brush" or "entity".
+static func _ask_for_keys(plugin: Object, kind: String) -> void:
 	if plugin.dock:
-		plugin.dock.show_toast("Tick what similar %s match on in Selection Filters" % what, 1)
+		var ask: String = {
+			"face": HFTranslationType.t("Tick what similar faces match on in Selection Filters"),
+			"brush": HFTranslationType.t("Tick what similar brushes match on in Selection Filters"),
+			"entity":
+			HFTranslationType.t("Tick what similar entities match on in Selection Filters"),
+		}[kind]
+		plugin.dock.show_toast(ask, 1)
 
 
 ## The brushes Similar Brushes selects for `selection`: every visible brush that
@@ -391,16 +414,30 @@ static func _grow_or_shrink(plugin: Object, root: Node, grow: bool) -> void:
 			plugin.dock.show_toast(str(result["message"]), 1)
 		return
 	var count := int(result.get("count", 0))
-	var what := "face" if result.has("faces") else "brush"
-	if result.has("faces"):
+	var faces := result.has("faces")
+	if faces:
 		apply_face_selection(plugin, root, result["faces"])
 	else:
 		plugin._apply_selection_list(result["nodes"], false)
 	if plugin.dock:
-		var plural := "" if count == 1 else ("es" if what == "brush" else "s")
-		plugin.dock.show_toast(
-			"%s %d %s%s" % ["Grow added" if grow else "Shrink dropped", count, what, plural], 0
-		)
+		var said := ""
+		if grow and faces:
+			said = HFTranslationType.tn(
+				"Grow added {count} face", "Grow added {count} faces", count
+			)
+		elif grow:
+			said = HFTranslationType.tn(
+				"Grow added {count} brush", "Grow added {count} brushes", count
+			)
+		elif faces:
+			said = HFTranslationType.tn(
+				"Shrink dropped {count} face", "Shrink dropped {count} faces", count
+			)
+		else:
+			said = HFTranslationType.tn(
+				"Shrink dropped {count} brush", "Shrink dropped {count} brushes", count
+			)
+		plugin.dock.show_toast(said.format({"count": count}), 0)
 
 
 ## What Grow (or Shrink, with `grow` false) makes of the selection: `faces`, the
@@ -522,8 +559,22 @@ static func narrow_selection(plugin: Object, root: Node, kind: String) -> void:
 		return
 	plugin._apply_selection_list(kept, false)
 	if plugin.dock:
-		var label := str(HFQuickSelectType.KIND_LABELS.get(kind, kind)).to_lower()
-		plugin.dock.show_toast("Kept the %d %s" % [kept.size(), label], 0)
+		var count := kept.size()
+		var said: String = (
+			{
+				"solid":
+				HFTranslationType.tn("Kept the {count} brush", "Kept the {count} brushes", count),
+				"cut": HFTranslationType.tn("Kept the {count} cut", "Kept the {count} cuts", count),
+				"brush_entity":
+				HFTranslationType.tn(
+					"Kept the {count} brush entity", "Kept the {count} brush entities", count
+				),
+				"entity":
+				HFTranslationType.tn("Kept the {count} entity", "Kept the {count} entities", count),
+			}
+			. get(kind, HFTranslationType.t("Kept {count}"))
+		)
+		plugin.dock.show_toast(said.format({"count": count}), 0)
 
 
 ## Selection Filters with the typed rule ready to type in (#1698).
@@ -544,15 +595,20 @@ static func on_filter_applied(plugin: Object, nodes: Array, faces: Dictionary) -
 		for key in faces.keys():
 			total += faces[key].size()
 		if plugin.dock:
-			plugin.dock.show_toast("Selected %d face%s" % [total, "" if total == 1 else "s"], 0)
+			var said := HFTranslationType.tn(
+				"Selected {count} face", "Selected {count} faces", total
+			)
+			plugin.dock.show_toast(said.format({"count": total}), 0)
 	elif not nodes.is_empty():
 		# Node-only filter — clear any stale face selection first
 		apply_face_selection(plugin, root, {})
 		plugin._apply_selection_list(nodes, false)
 		if plugin.dock:
-			plugin.dock.show_toast(
-				"Selected %d node%s" % [nodes.size(), "" if nodes.size() == 1 else "s"], 0
+			var count := nodes.size()
+			var said := HFTranslationType.tn(
+				"Selected {count} node", "Selected {count} nodes", count
 			)
+			plugin.dock.show_toast(said.format({"count": count}), 0)
 	else:
 		# Quick Select's Take Away took the last of the selection (#1698).
 		deselect_all(plugin, root)
