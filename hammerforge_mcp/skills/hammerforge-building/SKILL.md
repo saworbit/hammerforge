@@ -48,7 +48,8 @@ measured sizes.
 ## When something is wrong
 
 [Warning signs](reference/warning-signs.md) lists the answers that mean a plan
-went wrong, such as a cut that misses its wall or a spawn over nothing.
+went wrong, such as a cut that misses its wall, a spawn over nothing, or an edit
+left without an answer. It also explains safe retries and scene reattachment.
 
 ## A worked example
 

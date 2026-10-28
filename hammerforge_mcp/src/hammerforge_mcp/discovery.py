@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import sys
 from dataclasses import dataclass, field
@@ -51,19 +52,25 @@ def read_discovery(
         path = discovery_path(project)
     try:
         text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        raise DiscoveryError(f"The HammerForge bridge is off. {TURN_ON}") from None
-    try:
         data = json.loads(text)
         found = Discovery(
-            port=_int(data, "port"),
-            pid=_int(data, "pid"),
+            port=_int(data, "port", maximum=65535),
+            pid=_int(data, "pid", maximum=0x7FFFFFFF),
             token=_str(data, "token"),
             bridge_version=_int(data, "bridge_version"),
             project_path=_str(data, "project_path"),
             hammerforge_version=str(data.get("hammerforge_version", "")),
         )
-    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+    except FileNotFoundError:
+        raise DiscoveryError(f"The HammerForge bridge is off. {TURN_ON}") from None
+    except (
+        OSError,
+        UnicodeError,
+        KeyError,
+        TypeError,
+        ValueError,
+        RecursionError,
+    ) as exc:
         raise DiscoveryError(
             f"{path} could not be read ({exc}). Untick and tick the bridge "
             "in the Test tab to write it again."
@@ -76,13 +83,17 @@ def read_discovery(
     return found
 
 
-def _int(data: dict, key: str) -> int:
+def _int(data: dict, key: str, *, maximum: int = 0x7FFFFFFF) -> int:
     value = data[key]
     # Godot writes every number from parsed JSON as a float; these are its own.
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{key} is not a number")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"{key} is not finite")
     if value != int(value):
         raise ValueError(f"{key} is not a whole number")
+    if not 1 <= value <= maximum:
+        raise ValueError(f"{key} must be between 1 and {maximum}")
     return int(value)
 
 

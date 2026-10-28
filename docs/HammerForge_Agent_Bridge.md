@@ -420,6 +420,21 @@ you are most likely to meet:
 | `timeout` | No answer in time | The editor may still be working. The answer gives an `operation_id`; the same change sent with it returns the first answer instead of running twice |
 | `internal_error` | A script error in the editor | See the Output panel, and report it with a recording of the session (below) |
 
+A call's timeout covers the whole trip, including connecting, attaching and
+waiting to write. Cancelling it stops the wait, but an edit already sent can
+still finish. Sending the same edit again uses the remembered retry id on the
+same scene; undo, redo and bake require an explicit `operation_id` for a retry.
+A reconnect keeps the original scene for an edit in flight. Delayed replies
+cannot replace the target from a newer status answer. For identical edits that
+can interleave, assign an explicit `operation_id` to each intended edit and
+reuse it for its retries; a separate success can clear an earlier automatic
+retry id ([#2058](https://github.com/saworbit/hammerforge/issues/2058)).
+
+A malformed reply closes the connection and gives `bad_request` rather than
+leaving calls waiting for a timeout. An error after an edit was sent carries
+its `operation_id` so the same edit can be retried safely. Invalid or unreadable
+discovery files give instructions for turning the bridge off and on again.
+
 `hammerforge-mcp --check` is the quickest way to see whether the server can
 reach the editor at all. It connects beside a working agent, not in its place,
 and can only read status, so it is safe to run while an agent builds.

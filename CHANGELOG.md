@@ -55,6 +55,9 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Fixed
 
+- **29 Oct** Agent Bridge calls time out while connecting or waiting to write, and cancelled edits keep their retry id. (issue [#2056](https://github.com/saworbit/hammerforge/issues/2056), PR [#2057](https://github.com/saworbit/hammerforge/pull/2057))
+- **29 Oct** Agent Bridge retries stay on their original scene; delayed replies no longer attach to an older scene. (issue [#2056](https://github.com/saworbit/hammerforge/issues/2056), PR [#2057](https://github.com/saworbit/hammerforge/pull/2057))
+- **29 Oct** Agent Bridge reports malformed replies and discovery files cleanly and closes failed handshakes. (issue [#2056](https://github.com/saworbit/hammerforge/issues/2056), PR [#2057](https://github.com/saworbit/hammerforge/pull/2057))
 - **29 Oct** An undo or redo of a paint layer edit redraws the Paint tab's layer list. (issue [#2029](https://github.com/saworbit/hammerforge/issues/2029), PR [#2047](https://github.com/saworbit/hammerforge/pull/2047))
 - **29 Oct** Height Scale set before a heightmap survives an undo and a save, and the spins show the active layer's values. (issue [#2030](https://github.com/saworbit/hammerforge/issues/2030), PR [#2047](https://github.com/saworbit/hammerforge/pull/2047))
 - **29 Oct** Hull of Selection makes one closed brush from turned brushes kilometres out. (issue [#1971](https://github.com/saworbit/hammerforge/issues/1971), PR [#2048](https://github.com/saworbit/hammerforge/pull/2048))

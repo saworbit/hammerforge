@@ -148,7 +148,23 @@ get a new one every call, since a second undo is usually meant: after a timeout,
 pass the id it gave to retry.
 
 If the editor moves to another scene or level, the next change is refused with
-`target_changed`. Call `hf_get_status` to work on the new one.
+`target_changed`. Call `hf_get_status` to work on the new one. A reconnect keeps
+an in-flight change aimed at its original scene, even if a concurrent status
+call has attached elsewhere. Delayed replies do not replace a newer attachment.
+
+Each call's timeout covers connecting, attaching, waiting to write and waiting
+for the answer, including a reconnect. Cancelling a call stops waiting; it does
+not roll back a change already sent to the editor. The server remembers that
+change's retry id for the same arguments on the same target. Undo, redo and bake
+still need an explicit `operation_id` for a retry. When identical edits can
+interleave, give each intended edit its own explicit id and retain it for
+retries: a separate successful edit can clear an earlier automatic retry id
+([#2058](https://github.com/saworbit/hammerforge/issues/2058)).
+
+Malformed replies produce a bridge error and close the connection; a sent
+change's error includes its `operation_id` for recovery. The JSON codec accepts
+finite numbers and at most 64 nested objects or arrays. Invalid discovery data
+or an unreadable discovery file gives instructions for reconnecting.
 
 ## The building guide
 

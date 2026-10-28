@@ -162,7 +162,10 @@ restart changes port and token.
 
 Each frame is a 4-byte unsigned big-endian length, then that many bytes of UTF-8
 JSON holding one object. Limits: a request at most 1 MiB, a response at most
-16 MiB (a 1920x1080 PNG screenshot in base64 fits). A frame over the limit
+16 MiB (a 1920x1080 PNG screenshot in base64 fits). The Python codec rejects
+non-finite numbers and more than 64 nested containers on reads and writes, and
+maps invalid UTF-8, serialization and nesting failures to bridge errors without
+echoing the payload. A frame over the limit
 gets a `frame_too_large` error and the connection is closed.
 
 ### Handshake
@@ -193,13 +196,13 @@ anything else. `hammerforge-mcp --check` connects as one (#1060).
 ### Requests and responses
 
 ```json
-{"type": "request", "id": 7, "method": "hf_place_brush",
+{"type": "request", "id": "r7", "method": "hf_place_brush",
  "params": {...}, "operation_id": "b1f0...", "expect_target": "4242:1234:5678"}
 
-{"type": "response", "id": 7, "ok": true, "result": {...},
+{"type": "response", "id": "r7", "ok": true, "result": {...},
  "revision": 12, "target_id": "4242:1234:5678", "replayed": false}
 
-{"type": "response", "id": 7, "ok": false,
+{"type": "response", "id": "r7", "ok": false,
  "error": {"code": "brush_not_found", "message": "...", "details": {...}},
  "revision": 12, "target_id": "4242:1234:5678"}
 ```
@@ -249,12 +252,13 @@ editor runs. `hf_get_status` returns it with the scene path, scene name and the
 LevelRoot's path in the scene.
 
 The Python server attaches. It sends `expect_target` on every request with the
-target from the last `hf_get_status` or successful response. If the current
-target differs, the command fails with `target_changed` and the current target in
-`details`. The server does not follow it on its own: the agent calls
-`hf_get_status`, which re-attaches. A successful response can only follow a
-matching `expect_target`, so taking the target from one is safe, and it is how
-`hf_create_starter` moves the client onto the new LevelRoot.
+target from the last `hf_get_status` or successful `hf_create_starter`. If the
+current target differs, the command fails with `target_changed` and the current
+target in `details`. The server does not follow it on its own: the agent calls
+`hf_get_status`, which re-attaches. A reconnect resends the original target with
+the original operation id. Ordinary replies cannot reattach a target; status
+and starter replies update it only when newer than the last attachment reply,
+so an out-of-order reply cannot replace a more recent attachment.
 
 ### Revision
 
@@ -288,10 +292,18 @@ status with `busy` until it is out, so two commands never run at once.
 Every mutating request may carry one: 1 to 128 characters from
 `[A-Za-z0-9._:-]`. The Python server makes a UUID for any mutating call that
 lacks one, and reuses it when it resends after a lost response. It also reuses
-the id of a change left without an answer when the same change, same arguments,
-is asked for again. Not for `hf_undo`, `hf_redo` and `hf_bake`: their arguments
-do not say which change they are, so a second undo gets a new id and undoes
+the id of a sent change left without an answer, including a cancelled call or a
+malformed reply, when the same change and arguments are asked for on the same
+target. An unsent change and a change on another target get fresh ids. Not for
+`hf_undo`, `hf_redo` and `hf_bake`: their arguments do not say which change they
+are, so a second undo gets a new id and undoes
 another step. A caller that means a retry passes the id the timeout gave.
+
+Known limit ([#2058](https://github.com/saworbit/hammerforge/issues/2058)): the
+automatic retry map holds one unanswered id per method and argument set. A
+successful separate operation with identical arguments currently clears that
+entry. Callers interleaving identical edits must assign a separate explicit id
+to each intended edit and retain it for retries.
 
 The dispatcher keeps the last 256 successful mutating responses keyed by
 `operation_id`, with a fingerprint of `{method, params, expect_target}`
@@ -472,8 +484,16 @@ with a one-line text summary. Bridge, protocol and internal errors set
 `is_error=True`.
 
 Per-tool timeouts: 30 s by default, 900 s for `hf_bake`, 60 s for the screenshot.
-A quiet socket during a known long call is not treated as dead: the timeout is
-the only clock.
+The budget starts before attaching and connecting, includes waiting for the
+write lock and drain, and is shared with the one reconnect. Expiry removes the
+waiter so a call still waiting to write is never sent later. Cancellation does
+not close a healthy shared connection or roll back an edit already sent.
+A quiet socket during a known long call is not treated as dead.
+
+The Python reader checks response and error envelopes before handing them to
+callers. Malformed frames fail all waiters promptly and the connection is
+dropped; errors for sent changes include each caller's own operation id.
+Failed, cancelled and malformed handshakes close their socket before returning.
 
 Lost response: the server reconnects (re-reading the discovery file) and resends
 once with the same `operation_id`. The listener's cache answers it if the first
