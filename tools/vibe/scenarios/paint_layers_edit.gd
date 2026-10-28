@@ -359,10 +359,17 @@ func _a_name_add_hands_out_again() -> void:
 func _layer_settings_and_undo() -> void:
 	note("-- Height Scale, Layer Y and Rename, then undo and redo the stroke before them --")
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/dock_paint_handler.gd")
-	for handler in ["on_height_scale_changed", "on_layer_y_changed", "on_paint_layer_rename"]:
+	# Rename commits when its dialog is confirmed (#2028), not when it opens.
+	var uncommitted: Array = []
+	for handler in [
+		"on_height_scale_changed", "on_layer_y_changed", "on_paint_layer_rename_confirmed"
+	]:
 		var start := source.find("static func %s(" % handler)
 		var body := source.substr(start, source.find("\n\n\n", start) - start)
-		note("%s commits an undo step" % handler, body.contains("_commit"))
+		var commits := start >= 0 and body.contains("_commit")
+		note("%s commits an undo step" % handler, commits)
+		if not commits:
+			uncommitted.append(handler)
 	var root: Node3D = await fresh_root("LayersSettings")
 	root.grid_snap = 1.0
 	await frame()
@@ -372,7 +379,9 @@ func _layer_settings_and_undo() -> void:
 	var before: Dictionary = root.capture_undo_state()
 	root.paint_system.paint_cells(0, Vector2i(8, 0), Vector2i(9, 7), true)
 	var after: Dictionary = root.capture_undo_state()
-	# Then the three edits, as the dock makes them.
+	# Then the three edits through the level alone, with no step of their own, as
+	# the dock made them before #2028. The redo of the stroke throws them away, which
+	# is why each must be a step of its own; the handlers above say whether it is.
 	root.set_heightmap_scale(2.0)
 	root.set_layer_y(1.5)
 	root.rename_paint_layer(0, "Hills")
@@ -388,19 +397,18 @@ func _layer_settings_and_undo() -> void:
 	await frame()
 	var redone: Array = read.call()
 	note("after Ctrl+Y of the stroke", redone)
-	if redone != set_to:
+	if not uncommitted.is_empty() and redone != set_to:
 		known(
 			2012,
 			"Height Scale, Layer Y and Rename take no undo step, so undo and redo of the stroke before them throws them away",
 			(
 				(
-					"on_height_scale_changed(), on_layer_y_changed() and on_paint_layer_rename()"
-					+ " call the level straight, with no _commit_state_action(), while"
+					"%s call the level straight, with no _commit_state_action(), while"
 					+ " capture_state() holds all three. Set to %s after a paint stroke, one Ctrl+Z"
 					+ " (the stroke's step) and one Ctrl+Y give %s: the redo state was captured"
 					+ " before them, and no step in the history can bring them back"
 				)
-				% [set_to, redone]
+				% [uncommitted, set_to, redone]
 			)
 		)
 	await drop_root(root)
