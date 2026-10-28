@@ -178,8 +178,8 @@ func _shape(root: LevelRoot, brush_id: String, shape: int, size: Vector3, at: Ve
 
 ## The hull walks from face to face (#1999). A capsule turned beside a cone has
 ## corners a hair over 0.0001 off one plane and a hair under off another, and the
-## walk leaves a seam there that the search through every three corners closes,
-## so that search decides when the walk does not close.
+## walk leaves a seam there, so the engine's own hull decides when the walk does
+## not close (#2049).
 func test_a_turned_capsule_beside_a_cone_wraps_closed():
 	var root := _fresh_root()
 	_shape(root, "cone", root.BrushShape.CONE, Vector3(2, 2, 2), Vector3(0, 1, 0))
@@ -206,3 +206,35 @@ func test_a_sphere_beside_a_box_wraps_closed():
 	assert_eq(brushes.size(), 1, "one brush")
 	for hull in brushes:
 		assert_eq(_open_edges(hull.faces), 0, "every edge on two faces")
+
+
+## A sphere beside a turned cylinder or capsule, and two ellipsoids with one
+## turned, have corners within 0.0001 of several nearly shared planes. The walk
+## and the search through every three corners both left seams there, after
+## seconds of trying, so the brush drew and the next restore dropped it (#2049).
+func test_a_sphere_beside_a_turned_round_brush_wraps_closed_and_keeps():
+	var sphere := [LevelRootType.BrushShape.SPHERE, Vector3(2, 2, 2)]
+	for case in [
+		["cylinder", sphere, [LevelRootType.BrushShape.CYLINDER, Vector3(1, 3, 1)]],
+		["capsule", sphere, [LevelRootType.BrushShape.CAPSULE, Vector3(1, 3, 1)]],
+		[
+			"ellipsoids",
+			[LevelRootType.BrushShape.ELLIPSOID, Vector3(2, 1, 3)],
+			[LevelRootType.BrushShape.ELLIPSOID, Vector3(1, 2, 1.5)]
+		],
+	]:
+		var label: String = case[0]
+		var root := _fresh_root()
+		_shape(root, "a", case[1][0], case[1][1], Vector3(0, 1, 0))
+		_shape(root, "b", case[2][0], case[2][1], Vector3(3, 0.5, 1.5))
+		root.rotate_managed_nodes(["b"], [], 1, 30.0, Vector3(3, 0, 1.5))
+		var made: HFOpResult = root.hull_brushes_by_ids(["a", "b"])
+		assert_true(made.ok, "%s: %s" % [label, made.message])
+		var brushes: Array = root._iter_managed_brush_nodes()
+		assert_eq(brushes.size(), 1, "%s: one brush" % label)
+		for hull in brushes:
+			assert_eq(_open_edges(hull.faces), 0, "%s: every edge on two faces" % label)
+			assert_lt(_worst_off_plane(hull.faces), HFHull.ON_FACE, "%s: every face flat" % label)
+			assert_gt(HFSolidMeasure.volume(hull.faces), 0.0, "%s: wound outward" % label)
+		root.restore_state(root.capture_state())
+		assert_eq(root._iter_managed_brush_nodes().size(), 1, "%s: a restore keeps it" % label)

@@ -247,9 +247,10 @@ func test_a_press_on_two_spheres_is_quick_and_makes_the_same_brush():
 	await _leave(level)
 
 
-## The walk finds the faces the search through every three found, in its order,
-## each on the plane it found.
-func test_the_walk_finds_what_the_search_through_every_three_found():
+## The walk finds the faces the engine's hull has, each with the same corners.
+## The search through every three corners was the one to match until it left
+## seams of its own (#2049).
+func test_the_walk_finds_the_faces_of_the_engine_s_hull():
 	var sets := {}
 	var cylinders := PackedVector3Array()
 	for side in 16:
@@ -281,9 +282,22 @@ func test_the_walk_finds_what_the_search_through_every_three_found():
 	for label in sets:
 		var corners := HFHull._corners(HFHull.unique_points(sets[label]))
 		var walked: Array = HFHull._walk(corners, HFHull.ON_FACE)
-		var searched: Array = HFHull._every_three(corners, HFHull.ON_FACE)
-		assert_eq(walked.size(), searched.size(), label)
-		for i in mini(walked.size(), searched.size()):
-			assert_eq(walked[i].local_verts, searched[i].local_verts, "%s face %d" % [label, i])
-			assert_eq(walked[i].normal, searched[i].normal, "%s face %d" % [label, i])
+		var joined: Array = HFHull._joined(corners, HFHull.ON_FACE)
+		assert_eq(walked.size(), joined.size(), label)
+		assert_eq(_corner_sets(walked), _corner_sets(joined), label)
 		assert_eq(HFSolidMeasure.open_edge_count(walked), 0, "%s closes" % label)
+		assert_eq(HFSolidMeasure.open_edge_count(joined), 0, "%s closes joined" % label)
+
+
+## Each face's corners, in an order that does not depend on where its ring starts
+## or on the order of the faces.
+static func _corner_sets(faces: Array) -> Array:
+	var out: Array = []
+	for face in faces:
+		var corners: Array = []
+		for corner in face.local_verts:
+			corners.append(str(corner))
+		corners.sort()
+		out.append(",".join(corners))
+	out.sort()
+	return out
