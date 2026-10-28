@@ -262,7 +262,9 @@ static func parse_map_text(
 		if entity_class == "worldspawn":
 			worldspawn = (props as Dictionary).duplicate()
 			worldspawn.erase("classname")
-		if not has_brushes and entity_class != "":
+		# A `worldspawn` with no brushes is still the map's own block, as Copy writes
+		# it for a selection of entities alone. It came in as an entity of its own.
+		if not has_brushes and entity_class != "" and entity_class != "worldspawn":
 			entity_points.append(
 				{
 					"classname": entity_class,
@@ -293,10 +295,14 @@ static func parse_map_text(
 				# door's `speed` and `wait`, a trigger's `target`. They were read
 				# and dropped, so a func_door arrived in the right place, with
 				# the right name, and no way to move (#663). `classname` and
-				# `targetname` are left out because they are already carried.
+				# `targetname` are left out because they are already carried, and
+				# so are the output lines: a copy kept here went out again beside
+				# the wire, aimed where the wire no longer is (#1994).
 				var extra: Dictionary = (props as Dictionary).duplicate()
 				for carried in ["classname", "targetname"]:
 					extra.erase(carried)
+				for connection in connections:
+					extra.erase(str(connection.get("output_name", "")))
 				if not extra.is_empty():
 					info["brush_entity_data"] = extra
 			elif _is_clip_brush(brush.get("faces", [])):

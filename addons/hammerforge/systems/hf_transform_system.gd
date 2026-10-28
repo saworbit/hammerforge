@@ -31,6 +31,7 @@ const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFDoorRuntime = preload("../hf_door_runtime.gd")
 const HFGeneratorSystem = preload("hf_generator_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFDimensions = preload("../hf_dimensions.gd")
 
 enum PivotMode { SELECTION_CENTER, WORLD_ORIGIN, ACTIVE, CUSTOM }
 
@@ -463,10 +464,13 @@ func flip(
 		HFLog.warn("HFTransformSystem: flip needs a finite pivot")
 		return 0
 	var changed := 0
+	# The local axis each brush is folded on, for a dimension flipped with it (#2000).
+	var folded: Dictionary = {}
 	for brush_id in brush_ids:
 		var draft := _brush_at_id(str(brush_id))
 		if draft == null:
 			continue
+		folded[str(brush_id)] = local_mirror_axis(draft.global_transform.basis, axis_index)
 		_flip_brush(draft, axis_index, pivot)
 		if refit_groups:
 			_refit_texture_groups(draft)
@@ -477,6 +481,8 @@ func flip(
 		if entity == null:
 			continue
 		var local_axis := local_mirror_axis(entity.global_transform.basis, axis_index)
+		if HFDimensions.is_dimension(entity):
+			HFDimensions.mirror_ends(entity, local_axis, folded)
 		entity.global_transform = flipped_transform(
 			entity.global_transform, axis_index, pivot, local_axis
 		)
@@ -537,6 +543,8 @@ func mirror_copy(brush_ids: Array, entity_paths: Array, axes: int, pivot: Vector
 func _copy_in_place(brush_ids: Array, entity_paths: Array) -> Dictionary:
 	var originals: Array = []
 	var infos: Array = []
+	# Each brush's id to its copy's, for a dimension copied with it (#2000).
+	var copies: Dictionary = {}
 	for brush_id in brush_ids:
 		var draft := _brush_at_id(str(brush_id))
 		if draft == null:
@@ -545,6 +553,7 @@ func _copy_in_place(brush_ids: Array, entity_paths: Array) -> Dictionary:
 		var info: Dictionary = root.build_duplicate_info(draft, Vector3.ZERO)
 		if not info.is_empty():
 			infos.append(info)
+			copies[str(draft.brush_id)] = str(info.get("brush_id", ""))
 	var entities: Array = []
 	for entity_path in entity_paths:
 		var entity := _entity_at_path(entity_path)
@@ -568,6 +577,7 @@ func _copy_in_place(brush_ids: Array, entity_paths: Array) -> Dictionary:
 		var group_id := str(info.get("group_id", ""))
 		if renamed.has(group_id):
 			info["group_id"] = renamed[group_id]
+		HFDimensions.follow_copies([info], copies)
 		var copied: Node = root.entity_system.restore_entity_from_info(info)
 		if copied != null:
 			copy_paths.append(root.get_path_to(copied))

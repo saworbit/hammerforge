@@ -1110,3 +1110,49 @@ func test_test_level_keeps_the_levels_own_light_and_environment():
 	await root._start_playtest()
 	assert_eq(_environments_in(root).size(), 1, "the level's own, not the grey one too")
 	assert_eq(root.find_children("PlaytestSun", "", true, false).size(), 0, "lit already")
+
+
+# ===========================================================================
+# A visgroup left out of the bake stays in the editor (#1980)
+# ===========================================================================
+
+
+## A lamp in "Guides", which is left out of the bake, and a lamp that is not.
+func _guide_lamp() -> void:
+	var guide := _place("light_point")
+	guide.name = "guide_lamp"
+	var kept := _place("light_point")
+	kept.name = "kept_lamp"
+	root.visgroup_system.add_to_visgroup(guide, "Guides")
+	root.set_visgroup_bakes("Guides", false)
+
+
+func test_a_left_out_visgroups_entity_is_in_neither_scene_and_the_export_says_so():
+	_guide_lamp()
+	var said: Array = []
+	root.user_message.connect(func(text, _level): said.append(text))
+	for game in [false, true]:
+		var path := "user://hf_left_out_%s.tscn" % ("game" if game else "playtest")
+		var wrote: bool = root.export_game_scene(path) if game else root.export_playtest_scene(path)
+		assert_true(wrote, "the export has to succeed")
+		var packed: PackedScene = ResourceLoader.load(path)
+		DirAccess.remove_absolute(path)
+		var scene: Node = packed.instantiate()
+		assert_null(scene.get_node_or_null("guide_lamp"), "left out, as the .map leaves it")
+		assert_true(scene.get_node_or_null("kept_lamp") is OmniLight3D, "the other one ships")
+		scene.free()
+	assert_eq(
+		said,
+		[
+			"Playtest export left out 1 in visgroups kept out of the bake",
+			"Game scene export left out 1 in visgroups kept out of the bake",
+		]
+	)
+
+
+func test_test_level_runs_without_a_left_out_visgroups_entity():
+	_test_level_floor()
+	_guide_lamp()
+	await root._start_playtest()
+	assert_null(root.entities_node.get_node_or_null("guide_lamp"), "left out of the run")
+	assert_true(root.entities_node.get_node_or_null("kept_lamp") is OmniLight3D, "the other runs")

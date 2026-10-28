@@ -390,10 +390,12 @@ static func on_entity_keep_wiring_toggled(dock: Object, keep: bool, entity: Node
 
 
 ## The copy is rebuilt from its prefab, so the panel lets go of the node it shows.
+## A copy with a locked piece is left as it is, and so is the history (#1977).
 static func on_entity_clear_kept(dock: Object, entity: Node3D) -> void:
 	if not can_edit_selected_entity(dock, entity):
 		return
-	dock._commit_state_action("Clear Kept", "clear_prefab_kept", [entity])
+	if not dock._commit_state_action_if_changed("Clear Kept", "clear_prefab_kept", [entity]):
+		return
 	if dock.has_method("set_selection_nodes"):
 		dock.set_selection_nodes([])
 

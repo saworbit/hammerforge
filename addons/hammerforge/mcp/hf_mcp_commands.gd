@@ -909,6 +909,10 @@ func check_cycle_variant(root: Node, targets: Dictionary, _args: Dictionary) -> 
 	var record = root.prefab_system.get_instance(instance_id)
 	if record == null:
 		return _failed("That prefab copy is no longer in the level's prefab records")
+	# A variant switch rebuilds the whole copy, so a locked piece holds it (#1977).
+	if root.prefab_system.copy_is_locked(instance_id):
+		var body := HFMcpProtocol.error_body(HFMcpProtocol.E_LOCKED, HFPrefabSystem.LOCKED_COPY)
+		return {"ok": false, "error": body}
 	var prefab = HFPrefab.load_from_file(record.source_path)
 	if prefab == null:
 		return _failed("The prefab file %s could not be read" % record.source_path)

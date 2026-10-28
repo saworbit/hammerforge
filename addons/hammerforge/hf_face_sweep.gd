@@ -4,7 +4,7 @@ extends RefCounted
 ##
 ## The faces the mapper picked are the cross section. A start frame stands on
 ## them, its Z the way they face, and an end frame says where the run ends: a
-## straight run, a circular arc whose axis is worked out from the two frames, or
+## straight run, a circular arc of the angle, radius and side the dialog gives, or
 ## an S bend between them. The path is cut into segments, and each cut carries
 ## the section, placed by that cut's frame: on an arc a cut is the radial plane
 ## through the axis, so the section turns with the bend and stays whole. Each
@@ -69,34 +69,48 @@ static func end_frame(
 	var side := (start.basis.x * toward.x + start.basis.y * toward.y).normalized()
 	match path:
 		Path.ARC:
-			var axis := z.cross(side).normalized()
-			var centre := start.origin + side * radius
-			var turn := Basis(axis, deg_to_rad(angle))
-			return Transform3D(turn * start.basis, centre + turn * (start.origin - centre))
+			return _turned(start, arc_turn(start, angle, radius, toward), 1.0)
 		Path.S_BEND:
 			return Transform3D(start.basis, start.origin + z * length + side * offset)
 	return Transform3D(start.basis, start.origin + z * length)
 
 
+## `{axis, angle, centre}` of an arc of `angle` degrees and `radius` from `start`,
+## turning toward `toward` as `end_frame()` reads it, `angle` in radians.
+static func arc_turn(
+	start: Transform3D, angle: float, radius: float, toward: Vector2
+) -> Dictionary:
+	var side := (start.basis.x * toward.x + start.basis.y * toward.y).normalized()
+	return {
+		"axis": start.basis.z.cross(side).normalized(),
+		"angle": deg_to_rad(angle),
+		"centre": start.origin + side * radius,
+	}
+
+
+## `start` carried `t` of the way round `turn`.
+static func _turned(start: Transform3D, turn: Dictionary, t: float) -> Transform3D:
+	var spin := Basis(turn["axis"], float(turn["angle"]) * t)
+	var centre: Vector3 = turn["centre"]
+	return Transform3D(spin * start.basis, centre + spin * (start.origin - centre))
+
+
 ## The frames at every cut from `start` to `end` along `path`, `segments` pieces'
-## worth: segments + 1 frames, the first `start` and the last `end`.
-static func frames(path: int, start: Transform3D, end: Transform3D, segments: int) -> Array:
+## worth: segments + 1 frames, the first `start` and the last `end`. An arc turns
+## as `turn` says, as `arc_turn()` gives it: its two end frames alone cannot tell a
+## quarter turn one way from three quarters the other, and a whole turn ends where
+## it began (#1968).
+static func frames(
+	path: int, start: Transform3D, end: Transform3D, segments: int, turn := {}
+) -> Array:
 	var count := clampi(segments, 1, MAX_SEGMENTS)
 	var out: Array = []
 	match path:
 		Path.ARC:
-			var arc := _arc(start, end)
-			if arc.is_empty():
+			if turn.is_empty() or absf(float(turn["angle"])) < STRAIGHT_ENOUGH:
 				return frames(Path.STRAIGHT, start, end, count)
 			for k in count + 1:
-				var t := float(k) / count
-				var turn := Basis(arc["axis"], arc["angle"] * t)
-				var origin: Vector3 = (
-					arc["centre"]
-					+ turn * (start.origin - arc["centre"])
-					+ arc["axis"] * arc["rise"] * t
-				)
-				out.append(Transform3D(turn * start.basis, origin))
+				out.append(_turned(start, turn, float(k) / count))
 		Path.S_BEND:
 			var reach := start.origin.distance_to(end.origin)
 			var heading := start.basis.z
@@ -116,37 +130,6 @@ static func frames(path: int, start: Transform3D, end: Transform3D, segments: in
 				var t := float(k) / count
 				out.append(start.interpolate_with(end, t))
 	return out
-
-
-## `{axis, angle, centre, rise}` of the turn about a line that takes `start` to
-## `end`, `rise` how far along the axis it climbs on the way, or {} when the two
-## face the same way.
-static func _arc(start: Transform3D, end: Transform3D) -> Dictionary:
-	var relative := (end.basis * start.basis.inverse()).orthonormalized()
-	var quat := relative.get_rotation_quaternion()
-	var angle := quat.get_angle()
-	if angle > PI:
-		angle -= TAU
-	if absf(angle) < STRAIGHT_ENOUGH:
-		return {}
-	var axis := quat.get_axis().normalized()
-	var move := end.origin - start.origin
-	var rise := move.dot(axis)
-	var across := move - axis * rise
-	# The centre is where the start turns onto the end: (I - R) u = across, in the
-	# plane square to the axis, with u from the start to the centre.
-	var e1 := (start.basis.z - axis * start.basis.z.dot(axis)).normalized()
-	if e1.is_zero_approx():
-		e1 = axis.cross(Vector3.UP if absf(axis.y) < 0.99 else Vector3.RIGHT).normalized()
-	var e2 := axis.cross(e1)
-	var a := across.dot(e1)
-	var b := across.dot(e2)
-	var c := cos(angle)
-	var s := sin(angle)
-	var den := 2.0 - 2.0 * c
-	var u1 := ((1.0 - c) * a - s * b) / den
-	var u2 := (s * a + (1.0 - c) * b) / den
-	return {"axis": axis, "angle": angle, "centre": start.origin + e1 * u1 + e2 * u2, "rise": rise}
 
 
 static func _hermite(start: Transform3D, end: Transform3D, reach: float, t: float) -> Vector3:
@@ -196,8 +179,11 @@ static func repeated(frame_list: Array, iterations: int) -> Array:
 ## about the frame's middle from 1 at the first cut to `end_scale` at the last,
 ## along its own X and Y, so a run narrows or widens and two pieces still share
 ## the cut between them (#1899). `edges` says for each face the edge of its ring
-## it ran along, or -1 for an end.
-static func pieces(rings: Array, frame_list: Array, end_scale := Vector2.ONE) -> Dictionary:
+## it ran along, or -1 for an end. A run `backward` goes the way the frames' Z
+## points away from, as an arc of a negative angle does, back through the faces.
+static func pieces(
+	rings: Array, frame_list: Array, end_scale := Vector2.ONE, backward := false
+) -> Dictionary:
 	var out: Array = []
 	var folded := 0
 	if frame_list.size() < 2:
@@ -205,6 +191,7 @@ static func pieces(rings: Array, frame_list: Array, end_scale := Vector2.ONE) ->
 	var first: Transform3D = frame_list[0]
 	var to_first := first.affine_inverse()
 	var last := frame_list.size() - 1
+	var way := -1.0 if backward else 1.0
 	for section in rings.size():
 		var local := PackedVector3Array()
 		for corner in rings[section]:
@@ -215,7 +202,8 @@ static func pieces(rings: Array, frame_list: Array, end_scale := Vector2.ONE) ->
 			var near := _placed(local, near_frame, Vector2.ONE.lerp(end_scale, float(k) / last))
 			var far := _placed(local, far_frame, Vector2.ONE.lerp(end_scale, float(k + 1) / last))
 			var ok := (
-				_ahead(near, near_frame.basis.z, far) and _ahead(far, -far_frame.basis.z, near)
+				_ahead(near, near_frame.basis.z * way, far)
+				and _ahead(far, -far_frame.basis.z * way, near)
 			)
 			var faces: Array = []
 			if ok:
@@ -252,8 +240,10 @@ static func _placed(
 
 
 ## For each of `faces`, the edge of the ring, from corner i to i + 1, whose two
-## ends at the near cut and at the far cut all lie on it, or -1 for a face no edge
-## ran along: the ends of the piece.
+## ends at the near cut and at the far cut lie on it, or -1 for a face no edge ran
+## along: the ends of the piece. Three of the four will do: a side that tapers on
+## a bend is not flat, so the hull splits it into two triangles, each holding
+## three of them (#1970). An end holds two of any edge's.
 static func _edges_run_along(
 	faces: Array, near: PackedVector3Array, far: PackedVector3Array
 ) -> PackedInt32Array:
@@ -261,14 +251,16 @@ static func _edges_run_along(
 	for face in faces:
 		var plane := Plane((face as FaceData).normal, (face as FaceData).local_verts[0])
 		var found := -1
+		var most := 2
 		for i in near.size():
 			var j := (i + 1) % near.size()
-			var on_it := true
+			var on_it := 0
 			for point in [near[i], near[j], far[i], far[j]]:
-				on_it = on_it and absf(plane.distance_to(point)) <= AHEAD
-			if on_it:
+				if absf(plane.distance_to(point)) <= AHEAD:
+					on_it += 1
+			if on_it > most:
 				found = i
-				break
+				most = on_it
 		out.append(found)
 	return out
 

@@ -18,6 +18,14 @@ const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
 const HFSettingsFile = preload("res://addons/hammerforge/hf_settings_file.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFDimensions = preload("res://addons/hammerforge/hf_dimensions.gd")
+
+## The record key that says which piece of the prefab a record is, so a placed
+## copy pairs each of its pieces with the record it was placed from through a
+## Push that dropped an earlier piece (#1976). A record without one is the piece
+## its place in the list says, as every record was before Push wrote any, and
+## Push writes one only where the two differ.
+const PIECE := "prefab_piece"
 
 var prefab_name: String = ""
 var brush_infos: Array = []  # Array[Dictionary]  — from get_brush_info_from_node()
@@ -102,6 +110,8 @@ static func capture_from_selection(
 			if not whole.has(str(record["parent"])):
 				record["parent"] = ""
 
+	# Each brush's id to what the prefab calls it, for a dimension on it (#2000).
+	var pieces: Dictionary = {}
 	# Capture brushes
 	for brush in brush_nodes:
 		var info: Dictionary = brush_system.get_brush_info_from_node(brush)
@@ -112,6 +122,7 @@ static func capture_from_selection(
 			var t: Transform3D = info["transform"]
 			t.origin -= centroid
 			info["transform"] = t
+		pieces[str(info.get("brush_id", ""))] = HFDimensions.piece_ref(prefab.brush_infos.size())
 		# Clear brush_id so new ones are assigned on instantiation
 		info.erase("brush_id")
 		# A group taken whole stays named, for the copy's own group to take its
@@ -143,6 +154,10 @@ static func capture_from_selection(
 		# Carried in the prefab, every copy placed from it would share one uid.
 		info.erase("prefab_entity_id")
 		prefab.entity_infos.append(info)
+	# A dimension's end on a brush it holds names that brush by its place in the
+	# prefab, so a copy placed measures its own brushes (#2000).
+	pieces.erase("")
+	HFDimensions.follow_copies(prefab.entity_infos, pieces)
 
 	prefab.material_slots = _record_material_slots(prefab.brush_infos, _palette_of(brush_system))
 	return prefab
@@ -253,7 +268,9 @@ static func _visual_aabb(node: Node3D) -> AABB:
 ## or a propagate rebuilds a turned copy where and as it stands.
 ## `group_suffix` goes on the names of the groups the copy makes: Paste's " copy",
 ## as Duplicate names them, and nothing for a prefab placed from the library.
-## Returns a dictionary: {"brush_ids": Array, "entity_count": int, "entity_names": Array, "entity_nodes": Array}.
+## Returns a dictionary: {"brush_ids": Array, "entity_count": int, "entity_names": Array, "entity_nodes": Array},
+## and "brush_pieces" and "entity_pieces", the piece each brush and entity was
+## placed from (`piece_of()`), in the same order.
 func instantiate(
 	brush_system,
 	entity_system,
@@ -267,7 +284,9 @@ func instantiate(
 		"brush_ids": [] as Array,
 		"entity_count": 0,
 		"entity_names": [] as Array,
-		"entity_nodes": [] as Array
+		"entity_nodes": [] as Array,
+		"brush_pieces": [] as Array,
+		"entity_pieces": [] as Array,
 	}
 
 	# Resolve variant data
@@ -296,7 +315,10 @@ func instantiate(
 	var slot_map: Dictionary = _resolve_material_slots(root)
 
 	var placed_brushes: Array = []
-	for info in b_infos:
+	# What the prefab calls each brush to the id its copy is given (#2000).
+	var copies: Dictionary = {}
+	for i in b_infos.size():
+		var info = b_infos[i]
 		if not (info is Dictionary):
 			continue
 		var placed_info: Dictionary = info.duplicate(true)
@@ -306,15 +328,20 @@ func instantiate(
 		# Assign new brush_id
 		if brush_system.has_method("next_brush_id"):
 			placed_info["brush_id"] = brush_system.next_brush_id()
+			copies[HFDimensions.piece_ref(i)] = placed_info["brush_id"]
+		placed_info[PIECE] = piece_of(info, i)
 		placed_brushes.append(placed_info)
 	var placed_entities: Array = []
-	for info in e_infos:
+	for i in e_infos.size():
+		var info = e_infos[i]
 		if not (info is Dictionary):
 			continue
 		var placed_info: Dictionary = info.duplicate(true)
 		if placed_info.has("transform"):
 			placed_info["transform"] = _placed(placed_info["transform"], placement_pos, turn)
+		placed_info[PIECE] = piece_of(info, i)
 		placed_entities.append(placed_info)
+	HFDimensions.follow_copies(placed_entities, copies)
 	# Each group it took whole is a group of its own, nested as it was (#1897). A
 	# paste back into the level it was copied from keeps the groups it took only
 	# part of, as Duplicate does.
@@ -337,6 +364,7 @@ func instantiate(
 		if brush:
 			new_brush_ids.append(str(placed_info.get("brush_id", "")))
 			new_brushes.append(brush)
+			result["brush_pieces"].append(placed_info[PIECE])
 			note_new_name(addresses, placed_info, brush)
 
 	# Instantiate entities
@@ -348,6 +376,7 @@ func instantiate(
 			result["entity_count"] += 1
 			new_entity_names.append(entity.name)
 			new_entity_nodes.append(entity)
+			result["entity_pieces"].append(placed_info[PIECE])
 			note_new_name(addresses, placed_info, entity)
 
 	# Remap I/O connections, through the nodes that were just created rather than by
@@ -384,6 +413,11 @@ static func _placed(record: Transform3D, at: Vector3, turn: Basis) -> Transform3
 		moved.origin += at
 		return moved
 	return Transform3D(turn, at) * record
+
+
+## Which piece of the prefab `info` records, at `index` in its list (`PIECE`).
+static func piece_of(info: Dictionary, index: int) -> int:
+	return int(info.get(PIECE, index))
 
 
 ## Record the node name a placed node came out with against the one its record

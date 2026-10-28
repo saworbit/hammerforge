@@ -11,6 +11,7 @@ const MapIO = preload("../map_io.gd")
 const HFEntityPropUtils = preload("../ui/hf_entity_prop_utils.gd")
 const HFHiddenFaces = preload("../hf_hidden_faces.gd")
 const HFFormatCensus = preload("../hf_format_census.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFMapAdapterType = preload("../map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("../map_adapters/hf_map_quake.gd")
@@ -515,13 +516,24 @@ static func is_map_text(text: String) -> bool:
 ## all of it. `{"brushes": [nodes], "entities": [nodes], "dropped": int,
 ## "first_dropped": String}`; no brushes and no entities when nothing could be
 ## read.
+##
+## A copy, as a paste from the buffer is: a name the level already answers to
+## gets a free one (`gate` becomes `gate_2`), and the pasted wires follow it. Text
+## from another level kept its names, so two entities answered to one, and a
+## pasted button opened the level's own door too (#1994).
 func paste_map_text(text: String, at: Vector3) -> Dictionary:
 	var palette := _palette_by_texture_token()
 	var map_data := MapIO.parse_map_text(
 		text, MapIO.QUAKE_UNITS_PER_METRE, true, _texture_sizes_by_token(palette)
 	)
 	var errors: Array = map_data.get("errors", [])
+	var addresses := HFBrushEntity.fresh_identities(
+		map_data.get("brushes", []), map_data.get("entities", []), root.entity_system
+	)
 	var made := _build_from_map(map_data, palette)
+	if not addresses.is_empty():
+		for node in made["brushes"] + made["entities"]:
+			root.entity_system.remap_io_connections(node, addresses)
 	made["dropped"] = errors.size()
 	made["first_dropped"] = str(errors[0]) if not errors.is_empty() else ""
 	var bounds := _bounds_of(made)
