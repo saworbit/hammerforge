@@ -1,0 +1,8 @@
+{
+	"what": "Which linked surface a face is in, and the Justify mode its group last used (#1600).",
+	"older_builds": "Each face keeps its look but is textured on its own, and the next save drops the groups.",
+	"keys": [
+		"state.brushes[].faces[].uv_group",
+		"state.brushes[].faces[].uv_group_justify"
+	]
+}

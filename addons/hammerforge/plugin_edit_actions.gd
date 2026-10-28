@@ -41,9 +41,12 @@ static func delete_selected(plugin: Object, root: Node) -> bool:
 	if object_count >= 3:
 		var dlg = ConfirmationDialog.new()
 		dlg.title = action_name
-		dlg.dialog_text = (
-			"Delete %d HammerForge objects? This can be undone with Ctrl+Z." % object_count
+		var ask := HFTranslationType.tn(
+			"Delete {count} HammerForge object? This can be undone with Ctrl+Z.",
+			"Delete {count} HammerForge objects? This can be undone with Ctrl+Z.",
+			object_count
 		)
+		dlg.dialog_text = ask.format({"count": object_count})
 		dlg.min_size = Vector2i(280, 80)
 		plugin._add_confirmable_dialog(dlg)
 		dlg.confirmed.connect(
@@ -920,10 +923,12 @@ static func _dropped_sculpts_line(preview: Object) -> String:
 	var count: int = int(preview.get("sculpts_dropped")) if preview else 0
 	if count <= 0:
 		return ""
-	return (
-		"%d sculpt%s cannot follow this cut and will be dropped.\n"
-		% [count, "" if count == 1 else "s"]
+	var said := HFTranslationType.tn(
+		"{count} sculpt cannot follow this cut and will be dropped.",
+		"{count} sculpts cannot follow this cut and will be dropped.",
+		count
 	)
+	return said.format({"count": count}) + "\n"
 
 
 ## What Hollow's confirmation asks, from the key and the dock's button alike, so
@@ -1048,7 +1053,12 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 		locked += root.carve_system.locked_overlaps(brush_id)
 	var hidden_line := ""
 	if hidden > 0:
-		hidden_line = "%d hidden brush(es) overlap and are left alone.\n" % hidden
+		var left := HFTranslationType.tn(
+			"{count} hidden brush overlaps and is left alone.",
+			"{count} hidden brushes overlap and are left alone.",
+			hidden
+		)
+		hidden_line = left.format({"count": hidden}) + "\n"
 	# Carve leaves a locked brush whole, and says so before the yes (#1973).
 	var locked_line := ""
 	if locked > 0:
@@ -1060,9 +1070,16 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 		locked_line = said.format({"count": locked}) + "\n"
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Carve"
+	var ask := HFTranslationType.tn(
+		"Carve {count} brush?", "Carve {count} brushes?", carve_ids.size()
+	)
 	dlg.dialog_text = (
-		"Carve %d brush(es)?\n%s%s%s(Green wireframe shows resulting pieces)"
-		% [carve_ids.size(), hidden_line, locked_line, _dropped_sculpts_line(root.carve_preview)]
+		ask.format({"count": carve_ids.size()})
+		+ "\n"
+		+ hidden_line
+		+ locked_line
+		+ _dropped_sculpts_line(root.carve_preview)
+		+ HFTranslationType.t("(Green wireframe shows resulting pieces)")
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
@@ -1123,9 +1140,16 @@ static func intersect_selected(plugin: Object, root: Node) -> bool:
 		root.carve_preview.show_intersect_preview(brush_ids)
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Intersect"
+	var ask := HFTranslationType.tn(
+		"Keep only the volume {count} brush has?",
+		"Keep only the volume {count} brushes share?",
+		brush_ids.size()
+	)
 	dlg.dialog_text = (
-		"Keep only the volume %d brushes share?\n%s(Green wireframe shows the brush that is kept)"
-		% [brush_ids.size(), _dropped_sculpts_line(root.carve_preview)]
+		ask.format({"count": brush_ids.size()})
+		+ "\n"
+		+ _dropped_sculpts_line(root.carve_preview)
+		+ HFTranslationType.t("(Green wireframe shows the brush that is kept)")
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
@@ -1185,9 +1209,16 @@ static func hull_selected(plugin: Object, root: Node) -> bool:
 		root.carve_preview.show_hull_preview(brush_ids)
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Hull of Selection"
+	var ask := HFTranslationType.tn(
+		"Replace {count} brush with one brush around it?",
+		"Replace {count} brushes with one brush around them all?",
+		brush_ids.size()
+	)
 	dlg.dialog_text = (
-		"Replace %d brushes with one brush around them all?\n%s(Green wireframe shows the brush that is made)"
-		% [brush_ids.size(), _dropped_sculpts_line(root.carve_preview)]
+		ask.format({"count": brush_ids.size()})
+		+ "\n"
+		+ _dropped_sculpts_line(root.carve_preview)
+		+ HFTranslationType.t("(Green wireframe shows the brush that is made)")
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
@@ -1267,14 +1298,20 @@ static func hide_faces_against_solids(plugin: Object, root: Node) -> bool:
 	root.face_selection_changed.emit()
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Hide Faces Against Solids"
-	dlg.dialog_text = (
+	var ask := HFTranslationType.tn(
 		(
-			"Make %d face%s Hidden?\nThey lie flat against other solid brushes, so nobody"
+			"Make {count} face Hidden?\nIt lies flat against another solid brush, so nobody"
+			+ " sees it. The bake leaves it out of the mesh and the lightmap, and it keeps"
+			+ " its collision.\n(The face is picked to show which)"
+		),
+		(
+			"Make {count} faces Hidden?\nThey lie flat against other solid brushes, so nobody"
 			+ " sees them. The bake leaves them out of the mesh and the lightmap, and they"
 			+ " keep their collision.\n(The faces are picked to show which)"
-		)
-		% [count, "" if count == 1 else "s"]
+		),
+		count
 	)
+	dlg.dialog_text = ask.format({"count": count})
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
 	dlg.confirmed.connect(
@@ -1290,9 +1327,10 @@ static func hide_faces_against_solids(plugin: Object, root: Node) -> bool:
 					found.keys()
 				)
 				if plugin.dock:
-					plugin.dock.show_toast(
-						"%d face%s made Hidden" % [count, "" if count == 1 else "s"], 0
+					var said := HFTranslationType.tn(
+						"{count} face made Hidden", "{count} faces made Hidden", count
 					)
+					plugin.dock.show_toast(said.format({"count": count}), 0)
 			dlg.queue_free()
 	)
 	dlg.canceled.connect(

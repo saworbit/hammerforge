@@ -386,10 +386,20 @@ func _solid_boxes() -> Array[AABB]:
 ## by its faces, so a ramp gives its slope, and a cutter after it takes its own
 ## stretch out, so a cut gives its bottom.
 static func _floors_at(brushes: Dictionary, point: Vector3, span: AABB) -> PackedFloat32Array:
+	var tops := PackedFloat32Array()
+	for stretch in _stretches_at(brushes, point, span):
+		tops.append(stretch.y)
+	return tops
+
+
+## The solid stretches on the upright line through `point`, within the height of
+## `span`, each as the height of its bottom and of its top, read as `_floors_at()`
+## reads them.
+static func _stretches_at(brushes: Dictionary, point: Vector3, span: AABB) -> PackedVector2Array:
 	var from := Vector3(point.x, span.position.y - 1.0, point.z)
 	var to := Vector3(point.x, span.end.y + 1.0, point.z)
 	var hair := LINE_HAIR / (to.y - from.y)
-	var tops := PackedFloat32Array()
+	var stretches := PackedVector2Array()
 	for solid in brushes["solids"]:
 		var stretch := _clip(solid["planes"], from, to, 0.0)
 		if stretch.y - stretch.x <= hair:
@@ -403,8 +413,9 @@ static func _floors_at(brushes: Dictionary, point: Vector3, span: AABB) -> Packe
 						cuts.append(cut)
 		for piece in _pieces(stretch, cuts):
 			if piece.y - piece.x > hair:
-				tops.append(lerpf(from.y, to.y, piece.y))
-	return tops
+				var bottom := lerpf(from.y, to.y, piece.x)
+				stretches.append(Vector2(bottom, lerpf(from.y, to.y, piece.y)))
+	return stretches
 
 
 ## The lowest floor at `point`, or INF for none.
@@ -446,15 +457,24 @@ func layout_issues() -> Array:
 
 
 ## The highest brush floor on the upright line through `pos`, no higher than
-## `from_y`, where the floor ray starts. Read from the brushes' faces less the
-## cutters after them, so it needs no bake. Null for none.
+## `from_y`, where the floor ray starts, nor than the first brush over `pos`, as
+## `_floor_ray_lift()` stops the ray under a ceiling. Read from the brushes' faces
+## less the cutters after them, so it needs no bake. Null for none.
+##
+## Before a bake the ray started a full lift over the spawn, so in a room this
+## found the ceiling's top and called a spawn on the floor buried (#2046).
 func _brush_floor_under(pos: Vector3, from_y: float) -> Variant:
 	var low := pos.y - DOWN_DISTANCE
 	var span := AABB(Vector3(pos.x, low, pos.z), Vector3(0, from_y - low, 0))
+	var stretches := _stretches_at(_brush_solids(span.grow(LINE_HAIR)), pos, span)
+	var under := from_y
+	for stretch in stretches:
+		if stretch.x > pos.y + LINE_HAIR:
+			under = minf(under, stretch.x - CEILING_MARGIN)
 	var best := -INF
-	for top in _floors_at(_brush_solids(span.grow(LINE_HAIR)), pos, span):
-		if top <= from_y + LINE_HAIR:
-			best = maxf(best, top)
+	for stretch in stretches:
+		if stretch.y <= under + LINE_HAIR:
+			best = maxf(best, stretch.y)
 	if best == -INF:
 		return null
 	return Vector3(pos.x, best, pos.z)

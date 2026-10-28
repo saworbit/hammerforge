@@ -44,6 +44,7 @@ const HFPluginFaceSweep = preload("plugin_face_sweep.gd")
 const HFPluginGroups = preload("plugin_groups.gd")
 const HFPluginRun = preload("plugin_run.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("hf_translation.gd")
 
 
 ## Whether the palette must refuse `action` when there is no level. These act on
@@ -638,13 +639,12 @@ static func execute(
 				var hide: bool = not root.is_view_filtered(kind)
 				root.set_view_filter(kind, hide)
 				if dock:
-					dock.show_toast(
-						(
-							"%s %s"
-							% [HFViewFiltersType.label_for(kind), "hidden" if hide else "shown"]
-						),
-						0
+					var said := (
+						HFTranslationType.t("{filter} hidden")
+						if hide
+						else HFTranslationType.t("{filter} shown")
 					)
+					dock.show_toast(said.format({"filter": HFViewFiltersType.label_for(kind)}), 0)
 		"toggle_face_direction":
 			if root:
 				root.face_direction_view = not root.face_direction_view
@@ -918,13 +918,15 @@ static func convert_entity_definitions(plugin: Object, root: Node) -> String:
 	var read := HFEntityDef._read_entries(path)
 	if str(read["failure"]) != "" or (read["entries"] as Array).is_empty():
 		if dock:
-			dock.show_toast("%s has no entity classes to convert" % fgd.get_file(), 1)
+			var none := HFTranslationType.t("{file} has no entity classes to convert")
+			dock.show_toast(none.format({"file": fgd.get_file()}), 1)
 		return ""
 	var out := fgd.get_basename() + ".json"
 	var err := HFSettingsFile.write_text(out, HFFgdReader.to_json_text(read["entries"]))
 	if err != OK:
 		if dock:
-			dock.show_toast("Could not write %s: %s" % [out, error_string(err)], 2)
+			var failed := HFTranslationType.t("Could not write {file}: {error}")
+			dock.show_toast(failed.format({"file": out, "error": error_string(err)}), 2)
 		return ""
 	(
 		root
@@ -954,5 +956,6 @@ static func repeat_last(plugin: Object, root: Node) -> void:
 	if root and not plugin._managed_action_surface_allowed(root, last):
 		return
 	if dock:
-		dock.show_toast("Repeat: %s" % repeat_text(plugin, last), 0)
+		var said := HFTranslationType.t("Repeat: {command}")
+		dock.show_toast(said.format({"command": repeat_text(plugin, last)}), 0)
 	execute(plugin, last)

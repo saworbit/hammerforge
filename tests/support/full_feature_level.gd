@@ -5,6 +5,10 @@ extends RefCounted
 ## committed cut, notes, floor paint, an accepted finding and saved views on top.
 ## `test_format_record.gd` takes its census, so a key a build starts saving is
 ## named before an older build can drop it (#1638).
+##
+## A key saved only beside something, such as a heightmap, a sculpt or a decal,
+## is in the census only when the level has one, so each of those is here too
+## (#2051).
 
 const REFERENCE := "res://addons/hammerforge/data/reference_map.hflevel"
 const HFAcceptedFindings = preload("res://addons/hammerforge/hf_accepted_findings.gd")
@@ -66,6 +70,20 @@ static func fill(level: Node, tree: SceneTree) -> void:
 		level.visgroup_system.save_view("everything")
 	if level.paint_layers and not level.paint_layers.layers.is_empty():
 		level.paint_layers.layers[0].set_cell(Vector2i(2, 2), true)
+		level.paint_layers.layers[0].heightmap = Image.create(4, 4, false, Image.FORMAT_RF)
+	var sculpted = level.create_brush_from_info(
+		{"shape": 0, "size": Vector3(2, 2, 2), "center": Vector3(70, 1, 0)}
+	)
+	level.create_displacement(str(sculpted.brush_id), 0, 2)
+	var face: FaceData = sculpted.faces[1]
+	var face_paint := FaceData.PaintLayer.new()
+	face_paint.weight_image = Image.create(4, 4, false, Image.FORMAT_L8)
+	face.paint_layers.append(face_paint)
+	face.uv_group = 1
+	level.map_worldspawn_properties = {"message": "full feature level"}
+	var decal := Decal.new()
+	decal.texture_albedo = load("res://addons/hammerforge/branding/hf_mark_editor.svg")
+	level.decals_node.add_child(decal)
 	level.create_duplicate_array(PackedStringArray([str(box.brush_id)]), 2, Vector3(3, 0, 0))
 	var wall = level.create_brush_from_info(
 		{"shape": 0, "size": Vector3(4, 3, 0.5), "center": Vector3(60, 1.5, 0)}

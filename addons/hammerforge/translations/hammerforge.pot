@@ -9,6 +9,18 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8-bit\n"
 
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "(Green wireframe shows resulting pieces)"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "(Green wireframe shows the brush that is kept)"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "(Green wireframe shows the brush that is made)"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "(no visgroups)"
 msgstr ""
@@ -181,6 +193,18 @@ msgstr ""
 msgid "Any material in the palette"
 msgstr ""
 
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Applied last texture to {count} brush"
+msgid_plural "Applied last texture to {count} brushes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Applied last texture to {count} face"
+msgid_plural "Applied last texture to {count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/plugin_drop_handler.gd
 msgid "Applied material #{slot} to face"
 msgstr ""
@@ -192,6 +216,12 @@ msgstr ""
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "Applied preset '{preset}' ({count} connection)"
 msgid_plural "Applied preset '{preset}' ({count} connections)"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_material_commands.gd
+msgid "Applied {material} to {count} brush"
+msgid_plural "Applied {material} to {count} brushes"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -531,6 +561,12 @@ msgstr ""
 msgid "Carve"
 msgstr ""
 
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Carve {count} brush?"
+msgid_plural "Carve {count} brushes?"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Cast Shadows:"
 msgstr ""
@@ -831,6 +867,10 @@ msgstr ""
 msgid "Corners"
 msgstr ""
 
+#: addons/hammerforge/plugin_commands.gd
+msgid "Could not write {file}: {error}"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_panel.gd
 msgid "Count in"
 msgstr ""
@@ -982,6 +1022,12 @@ msgstr ""
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "Delete the selected saved preset"
 msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Delete {count} HammerForge object? This can be undone with Ctrl+Z."
+msgid_plural "Delete {count} HammerForge objects? This can be undone with Ctrl+Z."
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Descriptions"
@@ -1339,6 +1385,10 @@ msgstr ""
 msgid "Faces: the most two neighbours' normals may differ by, in degrees"
 msgstr ""
 
+#: addons/hammerforge/plugin_material_commands.gd
+msgid "Favorite {slot} is empty: star a material in Paint > Materials to fill it"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_material_browser.gd
 msgid "Favorites"
 msgstr ""
@@ -1652,6 +1702,18 @@ msgstr ""
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Grow Selection"
 msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Grow added {count} brush"
+msgid_plural "Grow added {count} brushes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Grow added {count} face"
+msgid_plural "Grow added {count} faces"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "HL"
@@ -1977,6 +2039,12 @@ msgstr ""
 msgid "Keep only the volume the selected brushes share."
 msgstr ""
 
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Keep only the volume {count} brush has?"
+msgid_plural "Keep only the volume {count} brushes share?"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/dock.gd
 msgid "Keep texture alignment while moving, resizing, hollowing, or clipping brushes"
 msgstr ""
@@ -2023,6 +2091,34 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Kept in the project, so everyone on it has this profile"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Kept the {count} brush"
+msgid_plural "Kept the {count} brushes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Kept the {count} brush entity"
+msgid_plural "Kept the {count} brush entities"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Kept the {count} cut"
+msgid_plural "Kept the {count} cuts"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Kept the {count} entity"
+msgid_plural "Kept the {count} entities"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Kept {count}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_shortcut_dialog.gd
@@ -2236,6 +2332,12 @@ msgstr ""
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Make the selected structure's pieces plain brushes, so an Update no longer rebuilds them."
 msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Make {count} face Hidden?\nIt lies flat against another solid brush, so nobody sees it. The bake leaves it out of the mesh and the lightmap, and it keeps its collision.\n(The face is picked to show which)"
+msgid_plural "Make {count} faces Hidden?\nThey lie flat against other solid brushes, so nobody sees them. The bake leaves them out of the mesh and the lightmap, and they keep their collision.\n(The faces are picked to show which)"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Map export format"
@@ -2459,6 +2561,22 @@ msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "No sound at {path}"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "No visible brushes match on {keys}"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "No visible entities match on {keys}"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "No visible face matches the selected one on {keys}"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "No visible objects match on {keys}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -2693,6 +2811,10 @@ msgstr ""
 msgid "Pick {kind}"
 msgstr ""
 
+#: addons/hammerforge/plugin_material_commands.gd
+msgid "Picked material #{index}"
+msgstr ""
+
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Pivot:"
 msgstr ""
@@ -2792,6 +2914,12 @@ msgstr ""
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Propagate Prefab"
 msgstr ""
+
+#: addons/hammerforge/plugin_prefab_commands.gd
+msgid "Propagated to {count} linked instance"
+msgid_plural "Propagated to {count} linked instances"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "Properties"
@@ -3081,7 +3209,7 @@ msgstr ""
 msgid "Repeat the last rectangle as a floor with walls round it."
 msgstr ""
 
-#: addons/hammerforge/ui/hf_hotkey_palette.gd
+#: addons/hammerforge/plugin_commands.gd addons/hammerforge/ui/hf_hotkey_palette.gd
 msgid "Repeat: {command}"
 msgstr ""
 
@@ -3112,6 +3240,12 @@ msgstr ""
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "Replace with"
 msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Replace {count} brush with one brush around it?"
+msgid_plural "Replace {count} brushes with one brush around them all?"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Replace..."
@@ -3301,6 +3435,14 @@ msgstr ""
 msgid "Save..."
 msgstr ""
 
+#: addons/hammerforge/plugin_prefab_commands.gd
+msgid "Saved prefab: {name}"
+msgstr ""
+
+#: addons/hammerforge/plugin_prefab_commands.gd
+msgid "Saved prefab: {name} (linked)"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_adjust_last_panel.gd
 msgid "Saved settings"
 msgstr ""
@@ -3482,8 +3624,44 @@ msgid "Selected faces and brushes"
 msgstr ""
 
 #: addons/hammerforge/plugin_selection_commands.gd
+msgid "Selected {count} face"
+msgid_plural "Selected {count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Selected {count} node"
+msgid_plural "Selected {count} nodes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
 msgid "Selected {count} object"
 msgid_plural "Selected {count} objects"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Selected {count} similar brush"
+msgid_plural "Selected {count} similar brushes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Selected {count} similar entity"
+msgid_plural "Selected {count} similar entities"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Selected {count} similar face"
+msgid_plural "Selected {count} similar faces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Selected {count} similar object"
+msgid_plural "Selected {count} similar objects"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -3738,6 +3916,18 @@ msgstr ""
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Shrink Selection"
 msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Shrink dropped {count} brush"
+msgid_plural "Shrink dropped {count} brushes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Shrink dropped {count} face"
+msgid_plural "Shrink dropped {count} faces"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/dock.tscn
 msgid "Sides"
@@ -4161,6 +4351,18 @@ msgstr ""
 msgid "Thumbnail size"
 msgstr ""
 
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Tick what similar brushes match on in Selection Filters"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Tick what similar entities match on in Selection Filters"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Tick what similar faces match on in Selection Filters"
+msgstr ""
+
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Tie"
 msgstr ""
@@ -4411,6 +4613,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
 msgid "Variant to remove:"
+msgstr ""
+
+#: addons/hammerforge/plugin_prefab_commands.gd
+msgid "Variant: {variant}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_context_toolbar.gd
@@ -4679,6 +4885,14 @@ msgstr ""
 msgid "{brushes} selected"
 msgstr ""
 
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "{command}: select the one brush to select with"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "{command}: {count} selected"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "{count} brush"
 msgid_plural "{count} brushes"
@@ -4709,9 +4923,15 @@ msgid_plural "{count} faces"
 msgstr[0] ""
 msgstr[1] ""
 
-#: addons/hammerforge/plugin_drop_handler.gd
+#: addons/hammerforge/plugin_drop_handler.gd addons/hammerforge/plugin_edit_actions.gd
 msgid "{count} face made Hidden"
 msgid_plural "{count} faces made Hidden"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "{count} hidden brush overlaps and is left alone."
+msgid_plural "{count} hidden brushes overlap and are left alone."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -4731,6 +4951,12 @@ msgid_plural "{count} pieces"
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "{count} sculpt cannot follow this cut and will be dropped."
+msgid_plural "{count} sculpts cannot follow this cut and will be dropped."
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "{entities} selected"
 msgstr ""
@@ -4747,12 +4973,24 @@ msgstr ""
 msgid "{file} could not be loaded as a material"
 msgstr ""
 
+#: addons/hammerforge/plugin_commands.gd
+msgid "{file} has no entity classes to convert"
+msgstr ""
+
 #: addons/hammerforge/plugin_drop_handler.gd
 msgid "{file} is not a prefab this build can read"
 msgstr ""
 
 #: addons/hammerforge/plugin_drop_handler.gd
 msgid "{file}: {problem}"
+msgstr ""
+
+#: addons/hammerforge/plugin_commands.gd
+msgid "{filter} hidden"
+msgstr ""
+
+#: addons/hammerforge/plugin_commands.gd
+msgid "{filter} shown"
 msgstr ""
 
 #: addons/hammerforge/plugin_face_sweep.gd
