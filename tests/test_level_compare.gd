@@ -8,11 +8,13 @@ const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
 
 const PATH := "user://test_level_compare.hflevel"
+const BRICK := "user://test_level_compare_brick.tres"
 
 
 func after_each() -> void:
-	if FileAccess.file_exists(PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(PATH))
+	for path in [PATH, BRICK]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _level() -> LevelRoot:
@@ -112,6 +114,39 @@ func test_a_move_a_deletion_an_added_entity_and_a_material_each_show():
 	assert_eq(result["counts"]["brushes"], 3)
 	assert_eq(result["counts"]["entities"], 1)
 	assert_eq(lines[0], "3 brushes, 1 face, 1 entity changed")
+
+
+## A brush's own Cast Shadows and Lightmap Scale and the material it wears whole
+## each show as a line, on a brush counted as changed, against the saved file. A
+## bake reads all three and Compare said "No changes" (#2023).
+func test_cast_shadows_lightmap_scale_and_a_whole_material_each_show():
+	var level := _level()
+	_box(level, Vector3(0, 1, 0), "box")
+	var saved := await _saved(level)
+	level.set_brush_cast_shadow(["box"], GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	level.set_brush_lightmap_scale(["box"], 4.0)
+	# A material with a file of its own, as a level's are: one with none is not
+	# kept by the save, and Compare rightly reads it as gone.
+	var made := StandardMaterial3D.new()
+	made.resource_name = "brick"
+	assert_eq(ResourceSaver.save(made, BRICK), OK, "fixture: the material is a file")
+	level.find_brush_by_id("box").material_override = load(BRICK)
+	var result := HFLevelCompare.compare(saved, _now(level))
+	var told := "\n".join(result["lines"])
+	assert_eq(result["brushes"]["changed"].size(), 1, told)
+	var changes: PackedStringArray = result["brushes"]["changed"][0]["changes"]
+	assert_has(changes, "cast shadows changed from level default to off", told)
+	assert_has(changes, "lightmap scale changed from 1 to 4", told)
+	assert_true(
+		Array(changes).any(
+			func(l): return l.begins_with("material changed from none to ") and l.contains("brick")
+		),
+		told
+	)
+	assert_eq(result["counts"]["brushes"], 1)
+	var again := await _saved(level)
+	var same := HFLevelCompare.compare(again, _now(level))
+	assert_eq(same["lines"], PackedStringArray(["No changes"]), "\n".join(same["lines"]))
 
 
 func test_a_brush_whose_id_changed_in_the_same_place_is_the_same_brush():

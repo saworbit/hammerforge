@@ -19,6 +19,7 @@ const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFHullType = preload("../hf_hull.gd")
+const HFDimensions = preload("../hf_dimensions.gd")
 
 ## How far a corner may stand off another brush's face plane and still count as
 ## lying on it, when a face of an intersection looks for the face it was cut by.
@@ -70,13 +71,16 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 		# brush. Deleting a group's last brush dropped the group, and every wire
 		# aimed at its entity, so pieces made after lost both (#1975). A target
 		# that gave no pieces stays where it was.
-		var made := 0
+		var made: Array = []
 		for info in infos:
-			if root.brush_system.create_brush_from_info(info):
-				made += 1
-		if made > 0:
+			var piece = root.brush_system.create_brush_from_info(info)
+			if piece:
+				made.append(piece)
+		if not made.is_empty():
+			# A dimension's end goes to the piece that keeps its corner (#2003).
+			HFDimensions.carry_to_pieces(root, target_draft, made)
 			root.brush_system.delete_brush_by_id(target_id)
-		total_pieces += made
+		total_pieces += made.size()
 
 	# Delete the carver brush
 	root.brush_system.delete_brush_by_id(brush_id)

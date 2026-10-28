@@ -26,6 +26,8 @@ class FakePrefabSystem:
 	var save_path := "res://prefabs/crate.tres"
 	var next_variant := ""
 	var push_ok := true
+	var discard_ok := true
+	var locked := false
 	var propagate_count := 0
 	var saved_calls: Array = []
 	var pushed: Array = []
@@ -51,6 +53,12 @@ class FakePrefabSystem:
 	func push_instance_to_source(iid: String) -> bool:
 		pushed.append(iid)
 		return push_ok
+
+	func discard_changes(_iid: String) -> bool:
+		return discard_ok
+
+	func copy_is_locked(_iid: String) -> bool:
+		return locked
 
 	func propagate_from_source(source: String) -> int:
 		propagated.append(source)
@@ -317,6 +325,35 @@ func test_cycle_variant_still_applies_without_an_undo_manager():
 
 	assert_eq(root.prefab_system.cycled, ["iid_1"])
 	assert_eq(plugin.dock.last_toast().get("message"), "Variant: Damaged")
+
+
+# ---------------------------------------------------------------------------
+# Discard changes
+# ---------------------------------------------------------------------------
+
+
+func test_discard_that_cannot_read_the_prefab_says_so():
+	plugin.hf_selection = [_instance_node()]
+	plugin.undo_redo_manager = FakeUndoRedo.new()
+	root.prefab_system.discard_ok = false
+
+	HFPluginPrefabCommands.discard_changes(plugin, root)
+
+	assert_eq(plugin.dock.last_toast().get("message"), "The prefab file could not be read")
+	assert_eq((plugin.undo_redo_manager as FakeUndoRedo).actions.size(), 0)
+
+
+## The copy says why itself, and is not blamed on the prefab file (#1977).
+func test_discard_of_a_locked_copy_leaves_the_reason_to_the_copy():
+	plugin.hf_selection = [_instance_node()]
+	plugin.undo_redo_manager = FakeUndoRedo.new()
+	root.prefab_system.discard_ok = false
+	root.prefab_system.locked = true
+
+	HFPluginPrefabCommands.discard_changes(plugin, root)
+
+	assert_eq(plugin.dock.toasts.size(), 0)
+	assert_eq((plugin.undo_redo_manager as FakeUndoRedo).actions.size(), 0)
 
 
 # ---------------------------------------------------------------------------

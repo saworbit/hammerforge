@@ -1063,11 +1063,15 @@ func _check_spawn(issues: Array) -> void:
 	)
 
 
-## Each dimension whose check fails, named, with its length and what it needs.
+## Each dimension whose check fails, named, with its length and what it needs. One
+## held to a check with an end come loose is named as that, with no length: the
+## length it reads is not a measurement (#2004).
 func _check_dimensions(issues: Array) -> void:
 	for dimension in HFDimensions.dimensions(root):
 		var measured := HFDimensions.measure(root, dimension)
-		if not bool(measured["passes"]):
+		if bool(measured["detached"]) and str(measured["check"]) != "None":
+			_found(issues, HFDimensions.detached_text(dimension), dimension)
+		elif not bool(measured["passes"]):
 			_found(issues, HFDimensions.failure_text(dimension, measured), dimension)
 
 

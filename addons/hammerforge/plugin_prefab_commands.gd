@@ -135,7 +135,8 @@ static func discard_changes(plugin: Object, root: Node) -> void:
 		return
 	var before_state: Dictionary = root.state_system.capture_state(true)
 	if not root.prefab_system.discard_changes(iid):
-		if plugin.dock:
+		# A copy with a locked piece has said why itself (#1977).
+		if plugin.dock and not root.prefab_system.copy_is_locked(iid):
 			plugin.dock.show_toast("The prefab file could not be read", 1)
 		return
 	if plugin.dock:

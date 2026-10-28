@@ -282,7 +282,9 @@ ask that, not read everything and filter it in its own context
 - An unknown filter key is refused, naming it.
 - A dimension (#1699) is an entity of class `dimension`. `hf_get_entities` gives
   it a `dimension` beside its properties: its `length` now, its `check`, the
-  length it `needs`, whether it `passes`, and whether an end is `detached`.
+  length it `needs`, whether it `passes`, and whether an end is `detached`. One
+  with an end detached is not judged, so it `passes` and is not counted as
+  failing (#2004).
   `hf_get_status` counts `dimensions` and `dimensions_failing`.
 
 The rules are in `addons/hammerforge/hf_object_filter.gd`, for the editor's own

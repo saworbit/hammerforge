@@ -482,3 +482,29 @@ func test_replace_shown_then_adjusted_to_the_whole_level_undoes_the_hidden_brush
 	assert_eq(level.find_brush_by_id("hidden").faces[0].material_idx, 1, "one Ctrl+Z puts it back")
 	assert_eq(level.find_brush_by_id("shown").faces[0].material_idx, 1, "and the shown one")
 	await rig.leave_level(level)
+
+
+## Replace Material on the whole level where only a hidden brush wears the
+## material, then Shown only in Adjust Last: nothing shown wears it, so the adjust
+## is refused before the undo and the replace stays. It undid the replace and left
+## an empty Replace Material step (#2036).
+func test_a_scope_that_finds_nothing_leaves_the_replace_and_its_step():
+	var level = await rig.make_level()
+	rig.undo().clear()
+	level.add_prototype_materials()
+	rig.box(level, "shown", Vector3(0, 2, 0))
+	var hidden: DraftBrush = rig.box(level, "hidden", Vector3(8, 2, 0))
+	for face in hidden.faces:
+		face.material_idx = 1
+	hidden.visible = false
+	rig.plugin.dock._on_replace_material_requested(1, 2, {"visible_only": false}, false)
+	assert_eq(str(rig.plugin.last_run.get("id")), "replace_material", "fixture: Adjust Last has it")
+	assert_eq(level.find_brush_by_id("hidden").faces[0].material_idx, 2, "fixture: replaced")
+	var steps: int = rig.undo().step_count()
+	rig.clear_toasts()
+	assert_false(await HFPluginAdjustLast.adjust(rig.plugin, "scope", "shown"), "refused")
+	await rig.frame()
+	assert_eq(rig.undo().step_count(), steps, "no step taken away or added")
+	assert_eq(level.find_brush_by_id("hidden").faces[0].material_idx, 2, "the replace stays")
+	assert_true(_said("Nothing to replace"), "and says why: %s" % [rig.toasts()])
+	await rig.leave_level(level)
