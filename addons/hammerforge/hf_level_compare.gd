@@ -982,7 +982,7 @@ static func _compare_paint(
 		if not old_layers.has(layer_id):
 			lines.append("paint layer '%s': added" % label)
 			counts["paint"] += 1
-		elif not same(old_layers[layer_id], entry):
+		elif not same(_with_layer_defaults(old_layers[layer_id]), _with_layer_defaults(entry)):
 			lines.append("paint layer '%s': painted" % label)
 			counts["paint"] += 1
 	for layer_id in old_layers:
@@ -991,6 +991,20 @@ static func _compare_paint(
 			lines.append("paint layer '%s': removed" % _layer_label(old_layers[layer_id]))
 			counts["paint"] += 1
 	return lines
+
+
+## What a load reads for a paint layer key a file older than it leaves out
+## (`HFPaintSystem.restore_paint_layers()`): a layer saved without a heightmap
+## had no Height Scale before #2030, and opens at the layer's own 10.
+const PAINT_LAYER_DEFAULTS := {"height_scale": 10.0}
+
+
+static func _with_layer_defaults(entry: Dictionary) -> Dictionary:
+	var filled := entry.duplicate()
+	for key in PAINT_LAYER_DEFAULTS:
+		if not filled.has(key):
+			filled[key] = PAINT_LAYER_DEFAULTS[key]
+	return filled
 
 
 ## A paint layer by the name the mapper gave it, or its id when it has none.
