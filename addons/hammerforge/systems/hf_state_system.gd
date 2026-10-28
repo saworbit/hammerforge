@@ -1453,9 +1453,11 @@ func capture_paint_layers(include_chunks: bool = true) -> Array:
 		entry["terrain_slot_uv_scales"] = layer.terrain_slot_uv_scales.duplicate()
 		entry["terrain_slot_tints"] = layer.terrain_slot_tints.duplicate()
 		entry["wall_heights"] = layer.get_wall_height_entries()
+		# Every layer's, not only one with a heightmap. Set before an import, it
+		# went back to 10 at the next undo or reopen, and the import took 10 (#2030).
+		entry["height_scale"] = layer.height_scale
 		if layer.has_heightmap():
 			entry["heightmap_b64"] = HFHeightmapIO.encode_to_base64(layer.heightmap)
-			entry["height_scale"] = layer.height_scale
 		if include_chunks:
 			for cid in layer.get_chunk_ids():
 				# An all-zero chunk describes nothing. Serializing one writes its

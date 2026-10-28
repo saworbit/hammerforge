@@ -1035,10 +1035,11 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 				typed_tints.append(t if t is Color else Color(0.5, 0.5, 0.5))
 			layer.terrain_slot_tints = typed_tints
 		layer._ensure_terrain_slots()
+		# The layer's own, with a heightmap or without one (#2030).
+		layer.height_scale = float(entry.get("height_scale", layer.height_scale))
 		var hm_b64 = str(entry.get("heightmap_b64", ""))
 		if hm_b64 != "":
 			layer.heightmap = HFHeightmapIO.decode_from_base64(hm_b64)
-			layer.height_scale = float(entry.get("height_scale", 10.0))
 		var chunks = entry.get("chunks", [])
 		if chunks is Array:
 			_deserialize_chunks_to_layer(layer, chunks)
