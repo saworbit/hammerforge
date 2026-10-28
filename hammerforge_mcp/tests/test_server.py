@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from pathlib import Path
@@ -6,7 +7,7 @@ from typing import Literal
 import pytest
 from mcp import Client
 
-from hammerforge_mcp.bridge import BridgeError
+from hammerforge_mcp.bridge import Bridge, BridgeError
 from hammerforge_mcp.catalogue import TOOLS
 from hammerforge_mcp.server import build_server
 
@@ -962,3 +963,82 @@ async def test_a_bake_asks_for_cordons_only_when_told():
     assert also_whole["params"] == {}
     assert partial["params"] == {"cordons": True}
     assert partial["operation_id"] == "op-5"
+
+
+async def test_malformed_editor_reply_is_a_tool_error_with_a_safe_retry_id(tmp_path):
+    from .conftest import FakeListener, make_project, ok
+
+    changes = []
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request)
+        changes.append(request)
+        if len(changes) == 1:
+            return {**ok(request), "ok": "yes"}
+        answer = ok(request, {"brush": {"brush_id": "b1"}})
+        answer["replayed"] = True
+        return answer
+
+    project = make_project(tmp_path)
+    listener = await FakeListener(project, responder).start()
+    bridge = Bridge(project, client_version="test")
+    params = {"size": [1, 1, 1], "position": [0, 0, 0]}
+    try:
+        async with Client(build_server(bridge)) as client:
+            refused = await client.call_tool("hf_place_brush", params)
+            assert refused.is_error is True
+            error = refused.structured_content["error"]
+            assert error["code"] == "bad_request"
+            retry_id = error["details"]["operation_id"]
+            assert retry_id == changes[0]["operation_id"]
+            retried = await client.call_tool("hf_place_brush", params)
+            assert retried.is_error is False
+            assert retried.structured_content["operation_id"] == retry_id
+            assert retried.structured_content["replayed"] is True
+            assert changes[1]["operation_id"] == retry_id
+    finally:
+        await bridge.close()
+        await listener.stop()
+
+
+async def test_client_cancellation_keeps_a_sent_changes_retry_id(tmp_path):
+    from .conftest import HOLD, FakeListener, make_project, ok
+
+    sent, cancelled = asyncio.Event(), asyncio.Event()
+    changes = []
+
+    class TrackingBridge(Bridge):
+        async def call(self, *args, **kwargs):
+            try:
+                return await super().call(*args, **kwargs)
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request)
+        changes.append(request)
+        sent.set()
+        return HOLD if len(changes) == 1 else ok(request)
+
+    project = make_project(tmp_path)
+    listener = await FakeListener(project, responder).start()
+    bridge = TrackingBridge(project, client_version="test")
+    params = {"size": [1, 1, 1], "position": [0, 0, 0]}
+    try:
+        async with Client(build_server(bridge)) as client:
+            first = asyncio.create_task(client.call_tool("hf_place_brush", params))
+            await asyncio.wait_for(sent.wait(), 2)
+            first.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await first
+            await asyncio.wait_for(cancelled.wait(), 2)
+            answer = await client.call_tool("hf_place_brush", params)
+            assert answer.is_error is False
+            assert changes[1]["operation_id"] == changes[0]["operation_id"]
+            assert listener.connections == 1
+    finally:
+        await bridge.close()
+        await listener.stop()

@@ -1,3 +1,6 @@
+import asyncio
+from unittest.mock import AsyncMock
+
 import pytest
 
 from hammerforge_mcp.bridge import Bridge, BridgeError
@@ -474,3 +477,358 @@ async def test_a_request_too_big_to_send_leaves_the_connection_up(tmp_path):
     assert after["ok"] is True
     assert listener.connections == 1, "nothing was sent, so nothing was dropped"
     assert all(r["method"] == "hf_get_status" for r in listener.requests)
+
+
+async def test_timeout_includes_waiting_to_write_and_does_not_send_later(tmp_path):
+    listener, bridge = await _bridge(tmp_path)
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        await bridge._write_lock.acquire()
+        try:
+            with pytest.raises(BridgeError) as caught:
+                await asyncio.wait_for(
+                    bridge.call("hf_place_brush", {}, mutating=True, timeout=0.05),
+                    1,
+                )
+            assert caught.value.code == "timeout"
+        finally:
+            bridge._write_lock.release()
+        after = await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        assert after["ok"] is True
+        assert all(r["method"] == "hf_get_status" for r in listener.requests)
+        changed = await bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+        assert changed["operation_id"] != caught.value.details["operation_id"]
+    finally:
+        await bridge.close()
+        await listener.stop()
+
+
+async def test_timeout_includes_connecting(tmp_path, monkeypatch):
+    bridge = Bridge(make_project(tmp_path), client_version="test")
+
+    async def never_connect():
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(bridge, "_ensure_connected", never_connect)
+    with pytest.raises(BridgeError) as caught:
+        await asyncio.wait_for(
+            bridge.call("hf_get_status", {}, mutating=False, timeout=0.05), 1
+        )
+    assert caught.value.code == "timeout"
+    assert not bridge.connected
+
+
+async def test_timeout_includes_a_blocked_drain(tmp_path, monkeypatch):
+    listener, bridge = await _bridge(tmp_path)
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        original = bridge._writer.drain
+        monkeypatch.setattr(
+            bridge._writer, "drain", AsyncMock(side_effect=asyncio.Event().wait)
+        )
+        with pytest.raises(BridgeError) as caught:
+            await asyncio.wait_for(
+                bridge.call("hf_place_brush", {}, mutating=True, timeout=0.05), 1
+            )
+        assert caught.value.code == "timeout"
+        assert caught.value.details["operation_id"]
+        monkeypatch.setattr(bridge._writer, "drain", original)
+        assert (await bridge.call("hf_get_status", {}, mutating=False, timeout=5))["ok"]
+    finally:
+        await bridge.close()
+        await listener.stop()
+
+
+async def test_cancelled_change_reuses_its_operation_id_on_retry(tmp_path):
+    sent = asyncio.Event()
+    changes = []
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request)
+        changes.append(request)
+        sent.set()
+        return HOLD if len(changes) == 1 else ok(request)
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    task = None
+    try:
+        task = asyncio.create_task(
+            bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+        )
+        await asyncio.wait_for(sent.wait(), 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        answer = await bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+        assert answer["operation_id"] == changes[0]["operation_id"]
+        assert changes[1]["operation_id"] == changes[0]["operation_id"]
+        assert listener.connections == 1
+    finally:
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        await bridge.close()
+        await listener.stop()
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"type": "error", "error": "broken"},
+        {"type": "response", "id": None, "ok": True, "result": {}},
+        {"type": "response", "id": "r2", "ok": "yes", "result": {}},
+        {"type": "response", "id": "r2", "ok": True, "result": []},
+        {
+            "type": "response",
+            "id": "r2",
+            "ok": False,
+            "error": {"code": "x", "message": "x", "details": []},
+        },
+        {"type": "surprise"},
+        {"revision": None},
+        {"revision": -1},
+        {"revision": 1.5},
+        {"revision": True},
+        {"revision": "5"},
+        {"target_id": None},
+        {"target_id": []},
+        {"replayed": "yes"},
+    ],
+)
+async def test_malformed_reply_fails_promptly_and_allows_reconnect(tmp_path, response):
+    listener, bridge = await _bridge(tmp_path)
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        listener.responder = lambda request: {**ok(request), **response}
+        with pytest.raises(BridgeError) as caught:
+            await bridge.call("hf_place_brush", {}, mutating=True, timeout=0.2)
+        assert caught.value.code == "bad_request"
+        assert caught.value.details["operation_id"]
+        assert not bridge.connected
+        listener.responder = lambda request: ok(request)
+        assert (await bridge.call("hf_get_status", {}, mutating=False, timeout=5))["ok"]
+    finally:
+        await bridge.close()
+        await listener.stop()
+
+
+async def test_handshake_socket_closes_when_call_is_cancelled(tmp_path):
+    from .conftest import write_discovery
+
+    project = make_project(tmp_path)
+    hello_seen, socket_closed = asyncio.Event(), asyncio.Event()
+    handlers = []
+
+    async def stalled_hello(reader, writer):
+        handlers.append(asyncio.current_task())
+        try:
+            await reader.read(4096)
+            hello_seen.set()
+            assert await reader.read() == b""
+        finally:
+            writer.close()
+            socket_closed.set()
+
+    server = await asyncio.start_server(stalled_hello, "127.0.0.1", 0)
+    write_discovery(project, server.sockets[0].getsockname()[1])
+    bridge = Bridge(project, client_version="test")
+    task = asyncio.create_task(
+        bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+    )
+    try:
+        await asyncio.wait_for(hello_seen.wait(), 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await asyncio.wait_for(socket_closed.wait(), 0.2)
+    finally:
+        await bridge.close()
+        server.close()
+        await server.wait_closed()
+        for handler in handlers:
+            handler.cancel()
+        await asyncio.gather(*handlers, return_exceptions=True)
+
+
+async def test_late_change_reply_does_not_reattach_an_old_target(tmp_path):
+    placed = asyncio.Event()
+    held = []
+
+    def responder(request):
+        if request["method"] == "hf_place_brush":
+            held.append(request)
+            placed.set()
+            return HOLD
+        if not held:
+            return ok(request)
+        return [ok(request, target="9:9:9"), ok(held[0])]
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    change = None
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        change = asyncio.create_task(
+            bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+        )
+        await asyncio.wait_for(placed.wait(), 2)
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        await change
+        assert bridge.target_id == "9:9:9"
+    finally:
+        if change is not None and not change.done():
+            change.cancel()
+            await asyncio.gather(change, return_exceptions=True)
+        await bridge.close()
+        await listener.stop()
+
+
+async def test_reconnect_preserves_the_original_target_of_a_change(tmp_path):
+    changes = []
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request)
+        changes.append(request)
+        if len(changes) == 1:
+            # A concurrent status attached elsewhere before this retry.
+            bridge.target_id = "9:9:9"
+            return None
+        return failed(request, "target_changed", target="9:9:9")
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    try:
+        answer = await bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+        assert answer["error"]["code"] == "target_changed"
+        assert [r["expect_target"] for r in changes] == ["1:2:3", "1:2:3"]
+        assert changes[0]["operation_id"] == changes[1]["operation_id"]
+    finally:
+        await bridge.close()
+        await listener.stop()
+
+
+async def test_automatic_retry_ids_do_not_cross_targets(tmp_path):
+    changes = []
+    target = "1:2:3"
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request, target=target)
+        changes.append(request)
+        return HOLD if len(changes) == 1 else ok(request, target=target)
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    try:
+        with pytest.raises(BridgeError):
+            await bridge.call("hf_place_brush", {}, mutating=True, timeout=0.05)
+        target = "9:9:9"
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        await bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+        assert changes[0]["operation_id"] != changes[1]["operation_id"]
+        assert changes[1]["expect_target"] == target
+    finally:
+        await bridge.close()
+        await listener.stop()
+
+
+async def test_connection_error_reports_each_waiting_changes_own_id(tmp_path):
+    first_sent = asyncio.Event()
+    changes = []
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request)
+        changes.append(request)
+        if len(changes) == 1:
+            first_sent.set()
+            return HOLD
+        return {"type": "error", "error": {"code": "bad_request", "message": "no"}}
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    try:
+        first = asyncio.create_task(
+            bridge.call(
+                "hf_place_brush",
+                {"n": 1},
+                mutating=True,
+                timeout=5,
+                operation_id="first",
+            )
+        )
+        await asyncio.wait_for(first_sent.wait(), 2)
+        second = bridge.call(
+            "hf_place_brush", {"n": 2}, mutating=True, timeout=5, operation_id="second"
+        )
+        results = await asyncio.gather(first, second, return_exceptions=True)
+        assert all(isinstance(r, BridgeError) for r in results)
+        assert [r.details["operation_id"] for r in results] == ["first", "second"]
+    finally:
+        await bridge.close()
+        await listener.stop()
+
+
+@pytest.mark.parametrize(
+    ("welcome", "code"),
+    [
+        ({"type": "welcome", "bridge_version": 2}, "unsupported_bridge_version"),
+        ({"type": "welcome", "bridge_version": True}, "unsupported_bridge_version"),
+        ({"type": "error", "error": "bad"}, "bad_request"),
+        ({"type": "unknown"}, "bad_request"),
+        (b"\x00\x00\x00\x01\xff", "bad_request"),
+        (b"\x7f\xff\xff\xff", "frame_too_large"),
+    ],
+)
+async def test_refused_or_malformed_handshake_closes_its_socket(
+    tmp_path, welcome, code
+):
+    listener, bridge = await _bridge(tmp_path)
+    listener.welcome = welcome
+    try:
+        with pytest.raises(BridgeError) as caught:
+            await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        assert caught.value.code == code
+        await asyncio.wait_for(listener.disconnected.wait(), 2)
+        assert not bridge.connected
+    finally:
+        await bridge.close()
+        await listener.stop()
+
+
+async def test_attach_timeout_sends_no_change(tmp_path):
+    listener, bridge = await _bridge(tmp_path, lambda request: HOLD)
+    try:
+        with pytest.raises(BridgeError) as caught:
+            await bridge.call("hf_place_brush", {}, mutating=True, timeout=0.05)
+        assert caught.value.code == "timeout"
+        assert [r["method"] for r in listener.requests] == ["hf_get_status"]
+        listener.responder = lambda request: ok(request)
+        answer = await bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+        assert answer["operation_id"] != caught.value.details["operation_id"]
+    finally:
+        await bridge.close()
+        await listener.stop()
+
+
+async def test_late_status_answer_cannot_replace_a_newer_status_target(tmp_path):
+    first_sent = asyncio.Event()
+    held = []
+
+    def responder(request):
+        if not held:
+            held.append(request)
+            first_sent.set()
+            return HOLD
+        return [ok(request, target="9:9:9"), ok(held[0])]
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    try:
+        first = asyncio.create_task(
+            bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        )
+        await asyncio.wait_for(first_sent.wait(), 2)
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        await first
+        assert bridge.target_id == "9:9:9"
+    finally:
+        await bridge.close()
+        await listener.stop()

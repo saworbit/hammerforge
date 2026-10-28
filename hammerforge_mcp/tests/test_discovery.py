@@ -81,3 +81,51 @@ def test_the_token_is_not_in_repr(tmp_path):
 def test_the_file_sits_in_its_own_folder(tmp_path):
     assert discovery_path(tmp_path).parent.name == "hammerforge_mcp"
     assert discovery_path(tmp_path).parent.parent.name == ".godot"
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("port", 0),
+        ("port", -1),
+        ("port", 65536),
+        ("port", True),
+        ("pid", -1),
+        ("pid", 0),
+        ("pid", 1 << 64),
+        ("bridge_version", 0),
+        ("port", float("inf")),
+        ("pid", float("inf")),
+        ("port", float("nan")),
+    ],
+)
+def test_invalid_discovery_numbers_are_actionable_errors(tmp_path, key, value):
+    project = make_project(tmp_path)
+    write_discovery(project, 4321)
+    path = discovery_path(project)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data[key] = value
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(DiscoveryError, match="Untick and tick") as caught:
+        read_discovery(project)
+    assert TOKEN not in str(caught.value)
+
+
+def test_invalid_utf8_discovery_is_an_actionable_error(tmp_path):
+    project = make_project(tmp_path)
+    discovery_path(project).write_bytes(b"\xff")
+    with pytest.raises(DiscoveryError, match="Untick and tick"):
+        read_discovery(project)
+
+
+def test_unreadable_discovery_is_an_actionable_error(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    project = make_project(tmp_path)
+
+    def denied(*args, **kwargs):
+        raise PermissionError("access denied")
+
+    monkeypatch.setattr(Path, "read_text", denied)
+    with pytest.raises(DiscoveryError, match="access denied"):
+        read_discovery(project)
