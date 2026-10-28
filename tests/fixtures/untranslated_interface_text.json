@@ -1,8 +1,6 @@
 {
 	"res://addons/hammerforge/dock.gd": 59,
 	"res://addons/hammerforge/dock_brush_handler.gd": 33,
-	"res://addons/hammerforge/dock_file_handler.gd": 5,
-	"res://addons/hammerforge/dock_manage_handler.gd": 22,
 	"res://addons/hammerforge/plugin_brush_stamp.gd": 1,
 	"res://addons/hammerforge/plugin_commands.gd": 4,
 	"res://addons/hammerforge/plugin_compare.gd": 2,
