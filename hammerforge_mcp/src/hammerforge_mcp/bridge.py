@@ -10,12 +10,13 @@ A dropped connection fails every waiting call, and each is retried once, with
 the same `operation_id` for a change, so a change the editor already made comes
 back from its cache instead of being made twice.
 
-A change that timed out may still run: the editor reads it off the socket when
-it gets to it. So the `operation_id` of every change left without an answer is
-kept, and the same change asked for again gets the same id. Whichever copy runs
-second is answered from the editor's cache. Not for undo, redo and bake, whose
-arguments do not say which change they are: a second undo is as likely meant as
-another undo, so it gets a new id unless the caller passes the old one.
+A change that timed out or was cancelled may still run: the editor reads it off
+the socket when it gets to it. So the `operation_id` of every sent change left
+without an answer is kept for the same arguments on the same target. The copy
+that runs second is answered from the editor's cache. Not for undo, redo and
+bake, whose arguments do not say which change they are: a second undo is as
+likely meant as another undo, so it gets a new id unless the caller passes the
+old one.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ import json
 import logging
 import uuid
 from collections import OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
 
 from hammerforge_mcp import __version__
@@ -63,6 +65,13 @@ class _ConnectionLost(ConnectionError):
     """The connection went while a call waited. The call may be retried."""
 
 
+@dataclass
+class _CallState:
+    # Once written, a cancelled or failed change may still run in the editor.
+    sent: bool = False
+    target_id: str | None = None
+
+
 class Bridge:
     def __init__(
         self,
@@ -93,12 +102,13 @@ class Bridge:
         self._write_lock = asyncio.Lock()
         self._attach_lock = asyncio.Lock()
         self._ids = itertools.count(1)
+        self._target_response = 0
         #: Which connection this is. A call that failed on an older one must not
         #: close the one another call has just opened.
         self._generation = 0
-        #: A change's method and arguments -> the operation_id it was sent with,
-        #: for changes that never got an answer.
-        self._unanswered: OrderedDict[str, str] = OrderedDict()
+        #: A change's method and arguments -> (operation_id, original target),
+        #: for changes that never got an answer. Never reused on another level.
+        self._unanswered: OrderedDict[str, tuple[str, str | None]] = OrderedDict()
 
     @property
     def connected(self) -> bool:
@@ -132,20 +142,47 @@ class Bridge:
         key = _change_key(method, params) if by_arguments else ""
         if mutating and operation_id is None:
             remembered = self._unanswered.get(key) if by_arguments else None
-            operation_id = remembered or uuid.uuid4().hex
-        if method != "hf_get_status" and self.target_id is None:
-            # Attach before the first change, so it is aimed at the level the
-            # editor has open now and not whatever it has open when it lands.
-            async with self._attach_lock:
-                if self.target_id is None:
-                    await self._call_once("hf_get_status", {}, None, timeout)
+            operation_id = (
+                remembered[0]
+                if remembered is not None and remembered[1] == self.target_id
+                else uuid.uuid4().hex
+            )
+        state = _CallState()
         try:
-            response = await self._call_once(method, params, operation_id, timeout)
+            # One budget for attaching, connecting, waiting to write, draining,
+            # reconnecting and reading. A timeout also removes an unsent waiter.
+            response = await asyncio.wait_for(
+                self._call_attached(method, params, operation_id, state), timeout
+            )
+        except _TIMEOUTS:
+            if by_arguments and state.sent:
+                self._remember_unanswered(key, operation_id, state.target_id)
+            hint = (
+                f" Send it again with operation_id {operation_id} and it will "
+                "not run twice."
+                if operation_id
+                else ""
+            )
+            raise BridgeError(
+                "timeout",
+                f"{method} did not answer within {timeout:g} s. The editor may "
+                "still be working on it: hf_get_status says what it is busy with."
+                + hint,
+                {"operation_id": operation_id} if mutating else {},
+            ) from None
+        except asyncio.CancelledError:
+            if by_arguments and state.sent:
+                self._remember_unanswered(key, operation_id, state.target_id)
+            raise
         except BridgeError as exc:
-            if mutating and exc.code in ("timeout", "bridge_unavailable"):
+            if mutating and state.sent:
                 if by_arguments:
-                    self._remember_unanswered(key, operation_id)
-                exc.details.setdefault("operation_id", operation_id)
+                    self._remember_unanswered(key, operation_id, state.target_id)
+                # A connection-level failure reaches several callers. Each
+                # must report its own id, without changing another's exception.
+                raise BridgeError(
+                    exc.code, str(exc), {**exc.details, "operation_id": operation_id}
+                ) from None
             raise
         if by_arguments:
             self._unanswered.pop(key, None)
@@ -153,31 +190,46 @@ class Bridge:
             response.setdefault("operation_id", operation_id)
         return response
 
-    def _remember_unanswered(self, key: str, operation_id: str | None) -> None:
+    async def _call_attached(
+        self, method: str, params: dict, operation_id: str | None, state: _CallState
+    ) -> dict:
+        if method != "hf_get_status" and self.target_id is None:
+            async with self._attach_lock:
+                if self.target_id is None:
+                    await self._call_once("hf_get_status", {}, None, _CallState())
+        return await self._call_once(method, params, operation_id, state)
+
+    def _remember_unanswered(
+        self, key: str, operation_id: str | None, target_id: str | None
+    ) -> None:
         if operation_id is None:
             return
-        self._unanswered[key] = operation_id
+        self._unanswered[key] = (operation_id, target_id)
         self._unanswered.move_to_end(key)
         while len(self._unanswered) > UNANSWERED_LIMIT:
             self._unanswered.popitem(last=False)
 
     async def _call_once(
-        self, method: str, params: dict, operation_id: str | None, timeout: float
+        self, method: str, params: dict, operation_id: str | None, state: _CallState
     ) -> dict:
         lost: BaseException | None = None
+        # A status running alongside this call may attach to another scene.
+        # Retries must keep the original target as well as the operation id.
+        state.target_id = self.target_id
         for attempt in (1, 2):
+            request_number = next(self._ids)
             request: dict = {
                 "type": "request",
                 # A string: Godot reads every JSON number as a float, so 7
                 # would come back as 7.0.
-                "id": f"r{next(self._ids)}",
+                "id": f"r{request_number}",
                 "method": method,
                 "params": params,
             }
             if operation_id is not None:
                 request["operation_id"] = operation_id
-            if method != "hf_get_status" and self.target_id:
-                request["expect_target"] = self.target_id
+            if method != "hf_get_status" and state.target_id:
+                request["expect_target"] = state.target_id
             try:
                 frame = encode_frame(request)
             except FrameError as exc:
@@ -188,20 +240,7 @@ class Bridge:
             try:
                 await self._ensure_connected()
                 generation = self._generation
-                response = await self._send_and_wait(request["id"], frame, timeout)
-            except _TIMEOUTS:
-                hint = (
-                    f" Send it again with operation_id {operation_id} and it will "
-                    "not run twice."
-                    if operation_id
-                    else ""
-                )
-                raise BridgeError(
-                    "timeout",
-                    f"{method} did not answer within {timeout:g} s. The editor may "
-                    "still be working on it: hf_get_status says what it is busy with."
-                    + hint,
-                ) from None
+                response = await self._send_and_wait(request["id"], frame, state)
             except FrameError as exc:
                 await self._drop(generation)
                 raise BridgeError(exc.code, str(exc)) from None
@@ -215,8 +254,16 @@ class Bridge:
                     "lost the editor during %s (try %d): %s", method, attempt, exc
                 )
                 continue
-            if response.get("ok") and response.get("target_id"):
-                self.target_id = str(response["target_id"])
+            if (
+                response.get("ok")
+                and response.get("target_id")
+                and method in ("hf_get_status", "hf_create_starter")
+                and request_number > self._target_response
+            ):
+                # Ordinary reads and changes cannot reattach an old target
+                # when their replies arrive after a newer status answer.
+                self.target_id = response["target_id"]
+                self._target_response = request_number
             return response
         raise BridgeError(
             "bridge_unavailable",
@@ -225,7 +272,7 @@ class Bridge:
         )
 
     async def _send_and_wait(
-        self, request_id: str, frame: bytes, timeout: float
+        self, request_id: str, frame: bytes, state: _CallState
     ) -> dict:
         future: asyncio.Future = asyncio.get_running_loop().create_future()
         self._waiters[request_id] = future
@@ -239,11 +286,18 @@ class Bridge:
                 writer = self._writer
                 if writer is None:
                     raise _ConnectionLost("not connected")
+                state.sent = True
                 writer.write(frame)
                 await writer.drain()
-            return await asyncio.wait_for(future, timeout)
+            return await future
         finally:
             self._waiters.pop(request_id, None)
+            if not future.done():
+                future.cancel()
+            elif not future.cancelled():
+                # A disconnect may fail the waiter while the caller is still
+                # draining or waiting for the lock, then cancellation wins.
+                future.exception()
 
     async def _read_loop(self, reader: asyncio.StreamReader) -> None:
         """Hand each response to its waiter until the connection goes."""
@@ -252,6 +306,7 @@ class Bridge:
                 message = await read_frame(reader)
                 kind = message.get("type")
                 if kind == "response":
+                    _validate_response(message)
                     waiter = self._waiters.get(str(message.get("id")))
                     if waiter is not None and not waiter.done():
                         waiter.set_result(message)
@@ -259,19 +314,10 @@ class Bridge:
                         log.debug("an answer nobody waits for: %s", message.get("id"))
                 elif kind == "error":
                     # The editor closes the connection after one of these.
-                    error = message.get("error") or {}
-                    self._fail_all(
-                        BridgeError(
-                            str(error.get("code", "bad_request")),
-                            str(
-                                error.get("message", "The editor closed the connection")
-                            ),
-                            error.get("details") or {},
-                        )
-                    )
+                    self._fail_all(_response_error(message))
                     return
                 else:
-                    log.debug("ignoring a %s frame", kind)
+                    raise FrameError("bad_request", "Unexpected bridge frame type")
         except FrameError as exc:
             self._fail_all(exc)
         except _LOST as exc:
@@ -316,21 +362,30 @@ class Bridge:
         }
         if self.observer:
             hello["role"] = "observer"
+        accepted = False
         try:
             writer.write(encode_frame(hello))
             await writer.drain()
             reply = await asyncio.wait_for(read_frame(reader), self.connect_timeout)
+            if reply.get("type") == "error":
+                raise _response_error(reply)
+            if reply.get("type") != "welcome":
+                raise FrameError("bad_request", "Expected a bridge welcome frame")
+            version = reply.get("bridge_version")
+            if isinstance(version, bool) or version != BRIDGE_VERSION:
+                raise BridgeError(
+                    "unsupported_bridge_version",
+                    "The editor's welcome does not match this server's bridge "
+                    f"version {BRIDGE_VERSION}. Update whichever is older.",
+                )
+            accepted = True
         except (*_TIMEOUTS, *_LOST) as exc:
-            writer.close()
             raise ConnectionError("the editor did not answer the hello") from exc
-        if reply.get("type") != "welcome":
-            writer.close()
-            error = reply.get("error") or {}
-            raise BridgeError(
-                str(error.get("code", "bad_request")),
-                str(error.get("message", "The editor refused the connection")),
-                error.get("details") or {},
-            )
+        finally:
+            # Includes cancellation and malformed frames. Until accepted this
+            # writer belongs to the handshake, so _drop cannot close it.
+            if not accepted:
+                writer.close()
         self.welcome = reply
         self._generation += 1
         self._reader, self._writer = reader, writer
@@ -366,4 +421,45 @@ class Bridge:
 
 
 def _change_key(method: str, params: dict) -> str:
-    return json.dumps([method, params], sort_keys=True, separators=(",", ":"))
+    try:
+        return json.dumps(
+            [method, params], sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
+    except (TypeError, ValueError, RecursionError):
+        raise BridgeError(
+            "invalid_argument", "Tool arguments must be finite JSON values"
+        ) from None
+
+
+def _response_error(message: dict) -> BridgeError:
+    error = message.get("error")
+    if (
+        not isinstance(error, dict)
+        or not isinstance(error.get("code"), str)
+        or not error["code"]
+        or not isinstance(error.get("message"), str)
+        or not isinstance(error.get("details", {}), dict)
+    ):
+        raise FrameError("bad_request", "Malformed bridge error envelope")
+    return BridgeError(error["code"], error["message"], error.get("details", {}))
+
+
+def _validate_response(message: dict) -> None:
+    revision = message.get("revision")
+    if (
+        not isinstance(message.get("id"), str)
+        or not message["id"]
+        or not isinstance(message.get("ok"), bool)
+        or not isinstance(message.get("target_id"), str)
+        or isinstance(revision, bool)
+        or not isinstance(revision, (int, float))
+        or revision < 0
+        or revision != int(revision)
+        or ("replayed" in message and not isinstance(message["replayed"], bool))
+    ):
+        raise FrameError("bad_request", "Malformed bridge response envelope")
+    if message["ok"]:
+        if not isinstance(message.get("result"), dict):
+            raise FrameError("bad_request", "A bridge result must be an object")
+    else:
+        _response_error(message)
