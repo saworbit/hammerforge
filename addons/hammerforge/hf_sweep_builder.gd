@@ -296,20 +296,22 @@ static func plan(settings: Dictionary, run: Dictionary) -> Dictionary:
 	var merged := HFGeneratorSchema.merge(settings_schema(), settings)
 	var path := int(merged["path"])
 	var toward := toward_of(float(merged["toward"]))
+	var angle := float(merged["angle"])
+	var radius := float(merged["radius"])
 	var start := Transform3D.IDENTITY
 	var end := HFFaceSweep.end_frame(
-		start,
-		path,
-		float(merged["length"]),
-		float(merged["angle"]),
-		float(merged["radius"]),
-		float(merged["offset"]),
-		toward
+		start, path, float(merged["length"]), angle, radius, float(merged["offset"]), toward
 	)
-	var frame_list := HFFaceSweep.frames(path, start, end, int(merged["segments"]))
+	# An arc turns by the Angle itself, not by what the end frame reads back as,
+	# which is never past a half turn (#1968).
+	var turn := {}
+	if path == HFFaceSweep.Path.ARC:
+		turn = HFFaceSweep.arc_turn(start, angle, radius, toward)
+	var frame_list := HFFaceSweep.frames(path, start, end, int(merged["segments"]), turn)
 	frame_list = HFFaceSweep.repeated(frame_list, int(merged["iterations"]))
 	var end_scale := Vector2(float(merged["end_width"]), float(merged["end_height"]))
-	var made := HFFaceSweep.pieces(rings_of(run), frame_list, end_scale)
+	var backward := path == HFFaceSweep.Path.ARC and angle < 0.0
+	var made := HFFaceSweep.pieces(rings_of(run), frame_list, end_scale, backward)
 	made["frames"] = frame_list
 	return made
 

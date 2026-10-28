@@ -219,10 +219,10 @@ func _paths_measured() -> void:
 
 ## The schema, the dialog's spin box and the end handle all allow -360 to 360, and
 ## the guide says the end handle drags "on past a half turn". An arc of 180 or
-## more is refused as folding, with advice that cannot help, while the same arc
-## made as two iterations of half of it builds: the angle only reaches the
-## geometry as an end frame, and the turn read back off the two frames is never
-## more than a half turn (`HFFaceSweep._arc()`).
+## more was refused as folding, with advice that could not help, while the same
+## arc made as two iterations of half of it built: the turn was read back off the
+## two end frames, which is never more than a half turn (#1968). Now the arc turns
+## by its Angle (`HFFaceSweep.arc_turn()`), and this checks it still does.
 func _half_turn_and_past() -> void:
 	var refused: Array = []
 	for angle in [180.0, 270.0, 360.0]:
