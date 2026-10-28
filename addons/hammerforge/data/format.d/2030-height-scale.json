@@ -1,0 +1,7 @@
+{
+	"what": "A paint layer's Height Scale, now saved for a layer without a heightmap too.",
+	"older_builds": "Read only beside a heightmap, so a layer without one opens at 10.",
+	"keys": [
+		"state.paint_layers[].height_scale"
+	]
+}

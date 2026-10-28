@@ -831,6 +831,10 @@ func restore_state(state: Dictionary) -> void:
 		HFLog.warn("HFStateSystem: skipped %d entry this level could not use" % skipped)
 		if root.has_signal("user_message"):
 			root.user_message.emit("Skipped %d unreadable entry in this level" % skipped, 1)
+	# The paint layers went back above, and the Paint tab reads them only when
+	# told, as the layer commands tell it. An undo of Rename left the new name on
+	# its row, and of Height Scale the value typed in its spin (#2029, #2030).
+	root._emit_or_batch("paint_layer_changed", [root.paint_system.get_active_paint_layer_index()])
 	# Last, once the brushes it names are back. The dock's Surface Paint panel and
 	# selection count read the selection when told it changed, and an undo that
 	# put back another one said nothing, so they showed the one it replaced
@@ -1453,9 +1457,11 @@ func capture_paint_layers(include_chunks: bool = true) -> Array:
 		entry["terrain_slot_uv_scales"] = layer.terrain_slot_uv_scales.duplicate()
 		entry["terrain_slot_tints"] = layer.terrain_slot_tints.duplicate()
 		entry["wall_heights"] = layer.get_wall_height_entries()
+		# Every layer's, not only one with a heightmap. Set before an import, it
+		# went back to 10 at the next undo or reopen, and the import took 10 (#2030).
+		entry["height_scale"] = layer.height_scale
 		if layer.has_heightmap():
 			entry["heightmap_b64"] = HFHeightmapIO.encode_to_base64(layer.heightmap)
-			entry["height_scale"] = layer.height_scale
 		if include_chunks:
 			for cid in layer.get_chunk_ids():
 				# An all-zero chunk describes nothing. Serializing one writes its

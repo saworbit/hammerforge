@@ -187,7 +187,11 @@ func build(parent: Control) -> void:
 		tex_btn.text = "Texture..."
 		tex_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		slot_row.add_child(tex_btn)
-		var scale_spin = dock._make_spin(0.01, 100, 0.1, 1.0)
+		# Values a hundredth apart, arrows a tenth. A step of 0.1 from 0.01 held
+		# 0.01, 0.11, 1.01 and so on, so the default of 1 showed as 1.01 and a
+		# typed 2 set 2.01 (#2030).
+		var scale_spin = dock._make_spin(0.01, 100, 0.01, 1.0)
+		scale_spin.custom_arrow_step = 0.1
 		slot_row.add_child(scale_spin)
 		bc.add_child(slot_row)
 		slot_buttons.append(tex_btn)

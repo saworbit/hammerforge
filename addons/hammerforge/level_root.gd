@@ -3818,10 +3818,12 @@ func rename_paint_layer(index: int, new_name: String) -> bool:
 
 func set_terrain_slot_texture(slot: int, path: String) -> void:
 	paint_system.set_terrain_slot_texture(slot, path)
+	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
 func set_terrain_slot_uv_scale(slot: int, value: float) -> void:
 	paint_system.set_terrain_slot_uv_scale(slot, value)
+	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
 func remove_active_paint_layer() -> void:
@@ -3868,12 +3870,17 @@ func generate_heightmap_noise(settings: Dictionary = {}) -> void:
 	paint_system.generate_heightmap_noise(settings)
 
 
+## These and the terrain slot setters tell the Paint tab, as the layer commands
+## do. A redo calls them again, and the spins went on showing the value from
+## before it (#2030).
 func set_heightmap_scale(value: float) -> void:
 	paint_system.set_heightmap_scale(value)
+	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
 func set_layer_y(value: float) -> void:
 	paint_system.set_layer_y(value)
+	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
 func set_region_streaming_enabled(value: bool) -> void:

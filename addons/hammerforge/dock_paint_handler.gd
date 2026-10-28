@@ -457,6 +457,19 @@ static func on_layer_y_changed(dock: Object, value: float) -> void:
 	)
 
 
+## Height Scale and Layer Y show the active layer's, set without a signal so
+## showing a value records no step. Set only by typing in them, they showed the
+## last value typed after a switch of layer or an undo (#2030).
+static func refresh_layer_spins(dock: Object) -> void:
+	var layer = _active_paint_layer(dock)
+	if layer == null:
+		return
+	if dock.height_scale_spin:
+		dock.height_scale_spin.set_value_no_signal(layer.height_scale)
+	if dock.layer_y_spin and layer.grid:
+		dock.layer_y_spin.set_value_no_signal(layer.grid.layer_y)
+
+
 static func _active_paint_layer(dock: Object) -> HFPaintLayer:
 	if dock == null or not dock.level_root or not dock.level_root.paint_layers:
 		return null

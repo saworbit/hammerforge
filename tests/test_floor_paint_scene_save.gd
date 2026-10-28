@@ -117,6 +117,28 @@ func test_a_second_layer_keeps_its_settings_and_stays_active():
 	assert_almost_eq(reopened.get_height_at(Vector2i(1, 1)), 3.0, 0.01, "at its height scale")
 
 
+## A layer's Height Scale is its own before it has a heightmap. It was written
+## only beside one, so a value set first went back to 10 at the next undo or
+## reopen, and the heightmap imported afterwards took 10 (#2030).
+func test_a_height_scale_set_before_a_heightmap_is_kept():
+	var root := _fresh_root()
+	root.set_heightmap_scale(3.0)
+	assert_false(_layer(root, 0).has_heightmap(), "fixture: no heightmap")
+	var before: Dictionary = root.capture_undo_state()
+	_layer(root, 0).set_cell(Vector2i(1, 1), true)
+	root.restore_state(before)
+	assert_almost_eq(_layer(root, 0).height_scale, 3.0, 0.0001, "through an undo")
+
+	var copy := _save_and_reopen(root)
+	assert_almost_eq(_layer(copy, 0).height_scale, 3.0, 0.0001, "through the scene")
+
+	assert_eq(root.save_hflevel(LEVEL, true), OK, "the level saves")
+	await _drain_save(root)
+	var loaded := _fresh_root()
+	assert_true(loaded.load_hflevel(LEVEL), "the level loads")
+	assert_almost_eq(_layer(loaded, 0).height_scale, 3.0, 0.0001, "through the .hflevel")
+
+
 ## A scene saved before this carries no floor paint, and opening it must not
 ## clear what it does hold: the layer nodes, and the floor built from them.
 func test_a_scene_from_before_keeps_its_layers_and_its_floor():

@@ -424,6 +424,126 @@ func test_height_scale_layer_y_and_rename_are_undo_steps() -> void:
 	undo.free_histories()
 
 
+## A dock bound to `root` as the editor binds one, so it hears the level's
+## signals, with a stand-in undo history.
+func _bound_dock(root: LevelRoot):
+	var dock = DockScene.instantiate()
+	add_child_autoqfree(dock)
+	dock.level_root = root
+	dock.connected_root = root
+	dock._connect_root_signals()
+	dock.undo_redo = EditorPluginStandIn.FakeUndoRedoManager.new()
+	return dock
+
+
+func _layer_rows(dock) -> Array:
+	var rows: Array = []
+	for i in dock.paint_layer_select.item_count:
+		rows.append(dock.paint_layer_select.get_item_text(i))
+	return rows
+
+
+func test_an_undo_or_redo_of_a_layer_edit_redraws_the_layer_list() -> void:
+	# The restore put the layers back and said nothing, and only the signal
+	# rebuilds the list, so an undo of Rename left the new name on its row (#2029).
+	var root := _fresh_root()
+	var dock = _bound_dock(root)
+	var undo = dock.undo_redo
+	var shown := func() -> Array: return [_layer_rows(dock), dock.paint_layer_select.selected]
+	var level := func() -> Array:
+		return [root.get_paint_layer_names(), root.get_active_paint_layer_index()]
+
+	HFDockPaintHandler.on_paint_layer_rename_confirmed(dock, 0, "Hills")
+	assert_eq(_layer_rows(dock), ["Hills"], "fixture: the row reads the new name")
+	undo.press_undo()
+	assert_false(_layer_rows(dock).has("Hills"), "an undo of Rename")
+	assert_eq(shown.call(), level.call())
+	undo.press_redo()
+	assert_eq(_layer_rows(dock), ["Hills"], "its redo, which puts back a snapshot")
+
+	dock._on_paint_layer_add()
+	assert_eq(_layer_rows(dock).size(), 2, "fixture: Add Layer adds a row")
+	undo.press_undo()
+	assert_eq(_layer_rows(dock), ["Hills"], "an undo of Add Layer")
+	assert_eq(shown.call(), level.call())
+
+	dock._on_paint_layer_add()
+	dock._on_paint_layer_remove()
+	assert_eq(_layer_rows(dock), ["Hills"], "fixture: Remove Layer takes the row")
+	undo.press_undo()
+	assert_eq(_layer_rows(dock).size(), 2, "an undo of Remove Layer")
+	assert_eq(shown.call(), level.call(), "with the row it put back chosen")
+	undo.free_histories()
+
+
+func test_the_spins_show_the_active_layer_after_a_switch_and_an_undo() -> void:
+	# Set only by typing in them, they showed the last value typed after a switch
+	# of layer or an undo, and an undo of Layer Y lost a Height Scale set on a
+	# layer with no heightmap (#2030).
+	var root := _fresh_root()
+	var dock = _bound_dock(root)
+	var undo = dock.undo_redo
+	var spins := func() -> Array: return [dock.height_scale_spin.value, dock.layer_y_spin.value]
+	# Read again each time, because a restore builds the layers again.
+	var active := func() -> Array:
+		var layer = root.paint_layers.get_active_layer()
+		return [layer.height_scale, layer.grid.layer_y]
+	assert_false(
+		root.paint_layers.get_active_layer().has_heightmap(), "fixture: a layer with no heightmap"
+	)
+
+	dock.height_scale_spin.value = 3.0
+	dock.layer_y_spin.value = 1.5
+	assert_eq(active.call(), [3.0, 1.5], "fixture: both spins set the layer")
+	undo.press_undo()
+	assert_eq(active.call(), [3.0, 0.0], "an undo of Layer Y undoes it alone")
+	assert_eq(spins.call(), [3.0, 0.0], "and the spins show the layer")
+	undo.press_undo()
+	assert_eq(spins.call(), [10.0, 0.0], "then of Height Scale")
+	undo.press_redo()
+	assert_eq(spins.call(), [3.0, 0.0], "a redo of Height Scale, which calls it again")
+	undo.press_redo()
+	assert_eq(spins.call(), [3.0, 1.5], "and of Layer Y")
+
+	dock._on_paint_layer_add()
+	assert_eq(root.get_active_paint_layer_index(), 1, "fixture: the new layer is the active one")
+	assert_eq(spins.call(), active.call(), "a new layer shows its own")
+	assert_eq(spins.call(), [10.0, 0.0])
+	dock._on_paint_layer_selected(0)
+	assert_eq(spins.call(), [3.0, 1.5], "and switching back shows the first's")
+	assert_eq(undo.step_count(), 3, "showing a value records no step")
+	undo.free_histories()
+
+
+func test_the_terrain_slot_controls_follow_an_undo_and_a_redo() -> void:
+	# They read the active layer as the spins above do, and kept what was typed or
+	# picked through an undo or a redo of it in the same way.
+	var root := _fresh_root()
+	var dock = _bound_dock(root)
+	var undo = dock.undo_redo
+	var slot_spin: SpinBox = dock.terrain_slot_scales[0]
+	assert_almost_eq(slot_spin.value, 1.0, 0.0001, "the spin shows the default of 1, not 1.01")
+	slot_spin.value = 2.0
+	var slot_scale := func() -> float:
+		return float(root.paint_layers.get_active_layer().terrain_slot_uv_scales[0])
+	assert_almost_eq(slot_scale.call(), 2.0, 0.0001, "a typed 2 sets 2, not 2.01")
+	undo.press_undo()
+	assert_almost_eq(slot_scale.call(), 1.0, 0.0001, "fixture: the undo puts the scale back")
+	assert_almost_eq(slot_spin.value, 1.0, 0.0001, "an undo of a slot scale")
+	undo.press_redo()
+	assert_almost_eq(slot_spin.value, 2.0, 0.0001, "and its redo")
+
+	var slot_button: Button = dock.terrain_slot_buttons[1]
+	dock._terrain_slot_pick_index = 1
+	dock._on_terrain_slot_texture_selected("res://new.tres")
+	assert_eq(slot_button.text, "new.tres", "fixture: the button names the texture")
+	undo.press_undo()
+	assert_eq(slot_button.text, "Texture...", "an undo of a slot texture")
+	undo.press_redo()
+	assert_eq(slot_button.text, "new.tres", "and its redo")
+	undo.free_histories()
+
+
 func test_commands_holding_live_nodes_ask_for_an_absolute_redo() -> void:
 	# Anything passing dock._selection_nodes or an entity into the wrapper: the
 	# redo cannot be a re-call, because the undo freed what it would be handed.
