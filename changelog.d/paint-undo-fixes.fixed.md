@@ -1,2 +1,0 @@
-- An undo or redo of a paint layer edit redraws the Paint tab's layer list. (issue [#2029](https://github.com/saworbit/hammerforge/issues/2029))
-- Height Scale set before a heightmap survives an undo and a save, and the spins show the active layer's values. (issue [#2030](https://github.com/saworbit/hammerforge/issues/2030))

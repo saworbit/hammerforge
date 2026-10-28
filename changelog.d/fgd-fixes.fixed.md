@@ -1,3 +1,0 @@
-- A name typed in an FGD class's targetname field is the name wires aim at. (issue [#1985](https://github.com/saworbit/hammerforge/issues/1985))
-- A flags default keeps its value through Convert to JSON. (issue [#1986](https://github.com/saworbit/hammerforge/issues/1986))
-- One unclosed bracket in an FGD leaves out its own class only, and says so. (issue [#1987](https://github.com/saworbit/hammerforge/issues/1987))

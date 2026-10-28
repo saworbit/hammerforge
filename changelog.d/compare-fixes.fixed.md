@@ -1,3 +1,0 @@
-- Compare names a rename, a visgroup or group change, and a wire left aimed at nothing. (issue [#1982](https://github.com/saworbit/hammerforge/issues/1982))
-- Compare reads a move with Texture Lock as a move, not a texture edit on four faces. (issue [#1989](https://github.com/saworbit/hammerforge/issues/1989))
-- Compare names a removed paint layer by its name, not its id. (issue [#1992](https://github.com/saworbit/hammerforge/issues/1992))

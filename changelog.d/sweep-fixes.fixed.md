@@ -1,3 +1,0 @@
-- An arc of a half turn or more, or of a negative angle, sweeps as far as its Angle says. (issue [#1968](https://github.com/saworbit/hammerforge/issues/1968))
-- A side that tapers on a swept arc or S bend takes the look of the face it ran along. (issue [#1970](https://github.com/saworbit/hammerforge/issues/1970))
-- Re-pick and Update read a structure moved or turned with Texture Lock as unpainted. (issue [#1969](https://github.com/saworbit/hammerforge/issues/1969))

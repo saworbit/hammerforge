@@ -1,1 +1,0 @@
-- A streamed level reopened from its scene streams its paint in, and its next save keeps the region files. (issue [#2006](https://github.com/saworbit/hammerforge/issues/2006))

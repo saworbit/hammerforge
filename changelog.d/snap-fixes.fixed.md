@@ -1,2 +1,0 @@
-- A distance typed along a guide is spent by the press that starts a Draw, so the drag follows the pointer. (issue [#2001](https://github.com/saworbit/hammerforge/issues/2001))
-- The guide says a Repeat copy has its corners on a turned grid when its sides are an even number of steps. (issue [#2005](https://github.com/saworbit/hammerforge/issues/2005))

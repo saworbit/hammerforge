@@ -1,2 +1,0 @@
-- Validate Spawn says "below" for a spawn that is too low, and "above" only for one too high. (issue [#2032](https://github.com/saworbit/hammerforge/issues/2032))
-- Create Default Spawn moves off a gap at the middle of the level to the nearest place with floor under the player. (issue [#2033](https://github.com/saworbit/hammerforge/issues/2033))

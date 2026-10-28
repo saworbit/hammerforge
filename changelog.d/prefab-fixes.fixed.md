@@ -1,2 +1,0 @@
-- A prefab copy's kept value stays on its own piece through a Pull after a Push dropped an earlier piece. (issue [#1976](https://github.com/saworbit/hammerforge/issues/1976))
-- Discard Changes, Clear Kept and a variant switch leave a prefab copy with a locked piece as it is, and say why. (issue [#1977](https://github.com/saworbit/hammerforge/issues/1977))
