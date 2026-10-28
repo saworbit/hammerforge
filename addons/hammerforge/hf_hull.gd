@@ -35,14 +35,18 @@ const FLAT := "The points lie in one plane, so they hold no solid"
 ## The hull of `points`: `{"ok": true, "faces": Array[FaceData], "corners":
 ## PackedVector3Array}`, the faces in the points' own space, or `{"ok": false,
 ## "reason": String}` for fewer than four points or points in one plane.
-static func of(points: PackedVector3Array) -> Dictionary:
+##
+## `rounding` is how far the points may sit from where they were meant to be. A
+## corner that far off a face is on it: a brush kilometres out is placed to a
+## float's step there, which is more than `ON_FACE` (#1971).
+static func of(points: PackedVector3Array, rounding := 0.0) -> Dictionary:
 	var unique := unique_points(points)
 	if unique.size() < 4:
 		return {"ok": false, "reason": TOO_FEW}
 	if is_flat(unique):
 		return {"ok": false, "reason": FLAT}
 	var corners := _corners(unique)
-	var faces := _faces(corners)
+	var faces := _faces(corners, maxf(ON_FACE, rounding))
 	if faces.size() < 4:
 		return {"ok": false, "reason": FLAT}
 	return {"ok": true, "faces": faces, "corners": corners}

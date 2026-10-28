@@ -127,6 +127,49 @@ func test_carving_a_hull_gives_pieces_a_restore_keeps():
 	assert_eq(kept, ids, "a restore leaves none of the pieces out")
 
 
+## Two 1 x 1 x 1 boxes 3 apart, turned together far from the origin, wrap in the
+## 4 x 1 x 1 box (#1971). The hull read the second box into the first's space
+## through the product of the two world transforms, which put its corners a few
+## ten-thousandths off where they are. And five kilometres out a float's step sets
+## two turned boxes 0.00024 out of line, more than the hull's 0.0001, wherever they
+## are read.
+## Either way the hull came out with 7 faces and a seam open.
+func test_two_turned_boxes_far_out_wrap_in_one_closed_box():
+	var root := _fresh_root()
+	for case in [
+		[Vector3(3000.3, 0, -1980.7), 45.0],
+		[Vector3(3000.3, 0, -1980.7), 7.0],
+		[Vector3(8000.3, 0, -5280.7), 30.0],
+		[Vector3(5074, 0, -5598.25), 40.0],
+	]:
+		var at: Vector3 = case[0]
+		var label := "turned %d at %s" % [case[1], at]
+		var a: Node3D = _box(root, "a", Vector3.ONE, at + Vector3(0, 0.5, 0))
+		var b: Node3D = _box(root, "b", Vector3.ONE, at + Vector3(3, 0.5, 0))
+		root.rotate_managed_nodes(["a", "b"], [], 1, case[1], at)
+		# Where b is in a's space, worked out in doubles from their places.
+		var from: Transform3D = a.global_transform
+		var to: Transform3D = b.global_transform
+		var gap := [
+			to.origin.x - from.origin.x, to.origin.y - from.origin.y, to.origin.z - from.origin.z
+		]
+		var want := Vector3()
+		for axis in 3:
+			var column: Vector3 = from.basis[axis]
+			want[axis] = column.x * gap[0] + column.y * gap[1] + column.z * gap[2]
+		var carried: Vector3 = root.carve_system._in_space_of(a, b).origin
+		assert_lt(carried.distance_to(want), 0.00001, "%s: b read where it is" % label)
+		var made: HFOpResult = root.hull_brushes_by_ids(["a", "b"])
+		assert_true(made.ok, made.message)
+		var brushes: Array = root._iter_managed_brush_nodes()
+		assert_eq(brushes.size(), 1, label)
+		for hull in brushes:
+			assert_eq(hull.faces.size(), 6, label)
+			assert_eq(_open_edges(hull.faces), 0, "%s closes" % label)
+			assert_almost_eq(HFSolidMeasure.volume(hull.faces), 4.0, 0.001, label)
+			root.brush_system.delete_brush(hull)
+
+
 func _shape(root: LevelRoot, brush_id: String, shape: int, size: Vector3, at: Vector3) -> Node:
 	return root.create_brush_from_info(
 		{"shape": shape, "size": size, "center": at, "brush_id": brush_id}

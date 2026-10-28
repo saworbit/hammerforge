@@ -23,6 +23,10 @@ const HFHullType = preload("../hf_hull.gd")
 ## How far a corner may stand off another brush's face plane and still count as
 ## lying on it, when a face of an intersection looks for the face it was cut by.
 const ON_PLANE := 0.01
+## A float's step is at most 1 / 2^23 of the number it holds, and a brush's place
+## is held to half a step on each axis. Two brushes can be out of line by a step
+## on each axis, so a hull of them takes two steps as on a face.
+const PLACEMENT_STEPS := 2.0 / 8388608.0
 
 var root: Node3D
 
@@ -636,15 +640,12 @@ func _plan_hull(brush_ids: Array) -> Dictionary:
 			"Hull: the selected brushes are not all one entity",
 			"Wrap the brushes of one door or trigger, or plain brushes. Tie or untie them first"
 		)
-	var into_target: Transform3D = target.global_transform.affine_inverse()
 	var sources: Array = []
 	var source_owner := {}
 	var points := PackedVector3Array()
 	for draft in drafts:
 		root.brush_system._ensure_faces(draft)
-		var carried: Array = HFBrushSystem._faces_carried(
-			draft, into_target * (draft as DraftBrush).global_transform
-		)
+		var carried: Array = HFBrushSystem._faces_carried(draft, _in_space_of(target, draft))
 		if carried.size() < 4:
 			return _hull_refusal(
 				"Hull: brush '%s' has no usable geometry" % _brush_id_of(draft),
@@ -654,7 +655,7 @@ func _plan_hull(brush_ids: Array) -> Dictionary:
 			sources.append(face)
 			source_owner[face] = draft
 			points.append_array((face as FaceData).local_verts)
-	var hull: Dictionary = HFHullType.of(points)
+	var hull: Dictionary = HFHullType.of(points, _placement_rounding(drafts))
 	if not hull["ok"]:
 		return _hull_refusal("Hull: the brushes hold no solid", hull["reason"])
 	var faces: Array = hull["faces"]
@@ -680,6 +681,31 @@ func _plan_hull(brush_ids: Array) -> Dictionary:
 		"owner_of": owner_of,
 		"new_faces": new_faces,
 	}
+
+
+## Where `draft` is in `target`'s space. The two origins are taken apart in the
+## world before the turn, so the rounding is that of the distance between them
+## and not of their distance from the origin. Kilometres out the product of the
+## two transforms put a turned brush's corners a few ten-thousandths off, and the
+## hull, which holds a corner 0.0001 off a face's plane as off it, came out open
+## (#1971).
+static func _in_space_of(target: Node3D, draft: Node3D) -> Transform3D:
+	var from := target.global_transform
+	var to := draft.global_transform
+	var unturn := from.basis.inverse()
+	return Transform3D(unturn * to.basis, unturn * (to.origin - from.origin))
+
+
+## How far out of line a float can set two of `drafts`, at the largest coordinate
+## of their places. A float's step is 0.0002 three kilometres out, so two brushes
+## turned together there need not line up to the hull's 0.0001, and the hull made
+## a face of each where one face goes (#1971).
+static func _placement_rounding(drafts: Array) -> float:
+	var far := 0.0
+	for draft in drafts:
+		var at: Vector3 = (draft as Node3D).global_transform.origin
+		far = maxf(far, maxf(absf(at.x), maxf(absf(at.y), absf(at.z))))
+	return far * PLACEMENT_STEPS
 
 
 static func _hull_refusal(msg: String, hint: String = "") -> Dictionary:
