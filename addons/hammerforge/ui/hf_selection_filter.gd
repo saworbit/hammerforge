@@ -237,15 +237,18 @@ func _build_similar_keys() -> void:
 		head.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 		row.add_child(head)
 		var checks: Dictionary = {}
+		var similar := {
+			"brush": HFTranslationType.t("Similar brushes must have the same {property}"),
+			"face": HFTranslationType.t("Similar faces must have the same {property}"),
+			"entity": HFTranslationType.t("Similar entities must have the same {property}"),
+		}
 		for key in HFSimilarType.known_keys(kind):
 			var check := CheckBox.new()
 			check.text = HFSimilarType.LABELS[key]
 			check.add_theme_font_size_override("font_size", 11)
 			check.button_pressed = HFSimilarType.DEFAULTS[kind].has(key)
-			check.tooltip_text = (
-				"Similar %s must have the same %s"
-				% [SIMILAR_HEADS[kind].trim_suffix(":").to_lower(), str(check.text).to_lower()]
-			)
+			var same := HFTranslationType.t(str(check.text)).to_lower()
+			check.tooltip_text = str(similar.get(kind, "")).format({"property": same})
 			check.toggled.connect(_on_similar_key_toggled.bind(kind))
 			row.add_child(check)
 			checks[key] = check

@@ -120,15 +120,19 @@ func set_kinds(counts: Dictionary) -> void:
 	_kinds_row.visible = counts.size() > 1
 	if not _kinds_row.visible:
 		return
+	var keep := {
+		"solid": HFTranslationType.t("Keep only the brushes"),
+		"cut": HFTranslationType.t("Keep only the cuts"),
+		"brush_entity": HFTranslationType.t("Keep only the brush entities"),
+		"entity": HFTranslationType.t("Keep only the entities"),
+	}
 	for kind in HFQuickSelectType.KINDS:
 		if not counts.has(kind):
 			continue
 		var button := Button.new()
 		button.name = str(kind)
 		button.text = str(HFQuickSelectType.KIND_LABELS[kind]) + " " + str(int(counts[kind]))
-		button.tooltip_text = (
-			"Keep only the %s" % str(HFQuickSelectType.KIND_LABELS[kind]).to_lower()
-		)
+		button.tooltip_text = str(keep.get(kind, ""))
 		button.add_theme_font_size_override("font_size", 11)
 		button.pressed.connect(_on_kind_pressed.bind(kind))
 		_kinds_row.add_child(button)

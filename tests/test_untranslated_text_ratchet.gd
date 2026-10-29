@@ -28,6 +28,10 @@ var _sink := RegEx.create_from_string(
 )
 var _formatted := RegEx.create_from_string('"(?:[^"\\\\]|\\\\.)*"\\s*(?:%|\\.format\\()')
 var _literal := RegEx.create_from_string('"(?:[^"\\\\]|\\\\.)*"')
+## `HFTranslation.t()` and `tn()`, under either of the names the addon preloads
+## it by, or Godot's own `tr()`, `tr_n()` and `atr()`. Whole names, so `str()`
+## is not taken for `tr()`.
+var _translated := RegEx.create_from_string("HFTranslation|(?<![A-Za-z_0-9])a?tr(?:_n)?\\(")
 
 
 func test_no_file_gains_text_that_skips_translation():
@@ -78,6 +82,8 @@ func test_a_missing_directory_does_not_count_as_scanned():
 
 func test_the_detector_still_finds_untranslated_formatted_text():
 	assert_eq(_hits('label.text = "Name %s" % value').size(), 1)
+	assert_eq(_hits('label.text = "Name %s" % str(value)').size(), 1, "str() is not tr()")
+	assert_eq(_hits('label.text = tr("Name %s") % value'), [])
 	assert_eq(_hits('label.text = HFTranslation.t("Name {name}").format({"name": value})'), [])
 
 
@@ -136,12 +142,7 @@ func _hits(source: String) -> Array:
 		var sunk := _sink.search(statement)
 		if sunk:
 			var value := sunk.get_string(1) + sunk.get_string(2)
-			# `HFTranslation.t()` and `tn()`, under either of the names the addon
-			# preloads it by, or Godot's own.
-			var wrapped := (
-				value.contains("HFTranslation") or value.contains("tr(") or value.contains("tr_n(")
-			)
-			if not wrapped and _formatted.search(value):
+			if _translated.search(value) == null and _formatted.search(value):
 				out.append(statement.strip_edges().left(90))
 		statement = ""
 	return out

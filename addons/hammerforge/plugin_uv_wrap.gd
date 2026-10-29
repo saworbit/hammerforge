@@ -116,7 +116,8 @@ static func wrap_onto_face_under_cursor(plugin: Object, root: Node) -> void:
 	var result: Dictionary = root.wrap_face_texture(source_id, source_idx, target_id, target_idx)
 	if not bool(result.get("ok", false)):
 		var reason := str(result.get("reason", ""))
-		_toast(plugin, "Wrap: %s" % str(HFUVWrap.REFUSALS.get(reason, reason)), 1)
+		var refused := HFTranslationType.t(str(HFUVWrap.REFUSALS.get(reason, reason)))
+		_toast(plugin, HFTranslationType.t("Wrap: {reason}").format({"reason": refused}), 1)
 		return
 	HFUndoHelper.commit_completed_if_changed(
 		plugin.call("_get_undo_redo"),

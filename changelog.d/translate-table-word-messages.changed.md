@@ -1,0 +1,1 @@
+- Twelve messages that glued a word from a table into a sentence go through the translation catalogs as whole sentences. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

@@ -234,13 +234,12 @@ static func _accepted_row(dock: Object, issue: Dictionary) -> HBoxContainer:
 	var record: Dictionary = issue.get("accepted", {})
 	var text := Label.new()
 	var note := str(record.get("note", ""))
+	var accepted := {"issue": str(issue.get("message", "")), "note": note}
+	accepted["date"] = str(record.get("date", ""))
 	text.text = (
-		"Accepted  %s%s (%s)"
-		% [
-			str(issue.get("message", "")),
-			(": " + note) if note != "" else "",
-			str(record.get("date", "")),
-		]
+		HFTranslationType.t("Accepted  {issue}: {note} ({date})").format(accepted)
+		if note != ""
+		else HFTranslationType.t("Accepted  {issue} ({date})").format(accepted)
 	)
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -390,14 +389,13 @@ static func _names_a_changed(finding: Dictionary, ids: Array) -> bool:
 static func set_check_runs(dock: Object, kind: String, on: bool) -> void:
 	var err := HFValidationChecks.set_runs(kind, on)
 	if dock and err == OK:
-		dock._set_status(
-			(
-				"Validate %s %s"
-				% ["runs" if on else "leaves out", str(HFValidationChecks.KINDS[kind]).to_lower()]
-			),
-			false,
-			3.0
+		var check := HFTranslationType.t(str(HFValidationChecks.KINDS[kind]))
+		var said := (
+			HFTranslationType.t("Validate runs: {check}")
+			if on
+			else HFTranslationType.t("Validate leaves out: {check}")
 		)
+		dock._set_status(said.format({"check": check}), false, 3.0)
 
 
 ## The kinds of finding a row below the list selects together (#1708). Each
@@ -499,9 +497,14 @@ static func _bake_issue_row(dock: Object, issue: Dictionary) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	var severity: int = clampi(int(issue.get("severity", 0)), 0, 2)
 	var text := Label.new()
-	text.text = "%s  %s" % [["Info", "Warning", "Error"][severity], str(issue.get("message", ""))]
+	var rows := [
+		HFTranslationType.t("Info  {message}"),
+		HFTranslationType.t("Warning  {message}"),
+		HFTranslationType.t("Error  {message}"),
+	]
+	text.text = str(rows[severity]).format({"message": str(issue.get("message", ""))})
 	if issue.get("changed_since_accepted", false):
-		text.text += "  (changed since accepted)"
+		text.text += "  " + HFTranslationType.t("(changed since accepted)")
 		var note := str(issue.get("accepted_note", ""))
 		if note != "":
 			text.tooltip_text = HFTranslationType.t("Accepted as: {note}").format({"note": note})

@@ -328,14 +328,15 @@ static func play(plugin: Object, root: Node) -> bool:
 			_select(plugin, _found(root, start_refs))
 			plugin.set("run_selection", _selection_ids(plugin))
 			plugin.set("run_restart", restart)
-			_say(
-				plugin,
-				(
-					"Repeat Run stopped at step %d of %d, %s: %s. Nothing was changed"
-					% [i + 1, steps.size(), step_text(steps[i]), str(outcome["message"])]
-				),
-				1
+			var stopped := (
+				HFTranslationType
+				. t(
+					"Repeat Run stopped at step {step} of {steps}, {command}: {reason}. Nothing was changed"
+				)
 			)
+			var where := {"step": i + 1, "steps": steps.size(), "command": step_text(steps[i])}
+			where["reason"] = str(outcome["message"])
+			_say(plugin, stopped.format(where), 1)
 			return false
 		targets = outcome["targets"]
 	plugin.set("playing_run", false)

@@ -174,7 +174,8 @@ static func on_hflevel_load_selected(dock: Object, path: String) -> void:
 		return
 	var check: Dictionary = dock.level_root.validate_hflevel(path)
 	if not bool(check.get("ok", false)):
-		dock._set_status("Failed to load .hflevel: %s" % str(check.get("error", "")), true)
+		var failed := HFTranslationType.t("Failed to load .hflevel: {error}")
+		dock._set_status(failed.format({"error": str(check.get("error", ""))}), true)
 		dock.show_toast("Failed to load .hflevel", 2)
 		return
 	dock._commit_full_state_action("Load .hflevel", "load_hflevel", [path])

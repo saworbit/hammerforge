@@ -9,6 +9,7 @@ extends VBoxContainer
 ## reader sees "3 warnings" and clicks that number to see only those three.
 
 const HFConsoleLogType = preload("../hf_console_log.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## Level toggles, in the order they appear. Kept beside the level enum rather
 ## than derived from it so the labels read as a sentence, not as constants.
@@ -61,16 +62,24 @@ func _build() -> void:
 	filters.add_theme_constant_override("separation", 4)
 	add_child(filters)
 
+	var tips := {
+		HFConsoleLogType.Level.DEBUG:
+		HFTranslationType.t("Show debug messages. The number is how many arrived this session."),
+		HFConsoleLogType.Level.INFO:
+		HFTranslationType.t("Show info messages. The number is how many arrived this session."),
+		HFConsoleLogType.Level.WARN:
+		HFTranslationType.t("Show warnings. The number is how many arrived this session."),
+		HFConsoleLogType.Level.ERROR:
+		HFTranslationType.t("Show errors. The number is how many arrived this session."),
+	}
 	for spec in LEVEL_BUTTONS:
 		var toggle := Button.new()
 		toggle.toggle_mode = true
 		toggle.button_pressed = bool(DEFAULT_MASK & (1 << int(spec["level"])))
 		toggle.focus_mode = Control.FOCUS_NONE
-		toggle.text = str(spec["label"]) + " 0"
-		toggle.tooltip_text = (
-			"Show %s messages. The number is how many arrived this session."
-			% str(spec["label"]).to_lower()
-		)
+		# The count is glued on, so the button cannot look the word up itself.
+		toggle.text = HFTranslationType.t(str(spec["label"])) + " 0"
+		toggle.tooltip_text = str(tips.get(int(spec["level"]), ""))
 		toggle.toggled.connect(_on_level_toggled.bind(int(spec["level"])))
 		filters.add_child(toggle)
 		_level_toggles[int(spec["level"])] = toggle
@@ -384,7 +393,8 @@ func _update_summary(shown: int) -> void:
 	for spec in LEVEL_BUTTONS:
 		var toggle: Button = _level_toggles.get(int(spec["level"]))
 		if toggle:
-			toggle.text = str(spec["label"]) + " " + str(int(counts.get(spec["count_key"], 0)))
+			var count := str(int(counts.get(spec["count_key"], 0)))
+			toggle.text = HFTranslationType.t(str(spec["label"])) + " " + count
 			toggle.add_theme_color_override("font_color", _level_color(int(spec["level"])))
 	var visible_count: int = maxi(shown, 0)
 	_visible_count = visible_count
