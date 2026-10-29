@@ -37,12 +37,20 @@ msgstr ""
 msgid "A property, a test and a value: is, is not, >, <, or matches with * for any run.\nJoin more with and. An entity takes its own properties by name too."
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "A {structure} preset called {name} is already saved. Replace it?"
+msgstr ""
+
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Accept"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Accept Finding"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Accepted as: {note}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn
@@ -337,6 +345,10 @@ msgstr ""
 msgid "Arm a stamp of the brush the last Draw made; each click places one."
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Array updated — {summary}"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Assign to Selected Faces"
 msgstr ""
@@ -401,6 +413,10 @@ msgstr ""
 msgid "Bake Preview — show wireframe of final mesh before committing"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake check: {errors} errors, {warnings} warnings"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Bake only brushes modified since last bake"
 msgstr ""
@@ -408,6 +424,32 @@ msgstr ""
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Bake only the currently selected brushes"
 msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake profile {profile} deleted"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake profile {profile} saved"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake profile {profile} saved in the project. Commit {file} to share it"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake profile {profile} updated"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake profile {profile} updated in the project. Commit {file} to share it"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake profile {profile}: {count} option changed"
+msgid_plural "Bake profile {profile}: {count} options changed"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/dock.gd
 msgid "Bake the level and run it in one step"
@@ -444,6 +486,12 @@ msgstr ""
 #: addons/hammerforge/dock.gd
 msgid "Bevel the selected edge (vertex mode, edge sub-mode)"
 msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Beveled {count} edge"
+msgid_plural "Beveled {count} edges"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "Bit {number}"
@@ -875,6 +923,10 @@ msgstr ""
 msgid "Corners"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd addons/hammerforge/dock_manage_handler.gd
+msgid "Could not write {file}"
+msgstr ""
+
 #: addons/hammerforge/plugin_commands.gd
 msgid "Could not write {file}: {error}"
 msgstr ""
@@ -938,6 +990,32 @@ msgstr ""
 #: addons/hammerforge/dock.tscn
 msgid "Create solid geometry"
 msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Create {structure}"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Created a {structure}"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Created {count} copy"
+msgid_plural "Created {count} copies"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Created {count} copy {angle}° apart"
+msgid_plural "Created {count} copies {angle}° apart"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Created {count} copy {angle}° apart, rising {rise}"
+msgid_plural "Created {count} copies {angle}° apart, rising {rise}"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Current"
@@ -1067,6 +1145,14 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Discard Prefab Changes"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Displacement created (power {power})"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Displacement is now power {power}, sculpt kept"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -1353,6 +1439,10 @@ msgstr ""
 msgid "Export Settings"
 msgstr ""
 
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Exported .map ({format})"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Extrude Down"
 msgstr ""
@@ -1395,6 +1485,14 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "Faces: the most two neighbours' normals may differ by, in degrees"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Failed to import .map: {reason}"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Failed to save .hflevel: {file}"
 msgstr ""
 
 #: addons/hammerforge/plugin_material_commands.gd
@@ -1503,6 +1601,10 @@ msgstr ""
 msgid "Fix"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Fix automatically and play, or cancel?"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Flatten"
 msgstr ""
@@ -1533,6 +1635,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Flip the texture top to bottom on the selected faces."
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Flipped across {axis}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -1569,6 +1675,14 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "G"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Game scene written to {file} with the Editing bake options. Pick Shipping under Export with and export again for a game."
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Game scene written to {file} with the {profile} bake options"
 msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
@@ -2105,6 +2219,12 @@ msgstr ""
 msgid "Kept in the project, so everyone on it has this profile"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Kept the first of each pair: deleted {count} brush"
+msgid_plural "Kept the first of each pair: deleted {count} brushes"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/plugin_selection_commands.gd
 msgid "Kept the {count} brush"
 msgid_plural "Kept the {count} brushes"
@@ -2268,6 +2388,12 @@ msgstr ""
 #: addons/hammerforge/dock.tscn
 msgid "Load Material Library"
 msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Loaded library; {count} of {total} materials is missing"
+msgid_plural "Loaded library; {count} of {total} materials are missing"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/hf_quick_property.gd
 msgid "Local"
@@ -2907,6 +3033,10 @@ msgstr ""
 msgid "Play the commands, moves and turns made since the selection last changed by hand again, on the current selection, as one undo step."
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Player spawn may be invalid:\n\n{issues}\n\n{ask}"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Point Filter: X and Z from Here"
 msgstr ""
@@ -2927,13 +3057,41 @@ msgstr ""
 msgid "Preset name"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Preset {name}"
+msgstr ""
+
 #: addons/hammerforge/dock.gd addons/hammerforge/dock_entity_handler.gd
 msgid "Preset:"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Press Delete again to delete bake profile {profile} from the project. It cannot be undone"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Press Delete again to delete bake profile {profile}. It cannot be undone"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Press Delete again to delete structure preset {name} from the project. It cannot be undone"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_hotkey_palette.gd
 msgid "Press Enter to execute, Esc to close  |  Ctrl+K"
 msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Press Re-hollow again to rebuild over {count} reworked wall"
+msgid_plural "Press Re-hollow again to rebuild over {count} reworked walls"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Press Update again to rebuild over {count} edited copy"
+msgid_plural "Press Update again to rebuild over {count} edited copies"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Preview"
@@ -3091,6 +3249,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "Re-hollow"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Re-hollowed at wall thickness {thickness}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -3379,6 +3541,10 @@ msgstr ""
 msgid "Rotate instances to match terrain normal"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Rotated {angle}°"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_command_line.gd
 msgid "Run Command Script"
 msgstr ""
@@ -3475,6 +3641,10 @@ msgstr ""
 msgid "Save this entity's connections as a new preset"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Save {structure} Preset"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_log_view.gd
 msgid "Save..."
 msgstr ""
@@ -3490,6 +3660,12 @@ msgstr ""
 #: addons/hammerforge/ui/hf_adjust_last_panel.gd
 msgid "Saved settings"
 msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Saved {saved} materials; {count} had no path and was left empty"
+msgid_plural "Saved {saved} materials; {count} had no path and were left empty"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Scale"
@@ -3643,6 +3819,18 @@ msgstr ""
 msgid "Select every face linked with the selected face."
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Select every one of the brushes inside another"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Select every one of the cuts that cut nothing"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Select every one of the later brushes of near pairs"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Select nothing: brushes, entities and faces."
 msgstr ""
@@ -3661,6 +3849,14 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Select what is not selected, and drop what is."
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Select {name}"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Select {name} and {other}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
@@ -3827,6 +4023,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Show accepted (0)"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Show accepted ({count})"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_example_library.gd
@@ -4049,6 +4249,14 @@ msgstr ""
 msgid "Spatial chunk size for bake grouping (0 = no chunking)\nThe status board recommends one once the level is big enough to want it"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Spawn issues: {issues}"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Spawn warning: {issues}"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Sphere"
 msgstr ""
@@ -4185,6 +4393,18 @@ msgstr ""
 msgid "Strip"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Structure preset {name} deleted"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Structure preset {name} saved. Commit {file} to share it"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Structure preset {name} updated. Commit {file} to share it"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_example_library.gd
 msgid "Study This"
 msgstr ""
@@ -4311,6 +4531,10 @@ msgstr ""
 msgid "Texture..."
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "The bake options are already on {profile}"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "The bake profile Export Game Scene bakes with. The level's own options\ncome back afterwards, with no undo step, so editing carries on as it was"
 msgstr ""
@@ -4333,6 +4557,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "The highlighted visgroup's brushes and entities are drawn faded, and nothing selects or changes them: no tool, command or agent. Godot's lock in the Scene dock does the same"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "The list already uses {name}. Save under another name"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
@@ -4377,6 +4605,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "The tallest step an agent can walk up. Below the stair height this level builds, and nothing in the game can use its stairs."
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "There is nowhere near to move it. Play anyway, or cancel and move it by hand?"
 msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
@@ -4635,6 +4867,10 @@ msgstr ""
 msgid "Update Structure"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Update {structure}"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "Use Picked"
 msgstr ""
@@ -4650,6 +4886,20 @@ msgstr ""
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Validate, bake optimized, and launch as playable scene"
 msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Validate: fixed {fixed}, no issues left"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Validate: fixed {fixed}, {count} remaining"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Validate: {count} issue"
+msgid_plural "Validate: {count} issues"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Valve 220"
@@ -4937,6 +5187,14 @@ msgstr ""
 msgid "{brushes} selected"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "{command} needs the HammerForge plugin running"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "{command} will be available when the current bake finishes"
+msgstr ""
+
 #: addons/hammerforge/systems/hf_vertex_system.gd
 msgid "{command}: finish the drag first"
 msgstr ""
@@ -4953,15 +5211,33 @@ msgstr ""
 msgid "{command}: {count} selected"
 msgstr ""
 
-#: addons/hammerforge/ui/hf_context_toolbar.gd
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "{copies} copy of {brushes}"
+msgid_plural "{copies} copies of {brushes}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/dock_brush_handler.gd addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "{count} brush"
 msgid_plural "{count} brushes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "{count} brush inside another"
+msgid_plural "{count} brushes inside another"
 msgstr[0] ""
 msgstr[1] ""
 
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "{count} copy of {prefab} in the level"
 msgid_plural "{count} copies of {prefab} in the level"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "{count} cut that cuts nothing"
+msgid_plural "{count} cuts that cut nothing"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -4992,6 +5268,12 @@ msgstr[1] ""
 #: addons/hammerforge/plugin_edit_actions.gd
 msgid "{count} hidden brush overlaps and is left alone."
 msgid_plural "{count} hidden brushes overlap and are left alone."
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "{count} later brush of a near pair"
+msgid_plural "{count} later brushes of near pairs"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -5039,6 +5321,14 @@ msgstr ""
 msgid "{file} could not be loaded as a material"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd addons/hammerforge/dock_manage_handler.gd
+msgid "{file} could not be read. Fix it before deleting from it"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd addons/hammerforge/dock_manage_handler.gd
+msgid "{file} could not be read. Fix it before saving to it"
+msgstr ""
+
 #: addons/hammerforge/plugin_commands.gd
 msgid "{file} has no entity classes to convert"
 msgstr ""
@@ -5069,6 +5359,30 @@ msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "{label}:"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "{preset} is in the settings"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "{preset} is in the settings. Press Update to rebuild with it"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "{structure} rebuilt"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "{structure} was not created"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "{structure} was not rebuilt"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "{summary}, listed under Check Bake Issues"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd

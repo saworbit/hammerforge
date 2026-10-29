@@ -1,8 +1,5 @@
 {
 	"res://addons/hammerforge/dock.gd": 59,
-	"res://addons/hammerforge/dock_brush_handler.gd": 33,
-	"res://addons/hammerforge/dock_file_handler.gd": 5,
-	"res://addons/hammerforge/dock_manage_handler.gd": 22,
 	"res://addons/hammerforge/ui/hf_adjust_last_panel.gd": 1,
 	"res://addons/hammerforge/ui/hf_coach_marks.gd": 1,
 	"res://addons/hammerforge/ui/hf_console_log_view.gd": 2,

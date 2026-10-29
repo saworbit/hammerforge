@@ -15,6 +15,7 @@ const DraftBrush = preload("brush_instance.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("hf_translation.gd")
 
 
 static func on_disp_create(dock: Object) -> void:
@@ -36,7 +37,8 @@ static func on_disp_create(dock: Object) -> void:
 		[info["brush_id"]]
 	)
 	if ok:
-		dock.show_toast("Displacement created (power %d)" % power, 0)
+		var made := HFTranslationType.t("Displacement created (power {power})")
+		dock.show_toast(made.format({"power": power}), 0)
 	else:
 		dock.show_toast("Failed — needs a quad face with no displacement on it yet", 2)
 
@@ -90,7 +92,8 @@ static func on_disp_set_power(dock: Object) -> void:
 		[info["brush_id"]]
 	)
 	if ok:
-		dock.show_toast("Displacement is now power %d, sculpt kept" % power, 0)
+		var kept := HFTranslationType.t("Displacement is now power {power}, sculpt kept")
+		dock.show_toast(kept.format({"power": power}), 0)
 	else:
 		dock.show_toast("Could not change the power of that face", 2)
 
@@ -268,7 +271,8 @@ static func on_bevel_edge(dock: Object) -> void:
 				Callable(dock, "record_history"),
 				before["scope_ids"]
 			)
-		dock.show_toast("Beveled %d edge(s)" % count, 0)
+		var beveled := HFTranslationType.tn("Beveled {count} edge", "Beveled {count} edges", count)
+		dock.show_toast(beveled.format({"count": count}), 0)
 	else:
 		dock.show_toast("Bevel failed — check edge selection", 2)
 
@@ -372,10 +376,10 @@ static func _rehollow(dock: Object) -> void:
 		# The rebuild was refused, and `update_hollow` has already said why.
 		dock._active_hollow_id = ""
 	else:
+		var redone := HFTranslationType.t("Re-hollowed at wall thickness {thickness}")
 		dock._set_status(
-			(
-				"Re-hollowed at wall thickness %s"
-				% HFNumberFormat.number(thickness, dock.level_root.grid_snap)
+			redone.format(
+				{"thickness": HFNumberFormat.number(thickness, dock.level_root.grid_snap)}
 			)
 		)
 	refresh_hollow_section(dock)
@@ -432,13 +436,12 @@ static func _confirm_hollow_overwrite(dock: Object, hollow_id: String, thickness
 		return true
 	dock._hollow_overwrite_ack = token
 	_refresh_hollow_warning(dock, hollow_id)
-	dock._set_status(
-		(
-			"Press Re-hollow again to rebuild over %d reworked wall%s"
-			% [edited, "" if edited == 1 else "s"]
-		),
-		true
+	var again := HFTranslationType.tn(
+		"Press Re-hollow again to rebuild over {count} reworked wall",
+		"Press Re-hollow again to rebuild over {count} reworked walls",
+		edited
 	)
+	dock._set_status(again.format({"count": edited}), true)
 	return false
 
 
@@ -684,7 +687,7 @@ static func on_create_duplicate_array(dock: Object) -> void:
 				"create_duplicate_array",
 				func(s: Dictionary) -> Array: return [brush_ids, int(s["count"]), s["offset"]]
 			)
-			dock._set_status("Created %d copies" % int(params["count"]))
+			_say_copies_made(dock, int(params["count"]))
 	# The selection is still the brushes the array was made from, so the section
 	# is now an editor for the array that has just appeared. Saying so here is
 	# what makes Update discoverable at all: it is the same button, one press later.
@@ -713,7 +716,8 @@ static func _update_duplicate_array(
 		dock._active_duplicator_id = ""
 		dock._set_status("That array's brushes are no longer in the level", true)
 	else:
-		dock._set_status("Array updated — %s" % _array_summary(copies, sources))
+		var updated := HFTranslationType.t("Array updated — {summary}")
+		dock._set_status(updated.format({"summary": _array_summary(copies, sources)}))
 	refresh_array_section(dock)
 	# The ghost has been overtaken by the real thing standing in the same place.
 	_put_array_ghost_away(dock)
@@ -747,15 +751,18 @@ static func _create_radial_array(
 				float(s["rise"])
 			]
 	)
-	if is_zero_approx(rise):
-		dock._set_status("Created %d copies %.1f° apart" % [cnt, step])
-	else:
-		dock._set_status(
-			(
-				"Created %d copies %.1f° apart, rising %s"
-				% [cnt, step, HFNumberFormat.number(rise, dock.level_root.grid_snap)]
-			)
+	var made := HFTranslationType.tn(
+		"Created {count} copy {angle}° apart", "Created {count} copies {angle}° apart", cnt
+	)
+	if not is_zero_approx(rise):
+		made = HFTranslationType.tn(
+			"Created {count} copy {angle}° apart, rising {rise}",
+			"Created {count} copies {angle}° apart, rising {rise}",
+			cnt
 		)
+	var angle := "%.1f" % step
+	var rising := HFNumberFormat.number(rise, dock.level_root.grid_snap)
+	dock._set_status(made.format({"count": cnt, "angle": angle, "rise": rising}))
 
 
 static func _create_grid_array(
@@ -787,7 +794,12 @@ static func _create_grid_array(
 				s["spacing"]
 			]
 	)
-	dock._set_status("Created %d copies" % total)
+	_say_copies_made(dock, total)
+
+
+static func _say_copies_made(dock: Object, count: int) -> void:
+	var made := HFTranslationType.tn("Created {count} copy", "Created {count} copies", count)
+	dock._set_status(made.format({"count": count}))
 
 
 ## The axes by index, as the settings Adjust Last shows name them.
@@ -898,10 +910,11 @@ static func refresh_array_preview(dock: Object) -> void:
 
 
 static func _array_summary(copies: int, sources: int) -> String:
-	return (
-		"%d cop%s of %d brush%s"
-		% [copies, "y" if copies == 1 else "ies", sources, "" if sources == 1 else "es"]
+	var brushes := HFTranslationType.tn("{count} brush", "{count} brushes", sources)
+	var summary := HFTranslationType.tn(
+		"{copies} copy of {brushes}", "{copies} copies of {brushes}", copies
 	)
+	return summary.format({"copies": copies, "brushes": brushes.format({"count": sources})})
 
 
 ## The ghost belongs to the Build tab, and follows it out of sight.
@@ -1056,13 +1069,12 @@ static func _confirm_array_overwrite(dock: Object, record: Variant, params: Dict
 		return true
 	dock._array_overwrite_ack = token
 	_refresh_array_warning(dock, duplicator_id, edited)
-	dock._set_status(
-		(
-			"Press Update again to rebuild over %d edited cop%s"
-			% [edited, "y" if edited == 1 else "ies"]
-		),
-		true
+	var again := HFTranslationType.tn(
+		"Press Update again to rebuild over {count} edited copy",
+		"Press Update again to rebuild over {count} edited copies",
+		edited
 	)
+	dock._set_status(again.format({"count": edited}), true)
 	return false
 
 
@@ -1272,9 +1284,7 @@ static func on_structure_type_changed(dock: Object) -> void:
 	dock._active_generator_id = ""
 	rebuild_structure_fields(dock)
 	if dock.structure_create_btn:
-		dock.structure_create_btn.text = (
-			"Create %s" % HFGeneratorSystem.display_name(structure_type(dock))
-		)
+		dock.structure_create_btn.text = _create_label(dock)
 	if dock.structure_detach_btn:
 		dock.structure_detach_btn.visible = false
 	_show_repick(dock)
@@ -1292,9 +1302,7 @@ static func refresh_structure_section(dock: Object) -> void:
 		record = dock.level_root.generator_for_selection(_transform_targets(dock)["brush_ids"])
 	if record == null or HFGeneratorSystem.builder_for(record.type) == null:
 		dock._active_generator_id = ""
-		dock.structure_create_btn.text = (
-			"Create %s" % HFGeneratorSystem.display_name(structure_type(dock))
-		)
+		dock.structure_create_btn.text = _create_label(dock)
 		if dock.structure_detach_btn:
 			dock.structure_detach_btn.visible = false
 		_show_repick(dock)
@@ -1308,7 +1316,9 @@ static func refresh_structure_section(dock: Object) -> void:
 	if structure_type(dock) != record.type:
 		_select_type(dock, record.type)
 		rebuild_structure_fields(dock)
-	dock.structure_create_btn.text = "Update %s" % HFGeneratorSystem.display_name(record.type)
+	dock.structure_create_btn.text = HFTranslationType.t("Update {structure}").format(
+		{"structure": HFGeneratorSystem.display_name(record.type)}
+	)
 	if dock.structure_detach_btn:
 		dock.structure_detach_btn.visible = true
 	_show_repick(dock)
@@ -1620,13 +1630,13 @@ static func on_structure_preset_selected(dock: Object, index: int) -> void:
 	dock._structure_preset_picked = preset_name
 	_load_structure_settings(dock, read["settings"])
 	refresh_structure_preview(dock)
-	var label := "Preset %s" % preset_name
+	var label := HFTranslationType.t("Preset {name}").format({"name": preset_name})
 	if preset_name == HFStructurePresets.DEFAULTS:
 		label = HFStructurePresets.DEFAULTS
+	var said := HFTranslationType.t("{preset} is in the settings")
 	if str(dock._active_generator_id) != "":
-		dock._set_status("%s is in the settings. Press Update to rebuild with it" % label)
-	else:
-		dock._set_status("%s is in the settings" % label)
+		said = HFTranslationType.t("{preset} is in the settings. Press Update to rebuild with it")
+	dock._set_status(said.format({"preset": label}))
 
 
 ## Ask for the name to keep the fields under, offering the preset the list is on
@@ -1639,7 +1649,9 @@ static func on_structure_preset_save(dock: Object) -> void:
 		return
 	var dialog := AcceptDialog.new()
 	dialog.name = "StructurePresetName"
-	dialog.title = "Save %s Preset" % HFGeneratorSystem.display_name(structure_type(dock))
+	dialog.title = HFTranslationType.t("Save {structure} Preset").format(
+		{"structure": HFGeneratorSystem.display_name(structure_type(dock))}
+	)
 	dialog.ok_button_text = "Save"
 	dialog.min_size = Vector2i(320, 80)
 	var line := LineEdit.new()
@@ -1671,11 +1683,13 @@ static func save_structure_preset(dock: Object, typed: String, replace := false)
 		dock._set_status("Type a name to save the settings under", true)
 		return
 	if HFStructurePresets.is_reserved_name(preset_name):
-		dock._set_status("The list already uses %s. Save under another name" % preset_name, true)
+		var taken := HFTranslationType.t("The list already uses {name}. Save under another name")
+		dock._set_status(taken.format({"name": preset_name}), true)
 		return
 	var path := structure_presets_path(dock)
 	if HFStructurePresets.file_unreadable(path):
-		dock._set_status("%s could not be read. Fix it before saving to it" % path, true)
+		var unread := HFTranslationType.t("{file} could not be read. Fix it before saving to it")
+		dock._set_status(unread.format({"file": path}), true)
 		return
 	var type := structure_type(dock)
 	var raw := HFStructurePresets.read_raw(path)
@@ -1687,16 +1701,26 @@ static func save_structure_preset(dock: Object, typed: String, replace := false)
 	presets[preset_name] = collect_structure_settings(dock)
 	raw[type] = presets
 	if not HFStructurePresets.write(raw, path):
-		dock._set_status("Could not write %s" % path, true)
+		_say_unwritten(dock, path)
 		return
 	dock._structure_preset_picked = preset_name
 	sync_structure_presets(dock)
-	dock.show_toast(
-		(
-			"Structure preset %s %s. Commit %s to share it"
-			% [preset_name, "updated" if replacing else "saved", path.get_file()]
-		),
-		0
+	var said := (
+		HFTranslationType.t("Structure preset {name} updated. Commit {file} to share it")
+		if replacing
+		else HFTranslationType.t("Structure preset {name} saved. Commit {file} to share it")
+	)
+	dock.show_toast(said.format({"name": preset_name, "file": path.get_file()}), 0)
+
+
+static func _say_unwritten(dock: Object, path: String) -> void:
+	dock._set_status(HFTranslationType.t("Could not write {file}").format({"file": path}), true)
+
+
+## The Create button's words for the structure type picked.
+static func _create_label(dock: Object) -> String:
+	return HFTranslationType.t("Create {structure}").format(
+		{"structure": HFGeneratorSystem.display_name(structure_type(dock))}
 	)
 
 
@@ -1705,8 +1729,11 @@ static func _ask_to_replace_structure_preset(dock: Object, preset_name: String) 
 	dlg.name = "StructurePresetReplaceConfirm"
 	dlg.title = "Replace Structure Preset"
 	dlg.dialog_text = (
-		"A %s preset called %s is already saved. Replace it?"
-		% [HFGeneratorSystem.display_name(structure_type(dock)), preset_name]
+		HFTranslationType
+		. t("A {structure} preset called {name} is already saved. Replace it?")
+		. format(
+			{"structure": HFGeneratorSystem.display_name(structure_type(dock)), "name": preset_name}
+		)
 	)
 	dlg.ok_button_text = "Replace"
 	dlg.min_size = Vector2i(320, 100)
@@ -1732,21 +1759,21 @@ static func on_structure_preset_delete(dock: Object) -> void:
 		return
 	if dock._structure_preset_delete_ack != preset_name:
 		dock._structure_preset_delete_ack = preset_name
-		(
-			dock
-			. _set_status(
-				(
-					"Press Delete again to delete structure preset %s from the project. It cannot be undone"
-					% preset_name
-				),
-				true
+		var again := (
+			HFTranslationType
+			. t(
+				"Press Delete again to delete structure preset {name} from the project. It cannot be undone"
 			)
 		)
+		dock._set_status(again.format({"name": preset_name}), true)
 		return
 	dock._structure_preset_delete_ack = ""
 	var path := structure_presets_path(dock)
 	if HFStructurePresets.file_unreadable(path):
-		dock._set_status("%s could not be read. Fix it before deleting from it" % path, true)
+		var unread := HFTranslationType.t(
+			"{file} could not be read. Fix it before deleting from it"
+		)
+		dock._set_status(unread.format({"file": path}), true)
 		return
 	var type := structure_type(dock)
 	var raw := HFStructurePresets.read_raw(path)
@@ -1754,12 +1781,13 @@ static func on_structure_preset_delete(dock: Object) -> void:
 	presets.erase(preset_name)
 	raw[type] = presets
 	if not HFStructurePresets.write(raw, path):
-		dock._set_status("Could not write %s" % path, true)
+		_say_unwritten(dock, path)
 		return
 	if dock._structure_preset_picked == preset_name:
 		dock._structure_preset_picked = ""
 	sync_structure_presets(dock)
-	dock.show_toast("Structure preset %s deleted" % preset_name, 0)
+	var said := HFTranslationType.t("Structure preset {name} deleted")
+	dock.show_toast(said.format({"name": preset_name}), 0)
 
 
 ## The structure the selected piece belongs to, or "" when none does. The
@@ -1826,9 +1854,11 @@ static func on_create_structure(dock: Object) -> void:
 	var args := [type, settings, create_placement(dock), dock.level_root.active_material]
 	dock._commit_state_action("Create %s" % label, "create_generator", args, true)
 	if dock.level_root.generator_count() > before:
-		dock._set_status("Created a %s" % label.to_lower())
+		var made := HFTranslationType.t("Created a {structure}")
+		dock._set_status(made.format({"structure": label.to_lower()}))
 	else:
-		dock._set_status("%s was not created" % label, true)
+		var failed := HFTranslationType.t("{structure} was not created")
+		dock._set_status(failed.format({"structure": label}), true)
 	refresh_structure_section(dock)
 	# The ghost showed what was not there yet. It is there now, so it stops
 	# standing on top of itself; the next change to the settings brings it back.
@@ -1843,7 +1873,8 @@ static func _create_along_faces(dock: Object) -> void:
 	var command := "sweep_faces" if sweep else "run_trim_along_faces"
 	if dock.command_requested.get_connections().is_empty():
 		var label := "Sweep Faces" if sweep else "Run Trim Along Faces"
-		dock._set_status("%s needs the HammerForge plugin running" % label, true)
+		var needs := HFTranslationType.t("{command} needs the HammerForge plugin running")
+		dock._set_status(needs.format({"command": label}), true)
 		return
 	dock.command_requested.emit(command)
 
@@ -1907,9 +1938,10 @@ static func _update_structure(dock: Object, generator_id: String, settings: Dict
 	)
 	dock._structure_overwrite_ack = ""
 	if dock.level_root.has_generator(generator_id):
-		dock._set_status("%s rebuilt" % label)
+		dock._set_status(HFTranslationType.t("{structure} rebuilt").format({"structure": label}))
 	else:
-		dock._set_status("%s was not rebuilt" % label, true)
+		var failed := HFTranslationType.t("{structure} was not rebuilt")
+		dock._set_status(failed.format({"structure": label}), true)
 	refresh_structure_section(dock)
 	dock.level_root.clear_structure_preview()
 
@@ -1966,7 +1998,7 @@ static func on_rotate_selection(dock: Object, direction: int) -> void:
 		"rotate_managed_nodes",
 		[brush_ids, entity_paths, axis_index, angle, pivot]
 	)
-	dock._set_status("Rotated %.1f°" % angle)
+	dock._set_status(HFTranslationType.t("Rotated {angle}°").format({"angle": "%.1f" % angle}))
 
 
 static func on_flip_selection(dock: Object) -> void:
@@ -1985,7 +2017,8 @@ static func on_flip_selection(dock: Object) -> void:
 		"flip_managed_nodes",
 		[brush_ids, entity_paths, axis_index, pivot]
 	)
-	dock._set_status("Flipped across %s" % ["X", "Y", "Z"][clampi(axis_index, 0, 2)])
+	var flipped := HFTranslationType.t("Flipped across {axis}")
+	dock._set_status(flipped.format({"axis": ["X", "Y", "Z"][clampi(axis_index, 0, 2)]}))
 
 
 static func on_reset_rotation(dock: Object) -> void:
