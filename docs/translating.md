@@ -19,10 +19,13 @@ rest left in English.
 - Each command's name, category and help, in the command palette and the
   shortcut dialog. The palette finds a command by its name in the language
   shown and by its English name, and shows which one matched.
+- Toasts and the dock's status line, and the text HammerForge puts together in
+  code with a number or a name in it before it shows it.
 
-Text HammerForge puts together in code, with a number or a name in it, is still
-English for now, apart from the palette's own: counts, toasts, and the HUD
-drawn over the viewport. The next steps of #1702 put it through the catalogs.
+Still English for now: a message put together in code and sent with the level's
+`user_message` signal, such as "Scattered 12 instances", and the words the
+radial menu and the snap markers draw straight onto the viewport. The next steps
+of #1702 put them through the catalogs.
 
 These stay English in every language, so a bug report and an agent read the
 same words:
@@ -67,6 +70,10 @@ The tool finds a word in these places, much as Godot finds a game's:
   of `"a" if x else "b"`;
 - a literal given to `add_item()`, `set_item_text()`, `set_tab_title()`,
   `set_text()` and the other calls `tools/pot_catalog.gd` lists in `CALLS`;
+- a literal given to `show_toast()`, `_set_status()` and the other toast and
+  status calls in `CALLS`, or sent with the level's `user_message` signal. The
+  toast shows it in the language shown, and the Console's log and the bridge
+  keep it in English;
 - a literal given to `HFTranslation.t()` or `HFTranslation.tn()`;
 - the same properties in the addon's `.tscn` scenes.
 
