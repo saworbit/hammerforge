@@ -1206,7 +1206,8 @@ static func rebuild_structure_fields(dock: Object) -> void:
 		var pair := HBoxContainer.new()
 		pair.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var label := Label.new()
-		label.text = "%s:" % str(schema_field.get("label", key))
+		var field := HFTranslationType.t(str(schema_field.get("label", key)))
+		label.text = HFTranslationType.t("{field}:").format({"field": field})
 		pair.add_child(label)
 		control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		pair.add_child(control)
@@ -1624,7 +1625,8 @@ static func on_structure_preset_selected(dock: Object, index: int) -> void:
 	var raw := HFStructurePresets.read_raw(structure_presets_path(dock))
 	var read := HFStructurePresets.settings_of(raw, type, preset_name)
 	if not read["ok"]:
-		dock._set_status("%s. The settings are unchanged" % str(read["message"]), true)
+		var unchanged := HFTranslationType.t("{reason}. The settings are unchanged")
+		dock._set_status(unchanged.format({"reason": str(read["message"])}), true)
 		sync_structure_presets(dock)
 		return
 	dock._structure_preset_picked = preset_name

@@ -17,6 +17,7 @@ extends RefCounted
 
 const HFSnapSystemType = preload("hf_snap_system.gd")
 const HFOverlayColors = preload("hf_overlay_colors.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## Half a marker's width on screen, in pixels.
 const MARKER_HALF := 7.0
@@ -453,9 +454,15 @@ static func limit(plugin: Object, command: String) -> bool:
 		return false
 	var dock = plugin.get("dock")
 	if dock and dock.has_method("show_toast"):
-		dock.show_toast(
-			"Next pick: %s only" % str(HFSnapSystemType.KIND_LABELS[kind]).to_lower(), 0
-		)
+		var only := {
+			HFSnapSystemType.KIND_VERTEX: HFTranslationType.t("Next pick: vertex only"),
+			HFSnapSystemType.KIND_MIDPOINT: HFTranslationType.t("Next pick: midpoint only"),
+			HFSnapSystemType.KIND_CENTRE: HFTranslationType.t("Next pick: centre only"),
+			HFSnapSystemType.KIND_PERPENDICULAR:
+			HFTranslationType.t("Next pick: perpendicular only"),
+			HFSnapSystemType.KIND_GRID: HFTranslationType.t("Next pick: grid only"),
+		}
+		dock.show_toast(str(only.get(kind, kind)), 0)
 	_ask_again(plugin)
 	return true
 

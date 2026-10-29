@@ -21,6 +21,10 @@ msgstr ""
 msgid "(Green wireframe shows the brush that is made)"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "(changed since accepted)"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "(no visgroups)"
 msgstr ""
@@ -79,6 +83,14 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Accept Finding"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Accepted  {issue} ({date})"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Accepted  {issue}: {note} ({date})"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
@@ -1929,6 +1941,10 @@ msgstr ""
 msgid "Erase floor cells."
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Error  {message}"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_log_view.gd
 msgid "Errors"
 msgstr ""
@@ -2133,6 +2149,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_file_handler.gd
 msgid "Failed to load .hflevel"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Failed to load .hflevel: {error}"
 msgstr ""
 
 #: addons/hammerforge/dock_file_handler.gd
@@ -2969,6 +2989,10 @@ msgstr ""
 msgid "Info"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Info  {message}"
+msgstr ""
+
 #: addons/hammerforge/hf_spiral_stairs_builder.gd
 msgid "Inner R"
 msgstr ""
@@ -3103,6 +3127,22 @@ msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "Keep nothing of this copy's own, and take the prefab's values again"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_info.gd
+msgid "Keep only the brush entities"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_info.gd
+msgid "Keep only the brushes"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_info.gd
+msgid "Keep only the cuts"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_info.gd
+msgid "Keep only the entities"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -3761,6 +3801,26 @@ msgstr ""
 
 #: addons/hammerforge/plugin_snap_feedback.gd
 msgid "Next pick: X and Z from here, the height from where you click"
+msgstr ""
+
+#: addons/hammerforge/plugin_snap_feedback.gd
+msgid "Next pick: centre only"
+msgstr ""
+
+#: addons/hammerforge/plugin_snap_feedback.gd
+msgid "Next pick: grid only"
+msgstr ""
+
+#: addons/hammerforge/plugin_snap_feedback.gd
+msgid "Next pick: midpoint only"
+msgstr ""
+
+#: addons/hammerforge/plugin_snap_feedback.gd
+msgid "Next pick: perpendicular only"
+msgstr ""
+
+#: addons/hammerforge/plugin_snap_feedback.gd
+msgid "Next pick: vertex only"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
@@ -4931,6 +4991,10 @@ msgstr ""
 msgid "Repeat Run"
 msgstr ""
 
+#: addons/hammerforge/plugin_run.gd
+msgid "Repeat Run stopped at step {step} of {steps}, {command}: {reason}. Nothing was changed"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_hotkey_palette.gd
 msgid "Repeat Run: {commands}"
 msgstr ""
@@ -5889,12 +5953,20 @@ msgstr ""
 msgid "Show annotations explaining the design"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Show debug messages. The number is how many arrived this session."
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Show density preview at current selection"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Show dimensions"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Show errors. The number is how many arrived this session."
 msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
@@ -5907,6 +5979,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Show grid"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Show info messages. The number is how many arrived this session."
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_log_view.gd
@@ -6001,6 +6077,10 @@ msgstr ""
 msgid "Show the settings the last command ran with, to change them and make its step again."
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Show warnings. The number is how many arrived this session."
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Show what Hide Selection and an isolate hid."
 msgstr ""
@@ -6055,6 +6135,18 @@ msgstr ""
 
 #: addons/hammerforge/hf_ring_builder.gd
 msgid "Sides around the tube. More sides, rounder tube"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Similar brushes must have the same {property}"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Similar entities must have the same {property}"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Similar faces must have the same {property}"
 msgstr ""
 
 #: addons/hammerforge/dock.tscn
@@ -7125,8 +7217,16 @@ msgstr ""
 msgid "Validate first, then Bake or Quick Play"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Validate leaves out: {check}"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Validate lists each To Do note not marked Done. Kept in the level, so everyone's check of it agrees."
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Validate runs: {check}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
@@ -7257,6 +7357,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Wall:"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Warning  {message}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_log_view.gd
@@ -7393,6 +7497,10 @@ msgstr ""
 
 #: addons/hammerforge/plugin_uv_wrap.gd
 msgid "Wrap: the selected face's brush has no id to keep"
+msgstr ""
+
+#: addons/hammerforge/plugin_uv_wrap.gd
+msgid "Wrap: {reason}"
 msgstr ""
 
 #: addons/hammerforge/plugin_uv_wrap.gd
@@ -7721,6 +7829,10 @@ msgstr ""
 msgid "{faces} selected"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "{field}:"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "{file} already exists. Replace it?"
 msgstr ""
@@ -7787,6 +7899,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "{preset} is in the settings. Press Update to rebuild with it"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "{reason}. The settings are unchanged"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_operation_replay.gd
