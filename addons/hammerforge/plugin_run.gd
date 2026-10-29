@@ -26,6 +26,7 @@ const HFPluginAdjustLast = preload("plugin_adjust_last.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFUndoNavType = preload("ui/hf_undo_nav.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## The commands that play the run and empty it, which are never in it.
 const REPEAT := "repeat_run"
@@ -349,7 +350,7 @@ static func play(plugin: Object, root: Node) -> bool:
 	_select(plugin, targets)
 	plugin.set("run_selection", _selection_ids(plugin))
 	plugin.set("run_restart", false)
-	_say(plugin, "Repeat Run: %s" % run_text(plugin), 0)
+	_say(plugin, HFTranslationType.t("Repeat Run: {run}").format({"run": run_text(plugin)}), 0)
 	return true
 
 

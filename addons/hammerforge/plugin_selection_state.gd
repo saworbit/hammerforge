@@ -10,6 +10,7 @@ const DraftEntityType = preload("draft_entity.gd")
 const HFCommandRegistry = preload("hf_command_registry.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFCommandAvailabilityType = preload("hf_command_availability.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 const HF_SHORTCUT_APPLY := -3
 const SCOPE_EMPTY := 0
 const SCOPE_NATIVE_ONLY := 1
@@ -104,9 +105,12 @@ static func drop_locked(plugin: Object, root: Node, nodes: Array) -> Array:
 	var kept: Array = system.without_locked(nodes)
 	var dropped := nodes.size() - kept.size()
 	if dropped > 0 and plugin.get("dock"):
-		plugin.dock.show_toast(
-			"%d locked: unlock its visgroup, or clear the lock in the Scene dock" % dropped, 1
+		var locked := HFTranslationType.tn(
+			"{count} locked: unlock its visgroup, or clear the lock in the Scene dock",
+			"{count} locked: unlock their visgroups, or clear the locks in the Scene dock",
+			dropped
 		)
+		plugin.dock.show_toast(locked.format({"count": dropped}), 1)
 	return kept
 
 

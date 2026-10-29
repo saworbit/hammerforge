@@ -8062,7 +8062,9 @@ func _on_apply_picked_look() -> void:
 		_sync_uv_params_to_face(_uv_active_face)
 		if uv_editor:
 			uv_editor.set_face(_uv_active_face)
-	var faces_text := "%d face%s" % [face_count, "" if face_count == 1 else "s"]
+	var faces_text := HFTranslationType.tn("{count} face", "{count} faces", face_count).format(
+		{"count": face_count}
+	)
 	if _picked_look_had_hand_layout:
 		var copied := (
 			HFTranslationType

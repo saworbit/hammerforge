@@ -7,6 +7,8 @@ extends PanelContainer
 ## entries to see details and click "Replay" to step through the undo
 ## history to that point and back.
 
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+
 signal replay_requested(entry_index: int)
 
 const MAX_ENTRIES := 20
@@ -174,7 +176,7 @@ func _on_entry_hovered(index: int) -> void:
 			time_str = "%dm ago" % int(elapsed / 60.0)
 		else:
 			time_str = "%dh ago" % int(elapsed / 3600.0)
-		_detail_label.text = "%s  (%s)" % [entry["name"], time_str]
+		_detail_label.text = str(entry["name"]) + "  (" + time_str + ")"
 
 
 func _on_entry_unhovered() -> void:
@@ -187,7 +189,11 @@ func _on_entry_clicked(index: int) -> void:
 	_replay_btn.visible = true
 	if index >= 0 and index < _entries.size():
 		var entry: Dictionary = _entries[index]
-		_detail_label.text = "%s  (click Replay to undo/redo to this point)" % entry["name"]
+		_detail_label.text = (
+			HFTranslationType
+			. t("{step}  (click Replay to undo/redo to this point)")
+			. format({"step": entry["name"]})
+		)
 
 
 func _on_replay_pressed() -> void:
@@ -201,7 +207,11 @@ func _refresh_detail_label() -> void:
 		return
 	if _selected_index >= 0 and _selected_index < _entries.size():
 		var entry: Dictionary = _entries[_selected_index]
-		_detail_label.text = "%s  (click Replay to undo/redo to this point)" % entry["name"]
+		_detail_label.text = (
+			HFTranslationType
+			. t("{step}  (click Replay to undo/redo to this point)")
+			. format({"step": entry["name"]})
+		)
 		return
 	_detail_label.text = "Hover an operation to see details"
 

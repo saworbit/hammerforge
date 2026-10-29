@@ -33,8 +33,8 @@ var _literal := RegEx.create_from_string('"(?:[^"\\\\]|\\\\.)*"')
 func test_no_file_gains_text_that_skips_translation():
 	var counts := {}
 	var found := {}
-	_scan(ROOT, counts, found)
-	assert_gt(counts.size(), 0, "the scan reached the addon")
+	var scanned := _scan(ROOT, counts, found)
+	assert_gt(scanned, 0, "the scan reached the addon")
 	if OS.get_environment("HF_RATCHET_WRITE") == "1":
 		var file := FileAccess.open(BASELINE, FileAccess.WRITE)
 		file.store_string(JSON.stringify(_sorted(counts), "\t") + "\n")
@@ -71,6 +71,16 @@ func test_no_file_gains_text_that_skips_translation():
 	assert_eq(problems, [], "see docs/translating.md, Adding a label")
 
 
+func test_a_missing_directory_does_not_count_as_scanned():
+	var missing := "user://ratchet_missing_" + str(get_instance_id())
+	assert_eq(_scan(missing, {}, {}), 0)
+
+
+func test_the_detector_still_finds_untranslated_formatted_text():
+	assert_eq(_hits('label.text = "Name %s" % value').size(), 1)
+	assert_eq(_hits('label.text = HFTranslation.t("Name {name}").format({"name": value})'), [])
+
+
 func _baseline() -> Dictionary:
 	if not FileAccess.file_exists(BASELINE):
 		return {}
@@ -78,22 +88,25 @@ func _baseline() -> Dictionary:
 	return parsed if parsed is Dictionary else {}
 
 
-func _scan(dir: String, counts: Dictionary, found: Dictionary) -> void:
+func _scan(dir: String, counts: Dictionary, found: Dictionary) -> int:
 	if ENGLISH_ONLY.has(dir):
-		return
+		return 0
 	var access := DirAccess.open(dir)
 	if access == null:
-		return
+		return 0
+	var scanned := 0
 	for sub in access.get_directories():
-		_scan(dir.path_join(sub), counts, found)
+		scanned += _scan(dir.path_join(sub), counts, found)
 	for file_name in access.get_files():
 		if file_name.get_extension() != "gd":
 			continue
+		scanned += 1
 		var path := dir.path_join(file_name)
 		var hits := _hits(FileAccess.get_file_as_string(path))
 		if not hits.is_empty():
 			counts[path] = hits.size()
 			found[path] = hits
+	return scanned
 
 
 ## The statements of `source` that hand a sink a formatted literal not put

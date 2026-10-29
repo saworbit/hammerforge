@@ -11,6 +11,7 @@ extends HBoxContainer
 
 const HFStatusBoardType = preload("../hf_status_board.gd")
 const HFStatusLampType = preload("hf_status_lamp.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## Slower than the Console's own beat. Nothing here is read closely, and unlike
 ## the Console's poll this one runs whether or not the Console is open.
@@ -93,11 +94,16 @@ func refresh() -> void:
 		"font_color", HFStatusLampType.color_for(severity, _base_control)
 	)
 	_button.tooltip_text = (
-		"HammerForge: %s. Click to open the Console.\n%d fine, %d to review, %d problem(s)."
-		% [
-			label,
-			int(summary.get("ok", 0)),
-			int(summary.get("warn", 0)),
-			int(summary.get("problem", 0)),
-		]
+		HFTranslationType
+		. t(
+			"HammerForge: {status}. Click to open the Console.\n{ok} fine, {warn} to review, {problem} problem(s)."
+		)
+		. format(
+			{
+				"status": label,
+				"ok": int(summary.get("ok", 0)),
+				"warn": int(summary.get("warn", 0)),
+				"problem": int(summary.get("problem", 0)),
+			}
+		)
 	)

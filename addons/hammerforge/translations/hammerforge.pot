@@ -145,6 +145,14 @@ msgstr ""
 msgid "Adjust Last"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_adjust_last_panel.gd
+msgid "Adjust {command}"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Against {file}: {change}"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Agent Climb / Slope"
 msgstr ""
@@ -581,6 +589,10 @@ msgstr ""
 msgid "Brushes"
 msgstr ""
 
+#: addons/hammerforge/ui/manage_tab_builder.gd
+msgid "Brushes against the {limit} past which every edit pauses the editor.\nMeasured in docs/HammerForge_Performance.md."
+msgstr ""
+
 #: addons/hammerforge/dock.tscn
 msgid "Brushes: 0"
 msgstr ""
@@ -695,12 +707,20 @@ msgstr ""
 msgid "Change the selected displacement to this power, keeping the sculpt"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_replace_material_dialog.gd
+msgid "Changes {faces} on {brushes}."
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Check the level for problems and list them."
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Check the level without baking or running it"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "Checked {time}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_panel.gd
@@ -871,6 +891,14 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_overlay_colors_panel.gd
 msgid "Compare: unchanged"
+msgstr ""
+
+#: addons/hammerforge/plugin_compare.gd
+msgid "Compare: {error}"
+msgstr ""
+
+#: addons/hammerforge/plugin_compare.gd
+msgid "Compared with {file}: {summary}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd
@@ -1121,6 +1149,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/dock_visgroup_handler.gd addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_io_wiring_panel.gd addons/hammerforge/ui/hf_prefab_library.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Delete"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Delete rejected: {brush} would be left flat"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
@@ -1499,6 +1531,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_file_handler.gd
 msgid "Exported .map ({format})"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Exported to {file}."
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -1927,6 +1963,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_console_panel.gd
 msgid "HammerForge — brush-based level editing for Godot."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_status_strip.gd
+msgid "HammerForge: {status}. Click to open the Console.\n{ok} fine, {warn} to review, {problem} problem(s)."
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
@@ -2617,6 +2657,10 @@ msgstr ""
 msgid "Merge Vertices"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Merge rejected: {reason}"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Merge the selected vertices into one at their middle."
 msgstr ""
@@ -2683,6 +2727,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "More"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Move rejected: {reason}"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -2775,6 +2823,10 @@ msgstr ""
 msgid "No LevelRoot in the scene — these switches turn on once a level is open."
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "No changes"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "No connections"
 msgstr ""
@@ -2825,6 +2877,14 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Noise"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Not exported: {error}"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Not saved: {error}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_panel.gd
@@ -3055,8 +3115,24 @@ msgstr ""
 msgid "Pick {kind}"
 msgstr ""
 
+#: addons/hammerforge/plugin_paint_input.gd
+msgid "Picked floor material {index}"
+msgstr ""
+
 #: addons/hammerforge/plugin_material_commands.gd
 msgid "Picked material #{index}"
+msgstr ""
+
+#: addons/hammerforge/plugin_transform_tools.gd
+msgid "Pivot set at a face ({point})"
+msgstr ""
+
+#: addons/hammerforge/plugin_transform_tools.gd
+msgid "Pivot set at a vertex ({point})"
+msgstr ""
+
+#: addons/hammerforge/plugin_transform_tools.gd
+msgid "Pivot set at an edge ({point})"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
@@ -3178,6 +3254,14 @@ msgid "Press Update again to rebuild over {count} edited copy"
 msgid_plural "Press Update again to rebuild over {count} edited copies"
 msgstr[0] ""
 msgstr[1] ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Press the new key for {command}. Escape stops."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Press the new second key for {command}. Escape stops."
+msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Preview"
@@ -3495,8 +3579,16 @@ msgstr ""
 msgid "Repeat Run: {commands}"
 msgstr ""
 
+#: addons/hammerforge/plugin_run.gd
+msgid "Repeat Run: {run}"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Repeat the last rectangle as a floor with walls round it."
+msgstr ""
+
+#: addons/hammerforge/plugin_brush_stamp.gd
+msgid "Repeat {brush}: click to place, Esc or right-click to stop"
 msgstr ""
 
 #: addons/hammerforge/plugin_commands.gd addons/hammerforge/ui/hf_hotkey_palette.gd
@@ -3765,6 +3857,10 @@ msgid_plural "Saved {saved} materials; {count} had no path and were left empty"
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Saved."
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Saved: {file}"
 msgstr ""
@@ -3895,6 +3991,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Select a mesh resource for scattering"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_selection_filter.gd
+msgid "Select all brushes in visgroup '{name}'"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -4497,6 +4597,10 @@ msgstr ""
 msgid "Step the I/O wires through none, all, the selection's chain and its own."
 msgstr ""
 
+#: addons/hammerforge/ui/hf_tutorial_wizard.gd
+msgid "Step {step} of {steps}"
+msgstr ""
+
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Step:"
 msgstr ""
@@ -4555,6 +4659,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_example_library.gd
 msgid "Study This"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_example_library.gd
+msgid "Study: {title}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -5035,6 +5143,12 @@ msgstr ""
 msgid "Use Picked"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_material_browser.gd
+msgid "Used on {count} face"
+msgid_plural "Used on {count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/dock.gd
 msgid "V"
 msgstr ""
@@ -5217,6 +5331,10 @@ msgstr ""
 msgid "Wrap Texture"
 msgstr ""
 
+#: addons/hammerforge/plugin_uv_wrap.gd
+msgid "Wrapped, with the {axes} scale changed to meet the edge: this face measures it differently"
+msgstr ""
+
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "Write Defaults"
 msgstr ""
@@ -5271,6 +5389,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "and {count} more"
+msgstr ""
+
+#: addons/hammerforge/plugin_compare.gd
+msgid "could not read {file}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
@@ -5339,12 +5461,28 @@ msgstr ""
 msgid "{action}: select a visgroup first"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_selection_info.gd
+msgid "{axis} must be a number."
+msgstr ""
+
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "{brushes} + {entities}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "{brushes} selected"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_example_library.gd
+msgid "{brushes}, {entities}"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "{chord} is already {commands}. Swap the keys, take it off {commands}, or leave it as it was."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "{chord} is taken by {commands} ahead of every binding. Choose another key."
 msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
@@ -5363,6 +5501,10 @@ msgstr ""
 msgid "{command} will be available when the current bake finishes"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "{command}: finish the drag first"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "{command}: select the faces to align first"
 msgstr ""
@@ -5375,6 +5517,10 @@ msgstr ""
 msgid "{command}: the selected faces are aligned that way already"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "{command}: two vertices of a brush would land on one point"
+msgstr ""
+
 #: addons/hammerforge/plugin_selection_commands.gd
 msgid "{command}: {count} selected"
 msgstr ""
@@ -5385,7 +5531,7 @@ msgid_plural "{copies} copies of {brushes}"
 msgstr[0] ""
 msgstr[1] ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/dock_brush_handler.gd addons/hammerforge/ui/hf_context_toolbar.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/dock_brush_handler.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "{count} brush"
 msgid_plural "{count} brushes"
 msgstr[0] ""
@@ -5409,7 +5555,7 @@ msgid_plural "{count} cuts that cut nothing"
 msgstr[0] ""
 msgstr[1] ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_context_toolbar.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd
 msgid "{count} entity"
 msgid_plural "{count} entities"
 msgstr[0] ""
@@ -5421,7 +5567,7 @@ msgid_plural "{count} entities. A value goes on each one that has it."
 msgstr[0] ""
 msgstr[1] ""
 
-#: addons/hammerforge/ui/hf_context_toolbar.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "{count} face"
 msgid_plural "{count} faces"
 msgstr[0] ""
@@ -5454,6 +5600,12 @@ msgstr[1] ""
 #: addons/hammerforge/plugin_edit_actions.gd
 msgid "{count} locked brush overlaps and is left alone."
 msgid_plural "{count} locked brushes overlap and are left alone."
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_state.gd
+msgid "{count} locked: unlock its visgroup, or clear the lock in the Scene dock"
+msgid_plural "{count} locked: unlock their visgroups, or clear the locks in the Scene dock"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -5513,6 +5665,10 @@ msgstr ""
 msgid "{file} has no entity classes to convert"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "{file} is not a keymap file."
+msgstr ""
+
 #: addons/hammerforge/plugin_drop_handler.gd
 msgid "{file} is not a prefab this build can read"
 msgstr ""
@@ -5551,6 +5707,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "{preset} is in the settings. Press Update to rebuild with it"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_operation_replay.gd
+msgid "{step}  (click Replay to undo/redo to this point)"
 msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
