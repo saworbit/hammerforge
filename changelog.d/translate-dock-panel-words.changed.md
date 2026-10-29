@@ -1,0 +1,1 @@
+- The dock toolbar tooltips and its material, face, save, export and example messages go through the translation catalogs. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

@@ -45,6 +45,7 @@ signal group_selection_requested(group_name: String)
 @warning_ignore_restore("unused_signal")
 
 const LevelRootType = preload("level_root.gd")
+const HFTranslationType = preload("hf_translation.gd")
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
@@ -1391,35 +1392,61 @@ func _update_toolbar_shortcut_labels() -> void:
 	if tool_draw:
 		var key = _keymap.get_display_string("tool_draw")
 		tool_draw.text = "Draw"
-		tool_draw.tooltip_text = "Draw (%s)\nDrag in the viewport to create a brush" % key
+		tool_draw.tooltip_text = (
+			HFTranslationType
+			. t("Draw ({key})\nDrag in the viewport to create a brush")
+			. format({"key": key})
+		)
 	if tool_select:
 		var key = _keymap.get_display_string("tool_select")
 		tool_select.text = "Select"
-		tool_select.tooltip_text = "Select (%s)\nClick a brush; Shift adds to selection" % key
+		tool_select.tooltip_text = (
+			HFTranslationType
+			. t("Select ({key})\nClick a brush; Shift adds to selection")
+			. format({"key": key})
+		)
 	if tool_extrude_up:
 		var key = _keymap.get_display_string("tool_extrude_up")
 		tool_extrude_up.text = "Up"
-		tool_extrude_up.tooltip_text = "Extrude Up (%s)\nClick face + drag to extrude upward" % key
+		tool_extrude_up.tooltip_text = (
+			HFTranslationType
+			. t("Extrude Up ({key})\nClick face + drag to extrude upward")
+			. format({"key": key})
+		)
 	if tool_extrude_down:
 		var key = _keymap.get_display_string("tool_extrude_down")
 		tool_extrude_down.text = "Down"
 		tool_extrude_down.tooltip_text = (
-			"Extrude Down (%s)\nClick face + drag to extrude downward" % key
+			HFTranslationType
+			. t("Extrude Down ({key})\nClick face + drag to extrude downward")
+			. format({"key": key})
 		)
 	if tool_vertex:
 		var key = _keymap.get_display_string("vertex_edit")
 		tool_vertex.text = "Vertex"
-		tool_vertex.tooltip_text = "Vertex Edit (%s)\nSelect and drag brush vertices" % key
+		tool_vertex.tooltip_text = (
+			HFTranslationType
+			. t("Vertex Edit ({key})\nSelect and drag brush vertices")
+			. format({"key": key})
+		)
 	if mode_add and mode_subtract:
 		var key = _keymap.get_display_string("toggle_operation")
-		mode_add.tooltip_text = "Solid brush | Toggle Solid/Cut: %s" % key
-		mode_subtract.tooltip_text = "Cut brush | Toggle Solid/Cut: %s" % key
+		mode_add.tooltip_text = HFTranslationType.t("Solid brush | Toggle Solid/Cut: {key}").format(
+			{"key": key}
+		)
+		mode_subtract.tooltip_text = (
+			HFTranslationType.t("Cut brush | Toggle Solid/Cut: {key}").format({"key": key})
+		)
 	if paint_mode:
 		var key = _keymap.get_display_string("toggle_paint_mode")
-		paint_mode.tooltip_text = "Toggle Paint Mode (%s)" % key
+		paint_mode.tooltip_text = HFTranslationType.t("Toggle Paint Mode ({key})").format(
+			{"key": key}
+		)
 	if quick_play_btn:
 		var key = _keymap.get_display_string("quick_play")
-		quick_play_btn.tooltip_text = "Bake the level and run it (%s)" % key
+		quick_play_btn.tooltip_text = (
+			HFTranslationType.t("Bake the level and run it ({key})").format({"key": key})
+		)
 
 
 func set_editor_interface(iface: EditorInterface) -> void:
@@ -2670,7 +2697,12 @@ func _ready():
 	_sync_snap_buttons(grid_snap.value)
 	var moved_presets := migrate_legacy_presets(LEGACY_PRESETS_DIR, presets_dir)
 	if moved_presets > 0:
-		show_toast("Moved %d brush presets to %s" % [moved_presets, presets_dir], 0)
+		var moved := HFTranslationType.tn(
+			"Moved {count} brush preset to {folder}",
+			"Moved {count} brush presets to {folder}",
+			moved_presets
+		)
+		show_toast(moved.format({"count": moved_presets, "folder": presets_dir}), 0)
 	_load_presets()
 	_load_entity_definitions()
 	_apply_pro_styles()
@@ -3312,15 +3344,16 @@ func _guard_selection_action(
 	if scope == DockSelectionScope.MANAGED:
 		var counts := _get_managed_selection_counts(_selection_nodes)
 		if requirement == DockSelectionRequirement.BRUSHES_ONLY and int(counts["entities"]) > 0:
-			show_toast(
-				"%s requires a brush-only selection; entities were left unchanged." % action_name, 1
+			var brushes_only := HFTranslationType.t(
+				"{command} requires a brush-only selection; entities were left unchanged."
 			)
+			show_toast(brushes_only.format({"command": action_name}), 1)
 			return false
 		if requirement == DockSelectionRequirement.ENTITIES_ONLY and int(counts["brushes"]) > 0:
-			show_toast(
-				"%s requires an entity-only selection; brushes were left unchanged." % action_name,
-				1
+			var entities_only := HFTranslationType.t(
+				"{command} requires an entity-only selection; brushes were left unchanged."
 			)
+			show_toast(entities_only.format({"command": action_name}), 1)
 			return false
 	return true
 
@@ -3444,7 +3477,7 @@ func _update_grid_command_tooltips() -> void:
 	for action in _grid_command_buttons:
 		var button: Button = _grid_command_buttons[action]
 		button.tooltip_text = (
-			"%s (%s)" % [HFCommandRegistry.label(action), km.get_display_string(action)]
+			HFCommandRegistry.label(action) + " (" + km.get_display_string(action) + ")"
 		)
 
 
@@ -3695,7 +3728,12 @@ func toggle_show_selection_size() -> void:
 	if show_selection_size:
 		show_selection_size.button_pressed = not show_selection_size.button_pressed
 		show_toast(
-			"Selection size %s" % ("shown" if show_selection_size.button_pressed else "hidden"), 0
+			(
+				HFTranslationType.t("Selection size shown")
+				if show_selection_size.button_pressed
+				else HFTranslationType.t("Selection size hidden")
+			),
+			0
 		)
 
 
@@ -3704,7 +3742,14 @@ func toggle_show_selection_size() -> void:
 func toggle_draw_on_face() -> void:
 	if draw_on_face_btn:
 		draw_on_face_btn.button_pressed = not draw_on_face_btn.button_pressed
-		show_toast("Draw on Face %s" % ("on" if draw_on_face_btn.button_pressed else "off"), 0)
+		show_toast(
+			(
+				HFTranslationType.t("Draw on Face on")
+				if draw_on_face_btn.button_pressed
+				else HFTranslationType.t("Draw on Face off")
+			),
+			0
+		)
 
 
 func is_draw_on_face_enabled() -> bool:
@@ -3794,7 +3839,8 @@ func cycle_io_wires() -> void:
 	_save_user_pref("io_wire_mode", mode)
 	_show_io_lines.set_pressed_no_signal(showing)
 	_sync_io_wires()
-	show_toast("I/O wires: %s" % (IO_WIRE_NAMES[mode] if showing else "none"), 0)
+	var wires: String = IO_WIRE_NAMES[mode] if showing else HFTranslationType.t("none")
+	show_toast(HFTranslationType.t("I/O wires: {mode}").format({"mode": wires}), 0)
 
 
 func _on_show_subtract_preview_toggled(pressed: bool) -> void:
@@ -3834,7 +3880,9 @@ func _save_prefab_from_panel(prefab_name: String, nodes: Array, linked: bool) ->
 	var dlg := ConfirmationDialog.new()
 	dlg.name = "PrefabReplaceConfirm"
 	dlg.title = "Replace Prefab"
-	dlg.dialog_text = "%s already exists. Replace it?" % path.get_file()
+	dlg.dialog_text = HFTranslationType.t("{file} already exists. Replace it?").format(
+		{"file": path.get_file()}
+	)
 	dlg.ok_button_text = "Replace"
 	dlg.min_size = Vector2i(320, 100)
 	dlg.confirmed.connect(
@@ -4488,7 +4536,9 @@ func _uv_faces_ready(label: String) -> bool:
 	if not _guard_selection_action(label, DockSelectionRequirement.BRUSHES_ONLY):
 		return false
 	if _count_selected_faces() == 0:
-		show_toast("Select the faces for %s" % label, 1)
+		show_toast(
+			HFTranslationType.t("Select the faces for {command}").format({"command": label}), 1
+		)
 		return false
 	return true
 
@@ -4503,12 +4553,16 @@ func _on_uv_align(projection: int) -> void:
 	if not _guard_selection_action(action, DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	if _count_selected_faces() == 0:
-		show_toast("%s: select the faces to align first" % action, 1)
+		var first := HFTranslationType.t("{command}: select the faces to align first")
+		show_toast(first.format({"command": action}), 1)
 		return
 	if not _commit_state_action_if_changed(
 		action, "align_selected_faces", [projection], _face_selection_brush_ids()
 	):
-		show_toast("%s: the selected faces are aligned that way already" % action, 0)
+		var already := HFTranslationType.t(
+			"{command}: the selected faces are aligned that way already"
+		)
+		show_toast(already.format({"command": action}), 0)
 		return
 	_resync_uv_face()
 
@@ -4539,7 +4593,10 @@ func _on_uv_link() -> void:
 	):
 		show_toast("Link: the selected faces are one surface already", 0)
 		return
-	show_toast("Linked %d faces into one surface" % face_count, 0)
+	var linked := HFTranslationType.tn(
+		"Linked {count} face into one surface", "Linked {count} faces into one surface", face_count
+	)
+	show_toast(linked.format({"count": face_count}), 0)
 	_resync_uv_face()
 
 
@@ -4571,7 +4628,12 @@ func _on_uv_select_group() -> void:
 	if count == 0:
 		show_toast("Select Group: the selected face is not linked to any other", 1)
 		return
-	show_toast("Selected the %d faces linked with it" % count, 0)
+	var linked := HFTranslationType.tn(
+		"Selected the {count} face linked with it",
+		"Selected the {count} faces linked with it",
+		count
+	)
+	show_toast(linked.format({"count": count}), 0)
 
 
 ## The brushes the face selection is on, as an undo step's scope.
@@ -4777,7 +4839,7 @@ func _on_bake_progress(value: float, label: String) -> void:
 
 func _on_autosave_failed(error_message: String) -> void:
 	push_warning("HammerForge autosave failed: %s" % error_message)
-	show_toast("Autosave failed: %s" % error_message, 2)
+	show_toast(HFTranslationType.t("Autosave failed: {error}").format({"error": error_message}), 2)
 	if _autosave_warning:
 		_autosave_warning.text = "Autosave failed! Save manually."
 		_autosave_warning.tooltip_text = error_message
@@ -4805,7 +4867,7 @@ func _on_autosave_waiting(waiting: bool) -> void:
 
 func _on_hflevel_save_completed(path: String) -> void:
 	_set_status("Saved .hflevel", false, 3.0)
-	show_toast("Saved: %s" % path.get_file(), 0)
+	show_toast(HFTranslationType.t("Saved: {file}").format({"file": path.get_file()}), 0)
 	if _user_prefs:
 		_user_prefs.add_recent_file(path)
 		_user_prefs.save()
@@ -4813,8 +4875,10 @@ func _on_hflevel_save_completed(path: String) -> void:
 
 func _on_hflevel_save_failed(path: String, error_message: String) -> void:
 	push_warning("HammerForge save failed for %s: %s" % [path, error_message])
-	_set_status("Failed to save .hflevel: %s" % path, true, 5.0)
-	show_toast("Save failed: %s" % path, 2)
+	_set_status(
+		HFTranslationType.t("Failed to save .hflevel: {file}").format({"file": path}), true, 5.0
+	)
+	show_toast(HFTranslationType.t("Save failed: {file}").format({"file": path}), 2)
 
 
 func _on_root_user_message(text: String, level: int) -> void:
@@ -4915,11 +4979,13 @@ func _update_perf_panel() -> void:
 
 	if perf_bake_time_value:
 		var ms = int(level_root.get_last_bake_duration_ms())
-		perf_bake_time_value.text = ("%d ms" % ms) if ms > 0 else "-"
+		var took := HFTranslationType.t("{ms} ms").format({"ms": ms})
+		perf_bake_time_value.text = took if ms > 0 else "-"
 
 	if perf_chunk_rec_value:
 		var rec: float = level_root.get_recommended_chunk_size()
-		perf_chunk_rec_value.text = ("%.0f" % rec) if rec > 0.0 else "N/A"
+		var recommended := "%.0f" % rec
+		perf_chunk_rec_value.text = recommended if rec > 0.0 else "N/A"
 
 	# Brush count progress bar
 	if perf_brush_bar:
@@ -5612,7 +5678,10 @@ func _on_material_remove_unused() -> void:
 	_commit_state_action("Remove Unused Materials", "remove_unused_materials")
 	_selected_material_index = -1
 	_sync_materials_from_root()
-	show_toast("Removed %d unused material%s" % [dead, "" if dead == 1 else "s"], 0)
+	var removed := HFTranslationType.tn(
+		"Removed {count} unused material", "Removed {count} unused materials", dead
+	)
+	show_toast(removed.format({"count": dead}), 0)
 
 
 func _on_material_clear() -> void:
@@ -5625,10 +5694,12 @@ func _on_material_clear() -> void:
 	_commit_state_action("Clear Palette", "clear_palette")
 	_selected_material_index = -1
 	_sync_materials_from_root()
-	show_toast(
-		"Cleared %d material%s; faces that used them are unset" % [held, "" if held == 1 else "s"],
-		0
+	var cleared := HFTranslationType.tn(
+		"Cleared {count} material; faces that used it are unset",
+		"Cleared {count} materials; faces that used them are unset",
+		held
 	)
+	show_toast(cleared.format({"count": held}), 0)
 
 
 func _on_material_load_prototypes() -> void:
@@ -5808,10 +5879,12 @@ func _on_browser_material_add_requested(path: String) -> void:
 	_on_material_palette_selected(path)
 	var slot: int = material_browser.palette_slot_of(path)
 	if slot < 0:
-		show_toast("%s could not be added to the palette" % path.get_file(), 1)
+		var refused := HFTranslationType.t("{file} could not be added to the palette")
+		show_toast(refused.format({"file": path.get_file()}), 1)
 		return
 	_on_browser_material_selected(slot)
-	show_toast("Added %s to the palette" % _material_display_name(slot), 0)
+	var added := HFTranslationType.t("Added {material} to the palette")
+	show_toast(added.format({"material": _material_display_name(slot)}), 0)
 
 
 func _on_browser_context_menu(index: int, global_pos: Vector2) -> void:
@@ -5843,19 +5916,17 @@ func select_faces_using(slot: int) -> int:
 	for key in picked:
 		total += (picked[key] as Array).size()
 	if total == 0:
-		show_toast("No visible face uses %s" % _material_display_name(slot), 1)
+		var no_face := HFTranslationType.t("No visible face uses {material}")
+		show_toast(no_face.format({"material": _material_display_name(slot)}), 1)
 		return 0
 	if face_select_mode and not face_select_mode.button_pressed:
 		face_select_mode.button_pressed = true
 	level_root.face_selection = picked
 	level_root.face_selection_changed.emit()
-	show_toast(
-		(
-			"Selected %d face%s using %s"
-			% [total, "" if total == 1 else "s", _material_display_name(slot)]
-		),
-		0
+	var faces_using := HFTranslationType.tn(
+		"Selected {count} face using {material}", "Selected {count} faces using {material}", total
 	)
+	show_toast(faces_using.format({"count": total, "material": _material_display_name(slot)}), 0)
 	return total
 
 
@@ -5865,7 +5936,8 @@ func select_brushes_using(slot: int) -> Array:
 		return []
 	var picked := HFMaterialUse.brushes_using(level_root, slot)
 	if picked.is_empty():
-		show_toast("No visible brush uses %s" % _material_display_name(slot), 1)
+		var no_brush := HFTranslationType.t("No visible brush uses {material}")
+		show_toast(no_brush.format({"material": _material_display_name(slot)}), 1)
 		return picked
 	if face_select_mode and face_select_mode.button_pressed:
 		face_select_mode.button_pressed = false
@@ -5875,12 +5947,13 @@ func select_brushes_using(slot: int) -> Array:
 			selection.clear()
 			for brush in picked:
 				selection.add_node(brush)
+	var brushes_using := HFTranslationType.tn(
+		"Selected {count} brush using {material}",
+		"Selected {count} brushes using {material}",
+		picked.size()
+	)
 	show_toast(
-		(
-			"Selected %d brush%s using %s"
-			% [picked.size(), "" if picked.size() == 1 else "es", _material_display_name(slot)]
-		),
-		0
+		brushes_using.format({"count": picked.size(), "material": _material_display_name(slot)}), 0
 	)
 	return picked
 
@@ -5905,10 +5978,12 @@ func _on_material_context_action(id: int) -> void:
 				return
 			_commit_state_action("Assign Face Material", "assign_material_to_selected_faces", [idx])
 			_note_material_used(idx)
-			show_toast(
-				"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"],
-				0
+			var applied := HFTranslationType.tn(
+				"Applied {material} to {count} face",
+				"Applied {material} to {count} faces",
+				face_count
 			)
+			show_toast(applied.format({"material": mat_name, "count": face_count}), 0)
 		1:  # Apply to Whole Brush — assign material to ALL faces on selected brushes
 			if not _guard_selection_action(
 				"Apply Brush Material", DockSelectionRequirement.BRUSHES_ONLY
@@ -5923,13 +5998,7 @@ func _on_material_context_action(id: int) -> void:
 				"Assign Brush Material", "assign_material_to_whole_brushes", [idx, brush_ids]
 			)
 			_note_material_used(idx)
-			show_toast(
-				(
-					"Applied %s to %d brush%s"
-					% [mat_name, brush_ids.size(), "" if brush_ids.size() == 1 else "es"]
-				),
-				0
-			)
+			_say_applied_to_brushes(mat_name, brush_ids.size())
 		7:  # Select Faces Using This
 			select_faces_using(idx)
 		8:  # Select Brushes Using This
@@ -5969,19 +6038,23 @@ func _on_material_context_action(id: int) -> void:
 				[idx, FaceData.UVProjection.BOX_UV]
 			)
 			_note_material_used(idx)
-			show_toast(
-				(
-					"Applied %s + Box UV to %d face%s"
-					% [mat_name, face_count, "" if face_count == 1 else "s"]
-				),
-				0
+			var boxed := HFTranslationType.tn(
+				"Applied {material} + Box UV to {count} face",
+				"Applied {material} + Box UV to {count} faces",
+				face_count
 			)
+			show_toast(boxed.format({"material": mat_name, "count": face_count}), 0)
 		5:  # Set as Active Material, what Paint Mode puts on a clicked brush
 			var active = level_root.material_manager.get_material(idx)
 			if active:
 				level_root.active_material = active
 				_sync_active_material_from_root()
-				show_toast("Active Material: %s" % mat_name, 0)
+				show_toast(
+					HFTranslationType.t("Active Material: {material}").format(
+						{"material": mat_name}
+					),
+					0
+				)
 		6:  # Replace Material, finding this one
 			open_replace_material(idx)
 
@@ -6053,15 +6126,21 @@ func _on_replace_material_requested(
 		show_toast("Nothing to replace", 1)
 		return
 	_note_material_used(to_index)
+	var replaced := HFTranslationType.tn(
+		"Replaced {from} with {to} on {count} face",
+		"Replaced {from} with {to} on {count} faces",
+		faces
+	)
 	show_toast(
 		(
-			"Replaced %s with %s on %d face%s"
-			% [
-				_material_display_name(from_index),
-				_material_display_name(to_index),
-				faces,
-				"" if faces == 1 else "s"
-			]
+			replaced
+			. format(
+				{
+					"from": _material_display_name(from_index),
+					"to": _material_display_name(to_index),
+					"count": faces,
+				}
+			)
 		),
 		0
 	)
@@ -6346,7 +6425,14 @@ func make_selected_faces_hidden(make_hidden: bool) -> bool:
 		return false
 	var count := _count_selected_faces()
 	if count == 0:
-		show_toast("Select the faces to make %s" % ("Hidden" if make_hidden else "Normal"), 1)
+		show_toast(
+			(
+				HFTranslationType.t("Select the faces to make Hidden")
+				if make_hidden
+				else HFTranslationType.t("Select the faces to make Normal")
+			),
+			1
+		)
 		return false
 	var brush_ids: Array = []
 	for key in level_root.face_selection.keys():
@@ -6354,15 +6440,21 @@ func make_selected_faces_hidden(make_hidden: bool) -> bool:
 	if not _commit_state_action_if_changed(
 		action, "set_selected_faces_hidden", [make_hidden], brush_ids
 	):
-		show_toast("Those faces are %s already" % ("Hidden" if make_hidden else "Normal"), 0)
+		show_toast(
+			(
+				HFTranslationType.t("Those faces are Hidden already")
+				if make_hidden
+				else HFTranslationType.t("Those faces are Normal already")
+			),
+			0
+		)
 		return false
-	show_toast(
-		(
-			"%d face%s made %s"
-			% [count, "" if count == 1 else "s", "Hidden" if make_hidden else "Normal"]
-		),
-		0
+	var made := (
+		HFTranslationType.tn("{count} face made Hidden", "{count} faces made Hidden", count)
+		if make_hidden
+		else HFTranslationType.tn("{count} face made Normal", "{count} faces made Normal", count)
 	)
+	show_toast(made.format({"count": count}), 0)
 	return true
 
 
@@ -6559,10 +6651,8 @@ func _on_surface_paint_layer_add() -> void:
 	if _surface_active_face.paint_layers.size() >= level_root.MAX_SURFACE_PAINT_LAYERS:
 		# Checked before the undo action opens, so Add does not report success
 		# over a layer the face cannot blend.
-		_set_status(
-			"A face blends at most %d surface paint layers" % level_root.MAX_SURFACE_PAINT_LAYERS,
-			true
-		)
+		var most := HFTranslationType.t("A face blends at most {count} surface paint layers")
+		_set_status(most.format({"count": level_root.MAX_SURFACE_PAINT_LAYERS}), true)
 		return
 	_commit_state_action("Add Surface Paint Layer", "add_surface_paint_layer", [brush_id, face_idx])
 	_refresh_surface_paint_layers()
@@ -6708,7 +6798,7 @@ func _update_perf_label() -> void:
 		perf_label.remove_theme_color_override("font_color")
 		return
 	var count = int(level_root.get_live_brush_count())
-	perf_label.text = "Live Brushes: %s" % count
+	perf_label.text = HFTranslationType.t("Live Brushes: {count}").format({"count": count})
 	var ok_color = _get_editor_color("success_color", Color(0.2, 0.85, 0.35))
 	var warn_color = _get_editor_color("warning_color", Color(0.95, 0.8, 0.2))
 	var danger_color = _get_editor_color("error_color", Color(0.95, 0.3, 0.3))
@@ -6761,7 +6851,9 @@ func _sync_active_material_from_root() -> void:
 	if active_material_button:
 		if mat:
 			var display_name := MaterialManager.material_label(mat)
-			active_material_button.text = "Active Material: %s" % display_name
+			active_material_button.text = HFTranslationType.t("Active Material: {material}").format(
+				{"material": display_name}
+			)
 		else:
 			active_material_button.text = "Active Material"
 	if clear_active_material_button:
@@ -6820,9 +6912,13 @@ func export_entities_to(path: String, scope: String = "") -> int:
 	var count := HFEntityCensus.entities(level_root, scope).size()
 	var err := HFEntityCensus.write_csv(level_root, path, scope)
 	if err == OK:
-		show_toast("Exported %d entities to %s" % [count, path.get_file()], 0)
+		var exported := HFTranslationType.tn(
+			"Exported {count} entity to {file}", "Exported {count} entities to {file}", count
+		)
+		show_toast(exported.format({"count": count, "file": path.get_file()}), 0)
 	else:
-		show_toast("Could not write %s: %s" % [path.get_file(), error_string(err)], 2)
+		var unwritten := HFTranslationType.t("Could not write {file}: {error}")
+		show_toast(unwritten.format({"file": path.get_file(), "error": error_string(err)}), 2)
 	return err
 
 
@@ -6850,9 +6946,12 @@ func export_plan_to(path: String) -> int:
 	var err := HFLevelPlan.write_files(level_root, path.get_basename())
 	if err == OK:
 		var base := path.get_basename().get_file()
-		show_toast("Plan written: %s.svg and %s.png" % [base, base], 0)
+		show_toast(
+			HFTranslationType.t("Plan written: {base}.svg and {base}.png").format({"base": base}), 0
+		)
 	else:
-		show_toast("Could not write the plan: %s" % error_string(err), 2)
+		var no_plan := HFTranslationType.t("Could not write the plan: {error}")
+		show_toast(no_plan.format({"error": error_string(err)}), 2)
 	return err
 
 
@@ -7366,8 +7465,12 @@ func _populate_entity_palette() -> void:
 			preset_button.entity_def = entry
 			preset_button.preset_values = HFEntityPropUtils.preset_values(entry, preset_name)
 			preset_button.dock_ref = self
-			preset_button.text = "%s: %s" % [button.text, preset_name]
-			preset_button.tooltip_text = "%s, placed with the %s preset" % [entity_id, preset_name]
+			preset_button.text = button.text + ": " + preset_name
+			preset_button.tooltip_text = (
+				HFTranslationType
+				. t("{entity}, placed with the {preset} preset")
+				. format({"entity": entity_id, "preset": preset_name})
+			)
 			preset_button.focus_mode = Control.FOCUS_NONE
 			if icon:
 				preset_button.icon = icon
@@ -7884,13 +7987,14 @@ func _apply_material_to_whole_brush() -> void:
 	)
 	_note_material_used(_selected_material_index)
 	var mat_name := _material_display_name(_selected_material_index)
-	show_toast(
-		(
-			"Applied %s to %d brush%s"
-			% [mat_name, brush_ids.size(), "" if brush_ids.size() == 1 else "es"]
-		),
-		0
+	_say_applied_to_brushes(mat_name, brush_ids.size())
+
+
+func _say_applied_to_brushes(mat_name: String, count: int) -> void:
+	var applied := HFTranslationType.tn(
+		"Applied {material} to {count} brush", "Applied {material} to {count} brushes", count
 	)
+	show_toast(applied.format({"material": mat_name, "count": count}), 0)
 
 
 ## Assign face material — called by context toolbar for quick material apply.
@@ -7958,17 +8062,22 @@ func _on_apply_picked_look() -> void:
 		_sync_uv_params_to_face(_uv_active_face)
 		if uv_editor:
 			uv_editor.set_face(_uv_active_face)
-	var faces_text := "%d face%s" % [face_count, "" if face_count == 1 else "s"]
+	var faces_text := HFTranslationType.tn("{count} face", "{count} faces", face_count).format(
+		{"count": face_count}
+	)
 	if _picked_look_had_hand_layout:
+		var copied := (
+			HFTranslationType
+			. t(
+				"Copied only the picked face's settings to {faces}: its hand-made UV layout does not travel"
+			)
+		)
+		show_toast(copied.format({"faces": faces_text}), 0)
+	else:
 		show_toast(
-			(
-				"Copied only the picked face's settings to %s: its hand-made UV layout does not travel"
-				% faces_text
-			),
+			HFTranslationType.t("Applied the picked look to {faces}").format({"faces": faces_text}),
 			0
 		)
-	else:
-		show_toast("Applied the picked look to %s" % faces_text, 0)
 
 
 ## Set the operation replay control (passed from plugin.gd).
@@ -7982,7 +8091,9 @@ func _on_example_load_requested(example_id: String) -> void:
 		return
 	var data: Dictionary = _example_library.get_example_data(example_id)
 	if data.is_empty():
-		show_toast("Example not found: %s" % example_id, 2)
+		show_toast(
+			HFTranslationType.t("Example not found: {example}").format({"example": example_id}), 2
+		)
 		return
 	if not level_root:
 		show_toast("No LevelRoot in scene — add one first", 1)
@@ -8006,15 +8117,18 @@ func _load_example_data(data: Dictionary) -> void:
 	var dlg := ConfirmationDialog.new()
 	dlg.name = "ExampleLoadConfirm"
 	dlg.title = "Load Example Level"
+	var brushes := HFTranslationType.tn("{count} brush", "{count} brushes", brush_count)
+	var entities := HFTranslationType.tn("{count} entity", "{count} entities", entity_count)
 	dlg.dialog_text = (
-		"Replace %d brush%s and %d entit%s with '%s'?"
-		% [
-			brush_count,
-			"" if brush_count == 1 else "es",
-			entity_count,
-			"y" if entity_count == 1 else "ies",
-			title,
-		]
+		HFTranslationType
+		. t("Replace {brushes} and {entities} with '{title}'?")
+		. format(
+			{
+				"brushes": brushes.format({"count": brush_count}),
+				"entities": entities.format({"count": entity_count}),
+				"title": title,
+			}
+		)
 	)
 	dlg.ok_button_text = "Replace"
 	dlg.min_size = Vector2i(320, 100)
@@ -8080,4 +8194,7 @@ func _apply_example_data(data: Dictionary) -> void:
 			loaded_count += 1
 
 	_commit_done_state_action("Load Example: %s" % title, before_state)
-	show_toast("Loaded '%s': %d objects" % [title, loaded_count], 0)
+	var loaded := HFTranslationType.tn(
+		"Loaded '{title}': {count} object", "Loaded '{title}': {count} objects", loaded_count
+	)
+	show_toast(loaded.format({"title": title, "count": loaded_count}), 0)
