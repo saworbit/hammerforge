@@ -1,0 +1,1 @@
+- The translation template takes the words of toasts, the status line and level messages, so a catalog can translate them. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

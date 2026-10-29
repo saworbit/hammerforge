@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from hammerforge_mcp.bridge import Bridge, BridgeError
+from hammerforge_mcp.bridge import UNANSWERED_LIMIT, Bridge, BridgeError
 from hammerforge_mcp.discovery import discovery_path
 
 from .conftest import HOLD, FakeListener, failed, make_project, ok
@@ -729,6 +729,103 @@ async def test_automatic_retry_ids_do_not_cross_targets(tmp_path):
     finally:
         await bridge.close()
         await listener.stop()
+
+
+async def test_a_separate_answered_edit_leaves_an_earlier_retry_id(tmp_path):
+    changes = []
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request)
+        changes.append(request)
+        return HOLD if len(changes) == 1 else ok(request)
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    try:
+        with pytest.raises(BridgeError) as caught:
+            await bridge.call("hf_place_brush", {}, mutating=True, timeout=0.3)
+        first_id = caught.value.details["operation_id"]
+        await bridge.call(
+            "hf_place_brush", {}, mutating=True, timeout=5, operation_id="separate"
+        )
+        retry = await bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+    finally:
+        await bridge.close()
+        await listener.stop()
+    assert [r["operation_id"] for r in changes] == [first_id, "separate", first_id]
+    assert retry["operation_id"] == first_id
+
+
+async def test_identical_unanswered_edits_are_each_retried_once(tmp_path):
+    changes = []
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request)
+        changes.append(request)
+        return HOLD if len(changes) <= 2 else ok(request)
+
+    listener, bridge = await _bridge(tmp_path, responder)
+
+    async def place(timeout):
+        try:
+            answer = await bridge.call(
+                "hf_place_brush", {}, mutating=True, timeout=timeout
+            )
+        except BridgeError as exc:
+            return exc.details["operation_id"]
+        return answer["operation_id"]
+
+    try:
+        held = await asyncio.gather(place(0.3), place(0.3))
+        retried = await asyncio.gather(place(5), place(5))
+        fresh = await place(5)
+    finally:
+        await bridge.close()
+        await listener.stop()
+    assert len(set(held)) == 2
+    assert sorted(retried) == sorted(held), "each unanswered edit is retried once"
+    assert fresh not in held, "once both have answered, a repeat is a new edit"
+
+
+async def test_an_answer_on_another_target_leaves_the_first_target_s_retry_id(
+    tmp_path,
+):
+    changes = []
+    target = "1:2:3"
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request, target=target)
+        changes.append(request)
+        return HOLD if len(changes) == 1 else ok(request, target=target)
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    try:
+        with pytest.raises(BridgeError) as caught:
+            await bridge.call("hf_place_brush", {}, mutating=True, timeout=0.3)
+        first_id = caught.value.details["operation_id"]
+        target = "9:9:9"
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        await bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+        target = "1:2:3"
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        await bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+    finally:
+        await bridge.close()
+        await listener.stop()
+    assert changes[1]["operation_id"] != first_id
+    assert changes[2]["operation_id"] == first_id
+    assert changes[2]["expect_target"] == "1:2:3"
+
+
+async def test_the_retry_memory_keeps_only_the_newest_unanswered_changes(tmp_path):
+    bridge = Bridge(make_project(tmp_path), client_version="test")
+    bridge.target_id = "1:2:3"
+    for n in range(UNANSWERED_LIMIT + 1):
+        bridge._remember_unanswered("same", f"op-{n}", "1:2:3")
+    assert len(bridge._unanswered) == UNANSWERED_LIMIT
+    assert bridge._unanswered_retry("same") == "op-1"
 
 
 async def test_connection_error_reports_each_waiting_changes_own_id(tmp_path):

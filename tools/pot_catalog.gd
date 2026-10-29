@@ -8,10 +8,13 @@ extends RefCounted
 ##   * each command's label, category and help, from `HFCommandRegistry`;
 ##   * in the addon's scripts, a literal given to `HFTranslation.t()` or `tn()`,
 ##     `tr()`, `tr_n()` or `atr()`; one assigned whole to a property in
-##     `PROPERTIES`; one given to a call in `CALLS` that sets a control's words.
+##     `PROPERTIES`; one given to a call in `CALLS` that sets a control's words
+##     or shows a toast or a status line; one sent with a signal in `SIGNALS`.
 ##     Literals joined with `+` count as one, and so does each branch of
 ##     `"a" if x else "b"`. A literal with `%` after it is put together in code
 ##     and is not found: it goes through `HFTranslation.t()` first;
+##   * in the addon's scripts too, a literal a table holds under a key in
+##     `TABLE_KEYS`, for the control that shows it;
 ##   * in the addon's scenes, the properties in `PROPERTIES`.
 ## The bridge (`mcp/`) is left out: its replies stay English.
 
@@ -24,7 +27,8 @@ const SKIP := ["res://addons/hammerforge/mcp"]
 const REGISTRY := "addons/hammerforge/hf_command_registry.gd"
 ## Properties whose literal a control shows.
 const PROPERTIES := ["text", "tooltip_text", "placeholder_text", "title", "dialog_text"]
-## Calls that set a control's words: the index of each argument that is one.
+## Calls that set a control's words, a toast's or the status line's: the index of
+## each argument that is one.
 const CALLS := {
 	"tr": [0],
 	"atr": [0],
@@ -46,13 +50,25 @@ const CALLS := {
 	"make_button": [0, 1],
 	"make_check": [0],
 	"make_label_row": [0],
+	"show_toast": [0],
+	"_toast": [1],
+	"_say": [0, 1],
+	"_set_status": [0],
+	"_set_status_success": [0],
+	"_set_status_warning": [0],
 }
+## Signals whose first argument a toast shows, sent with `emit_signal()` or
+## `.emit()`. The Console's log and the bridge get the same text in English.
+const SIGNALS := ["user_message"]
 ## Calls with a plural: the singular's index and the plural's.
 const PLURAL_CALLS := {"tr_n": [0, 1], "atr_n": [0, 1]}
 ## `HFTranslation`'s own, found only after a name that ends in one of `OWNERS`.
 const OWN_CALLS := {"t": [0]}
 const OWN_PLURAL_CALLS := {"tn": [0, 1]}
 const OWNERS := ["HFTranslation", "HFTranslationType"]
+## Keys whose literal a table holds for a control to show, as in
+## `{"label": "Width", "tooltip": "How wide the flight is"}`.
+const TABLE_KEYS := ["label", "tooltip", "help", "title", "blurb"]
 
 const TOKENS := (
 	"(?<c>#[^\\n]*)"
@@ -132,6 +148,11 @@ static func script_words(source: String) -> Array:
 	var out: Array = []
 	for i in tokens.size():
 		var token: Array = tokens[i]
+		if token[0] == "s" and TABLE_KEYS.has(token[1]) and _at(tokens, i + 1) == ["p", ":"]:
+			var held := _entry_word(tokens, i + 2)
+			if held != "":
+				out.append([held, "", ""])
+			continue
 		if token[0] != "n":
 			continue
 		var name: String = token[1]
@@ -143,9 +164,17 @@ static func script_words(source: String) -> Array:
 		if next != ["p", "("]:
 			continue
 		var dot := _back(tokens, i - 1)
-		var own := (
-			_at(tokens, dot) == ["p", "."] and OWNERS.has(_at(tokens, _back(tokens, dot - 1))[1])
+		var holder: String = (
+			_at(tokens, _back(tokens, dot - 1))[1] if _at(tokens, dot) == ["p", "."] else ""
 		)
+		if name == "emit_signal" or (name == "emit" and SIGNALS.has(holder)):
+			var sent := _arguments(tokens, i + 1)
+			if name == "emit_signal":
+				sent = sent.slice(1) if not sent.is_empty() and SIGNALS.has(sent[0]) else []
+			if not sent.is_empty() and sent[0] is String:
+				out.append([sent[0], "", ""])
+			continue
+		var own := OWNERS.has(holder)
 		if own and not (OWN_CALLS.has(name) or OWN_PLURAL_CALLS.has(name)):
 			continue
 		if not own and not (CALLS.has(name) or PLURAL_CALLS.has(name)):
@@ -301,6 +330,20 @@ static func _literal(tokens: Array, i: int) -> Array:
 		open -= 1
 		i = _skip_lines(tokens, i + 1, open)
 	return [text, i]
+
+
+## A table entry's value at `i`, on its own line or the next, when it is one
+## whole literal; empty when it is put together in code.
+static func _entry_word(tokens: Array, i: int) -> String:
+	while _at(tokens, i)[0] == "l":
+		i += 1
+	var read := _literal(tokens, i)
+	if read.is_empty():
+		return ""
+	var after: int = read[1]
+	while _at(tokens, after)[0] == "l":
+		after += 1
+	return read[0] if _at(tokens, after) in [["p", ","], ["p", "}"]] else ""
 
 
 static func _skip_lines(tokens: Array, i: int, open: int) -> int:
