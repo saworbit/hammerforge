@@ -13,7 +13,10 @@ back from its cache instead of being made twice.
 A change that timed out or was cancelled may still run: the editor reads it off
 the socket when it gets to it. So the `operation_id` of every sent change left
 without an answer is kept for the same arguments on the same target. The copy
-that runs second is answered from the editor's cache. Not for undo, redo and
+that runs second is answered from the editor's cache. Each is kept on its own:
+a repeat takes the oldest one that no other call is sending, and an answer
+clears only its own id, so a separate edit with the same arguments never makes
+an earlier one's retry look new. Not for undo, redo and
 bake, whose arguments do not say which change they are: a second undo is as
 likely meant as another undo, so it gets a new id unless the caller passes the
 old one.
@@ -27,7 +30,7 @@ import itertools
 import json
 import logging
 import uuid
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -106,9 +109,13 @@ class Bridge:
         #: Which connection this is. A call that failed on an older one must not
         #: close the one another call has just opened.
         self._generation = 0
-        #: A change's method and arguments -> (operation_id, original target),
-        #: for changes that never got an answer. Never reused on another level.
+        #: operation_id -> (the change's method and arguments, original target),
+        #: for changes that never got an answer, oldest first. Never reused on
+        #: another level.
         self._unanswered: OrderedDict[str, tuple[str, str | None]] = OrderedDict()
+        #: How many calls are sending each operation_id now. A repeat does not
+        #: take an unanswered id another call is already retrying.
+        self._sending: Counter[str] = Counter()
 
     @property
     def connected(self) -> bool:
@@ -143,13 +150,12 @@ class Bridge:
         by_arguments = mutating and method not in NOT_RETRIED_BY_ARGUMENTS
         key = _change_key(method, params) if by_arguments else ""
         if mutating and operation_id is None:
-            remembered = self._unanswered.get(key) if by_arguments else None
             operation_id = (
-                remembered[0]
-                if remembered is not None and remembered[1] == self.target_id
-                else uuid.uuid4().hex
-            )
+                self._unanswered_retry(key) if by_arguments else None
+            ) or uuid.uuid4().hex
         state = _CallState()
+        if operation_id is not None:
+            self._sending[operation_id] += 1
         try:
             # One budget for attaching, connecting, waiting to write, draining,
             # reconnecting and reading. A timeout also removes an unsent waiter.
@@ -186,8 +192,17 @@ class Bridge:
                     exc.code, str(exc), {**exc.details, "operation_id": operation_id}
                 ) from None
             raise
-        if by_arguments:
-            self._unanswered.pop(key, None)
+        finally:
+            if operation_id is not None:
+                self._sending[operation_id] -= 1
+                if self._sending[operation_id] <= 0:
+                    del self._sending[operation_id]
+        # An answer settles only its own change, never another one's retry.
+        if by_arguments and self._unanswered.get(operation_id) == (
+            key,
+            state.target_id,
+        ):
+            del self._unanswered[operation_id]
         if mutating:
             response.setdefault("operation_id", operation_id)
         return response
@@ -201,13 +216,24 @@ class Bridge:
                     await self._call_once("hf_get_status", {}, None, _CallState())
         return await self._call_once(method, params, operation_id, state)
 
+    def _unanswered_retry(self, key: str) -> str | None:
+        """The oldest unanswered change with these arguments on this target
+        that no other call is sending now."""
+        for operation_id, remembered in self._unanswered.items():
+            if (
+                remembered == (key, self.target_id)
+                and operation_id not in self._sending
+            ):
+                return operation_id
+        return None
+
     def _remember_unanswered(
         self, key: str, operation_id: str | None, target_id: str | None
     ) -> None:
         if operation_id is None:
             return
-        self._unanswered[key] = (operation_id, target_id)
-        self._unanswered.move_to_end(key)
+        self._unanswered[operation_id] = (key, target_id)
+        self._unanswered.move_to_end(operation_id)
         while len(self._unanswered) > UNANSWERED_LIMIT:
             self._unanswered.popitem(last=False)
 
