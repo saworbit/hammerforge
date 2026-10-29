@@ -13,6 +13,8 @@ extends RefCounted
 ##     Literals joined with `+` count as one, and so does each branch of
 ##     `"a" if x else "b"`. A literal with `%` after it is put together in code
 ##     and is not found: it goes through `HFTranslation.t()` first;
+##   * in the addon's scripts too, a literal a table holds under a key in
+##     `TABLE_KEYS`, for the control that shows it;
 ##   * in the addon's scenes, the properties in `PROPERTIES`.
 ## The bridge (`mcp/`) is left out: its replies stay English.
 
@@ -64,6 +66,9 @@ const PLURAL_CALLS := {"tr_n": [0, 1], "atr_n": [0, 1]}
 const OWN_CALLS := {"t": [0]}
 const OWN_PLURAL_CALLS := {"tn": [0, 1]}
 const OWNERS := ["HFTranslation", "HFTranslationType"]
+## Keys whose literal a table holds for a control to show, as in
+## `{"label": "Width", "tooltip": "How wide the flight is"}`.
+const TABLE_KEYS := ["label", "tooltip", "help", "title", "blurb"]
 
 const TOKENS := (
 	"(?<c>#[^\\n]*)"
@@ -143,6 +148,11 @@ static func script_words(source: String) -> Array:
 	var out: Array = []
 	for i in tokens.size():
 		var token: Array = tokens[i]
+		if token[0] == "s" and TABLE_KEYS.has(token[1]) and _at(tokens, i + 1) == ["p", ":"]:
+			var held := _entry_word(tokens, i + 2)
+			if held != "":
+				out.append([held, "", ""])
+			continue
 		if token[0] != "n":
 			continue
 		var name: String = token[1]
@@ -320,6 +330,20 @@ static func _literal(tokens: Array, i: int) -> Array:
 		open -= 1
 		i = _skip_lines(tokens, i + 1, open)
 	return [text, i]
+
+
+## A table entry's value at `i`, on its own line or the next, when it is one
+## whole literal; empty when it is put together in code.
+static func _entry_word(tokens: Array, i: int) -> String:
+	while _at(tokens, i)[0] == "l":
+		i += 1
+	var read := _literal(tokens, i)
+	if read.is_empty():
+		return ""
+	var after: int = read[1]
+	while _at(tokens, after)[0] == "l":
+		after += 1
+	return read[0] if _at(tokens, after) in [["p", ","], ["p", "}"]] else ""
 
 
 static func _skip_lines(tokens: Array, i: int, open: int) -> int:

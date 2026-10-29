@@ -29,8 +29,16 @@ msgstr ""
 msgid "0 KB"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_tutorial_wizard.gd
+msgid "1. Draw something"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "1x"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_tutorial_wizard.gd
+msgid "2. Test your level"
 msgstr ""
 
 #: addons/hammerforge/systems/hf_bake_system.gd
@@ -41,8 +49,24 @@ msgstr ""
 msgid "A face blends at most {count} surface paint layers"
 msgstr ""
 
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "A flat lintel over the opening, or a half round arch on the posts"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "A ground plane at the snap size, to judge scale while drawing."
+msgstr ""
+
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "A property, a test and a value: is, is not, >, <, or matches with * for any run.\nJoin more with and. An entity takes its own properties by name too."
+msgstr ""
+
+#: addons/hammerforge/hf_sweep_builder.gd
+msgid "A straight run, a circular arc, or an S bend"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "A word beside the snap marker says what the point is on: Vertex, Midpoint, Centre, Perpendicular or Grid. The marker's shape says it too."
 msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
@@ -87,6 +111,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Add Texture Folder"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Add Trim"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
@@ -161,6 +189,14 @@ msgstr ""
 msgid "Added {material} to the palette"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Adds a debug player when this level's own scene is run on its own. Test Level builds its own player and does not read this. Never applies to a release build."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Adds per-operation detail to the Log tab. Noisy by design — turn it on when reproducing a fault."
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Adjust Last"
 msgstr ""
@@ -193,7 +229,7 @@ msgstr ""
 msgid "Align selected faces as a single unified surface"
 msgstr ""
 
-#: addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Align to Edge"
 msgstr ""
 
@@ -233,12 +269,32 @@ msgstr ""
 msgid "Already on the grid"
 msgstr ""
 
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Also make the cut for the opening, a Pending Cut until it is applied"
+msgstr ""
+
 #: addons/hammerforge/plugin_edit_actions.gd
 msgid "Amount"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Angle"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Angle the arch begins at"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Angle the dome begins at"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Angle the first tread begins at"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Angle the ring begins at"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
@@ -303,6 +359,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Apply Context Material"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Apply Favorite"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -401,6 +461,10 @@ msgstr ""
 msgid "Apply: {material} ({keys})"
 msgstr ""
 
+#: addons/hammerforge/hf_arch_builder.gd addons/hammerforge/hf_dome_builder.gd
+msgid "Arc"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Arm a stamp of the brush the last Draw made; each click places one."
 msgstr ""
@@ -413,6 +477,10 @@ msgstr ""
 msgid "Array updated — {summary}"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Arrows follow the view"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Assign to Selected Faces"
 msgstr ""
@@ -421,8 +489,20 @@ msgstr ""
 msgid "Auto"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Auto connectors"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Auto mode builds stairs once the height difference reaches this, and a ramp below it"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Auto-Generate"
+msgstr ""
+
+#: addons/hammerforge/hf_polygon_tool.gd
+msgid "Auto-close Dist"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
@@ -435,6 +515,18 @@ msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Auto-generate ramps or stairs between height levels during bake\nRequires at least 2 paint layers at different heights"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Auto-spawn player"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Autosave"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Autosave every (min)"
 msgstr ""
 
 #: addons/hammerforge/dock.tscn
@@ -473,7 +565,11 @@ msgstr ""
 msgid "Back to World"
 msgstr ""
 
-#: addons/hammerforge/dock_visgroup_handler.gd
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Backups kept"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd addons/hammerforge/ui/hf_console_controls.gd
 msgid "Bake"
 msgstr ""
 
@@ -515,6 +611,14 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Bake failed — check Output for details"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Bake navmesh"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Bake on worker threads"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
@@ -579,6 +683,10 @@ msgstr ""
 msgid "Bake this cordon. Off keeps it for later"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Bakes each face with its assigned palette material instead of one override. Needs a loaded palette."
+msgstr ""
+
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "Bake▷"
 msgstr ""
@@ -597,6 +705,18 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Baking..."
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Bands of panels stacked from the base to the crown"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Before landing"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Before you click, tints the face a draw would start on and marks the snapped start point, with the two grid lines through it."
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -633,7 +753,7 @@ msgstr ""
 msgid "Bottom"
 msgstr ""
 
-#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+#: addons/hammerforge/ui/hf_radial_menu.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Box"
 msgstr ""
 
@@ -705,6 +825,14 @@ msgstr ""
 msgid "Build the structure centred on the selection and facing the way it faces, or on the world origin"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Builds a navigation mesh from the baked floors, for AI pathfinding."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Builds simplified versions for distance. Costs bake time, saves frame time."
+msgstr ""
+
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "By Material"
 msgstr ""
@@ -721,7 +849,7 @@ msgstr ""
 msgid "C"
 msgstr ""
 
-#: addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_shortcut_dialog.gd
+#: addons/hammerforge/hf_keymap.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_shortcut_dialog.gd
 msgid "Cancel"
 msgstr ""
 
@@ -743,6 +871,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Carve"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_coach_marks.gd
+msgid "Carve Tool"
 msgstr ""
 
 #: addons/hammerforge/plugin_edit_actions.gd
@@ -803,6 +935,10 @@ msgstr ""
 msgid "Changes {faces} on {brushes}."
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Check for a newer HammerForge"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Check the level for problems and list them."
 msgstr ""
@@ -837,6 +973,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Chunk Size"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Chunk size"
 msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/ui/paint_tab_builder.gd
@@ -909,7 +1049,7 @@ msgstr ""
 msgid "Click a note to select it. F frames it in the viewport."
 msgstr ""
 
-#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_radial_menu.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Clip"
 msgstr ""
 
@@ -921,7 +1061,7 @@ msgstr ""
 msgid "Clip Selected (Shift+X)"
 msgstr ""
 
-#: addons/hammerforge/hf_command_registry.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_coach_marks.gd
 msgid "Clip Tool"
 msgstr ""
 
@@ -981,12 +1121,20 @@ msgstr ""
 msgid "Closed {group}"
 msgstr ""
 
+#: addons/hammerforge/hf_spiral_stairs_builder.gd addons/hammerforge/hf_stairs_builder.gd
+msgid "Collision"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_overlay_colors_panel.gd
 msgid "Colours"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_overlay_colors_panel.gd
 msgid "Colours that stay apart for the common kinds of colour blindness\nSolids and cuts differ in brightness as well as hue"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Combines brushes sharing a material into one mesh. Fewer draw calls, coarser culling."
 msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
@@ -997,7 +1145,7 @@ msgstr ""
 msgid "Command Line"
 msgstr ""
 
-#: addons/hammerforge/ui/hf_hotkey_palette.gd
+#: addons/hammerforge/hf_keymap.gd addons/hammerforge/ui/hf_hotkey_palette.gd
 msgid "Command Palette"
 msgstr ""
 
@@ -1025,6 +1173,10 @@ msgstr ""
 msgid "Compared with {file}: {summary}"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Compress saves"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Cone"
 msgstr ""
@@ -1047,6 +1199,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Connector width in cells"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Connects entity outputs to their targets in the baked scene. Off leaves the wiring to your own code."
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -1101,12 +1257,20 @@ msgstr ""
 msgid "Copy Name"
 msgstr ""
 
+#: addons/hammerforge/hf_status_board.gd
+msgid "Copy Report"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_log_view.gd
 msgid "Copy the lines currently shown to the clipboard."
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Copy the selected brushes and entities in place."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Cordon"
 msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
@@ -1235,8 +1399,20 @@ msgid_plural "Created {count} copies {angle}° apart, rising {rise}"
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Ctrl+D of a whole linked prefab copy places another linked copy, with what the copy keeps, instead of ordinary geometry."
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Current"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Curve"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Curve Segments"
 msgstr ""
 
 #: addons/hammerforge/dock.tscn addons/hammerforge/ui/hf_context_toolbar.gd
@@ -1249,6 +1425,14 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Cut mode is ready - draw through existing geometry"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Cut opening"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Cut preview"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -1271,7 +1455,11 @@ msgstr ""
 msgid "Cycle Prefab Variant"
 msgstr ""
 
-#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Cycle Variant"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_radial_menu.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Cylinder"
 msgstr ""
 
@@ -1283,7 +1471,19 @@ msgstr ""
 msgid "Debris/Prop (Layer 2) - the player falls through"
 msgstr ""
 
-#: addons/hammerforge/hf_command_registry.gd
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Debug"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Debug logging"
+msgstr ""
+
+#: addons/hammerforge/hf_decal_tool.gd
+msgid "Decal Size"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_coach_marks.gd
 msgid "Decal Tool"
 msgstr ""
 
@@ -1295,8 +1495,28 @@ msgstr ""
 msgid "Degrees between copies"
 msgstr ""
 
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Degrees one tread turns through. Negative turns the other way"
+msgstr ""
+
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Degrees per rotate press"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Degrees the arch sweeps. 180 is a half arch, 360 a full ring"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Degrees the dome climbs. 90 reaches the crown, less leaves it open"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Degrees the dome sweeps around. Less than 360 makes a slice"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Degrees the ring goes round. 360 closes it, 90 is a quarter bend"
 msgstr ""
 
 #: addons/hammerforge/ui/entity_tab_builder.gd
@@ -1353,6 +1573,10 @@ msgid_plural "Delete {count} HammerForge objects? This can be undone with Ctrl+Z
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Depth"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Descriptions"
 msgstr ""
@@ -1383,6 +1607,10 @@ msgstr ""
 
 #: addons/hammerforge/plugin_prefab_commands.gd
 msgid "Discarded: the copy matches its prefab again"
+msgstr ""
+
+#: addons/hammerforge/hf_status_board.gd
+msgid "Dismiss"
 msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
@@ -1509,6 +1737,10 @@ msgstr ""
 msgid "Draw cylinders from now on."
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Draw hover preview"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Draw is ready - drag in the 3D viewport"
 msgstr ""
@@ -1545,6 +1777,18 @@ msgstr ""
 msgid "Drawing"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Draws the dimensions kept in the level, with their lengths: amber with an end come loose, red when a check fails."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Draws the player capsule and clearance check at each spawn point."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Draws the wiring between entities that trigger each other."
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Drop the selected faces or brushes on the edge of the selection."
 msgstr ""
@@ -1561,8 +1805,16 @@ msgstr ""
 msgid "Duplicate Array"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Duplicate keeps prefab link"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "E"
+msgstr ""
+
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "Edge"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -1607,6 +1859,18 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Editing"
+msgstr ""
+
+#: addons/hammerforge/level_root.gd
+msgid "Edits Pause"
+msgstr ""
+
+#: addons/hammerforge/level_root.gd
+msgid "Edits Slowing"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Emits occlusion geometry from large flat surfaces, so the renderer can cull what is behind walls."
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -1663,6 +1927,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Erase floor cells."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Errors"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
@@ -1771,6 +2039,10 @@ msgstr ""
 msgid "Extrude Down ({key})\nClick face + drag to extrude downward"
 msgstr ""
 
+#: addons/hammerforge/hf_polygon_tool.gd
+msgid "Extrude Height"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Extrude Up"
 msgstr ""
@@ -1793,6 +2065,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Face"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_coach_marks.gd
+msgid "Face Extrusion"
 msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
@@ -1819,12 +2095,20 @@ msgstr ""
 msgid "Face inset applied"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Face materials"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "Faces: reach only faces in the plane of the one they border"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "Faces: the most two neighbours' normals may differ by, in degrees"
+msgstr ""
+
+#: addons/hammerforge/hf_decal_tool.gd
+msgid "Fade Distance"
 msgstr ""
 
 #: addons/hammerforge/dock_file_handler.gd
@@ -1883,6 +2167,10 @@ msgstr ""
 msgid "Favorites"
 msgstr ""
 
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Fill"
+msgstr ""
+
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Fill 360°"
 msgstr ""
@@ -1895,8 +2183,16 @@ msgstr ""
 msgid "Fill in Output, Target, and Input fields"
 msgstr ""
 
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Fill the middle with a post the full height of the flight"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Fill the settings from a preset saved for this type"
+msgstr ""
+
+#: addons/hammerforge/hf_entity_def.gd
+msgid "Filter Class"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_shortcut_dialog.gd
@@ -1945,11 +2241,11 @@ msgstr ""
 msgid "Fit"
 msgstr ""
 
-#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Fit Repeats"
 msgstr ""
 
-#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Fit Strip"
 msgstr ""
 
@@ -2053,6 +2349,18 @@ msgstr ""
 msgid "Forget the run Repeat Run plays, so the next command starts a new one."
 msgstr ""
 
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Frame"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Freeze on commit"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "From the centre of the ring to the middle of the tube"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Full"
 msgstr ""
@@ -2073,8 +2381,28 @@ msgstr ""
 msgid "Game scene written to {file} with the {profile} bake options"
 msgstr ""
 
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Gap"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Generate LODs"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Generate Noise"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Generate occluders"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Generates ramps or stairs between paint layers at different heights."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Generates the second UV set LightmapGI needs. Slow on large levels; only required if you bake light."
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -2189,6 +2517,10 @@ msgstr ""
 msgid "Grid array needs more than one cell"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Grid follows cursor"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Grid snap"
 msgstr ""
@@ -2237,6 +2569,10 @@ msgid_plural "Grow added {count} faces"
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Guides from points"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "HL"
 msgstr ""
@@ -2257,8 +2593,20 @@ msgstr ""
 msgid "HammerForge: {status}. Click to open the Console.\n{ok} fine, {warn} to review, {problem} problem(s)."
 msgstr ""
 
-#: addons/hammerforge/ui/manage_tab_builder.gd
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Head"
+msgstr ""
+
+#: addons/hammerforge/level_root.gd addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Healthy"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd addons/hammerforge/hf_path_tool.gd addons/hammerforge/hf_trim_run_builder.gd
+msgid "Height"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Height from"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -2385,6 +2733,10 @@ msgstr ""
 msgid "Hollow Brush"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_coach_marks.gd
+msgid "Hollow Tool"
+msgstr ""
+
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "Hollow detached — its walls are ordinary brushes now"
 msgstr ""
@@ -2397,12 +2749,88 @@ msgstr ""
 msgid "How baked meshes cast shadows. A brush in Selection Tools, or a visgroup, can choose its own; Shadows Only casts shadows without being seen"
 msgstr ""
 
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "How deep the landing is along the first flight. An L's is at least the width"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "How drafts become the meshes and collision that ship."
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "How far a tread overhangs the riser below. 0 is none; on a solid flight, 0.1 or more"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "How far back you can roll an autosave."
+msgstr ""
+
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "How far each copy climbs along the axis. Zero is a flat ring; anything else is a helix, and with a step box, a spiral stair."
 msgstr ""
 
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "How far in from that edge the trim stands: up from the bottom, down from the top"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "How far one step carries you forward"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "How far one step carries you up, or with Fit the most it may. Keep it under what the player can climb. Not used by Total"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "How far one tread carries you up. Zero makes a flat fan"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "How far the arch extends along its own axis"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "How far the frame stands out from each face of the wall"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "How far the treads reach from the axis"
+msgstr ""
+
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "How far the trim stands out from the wall"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "How high the clear opening is, to the head, or to the crown of an arched one"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "How long an editor crash can cost you."
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "How many equal strips the texture holds across V"
+msgstr ""
+
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "How many pieces a curve of the profile is cut into"
+msgstr ""
+
+#: addons/hammerforge/hf_sweep_builder.gd
+msgid "How many pieces the run is cut into"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "How many risers the stair climbs, one brush each. Not used by Fit"
+msgstr ""
+
+#: addons/hammerforge/hf_sweep_builder.gd
+msgid "How many times the sweep repeats from where it ended"
+msgstr ""
+
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "How tall the trim is up the wall"
 msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
@@ -2411,6 +2839,42 @@ msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "How these brushes cast shadows once baked. Level Default leaves it to their visgroups and then to Cast Shadows in Advanced Bake"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "How thick a floating tread or a nosing is"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "How thick one tread is"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "How thick the arch ring is; the opening is the rest"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "How thick the shell is. A thickness equal to the radius makes it solid"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "How thick the tube is, from its middle to its outside. Less than Radius"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "How thick the wall is that the frame wraps"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "How wide each post and the head are on the wall's face"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "How wide the clear opening is, between the posts"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "How wide the flight is, across the direction of travel"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -2427,6 +2891,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "I/O Wiring"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "I/O connection lines"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -2497,6 +2965,14 @@ msgstr ""
 msgid "In:"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Info"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Inner R"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "Input names the target entity class declares"
 msgstr ""
@@ -2565,6 +3041,10 @@ msgstr ""
 msgid "Isolated, {count} hidden"
 msgstr ""
 
+#: addons/hammerforge/hf_sweep_builder.gd
+msgid "Iterations"
+msgstr ""
+
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "Its outputs stay as this copy has them through a Pull"
 msgstr ""
@@ -2609,7 +3089,7 @@ msgstr ""
 msgid "Justify:"
 msgstr ""
 
-#: addons/hammerforge/dock_entity_handler.gd
+#: addons/hammerforge/dock_entity_handler.gd addons/hammerforge/hf_clip_tool.gd
 msgid "Keep"
 msgstr ""
 
@@ -2679,6 +3159,14 @@ msgstr ""
 msgid "Keep wiring on this copy"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Keeps face textures pinned to world space when a brush moves, so alignment survives a nudge."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Keeps the CSG source hidden after a commit, leaving only the baked result visible."
+msgstr ""
+
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Kept in the project, so everyone on it has this profile"
 msgstr ""
@@ -2727,6 +3215,18 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Label the selection's width, depth and height in the viewport."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Labels the width, depth and height of the selection's bounds in the viewport, and follows every move and resize."
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Landing"
+msgstr ""
+
+#: addons/hammerforge/hf_status_board.gd
+msgid "Later"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
@@ -2791,6 +3291,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Lightmap Scale:"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Lightmap UV2"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
@@ -3001,6 +3505,10 @@ msgstr ""
 msgid "Material #{slot} is no longer in the palette"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Material atlas"
+msgstr ""
+
 #: addons/hammerforge/dock_file_handler.gd
 msgid "Material library not found"
 msgstr ""
@@ -3017,15 +3525,19 @@ msgstr ""
 msgid "Max angle"
 msgstr ""
 
-#: addons/hammerforge/hf_command_registry.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_radial_menu.gd
 msgid "Measure"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_coach_marks.gd
+msgid "Measure Tool"
 msgstr ""
 
 #: addons/hammerforge/plugin_dimensions.gd
 msgid "Measure a ruler with the Measure tool first"
 msgstr ""
 
-#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Merge"
 msgstr ""
 
@@ -3039,6 +3551,10 @@ msgstr ""
 
 #: addons/hammerforge/plugin_vertex_ops.gd
 msgid "Merge Vertices: select two or more vertices of one brush"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Merge meshes"
 msgstr ""
 
 #: addons/hammerforge/systems/hf_vertex_system.gd
@@ -3111,6 +3627,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Mirror:"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Miter Joints"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -3187,6 +3707,10 @@ msgstr ""
 msgid "Name"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Name the snap"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Navmesh Cell"
 msgstr ""
@@ -3209,6 +3733,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "New level created — floor, sun, and player spawn added"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Newel post"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -3471,6 +3999,10 @@ msgstr ""
 msgid "Noise failed — face has no displacement"
 msgstr ""
 
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Nosing"
+msgstr ""
+
 #: addons/hammerforge/plugin_prefab_commands.gd
 msgid "Not a prefab instance"
 msgstr ""
@@ -3535,7 +4067,7 @@ msgstr ""
 msgid "Nothing under the cursor to stand the brush on"
 msgstr ""
 
-#: addons/hammerforge/hf_command_registry.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/hf_keymap.gd
 msgid "Nudge"
 msgstr ""
 
@@ -3555,7 +4087,7 @@ msgstr ""
 msgid "Objects"
 msgstr ""
 
-#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/paint_tab_builder.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/hf_trim_run_builder.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Offset"
 msgstr ""
 
@@ -3589,6 +4121,22 @@ msgstr ""
 
 #: addons/hammerforge/ui/entity_tab_builder.gd
 msgid "Once"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Once a day, asks the Asset Library which version is current, when the editor is online and its own update check is on. Sends nothing about you or your levels, and never installs anything."
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "One brush per piece of an arched head. More segments, smoother curve"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd addons/hammerforge/hf_ring_builder.gd
+msgid "One brush per segment. More segments, smoother curve"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "One brush per tread"
 msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
@@ -3663,6 +4211,22 @@ msgstr ""
 msgid "Out:"
 msgstr ""
 
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Outer R"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Outer radius of the arch"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Outer radius of the dome"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Outlines what an agent changed over the bridge for a moment, with an arrow at the viewport's edge when it is out of view."
+msgstr ""
+
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "Output names this entity class declares"
 msgstr ""
@@ -3679,7 +4243,11 @@ msgstr ""
 msgid "Pack material textures into a single atlas to reduce draw calls (requires Face Materials)"
 msgstr ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn addons/hammerforge/hf_command_registry.gd
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Packs palette textures into one atlas to cut draw calls. Requires face materials."
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_radial_menu.gd
 msgid "Paint"
 msgstr ""
 
@@ -3715,6 +4283,10 @@ msgstr ""
 msgid "Palette"
 msgstr ""
 
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Panels around the dome. More segments, rounder dome"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Paste"
 msgstr ""
@@ -3735,7 +4307,11 @@ msgstr ""
 msgid "Paste at Cursor: the clipboard holds nothing to paste"
 msgstr ""
 
-#: addons/hammerforge/hf_command_registry.gd
+#: addons/hammerforge/hf_sweep_builder.gd
+msgid "Path"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_coach_marks.gd
 msgid "Path Tool"
 msgstr ""
 
@@ -3911,8 +4487,16 @@ msgstr ""
 msgid "Point entity classes"
 msgstr ""
 
-#: addons/hammerforge/hf_command_registry.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_coach_marks.gd
 msgid "Polygon Tool"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Post Spacing"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Power-user overlays"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
@@ -3979,6 +4563,10 @@ msgstr ""
 msgid "Previous Visibility"
 msgstr ""
 
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "Profile"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Projection:"
 msgstr ""
@@ -4007,6 +4595,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_material_browser.gd
 msgid "Prototypes"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Proud"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
@@ -4077,6 +4669,10 @@ msgstr ""
 msgid "Quick Save Linked Prefab"
 msgstr ""
 
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Quick Save Prefab"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_selection_filter.gd
 msgid "Quick Select"
 msgstr ""
@@ -4095,6 +4691,30 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Radial Menu"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_radial_menu.gd
+msgid "Radial menu"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Radial menu, coach marks and operation replay. Off by default to keep the core loop quiet."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_radial_menu.gd
+msgid "Radial menu: {item}"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd addons/hammerforge/hf_dome_builder.gd addons/hammerforge/hf_ring_builder.gd
+msgid "Radius"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Railing Height"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Railing Thickness"
 msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/ui/paint_tab_builder.gd
@@ -4163,6 +4783,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_console_panel.gd
 msgid "Re-run every check now, including the level scan, which is too slow to\nrun on the panel's own refresh."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Re-unwraps the base UV channel. Needed when a material expects a continuous unwrap rather than per-face projection."
 msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn
@@ -4427,16 +5051,44 @@ msgstr ""
 msgid "Rest the pointer on a vertex, a midpoint or a centre first"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Rest the pointer on a vertex, midpoint or centre and guides run from it along the world axes; a point placed near one lines up with it."
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Restart the interactive getting-started guide"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Restricts editing and baking to a box, for working on one room of a large level."
 msgstr ""
 
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Right"
 msgstr ""
 
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Ring Segments"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Rings"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd addons/hammerforge/hf_stairs_builder.gd
+msgid "Rise"
+msgstr ""
+
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Rise:"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Rise: each step climbs Rise. Total: Steps share the Total. Fit: the fewest steps no higher than Rise that climb the Total"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Risers in the first flight, the last onto the landing. Used by a turn"
 msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
@@ -4511,6 +5163,10 @@ msgstr ""
 msgid "Run a text file of commands, one a line, each its own undo step."
 msgstr ""
 
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "Run along the faces' bottom edges, a skirting, or their top edges, a cornice"
+msgstr ""
+
 #: addons/hammerforge/plugin_commands.gd
 msgid "Run cleared: the next command starts a new one"
 msgstr ""
@@ -4521,6 +5177,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Run the last command again on the current selection, with the same settings."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Safety net"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_selection_filter.gd
@@ -4657,7 +5317,7 @@ msgstr ""
 msgid "Scale"
 msgstr ""
 
-#: addons/hammerforge/plugin_vertex_ops.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_vertex_ops.gd
 msgid "Scale Vertices"
 msgstr ""
 
@@ -4713,7 +5373,11 @@ msgstr ""
 msgid "Searchable keyboard shortcut reference"
 msgstr ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn addons/hammerforge/dock_manage_handler.gd addons/hammerforge/hf_command_registry.gd
+#: addons/hammerforge/hf_arch_builder.gd addons/hammerforge/hf_dome_builder.gd addons/hammerforge/hf_door_frame_builder.gd addons/hammerforge/hf_sweep_builder.gd addons/hammerforge/hf_trim_run_builder.gd
+msgid "Segments"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock.tscn addons/hammerforge/dock_manage_handler.gd addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_radial_menu.gd
 msgid "Select"
 msgstr ""
 
@@ -5177,6 +5841,18 @@ msgstr ""
 msgid "Shell the selected brush into walls of the set thickness, after a preview."
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Shift over a snap point starts or ends guides from it, in place of resting the pointer there."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Shift takes a guide point"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Shortcut HUD"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Show All"
 msgstr ""
@@ -5205,6 +5881,10 @@ msgstr ""
 msgid "Show accepted ({count})"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Show agent changes"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_example_library.gd
 msgid "Show annotations explaining the design"
 msgstr ""
@@ -5213,12 +5893,20 @@ msgstr ""
 msgid "Show density preview at current selection"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Show dimensions"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Show every kind again"
 msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Show exactly that many repeats, ending at both edges"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Show grid"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_log_view.gd
@@ -5293,6 +5981,10 @@ msgstr ""
 msgid "Show or hide the texture gizmo, which slides, stretches and turns a face's texture by dragging."
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Show selection size"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Show the Paint tab's count of whole repeats across the selected faces."
 msgstr ""
@@ -5333,6 +6025,10 @@ msgstr ""
 msgid "Shown in the editor. The level and the bake are not changed."
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Shows what a cut brush will remove before you commit the cut."
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Shrink Selection"
 msgstr ""
@@ -5349,20 +6045,48 @@ msgid_plural "Shrink dropped {count} faces"
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Side"
+msgstr ""
+
 #: addons/hammerforge/dock.tscn
 msgid "Sides"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Sides around the tube. More sides, rounder tube"
 msgstr ""
 
 #: addons/hammerforge/dock.tscn
 msgid "Size"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Size at cursor"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_tutorial_wizard.gd
 msgid "Skip Step"
 msgstr ""
 
+#: addons/hammerforge/hf_status_board.gd
+msgid "Skip This Version"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Skip hidden visgroups and invisible brushes during bake"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Skips hidden visgroups and invisible brushes. Fast iteration on one area."
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd addons/hammerforge/hf_stairs_builder.gd
+msgid "Slab"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Slides the grid under the cursor along its current plane without changing its height."
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -5375,6 +6099,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Slot D"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Smaller .hflevel files. Turn off to read or diff a save as plain text."
 msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/ui/paint_tab_builder.gd
@@ -5441,12 +6169,24 @@ msgstr ""
 msgid "Solid brush | Toggle Solid/Cut: {key}"
 msgstr ""
 
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Solid fills under each step to the base; Open leaves floating treads"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Some kinds are hidden by View Filters. Click to show them all"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Spatial chunk size for bake grouping (0 = no chunking)\nThe status board recommends one once the level is big enough to want it"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Spatial grouping for baked meshes. 0 bakes the level as one piece."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Spawn debug"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
@@ -5513,6 +6253,10 @@ msgstr ""
 msgid "Split the selected edge at its middle."
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Spreads the bake across cores. Turn off only to rule threading out while chasing a bake bug."
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Square"
 msgstr ""
@@ -5535,6 +6279,14 @@ msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Stamp a room using the last Rect size"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd addons/hammerforge/hf_dome_builder.gd addons/hammerforge/hf_ring_builder.gd addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Start"
+msgstr ""
+
+#: addons/hammerforge/hf_entity_def.gd
+msgid "Start Disabled"
 msgstr ""
 
 #: addons/hammerforge/dock.tscn
@@ -5585,6 +6337,10 @@ msgstr ""
 msgid "Step H:"
 msgstr ""
 
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Step Height"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Step the I/O wires through none, all, the selection's chain and its own."
 msgstr ""
@@ -5595,6 +6351,18 @@ msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Step:"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd addons/hammerforge/hf_stairs_builder.gd
+msgid "Steps"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Steps collide as they look. Ramp bakes a smooth slope over each flight, for a player that cannot step up"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Steps collide as they look. Ramp bakes a smooth slope up the treads, for a player that cannot step up"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
@@ -5669,7 +6437,7 @@ msgstr ""
 msgid "Surface"
 msgstr ""
 
-#: addons/hammerforge/hf_command_registry.gd
+#: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_coach_marks.gd
 msgid "Surface Paint"
 msgstr ""
 
@@ -5679,6 +6447,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Swap one material for another on every face that wears it."
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd addons/hammerforge/hf_ring_builder.gd
+msgid "Sweep"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_face_sweep.gd
@@ -5767,6 +6539,10 @@ msgstr ""
 msgid "Test cancelled because the selected area could not be baked"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_radial_menu.gd
+msgid "Tex Pick"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Texel Size"
 msgstr ""
@@ -5787,6 +6563,10 @@ msgstr ""
 msgid "Texture Lock"
 msgstr ""
 
+#: addons/hammerforge/hf_decal_tool.gd
+msgid "Texture Path"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Texture Picker"
 msgstr ""
@@ -5797,6 +6577,10 @@ msgstr ""
 
 #: addons/hammerforge/plugin_commands.gd addons/hammerforge/plugin_input_router.gd
 msgid "Texture Picker: click a face to sample its material"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Texture lock"
 msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
@@ -5815,12 +6599,20 @@ msgstr ""
 msgid "That structure is no longer in the level"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "The arrow keys move the selection along the world axis nearest their direction on screen. Off, Up is always -Z and Right +X."
+msgstr ""
+
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "The bake options are already on {profile}"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "The bake profile Export Game Scene bakes with. The level's own options\ncome back afterwards, with no undo step, so editing carries on as it was"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "The brush's size beside the cursor while you draw, and the depth while you extrude. A typed number shows in brackets."
 msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
@@ -5839,12 +6631,24 @@ msgstr ""
 msgid "The form opens in your browser. Nothing is sent until you submit it there."
 msgstr ""
 
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "The height the stair climbs, floor to floor. Used by Total and Fit"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "The highlighted visgroup stays visible and editable, and no bake or export takes it: guide brushes, a scale figure, a reference copy"
 msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "The highlighted visgroup's brushes and entities are drawn faded, and nothing selects or changes them: no tool, command or agent. Godot's lock in the Scene dock does the same"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "The hole down the middle. Zero makes treads that meet at the axis"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "The key reminders overlaid on the 3D viewport."
 msgstr ""
 
 #: addons/hammerforge/plugin_commands.gd
@@ -5913,6 +6717,14 @@ msgstr ""
 
 #: addons/hammerforge/plugin_texture_keys.gd
 msgid "The selected faces are edge on or Cylindrical; use the UV boxes for them"
+msgstr ""
+
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "The shape the trim shows cut square across"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "The space between the two flights of a U, which the landing spans"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
@@ -6039,6 +6851,10 @@ msgstr ""
 msgid "Top"
 msgstr ""
 
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Total"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Track Point for Guides"
 msgstr ""
@@ -6047,12 +6863,52 @@ msgstr ""
 msgid "Transform"
 msgstr ""
 
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Tread"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Treat as One"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Trigger Only (Layer 3) - the player falls through"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Trim Flip"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Trim Height"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Trim Material"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Trim Profile"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Trim Segments"
+msgstr ""
+
+#: addons/hammerforge/hf_path_tool.gd
+msgid "Trim Width"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Tube Radius"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Tube Segments"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd addons/hammerforge/hf_stairs_builder.gd
+msgid "Turn"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -6128,11 +6984,19 @@ msgid "Type:"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
+msgid "UV Flip"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
 msgid "UV Flip U"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "UV Flip V"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "UV Justify"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd
@@ -6223,6 +7087,10 @@ msgstr ""
 msgid "Untie the selected brushes from their brush entity, so they are plain world brushes."
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Unwrap UV0"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Up"
 msgstr ""
@@ -6255,6 +7123,14 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Validate first, then Bake or Quick Play"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Validate lists each To Do note not marked Done. Kept in the level, so everyone's check of it agrees."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Validate warns about open To Do notes"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
@@ -6291,7 +7167,7 @@ msgstr ""
 msgid "Variant: {variant}"
 msgstr ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_context_toolbar.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_radial_menu.gd
 msgid "Vertex"
 msgstr ""
 
@@ -6311,12 +7187,24 @@ msgstr ""
 msgid "Vertex Edit ({key})\nSelect and drag brush vertices"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_coach_marks.gd
+msgid "Vertex Editing"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Vertex Exit"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
+msgid "Vertex Merge"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
 msgid "Vertex Split"
+msgstr ""
+
+#: addons/hammerforge/hf_command_registry.gd
+msgid "Vertex Split Edge"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd
@@ -6335,6 +7223,10 @@ msgstr ""
 msgid "View name"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Viewport"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Views:"
 msgstr ""
@@ -6347,16 +7239,40 @@ msgstr ""
 msgid "Visibility states saved with the level"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Visible only"
+msgstr ""
+
 #: addons/hammerforge/playtest_fps.gd
 msgid "WASD move\nShift sprint\nSpace jump\nCtrl crouch\nEsc capture mouse"
+msgstr ""
+
+#: addons/hammerforge/hf_entity_def.gd
+msgid "Wait Time"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd addons/hammerforge/hf_dome_builder.gd addons/hammerforge/hf_door_frame_builder.gd
+msgid "Wall"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Wall:"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_log_view.gd
+msgid "Warnings"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "What survives a crash, and what tells you why one happened."
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "What to build"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "What you see while building. None of these change the level."
 msgstr ""
 
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
@@ -6379,6 +7295,10 @@ msgstr ""
 msgid "Which strip of the trim sheet, counted down from the top"
 msgstr ""
 
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Which way the stair turns at a landing, seen walking up it"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "Whole level"
 msgstr ""
@@ -6395,12 +7315,20 @@ msgstr ""
 msgid "Why this is fine, such as decorative, not walked"
 msgstr ""
 
+#: addons/hammerforge/hf_door_frame_builder.gd addons/hammerforge/hf_path_tool.gd addons/hammerforge/hf_stairs_builder.gd addons/hammerforge/hf_trim_run_builder.gd
+msgid "Width"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Width:"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "Wire Connection"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Wire I/O at bake"
 msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
@@ -6495,8 +7423,16 @@ msgstr ""
 msgid "Write the selected linked copy's changes back to its prefab file."
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_controls.gd
+msgid "Writes a .hflevel snapshot on a timer, separate from Godot's scene saving."
+msgstr ""
+
 #: addons/hammerforge/dock.gd addons/hammerforge/ui/selection_tools_builder.gd
 msgid "X"
+msgstr ""
+
+#: addons/hammerforge/hf_snap_system.gd
+msgid "X and Z from the point taken, height from here"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd

@@ -9,6 +9,7 @@ extends Control
 @warning_ignore_start("shadowed_global_identifier")
 const HFThemeUtils = preload("hf_theme_utils.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 signal action_selected(action: String)
 
@@ -38,8 +39,10 @@ func _init() -> void:
 	mouse_filter = MOUSE_FILTER_IGNORE
 	z_index = 100
 	# Drawn in `_draw()`, so a screen reader is told its items (#1703).
-	accessibility_name = "Radial menu"
-	accessibility_description = ", ".join(SEGMENTS.map(func(s): return s["label"]))
+	accessibility_name = HFTranslationType.t("Radial menu")
+	accessibility_description = ", ".join(
+		SEGMENTS.map(func(s): return HFTranslationType.t(s["label"]))
+	)
 
 
 func show_at(center_pos: Vector2) -> void:
@@ -104,9 +107,10 @@ func _gui_input(event: InputEvent) -> void:
 ## one a release would pick.
 func _name_hovered() -> void:
 	if _hovered_segment >= 0 and _hovered_segment < SEGMENTS.size():
-		accessibility_name = "Radial menu: %s" % SEGMENTS[_hovered_segment]["label"]
+		var item := HFTranslationType.t(SEGMENTS[_hovered_segment]["label"])
+		accessibility_name = HFTranslationType.t("Radial menu: {item}").format({"item": item})
 	else:
-		accessibility_name = "Radial menu"
+		accessibility_name = HFTranslationType.t("Radial menu")
 
 
 func _segment_at_position(pos: Vector2) -> int:
@@ -170,7 +174,8 @@ func _draw() -> void:
 	for i in seg_count:
 		var mid_angle := i * seg_angle + seg_angle / 2.0 - PI / 2.0
 		var label_pos := _center + Vector2(cos(mid_angle), sin(mid_angle)) * LABEL_RADIUS
-		var label_text: String = SEGMENTS[i]["label"]
+		# Drawn here, so nothing else looks the label up.
+		var label_text := HFTranslationType.t(SEGMENTS[i]["label"])
 		var text_size := font.get_string_size(
 			label_text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size
 		)
