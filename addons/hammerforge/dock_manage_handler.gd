@@ -14,6 +14,7 @@ const HFPlaytestRequest = preload("hf_playtest_request.gd")
 const HFBakeProfilesType = preload("hf_bake_profiles.gd")
 const HFAcceptedFindings = preload("hf_accepted_findings.gd")
 const HFValidationChecks = preload("hf_validation_checks.gd")
+const HFTranslationType = preload("hf_translation.gd")
 
 ## The saved profiles as last read and the stored values they were read from, so
 ## a bad entry in the preferences is named once rather than at every click.
@@ -151,9 +152,12 @@ static func on_bake_check_issues(dock: Object) -> void:
 			errors += 1
 		elif sev >= 1:
 			warnings += 1
-	var summary := "Bake check: %d errors, %d warnings" % [errors, warnings]
+	var summary := HFTranslationType.t("Bake check: {errors} errors, {warnings} warnings").format(
+		{"errors": errors, "warnings": warnings}
+	)
 	dock._set_status(summary, errors > 0, 5.0)
-	dock.show_toast("%s, listed under Check Bake Issues" % summary, mini(1 + int(errors > 0), 2))
+	var listed := HFTranslationType.t("{summary}, listed under Check Bake Issues")
+	dock.show_toast(listed.format({"summary": summary}), mini(1 + int(errors > 0), 2))
 	for issue in issues:
 		push_warning("HF Bake Issue: %s" % issue.get("message", ""))
 
@@ -203,7 +207,9 @@ static func render_findings(dock: Object) -> void:
 			list.add_child(_kind_row(dock, kind, nodes))
 	list.visible = list.get_child_count() > 0
 	if dock.show_accepted_findings != null:
-		dock.show_accepted_findings.text = "Show accepted (%d)" % accepted.size()
+		dock.show_accepted_findings.text = HFTranslationType.t("Show accepted ({count})").format(
+			{"count": accepted.size()}
+		)
 
 
 ## The findings whose objects are still in the level. A row naming a brush that
@@ -394,14 +400,36 @@ static func set_check_runs(dock: Object, kind: String, on: bool) -> void:
 		)
 
 
-## The kinds of finding a row below the list selects together, with what the row
-## calls them (#1708). Each finding's `node` is the brush that adds nothing: the
-## cut, the brush inside, the later of a near pair.
-const KIND_ROWS := {
-	"cut_cuts_nothing": "cuts that cut nothing",
-	"solid_inside_solid": "brushes inside another",
-	"near_duplicate": "later brushes of near pairs",
-}
+## The kinds of finding a row below the list selects together (#1708). Each
+## finding's `node` is the brush that adds nothing: the cut, the brush inside, the
+## later of a near pair. `_kind_words()` says what the row calls them.
+const KIND_ROWS := ["cut_cuts_nothing", "solid_inside_solid", "near_duplicate"]
+
+
+## What the row for `count` findings of `kind` says, with a `{count}` to fill, and
+## its Select All's tooltip. Whole sentences, so a language can inflect each.
+static func _kind_words(kind: String, count: int) -> PackedStringArray:
+	match kind:
+		"cut_cuts_nothing":
+			return [
+				HFTranslationType.tn(
+					"{count} cut that cuts nothing", "{count} cuts that cut nothing", count
+				),
+				HFTranslationType.t("Select every one of the cuts that cut nothing"),
+			]
+		"solid_inside_solid":
+			return [
+				HFTranslationType.tn(
+					"{count} brush inside another", "{count} brushes inside another", count
+				),
+				HFTranslationType.t("Select every one of the brushes inside another"),
+			]
+	return [
+		HFTranslationType.tn(
+			"{count} later brush of a near pair", "{count} later brushes of near pairs", count
+		),
+		HFTranslationType.t("Select every one of the later brushes of near pairs"),
+	]
 
 
 static func _nodes_of_kind(issues: Array, kind: String) -> Array:
@@ -420,12 +448,13 @@ static func _nodes_of_kind(issues: Array, kind: String) -> Array:
 static func _kind_row(dock: Object, kind: String, nodes: Array) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	var text := Label.new()
-	text.text = "%d %s" % [nodes.size(), KIND_ROWS[kind]]
+	var words := _kind_words(kind, nodes.size())
+	text.text = words[0].format({"count": nodes.size()})
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(text)
 	var select := Button.new()
 	select.text = "Select All"
-	select.tooltip_text = "Select every one of the %s" % KIND_ROWS[kind]
+	select.tooltip_text = words[1]
 	select.pressed.connect(dock._on_bake_issue_select_all.bind(nodes))
 	row.add_child(select)
 	if kind == "near_duplicate":
@@ -457,7 +486,12 @@ static func keep_first(dock: Object, later: Array) -> void:
 		false,
 		Callable(dock, "record_history")
 	)
-	dock.show_toast("Kept the first of each pair: deleted %d brushes" % ids.size(), 0)
+	var said := HFTranslationType.tn(
+		"Kept the first of each pair: deleted {count} brush",
+		"Kept the first of each pair: deleted {count} brushes",
+		ids.size()
+	)
+	dock.show_toast(said.format({"count": ids.size()}), 0)
 	run_validation(dock, false)
 
 
@@ -470,7 +504,7 @@ static func _bake_issue_row(dock: Object, issue: Dictionary) -> HBoxContainer:
 		text.text += "  (changed since accepted)"
 		var note := str(issue.get("accepted_note", ""))
 		if note != "":
-			text.tooltip_text = "Accepted as: %s" % note
+			text.tooltip_text = HFTranslationType.t("Accepted as: {note}").format({"note": note})
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(text)
@@ -478,11 +512,15 @@ static func _bake_issue_row(dock: Object, issue: Dictionary) -> HBoxContainer:
 	if node is Node and is_instance_valid(node):
 		var select := Button.new()
 		select.text = "Select"
-		select.tooltip_text = "Select %s" % (node as Node).name
+		select.tooltip_text = HFTranslationType.t("Select {name}").format(
+			{"name": (node as Node).name}
+		)
 		# A finding about a pair, such as a micro-gap, selects both (#1037).
 		var other: Variant = issue.get("other_node")
 		if other is Node and is_instance_valid(other):
-			select.tooltip_text += " and %s" % (other as Node).name
+			select.tooltip_text = HFTranslationType.t("Select {name} and {other}").format(
+				{"name": (node as Node).name, "other": (other as Node).name}
+			)
 			select.pressed.connect(dock._on_bake_issue_select.bind(node, other))
 		else:
 			select.pressed.connect(dock._on_bake_issue_select.bind(node))
@@ -666,7 +704,10 @@ static func can_start_bake(dock: Object, action_label: String) -> bool:
 		and dock.level_root.has_method("is_bake_in_flight")
 		and dock.level_root.is_bake_in_flight()
 	):
-		dock.show_toast("%s will be available when the current bake finishes" % action_label, 1)
+		var wait := HFTranslationType.t(
+			"{command} will be available when the current bake finishes"
+		)
+		dock.show_toast(wait.format({"command": action_label}), 1)
 		return false
 	return true
 
@@ -742,12 +783,13 @@ static func judge_spawn(
 	var issues: PackedStringArray = validation.get("issues", PackedStringArray())
 	if severity >= 2:
 		spawns.show_validation_debug(spawn, validation, 10.0)
-		dock.show_toast("Spawn issues: %s" % "\n".join(issues), 2)
+		_say_spawn_issues(dock, issues)
 		show_spawn_fix_dialog(dock, spawn, validation, mask, start, launch)
 		return false
 	if severity >= 1:
 		spawns.show_validation_debug(spawn, validation, 6.0)
-		dock.show_toast("Spawn warning: %s" % "\n".join(issues), 1)
+		var warned := HFTranslationType.t("Spawn warning: {issues}")
+		dock.show_toast(warned.format({"issues": "\n".join(issues)}), 1)
 	return true
 
 
@@ -1045,18 +1087,18 @@ static func on_bake_profile_selected(dock: Object, index: int) -> void:
 	var changed := HFBakeProfilesType.count_changes(dock.level_root, values)
 	if changed == 0:
 		sync_bake_profile_ui(dock)
-		dock._set_status("The bake options are already on %s" % profile_name, false, 3.0)
+		var already := HFTranslationType.t("The bake options are already on {profile}")
+		dock._set_status(already.format({"profile": profile_name}), false, 3.0)
 		return
 	var before: Dictionary = dock.level_root.capture_bake_options()
 	dock.level_root.apply_bake_options(values)
 	dock._commit_bake_profile("Bake Profile: %s" % profile_name, before)
-	dock.show_toast(
-		(
-			"Bake profile %s: %d option%s changed"
-			% [profile_name, changed, "" if changed == 1 else "s"]
-		),
-		0
+	var said := HFTranslationType.tn(
+		"Bake profile {profile}: {count} option changed",
+		"Bake profile {profile}: {count} options changed",
+		changed
 	)
+	dock.show_toast(said.format({"profile": profile_name, "count": changed}), 0)
 
 
 ## Record a profile switch the dock has just made: the options before it and
@@ -1074,11 +1116,6 @@ static func record_bake_profile(
 	undo_redo.add_undo_method(root, "apply_bake_options", before)
 	undo_redo.commit_action(false)
 	return true
-
-
-## What Save and Delete say when the project's profiles file does not read, in
-## place of writing over it.
-const UNREADABLE_PROFILES := "%s could not be read. Fix it before %s it"
 
 
 ## Keep every option a profile carries under the typed name, replacing a saved
@@ -1105,32 +1142,41 @@ static func on_bake_profile_save(dock: Object) -> void:
 	dock._user_prefs.set_bake_profile(profile_name, dock.level_root.capture_bake_options())
 	dock.bake_profile_name.text = profile_name
 	sync_bake_profile_ui(dock)
-	dock.show_toast("Bake profile %s %s" % [profile_name, "updated" if replacing else "saved"], 0)
+	var said := (
+		HFTranslationType.t("Bake profile {profile} updated")
+		if replacing
+		else HFTranslationType.t("Bake profile {profile} saved")
+	)
+	dock.show_toast(said.format({"profile": profile_name}), 0)
 
 
 static func _save_project_bake_profile(dock: Object, profile_name: String) -> void:
 	var path := project_bake_profiles_path(dock)
 	if HFBakeProfilesType.project_file_unreadable(path):
-		dock._set_status(UNREADABLE_PROFILES % [path, "saving to"], true)
+		var unread := HFTranslationType.t("{file} could not be read. Fix it before saving to it")
+		dock._set_status(unread.format({"file": path}), true)
 		return
 	var profiles := HFBakeProfilesType.read_project_raw(path)
 	var replacing := profiles.has(profile_name)
 	profiles[profile_name] = dock.level_root.capture_bake_options()
 	if not HFBakeProfilesType.write_project(profiles, path):
-		dock._set_status("Could not write %s" % path, true)
+		_say_unwritten(dock, path)
 		return
 	if dock._user_prefs and dock._user_prefs.get_bake_profiles().has(profile_name):
 		dock._user_prefs.remove_bake_profile(profile_name)
 	_saved_profiles_key = 0
 	dock.bake_profile_name.text = profile_name
 	sync_bake_profile_ui(dock)
-	dock.show_toast(
-		(
-			"Bake profile %s %s in the project. Commit %s to share it"
-			% [profile_name, "updated" if replacing else "saved", path.get_file()]
-		),
-		0
+	var said := (
+		HFTranslationType.t(
+			"Bake profile {profile} updated in the project. Commit {file} to share it"
+		)
+		if replacing
+		else HFTranslationType.t(
+			"Bake profile {profile} saved in the project. Commit {file} to share it"
+		)
 	)
+	dock.show_toast(said.format({"profile": profile_name, "file": path.get_file()}), 0)
 
 
 ## Delete the saved profile named in the box. A saved profile is not on the undo
@@ -1150,32 +1196,45 @@ static func on_bake_profile_delete(dock: Object) -> void:
 		return
 	if dock._bake_profile_delete_ack != profile_name:
 		dock._bake_profile_delete_ack = profile_name
-		var where := " from the project" if shared else ""
-		dock._set_status(
+		var again := (
 			(
-				"Press Delete again to delete bake profile %s%s. It cannot be undone"
-				% [profile_name, where]
-			),
-			true
+				HFTranslationType
+				. t(
+					"Press Delete again to delete bake profile {profile} from the project. It cannot be undone"
+				)
+			)
+			if shared
+			else HFTranslationType.t(
+				"Press Delete again to delete bake profile {profile}. It cannot be undone"
+			)
 		)
+		dock._set_status(again.format({"profile": profile_name}), true)
 		return
 	dock._bake_profile_delete_ack = ""
 	if shared:
 		var path := project_bake_profiles_path(dock)
 		if HFBakeProfilesType.project_file_unreadable(path):
-			dock._set_status(UNREADABLE_PROFILES % [path, "deleting from"], true)
+			var unread := HFTranslationType.t(
+				"{file} could not be read. Fix it before deleting from it"
+			)
+			dock._set_status(unread.format({"file": path}), true)
 			return
 		var profiles := HFBakeProfilesType.read_project_raw(path)
 		profiles.erase(profile_name)
 		if not HFBakeProfilesType.write_project(profiles, path):
-			dock._set_status("Could not write %s" % path, true)
+			_say_unwritten(dock, path)
 			return
 		_saved_profiles_key = 0
 	else:
 		dock._user_prefs.remove_bake_profile(profile_name)
 	dock.bake_profile_name.text = ""
 	sync_bake_profile_ui(dock)
-	dock.show_toast("Bake profile %s deleted" % profile_name, 0)
+	var said := HFTranslationType.t("Bake profile {profile} deleted")
+	dock.show_toast(said.format({"profile": profile_name}), 0)
+
+
+static func _say_unwritten(dock: Object, path: String) -> void:
+	dock._set_status(HFTranslationType.t("Could not write {file}").format({"file": path}), true)
 
 
 static func on_export_playtest(dock: Object) -> void:
@@ -1283,15 +1342,20 @@ static func on_export_game_scene(dock: Object) -> void:
 	# Say which bake options went into the game, and warn on the Editing ones:
 	# unmerged meshes and no LODs are right while a level changes, not in a game.
 	if profile == HFBakeProfilesType.EDITING:
-		var warning := (
-			"Game scene written to %s with the Editing bake options. "
-			+ "Pick Shipping under Export with and export again for a game."
+		var warning := HFTranslationType.t(
+			(
+				"Game scene written to {file} with the Editing bake options. "
+				+ "Pick Shipping under Export with and export again for a game."
+			)
 		)
-		dock.show_toast(warning % export_path, 1)
+		dock.show_toast(warning.format({"file": export_path}), 1)
 		return
 	if profile == "":
 		profile = HFBakeProfilesType.CUSTOM
-	dock.show_toast("Game scene written to %s with the %s bake options" % [export_path, profile], 0)
+	var written := HFTranslationType.t(
+		"Game scene written to {file} with the {profile} bake options"
+	)
+	dock.show_toast(written.format({"file": export_path, "profile": profile}), 0)
 
 
 ## The bake options that changed while Export Game Scene baked: set from the
@@ -1374,10 +1438,16 @@ static func show_spawn_fix_dialog(
 	var level_ref: WeakRef = weakref(dock.level_root)
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "Quick Play — Spawn Warning"
-	var ask := "Fix automatically and play, or cancel?"
+	var ask := HFTranslationType.t("Fix automatically and play, or cancel?")
 	if not fixes:
-		ask = "There is nowhere near to move it. Play anyway, or cancel and move it by hand?"
-	dialog.dialog_text = "Player spawn may be invalid:\n\n%s\n\n%s" % ["\n".join(issues), ask]
+		ask = HFTranslationType.t(
+			"There is nowhere near to move it. Play anyway, or cancel and move it by hand?"
+		)
+	dialog.dialog_text = (
+		HFTranslationType
+		. t("Player spawn may be invalid:\n\n{issues}\n\n{ask}")
+		. format({"issues": "\n".join(issues), "ask": ask})
+	)
 	dialog.ok_button_text = "Fix & Play" if fixes else "Play Anyway"
 	dialog.add_cancel_button("Cancel")
 	dialog.confirmed.connect(
@@ -1482,7 +1552,12 @@ static func on_spawn_validate(dock: Object) -> void:
 	if validation.get("valid", false):
 		dock.show_toast("Spawn is valid", 0)
 	else:
-		dock.show_toast("Spawn issues: %s" % "\n".join(issues), 2)
+		_say_spawn_issues(dock, issues)
+
+
+static func _say_spawn_issues(dock: Object, issues: PackedStringArray) -> void:
+	var said := HFTranslationType.t("Spawn issues: {issues}")
+	dock.show_toast(said.format({"issues": "\n".join(issues)}), 2)
 
 
 static func on_spawn_auto_create(dock: Object) -> void:
@@ -1632,13 +1707,17 @@ static func run_validation(dock: Object, auto_fix: bool) -> void:
 	show_findings(dock, result.get("findings", []), result.get("accepted", []), "validate")
 	if issues.is_empty():
 		if auto_fix and fixed > 0:
-			dock._set_status("Validate: fixed %d, no issues left" % fixed, false, 3.0)
+			var clean := HFTranslationType.t("Validate: fixed {fixed}, no issues left")
+			dock._set_status(clean.format({"fixed": fixed}), false, 3.0)
 		else:
 			dock._set_status("Validate: no issues found", false, 3.0)
 		return
-	var message = "Validate: %d issue(s)" % issues.size()
+	var message := HFTranslationType.tn(
+		"Validate: {count} issue", "Validate: {count} issues", issues.size()
+	)
 	if auto_fix:
-		message = "Validate: fixed %d, %d remaining" % [fixed, issues.size()]
+		message = HFTranslationType.t("Validate: fixed {fixed}, {count} remaining")
+	message = message.format({"fixed": fixed, "count": issues.size()})
 	dock._set_status_warning(message, 6.0)
 	for issue in issues:
 		dock._log("[Validate] %s" % str(issue), true)

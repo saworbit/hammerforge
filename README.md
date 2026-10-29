@@ -126,6 +126,8 @@ Create Starter adds `LevelRoot`, a floor, sunlight, and a player spawn. Create E
 
 HammerForge has its own bridge for agents that speak MCP. Tick **Allow agent connections (MCP)** under Test, then Agent Bridge, and run the server in [hammerforge_mcp/](hammerforge_mcp/README.md). It listens on 127.0.0.1 only, makes a new token each time it is turned on, and is off again whenever the editor starts. Every change an agent makes is one undo step named `MCP: ...`. The [Agent Bridge guide](docs/HammerForge_Agent_Bridge.md) covers setting it up, what to ask, and what each refusal means.
 
+Calls have one timeout covering connection through reply. Cancelled edits keep their retry id, and reconnecting keeps an in-flight edit on its original scene. The [server guide](hammerforge_mcp/README.md) explains recovery after a timeout or cancellation.
+
 **For the rest of Godot, I recommend [gda](https://github.com/aigengame/godot-agent).** HammerForge's bridge edits the level in the open editor. gda drives Godot itself: it builds and validates project content headless, and with Godot 4.6 or later it runs the game and gives an agent its runtime tree, input, frame capture, logs, errors and performance, through a CLI, an Agent Skill or an MCP server. It is MIT licensed and on [PyPI](https://pypi.org/project/gda/), and it is where I point people now that my own Godot MCP server, [Didi](https://github.com/saworbit/didi), is archived. The two meet at `hf_bake`, which writes a scene gda can run: see [Hand a bake to gda](hammerforge_mcp/README.md#hand-a-bake-to-gda). One command runs its MCP server with nothing installed:
 
 ```bash

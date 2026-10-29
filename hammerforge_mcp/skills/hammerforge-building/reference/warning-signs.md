@@ -24,3 +24,17 @@ a build is done.
 - **A refusal.** A refused change names the field it could not take in
   `error.details.param`. Fix that field and send it again, rather than changing
   something else.
+
+- **An edit without an answer.** A timeout covers connecting, attaching, waiting
+  to write and waiting for the reply, including a reconnect. Cancellation stops
+  waiting; a sent edit may still finish. Retry it with the returned
+  `operation_id` so it does not run twice. Undo, redo and bake always need that
+  explicit id for a retry.
+- **A different target.** `target_changed` means the editor moved to another
+  scene or level. Call `hf_get_status` to attach to the new one. A reconnect keeps
+  an in-flight edit aimed at its original target; it does not move that edit to
+  the new scene.
+- **Identical edits that overlap.** Give each intended edit its own
+  `operation_id` and reuse that exact id for retries. A successful separate edit
+  with the same arguments can clear an earlier edit's remembered automatic id;
+  explicit ids avoid that ambiguity ([#2058](https://github.com/saworbit/hammerforge/issues/2058)).

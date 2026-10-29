@@ -51,8 +51,8 @@ func test_the_structure_section_becomes_an_editor_when_a_piece_is_selected():
 	assert_gt(start, -1, "the section must refresh with the selection")
 	var body := source.substr(start, 1600)
 	assert_true(body.contains("generator_for_selection"), "it asks the record what is selected")
-	assert_true(body.contains('"Update %s"'), "and says so on the button")
-	assert_true(body.contains('"Create %s"'), "and switches back when nothing is selected")
+	assert_true(body.contains('"Update {structure}"'), "and says so on the button")
+	assert_true(body.contains("_create_label(dock)"), "and switches back when nothing is selected")
 	assert_true(body.contains("structure_detach_btn"), "a way out is offered beside the way in")
 	assert_true(
 		body.contains("_select_type"), "selecting a dome must not leave the dropdown on arch"
@@ -169,7 +169,7 @@ func test_switching_type_stops_editing_the_selected_structure():
 		-1,
 		"picking a type must not be answered by re-deriving it from the selection"
 	)
-	assert_true(body.contains("Create %s"), "the button follows the choice immediately")
+	assert_true(body.contains("_create_label(dock)"), "the button follows the choice immediately")
 
 
 func test_the_section_warns_before_it_rebuilds_over_hand_edits():

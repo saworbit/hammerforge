@@ -3,7 +3,7 @@ import struct
 
 import pytest
 
-from hammerforge_mcp.framing import FrameError, encode_frame, read_frame
+from hammerforge_mcp.framing import MAX_JSON_DEPTH, FrameError, encode_frame, read_frame
 
 
 def _reader_with(data: bytes) -> asyncio.StreamReader:
@@ -65,3 +65,50 @@ def test_nan_and_infinity_are_refused_before_they_are_sent():
         with pytest.raises(FrameError) as caught:
             encode_frame({"size": [value, 1, 1]})
         assert caught.value.code == "invalid_argument"
+
+
+@pytest.mark.parametrize("value", [object(), {1, 2}, "\ud800"])
+def test_unsendable_values_are_argument_errors(value):
+    with pytest.raises(FrameError) as caught:
+        encode_frame({"value": value})
+    assert caught.value.code == "invalid_argument"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'{"n": NaN}',
+        b'{"n": Infinity}',
+        b'{"n": -Infinity}',
+        b'{"n": 1e9999}',
+        b'{"n": -1e9999}',
+        b'{"n":'
+        + b"[" * (MAX_JSON_DEPTH + 1)
+        + b"0"
+        + b"]" * (MAX_JSON_DEPTH + 1)
+        + b"}",
+    ],
+)
+async def test_invalid_inbound_numbers_and_nesting_are_frame_errors(body):
+    with pytest.raises(FrameError) as caught:
+        await read_frame(_reader_with(struct.pack(">I", len(body)) + body))
+    assert caught.value.code == "bad_request"
+
+
+def test_too_deep_outbound_json_is_an_argument_error():
+    value = []
+    for _ in range(MAX_JSON_DEPTH + 1):
+        value = [value]
+    with pytest.raises(FrameError) as caught:
+        encode_frame({"value": value})
+    assert caught.value.code == "invalid_argument"
+
+
+@pytest.mark.anyio
+async def test_json_at_the_depth_limit_round_trips():
+    value = 1
+    for _ in range(MAX_JSON_DEPTH - 1):
+        value = [value]
+    message = {"value": value}
+    assert await read_frame(_reader_with(encode_frame(message))) == message

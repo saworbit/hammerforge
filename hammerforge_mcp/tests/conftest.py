@@ -87,6 +87,12 @@ class FakeListener:
         self.hellos: list[dict] = []
         self.requests: list[dict] = []
         self.connections = 0
+        self.disconnected = asyncio.Event()
+        self.welcome: dict | bytes = {
+            "type": "welcome",
+            "bridge_version": 1,
+            "editor_pid": 1,
+        }
         self._server: asyncio.base_events.Server | None = None
 
     async def start(self) -> FakeListener:
@@ -113,7 +119,9 @@ class FakeListener:
                 await writer.drain()
                 return
             writer.write(
-                encode_frame({"type": "welcome", "bridge_version": 1, "editor_pid": 1})
+                self.welcome
+                if isinstance(self.welcome, bytes)
+                else encode_frame(self.welcome)
             )
             await writer.drain()
             while True:
@@ -131,3 +139,4 @@ class FakeListener:
             return
         finally:
             writer.close()
+            self.disconnected.set()

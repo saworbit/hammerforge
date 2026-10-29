@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import struct
 
 MAX_REQUEST_BYTES = 1 << 20
 MAX_RESPONSE_BYTES = 16 << 20
+MAX_JSON_DEPTH = 64
 
 _HEADER = struct.Struct(">I")
 
@@ -28,12 +30,17 @@ def encode_frame(message: dict, max_bytes: int = MAX_REQUEST_BYTES) -> bytes:
     try:
         # allow_nan off: NaN and Infinity are not JSON, and Godot's parser
         # refuses the whole frame rather than the one number.
+        _check_json(message)
         text = json.dumps(
             message, ensure_ascii=False, separators=(",", ":"), allow_nan=False
         )
-    except ValueError as exc:
-        raise FrameError("invalid_argument", f"Numbers must be finite: {exc}") from exc
-    body = text.encode()
+        body = text.encode()
+    except (TypeError, ValueError, UnicodeError, RecursionError):
+        raise FrameError(
+            "invalid_argument",
+            "A request must be UTF-8 JSON with finite numbers and at most "
+            f"{MAX_JSON_DEPTH} nested containers",
+        ) from None
     if len(body) > max_bytes:
         raise FrameError(
             "frame_too_large",
@@ -56,8 +63,33 @@ async def read_frame(
     body = await reader.readexactly(size)
     try:
         message = json.loads(body.decode())
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise FrameError("bad_request", f"Not JSON: {exc}") from exc
+        _check_json(message)
+    except (UnicodeError, ValueError, RecursionError):
+        # Do not echo the received body; a broken hello may contain a token.
+        raise FrameError(
+            "bad_request",
+            "A frame must be UTF-8 JSON with finite numbers and at most "
+            f"{MAX_JSON_DEPTH} nested containers",
+        ) from None
     if not isinstance(message, dict):
         raise FrameError("bad_request", "A frame must hold one JSON object")
     return message
+
+
+def _check_json(value: object) -> None:
+    # Iterators keep memory proportional to depth, even for a large brush list.
+    # Use an explicit bound rather than the interpreter's recursion limit,
+    # which differs across Python versions. Cycles also hit this bound.
+    stack = [iter((value,))]
+    while stack:
+        try:
+            item = next(stack[-1])
+        except StopIteration:
+            stack.pop()
+            continue
+        if isinstance(item, float) and not math.isfinite(item):
+            raise ValueError("non-finite number")
+        if isinstance(item, (dict, list, tuple)):
+            if len(stack) > MAX_JSON_DEPTH:
+                raise ValueError("JSON nesting limit exceeded")
+            stack.append(iter(item.values() if isinstance(item, dict) else item))
