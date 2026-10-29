@@ -3,6 +3,8 @@ class_name HFDockFileHandler
 extends RefCounted
 ## File dialogs, level import/export, autosave paths, and settings files extracted from dock.gd.
 
+const HFTranslationType = preload("hf_translation.gd")
+
 
 static func setup_storage_dialogs(dock: Object) -> void:
 	if dock == null:
@@ -155,7 +157,8 @@ static func on_hflevel_save_selected(dock: Object, path: String) -> void:
 	var error := int(dock.level_root.save_hflevel(path, true))
 	if error != OK:
 		dock._set_status("Failed to save .hflevel", true, 3.0)
-		dock.show_toast("Failed to save .hflevel: %s" % path.get_file(), 2)
+		var failed := HFTranslationType.t("Failed to save .hflevel: {file}")
+		dock.show_toast(failed.format({"file": path.get_file()}), 2)
 	else:
 		dock._set_status("Saving .hflevel...", false)
 
@@ -206,7 +209,8 @@ static func on_map_import_selected(dock: Object, path: String) -> void:
 	var check: Dictionary = dock.level_root.validate_map(path, units)
 	if not bool(check.get("ok", false)):
 		var reason := str(check.get("error", "unreadable file"))
-		dock._set_status("Failed to import .map: %s" % reason, true)
+		var failed := HFTranslationType.t("Failed to import .map: {reason}")
+		dock._set_status(failed.format({"reason": reason}), true)
 		dock.show_toast("Failed to import .map", 2)
 		return
 	dock._commit_full_state_action("Import .map", "import_map", [path, units])
@@ -230,7 +234,8 @@ static func on_map_export_selected(dock: Object, path: String) -> void:
 	if error != OK:
 		dock.show_toast("Failed to export .map", 2)
 	else:
-		dock.show_toast("Exported .map (%s)" % format_name, 0)
+		var said := HFTranslationType.t("Exported .map ({format})")
+		dock.show_toast(said.format({"format": format_name}), 0)
 
 
 static func on_glb_export_selected(dock: Object, path: String) -> void:
@@ -318,10 +323,14 @@ static func on_material_library_save_selected(dock: Object, path: String) -> voi
 		dock._set_status("Saved, but no material had a path to record", true)
 		return
 	if not dropped.is_empty():
+		var saved := HFTranslationType.tn(
+			"Saved {saved} materials; {count} had no path and was left empty",
+			"Saved {saved} materials; {count} had no path and were left empty",
+			dropped.size()
+		)
 		dock._set_status(
-			(
-				"Saved %d materials; %d had no path and were left empty"
-				% [manager.materials.size() - dropped.size(), dropped.size()]
+			saved.format(
+				{"saved": manager.materials.size() - dropped.size(), "count": dropped.size()}
 			),
 			true,
 			5.0
@@ -350,10 +359,13 @@ static func on_material_library_load_selected(dock: Object, path: String) -> voi
 	dock._sync_materials_from_root()
 	var missing: int = manager.get_missing_count()
 	if missing > 0:
+		var loaded := HFTranslationType.tn(
+			"Loaded library; {count} of {total} materials is missing",
+			"Loaded library; {count} of {total} materials are missing",
+			missing
+		)
 		dock._set_status(
-			"Loaded library; %d of %d materials are missing" % [missing, manager.materials.size()],
-			true,
-			5.0
+			loaded.format({"count": missing, "total": manager.materials.size()}), true, 5.0
 		)
 		return
 	dock._set_status("Loaded material library", false, 3.0)
