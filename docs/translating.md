@@ -23,9 +23,9 @@ rest left in English.
   code with a number or a name in it before it shows it.
 
 Still English for now: a message put together in code and sent with the level's
-`user_message` signal, such as "Scattered 12 instances", and the words the
-radial menu and the snap markers draw straight onto the viewport. The next steps
-of #1702 put them through the catalogs.
+`user_message` signal, such as "Scattered 12 instances", and the words the snap
+markers draw beside a point. The next steps of #1702 put them through the
+catalogs.
 
 These stay English in every language, so a bug report and an agent read the
 same words:
@@ -75,10 +75,11 @@ The tool finds a word in these places, much as Godot finds a game's:
   toast shows it in the language shown, and the Console's log and the bridge
   keep it in English;
 - a literal given to `HFTranslation.t()` or `HFTranslation.tn()`;
+- a literal a table holds under `"label"`, `"tooltip"`, `"help"`, `"title"` or
+  `"blurb"`, such as a structure's fields and the Console's Controls. The
+  control the table fills looks it up. Code that draws a table's word itself,
+  like the radial menu, puts it through `HFTranslation.t()` first;
 - the same properties in the addon's `.tscn` scenes.
-
-It does not find a label kept in a table yet, such as the captions in the
-Console's Controls. Those show translated once a catalog has them.
 
 A control in HammerForge's domain looks its own text up, so a label set from a
 literal needs nothing more. Text put together in code goes through
