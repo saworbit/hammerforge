@@ -6,6 +6,8 @@ extends PopupPanel
 ## matches on ticked here, and Quick Select, which selects by a typed rule
 ## (#1698).
 
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+
 signal filter_applied(nodes: Array, faces: Dictionary)
 ## Emitted instead of `filter_applied` when a filter has nothing to select,
 ## carrying the reason. A filter that matched nothing used to close in silence
@@ -400,7 +402,9 @@ func _rebuild_visgroup_buttons() -> void:
 		var btn = Button.new()
 		btn.text = vg_name
 		btn.add_theme_font_size_override("font_size", 11)
-		btn.tooltip_text = "Select all brushes in visgroup '%s'" % vg_name
+		btn.tooltip_text = HFTranslationType.t("Select all brushes in visgroup '{name}'").format(
+			{"name": vg_name}
+		)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.pressed.connect(_filter_visgroup.bind(vg_name))
 		row.add_child(btn)

@@ -619,7 +619,7 @@ func _update_target_map_ui() -> void:
 		var row = HBoxContainer.new()
 		_target_map_container.add_child(row)
 		var lbl = Label.new()
-		lbl.text = "%s:" % tag
+		lbl.text = str(tag) + ":"
 		lbl.custom_minimum_size.x = 70
 		lbl.add_theme_font_size_override("font_size", 10)
 		row.add_child(lbl)

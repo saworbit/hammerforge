@@ -18,6 +18,8 @@ extends VBoxContainer
 ## A selection of more than one kind, brushes and cuts and entities, lists each
 ## kind with its count, and a click on one keeps only that kind (#1698).
 
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+
 ## The one selected vertex is wanted at [param place], in its brush's own space
 ## when [param local].
 signal vertex_typed(place: Vector3, local: bool)
@@ -123,7 +125,7 @@ func set_kinds(counts: Dictionary) -> void:
 			continue
 		var button := Button.new()
 		button.name = str(kind)
-		button.text = "%s %d" % [HFQuickSelectType.KIND_LABELS[kind], int(counts[kind])]
+		button.text = str(HFQuickSelectType.KIND_LABELS[kind]) + " " + str(int(counts[kind]))
 		button.tooltip_text = (
 			"Keep only the %s" % str(HFQuickSelectType.KIND_LABELS[kind]).to_lower()
 		)
@@ -303,7 +305,7 @@ func _commit(axis: int) -> void:
 		return
 	if not typed.is_valid_float() or not is_finite(typed.to_float()):
 		field.text = _shown[axis]
-		_note.text = "%s must be a number." % AXES[axis]
+		_note.text = HFTranslationType.t("{axis} must be a number.").format({"axis": AXES[axis]})
 		_note.visible = true
 		return
 	var space_key := "world"

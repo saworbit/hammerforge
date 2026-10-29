@@ -11,6 +11,7 @@ const HFMcpPanelType = preload("hf_mcp_panel.gd")
 const HFOverlayColorsPanelType = preload("hf_overlay_colors_panel.gd")
 const HFStatusBoardType = preload("../hf_status_board.gd")
 const HFAccessibilityType = preload("../hf_accessibility.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -644,11 +645,14 @@ func build(parent: Control) -> void:
 	dock.perf_brush_bar.show_percentage = false
 	dock.perf_brush_bar.custom_minimum_size = Vector2(0, 14)
 	dock.perf_brush_bar.tooltip_text = (
-		(
-			"Brushes against the %d past which every edit pauses the editor.\n"
-			% HFStatusBoardType.GEOMETRY_PROBLEM
+		HFTranslationType
+		. t(
+			(
+				"Brushes against the {limit} past which every edit pauses the editor.\n"
+				+ "Measured in docs/HammerForge_Performance.md."
+			)
 		)
-		+ "Measured in docs/HammerForge_Performance.md."
+		. format({"limit": HFStatusBoardType.GEOMETRY_PROBLEM})
 	)
 	pfc.add_child(dock.perf_brush_bar)
 

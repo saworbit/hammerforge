@@ -7,6 +7,8 @@ extends ConfirmationDialog
 ## While the dialog is open the faces it would change are the face selection, so
 ## the viewport marks them; Cancel puts the selection back as it was.
 
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+
 ## Replace pressed: `scope` is what `LevelRoot.replace_material()` takes.
 signal replace_requested(from_index: int, to_index: int, scope: Dictionary, reset_uv: bool)
 
@@ -215,9 +217,17 @@ func _on_choice_changed() -> void:
 		preview_label.text = "No face there wears that material."
 		ok_button.disabled = true
 	else:
+		var face_count := HFTranslationType.tn("{count} face", "{count} faces", faces)
+		var brush_count := HFTranslationType.tn("{count} brush", "{count} brushes", found.size())
 		preview_label.text = (
-			"Changes %d face%s on %d brush%s."
-			% [faces, "" if faces == 1 else "s", found.size(), "" if found.size() == 1 else "es"]
+			HFTranslationType
+			. t("Changes {faces} on {brushes}.")
+			. format(
+				{
+					"faces": face_count.format({"count": faces}),
+					"brushes": brush_count.format({"count": found.size()}),
+				}
+			)
 		)
 		ok_button.disabled = false
 	_show_faces(found)
