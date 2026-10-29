@@ -8,7 +8,8 @@ extends RefCounted
 ##   * each command's label, category and help, from `HFCommandRegistry`;
 ##   * in the addon's scripts, a literal given to `HFTranslation.t()` or `tn()`,
 ##     `tr()`, `tr_n()` or `atr()`; one assigned whole to a property in
-##     `PROPERTIES`; one given to a call in `CALLS` that sets a control's words.
+##     `PROPERTIES`; one given to a call in `CALLS` that sets a control's words
+##     or shows a toast or a status line; one sent with a signal in `SIGNALS`.
 ##     Literals joined with `+` count as one, and so does each branch of
 ##     `"a" if x else "b"`. A literal with `%` after it is put together in code
 ##     and is not found: it goes through `HFTranslation.t()` first;
@@ -26,7 +27,8 @@ const SKIP := ["res://addons/hammerforge/mcp"]
 const REGISTRY := "addons/hammerforge/hf_command_registry.gd"
 ## Properties whose literal a control shows.
 const PROPERTIES := ["text", "tooltip_text", "placeholder_text", "title", "dialog_text"]
-## Calls that set a control's words: the index of each argument that is one.
+## Calls that set a control's words, a toast's or the status line's: the index of
+## each argument that is one.
 const CALLS := {
 	"tr": [0],
 	"atr": [0],
@@ -48,7 +50,16 @@ const CALLS := {
 	"make_button": [0, 1],
 	"make_check": [0],
 	"make_label_row": [0],
+	"show_toast": [0],
+	"_toast": [1],
+	"_say": [0, 1],
+	"_set_status": [0],
+	"_set_status_success": [0],
+	"_set_status_warning": [0],
 }
+## Signals whose first argument a toast shows, sent with `emit_signal()` or
+## `.emit()`. The Console's log and the bridge get the same text in English.
+const SIGNALS := ["user_message"]
 ## Calls with a plural: the singular's index and the plural's.
 const PLURAL_CALLS := {"tr_n": [0, 1], "atr_n": [0, 1]}
 ## `HFTranslation`'s own, found only after a name that ends in one of `OWNERS`.
@@ -153,9 +164,17 @@ static func script_words(source: String) -> Array:
 		if next != ["p", "("]:
 			continue
 		var dot := _back(tokens, i - 1)
-		var own := (
-			_at(tokens, dot) == ["p", "."] and OWNERS.has(_at(tokens, _back(tokens, dot - 1))[1])
+		var holder: String = (
+			_at(tokens, _back(tokens, dot - 1))[1] if _at(tokens, dot) == ["p", "."] else ""
 		)
+		if name == "emit_signal" or (name == "emit" and SIGNALS.has(holder)):
+			var sent := _arguments(tokens, i + 1)
+			if name == "emit_signal":
+				sent = sent.slice(1) if not sent.is_empty() and SIGNALS.has(sent[0]) else []
+			if not sent.is_empty() and sent[0] is String:
+				out.append([sent[0], "", ""])
+			continue
+		var own := OWNERS.has(holder)
 		if own and not (OWN_CALLS.has(name) or OWN_PLURAL_CALLS.has(name)):
 			continue
 		if not own and not (CALLS.has(name) or PLURAL_CALLS.has(name)):

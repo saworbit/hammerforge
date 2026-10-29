@@ -41,6 +41,10 @@ msgstr ""
 msgid "2. Test your level"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "A bake is already running"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "A face blends at most {count} surface paint layers"
 msgstr ""
@@ -121,6 +125,10 @@ msgstr ""
 msgid "Add Variant..."
 msgstr ""
 
+#: addons/hammerforge/plugin_vertex_input.gd
+msgid "Add Vertex: Alt+click a face of a selected brush, or select one brush"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Add a cordon round the selected brushes"
 msgstr ""
@@ -131,6 +139,18 @@ msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Add from Selection"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Add rejected: finish the drag first"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Add rejected: the brush would be flat"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Add rejected: the point is inside the brush"
 msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
@@ -243,6 +263,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_quick_property.gd
 msgid "Along the selection's own axes"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Already on the grid"
 msgstr ""
 
 #: addons/hammerforge/hf_door_frame_builder.gd
@@ -446,6 +470,10 @@ msgid "Arm a stamp of the brush the last Draw made; each click places one."
 msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
+msgid "Array detached — its copies are ordinary brushes now"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
 msgid "Array updated — {summary}"
 msgstr ""
 
@@ -513,6 +541,10 @@ msgstr ""
 msgid "Autosave failed: {error}"
 msgstr ""
 
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Autosave path set"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Axis Lock"
 msgstr ""
@@ -550,7 +582,35 @@ msgid "Bake Preview — show wireframe of final mesh before committing"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake check: no issues"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
 msgid "Bake check: {errors} errors, {warnings} warnings"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake complete"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake complete — exporting scene..."
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake dry run failed"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake failed - check Output for details"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "Bake failed — baker not initialized"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Bake failed — check Output for details"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
@@ -595,6 +655,10 @@ msgid_plural "Bake profile {profile}: {count} options changed"
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "Bake stopped: its scene was switched away from before it finished. Bake it again there."
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Bake the level and run it ({key})"
 msgstr ""
@@ -627,6 +691,22 @@ msgstr ""
 msgid "Bake▷"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Baking before validation…"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Baking for export..."
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Baking for playtest..."
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Baking..."
+msgstr ""
+
 #: addons/hammerforge/hf_dome_builder.gd
 msgid "Bands of panels stacked from the base to the crown"
 msgstr ""
@@ -641,6 +721,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Bevel Edge"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Bevel failed — check edge selection"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -695,6 +779,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Brush height (Y)"
+msgstr ""
+
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Brush is already convex"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -835,6 +923,10 @@ msgstr ""
 msgid "Chain from selection"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Change the bake options when the export finishes"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Change the selected displacement to this power, keeping the sculpt"
 msgstr ""
@@ -857,6 +949,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_console_panel.gd
 msgid "Checked {time}"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Checking, baking, and starting the level"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_panel.gd
@@ -973,8 +1069,36 @@ msgstr ""
 msgid "Clip to Convex"
 msgstr ""
 
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Clip to Convex: select vertices of the brush first"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Clip to Face Plane"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Clip to Face: no usable face is selected"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Clip to Face: select a face to cut along first — enter Face Select and click one"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Clip to Face: select the brushes to cut"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Clip to Face: that plane does not pass through any selected brush"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Clip to Face: the selected face has no usable plane"
+msgstr ""
+
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Clipped to convex hull"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_example_library.gd addons/hammerforge/ui/hf_tutorial_wizard.gd
@@ -1093,12 +1217,20 @@ msgstr ""
 msgid "Convert Selection → Heightmap"
 msgstr ""
 
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "Convert failed: no paint layer manager"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Convert selected solid brushes into a sculptable heightmap layer\nUses mesh bounds (including displacements). Cut brushes are skipped."
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Convert to Brushes"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Convert to Brushes: select a MeshInstance3D or a CSG node"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -1145,12 +1277,24 @@ msgstr ""
 msgid "Cordon 1"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Cordon set to selection — baking area"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Cordon {number}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Corners"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Could not change the power of that face"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Could not read material library"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -1199,6 +1343,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Create Structure"
+msgstr ""
+
+#: addons/hammerforge/plugin.gd
+msgid "Create a HammerForge level first"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
@@ -1275,6 +1423,10 @@ msgstr ""
 msgid "Cut brush | Toggle Solid/Cut: {key}"
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Cut mode is ready - draw through existing geometry"
+msgstr ""
+
 #: addons/hammerforge/hf_door_frame_builder.gd
 msgid "Cut opening"
 msgstr ""
@@ -1335,6 +1487,10 @@ msgstr ""
 msgid "Decal Tool"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Default player_start created"
+msgstr ""
+
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Degrees between copies"
 msgstr ""
@@ -1369,6 +1525,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/dock_visgroup_handler.gd addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_io_wiring_panel.gd addons/hammerforge/ui/hf_prefab_library.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Delete"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Delete rejected: finish the drag first"
 msgstr ""
 
 #: addons/hammerforge/systems/hf_vertex_system.gd
@@ -1445,6 +1605,10 @@ msgstr ""
 msgid "Discard Prefab Changes"
 msgstr ""
 
+#: addons/hammerforge/plugin_prefab_commands.gd
+msgid "Discarded: the copy matches its prefab again"
+msgstr ""
+
 #: addons/hammerforge/hf_status_board.gd
 msgid "Dismiss"
 msgstr ""
@@ -1467,6 +1631,14 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Displacement paint brush strength"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Displacement removed"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Displacement smoothed"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -1495,6 +1667,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Down"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Drag an entity into the viewport"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -1563,6 +1739,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Draw hover preview"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Draw is ready - drag in the 3D viewport"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -1657,7 +1837,7 @@ msgstr ""
 msgid "Edges"
 msgstr ""
 
-#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+#: addons/hammerforge/plugin_input_router.gd addons/hammerforge/plugin_selection_state.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Edit HammerForge and Godot nodes separately"
 msgstr ""
 
@@ -1693,6 +1873,10 @@ msgstr ""
 msgid "Emits occlusion geometry from large flat surfaces, so the renderer can cull what is behind walls."
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Empty LevelRoot created - Draw + Solid is ready"
+msgstr ""
+
 #: addons/hammerforge/dock.tscn
 msgid "Empty Root"
 msgstr ""
@@ -1719,6 +1903,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
 msgid "Enter variant name:"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Enter vertex/edge mode first (V key)"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_selection_filter.gd
@@ -1755,6 +1943,14 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_overlay_colors_panel.gd
 msgid "Every overlay colour back to its default"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Every palette slot is in use"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Every property is written already"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
@@ -1797,8 +1993,24 @@ msgstr ""
 msgid "Export Settings"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Export cancelled because the level could not be baked"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Export failed — could not pack scene"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Exported .glb"
+msgstr ""
+
 #: addons/hammerforge/dock_file_handler.gd
 msgid "Exported .map ({format})"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Exported settings"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_shortcut_dialog.gd
@@ -1863,6 +2075,26 @@ msgstr ""
 msgid "Face Select Mode"
 msgstr ""
 
+#: addons/hammerforge/plugin_selection_state.gd
+msgid "Face Select closed for object editing"
+msgstr ""
+
+#: addons/hammerforge/plugin_tool_modes.gd
+msgid "Face Select: object transform handles hidden"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Face has no displacement to remove"
+msgstr ""
+
+#: addons/hammerforge/plugin_material_commands.gd
+msgid "Face has no material assigned"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Face inset applied"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Face materials"
 msgstr ""
@@ -1880,11 +2112,51 @@ msgid "Fade Distance"
 msgstr ""
 
 #: addons/hammerforge/dock_file_handler.gd
+msgid "Failed to export .glb"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Failed to export .map"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Failed to export settings"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Failed to import .map"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
 msgid "Failed to import .map: {reason}"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Failed to load .hflevel"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Failed to open settings file"
+msgstr ""
+
+#: addons/hammerforge/plugin_prefab_commands.gd
+msgid "Failed to push to source"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Failed to save .hflevel"
 msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/dock_file_handler.gd
 msgid "Failed to save .hflevel: {file}"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Failed to write material library"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Failed — needs a quad face with no displacement on it yet"
 msgstr ""
 
 #: addons/hammerforge/plugin_material_commands.gd
@@ -1905,6 +2177,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Fill a connected area of floor cells."
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Fill in Output, Target, and Input fields"
 msgstr ""
 
 #: addons/hammerforge/hf_spiral_stairs_builder.gd
@@ -2053,6 +2329,10 @@ msgstr ""
 msgid "Floor Paint"
 msgstr ""
 
+#: addons/hammerforge/plugin_paint_input.gd
+msgid "Floor Paint could not reach the active layer plane"
+msgstr ""
+
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Fold rotation and scale into the brush's shape: nothing moves, and size reads in metres"
 msgstr ""
@@ -2123,6 +2403,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Generates the second UV set LightmapGI needs. Slow on large levels; only required if you bake light."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Give Repeats a count across or down"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -2227,6 +2511,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Grid Up"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Grid array needs more than one cell"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
@@ -2417,6 +2705,10 @@ msgstr ""
 msgid "Highlight Connected — pulse linked entities"
 msgstr ""
 
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Highlight a group in the Groups list first"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Hold the next drag to the X axis."
 msgstr ""
@@ -2443,6 +2735,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_coach_marks.gd
 msgid "Hollow Tool"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Hollow detached — its walls are ordinary brushes now"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_operation_replay.gd
@@ -2621,8 +2917,20 @@ msgstr ""
 msgid "Import Settings"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_paint_system.gd
+msgid "Import failed — no active paint layer"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Import..."
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Imported .map"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Imported settings"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_material_browser.gd
@@ -2645,6 +2953,14 @@ msgstr ""
 msgid "In selection"
 msgstr ""
 
+#: addons/hammerforge/plugin_tool_modes.gd
+msgid "In-progress brush resize closed for tool switch"
+msgstr ""
+
+#: addons/hammerforge/plugin_tool_modes.gd
+msgid "In-progress gesture closed for tool switch"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "In:"
 msgstr ""
@@ -2665,6 +2981,10 @@ msgstr ""
 msgid "Inset Face"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Inset failed — distance too large or face too small"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Inset the selected face and create connecting side faces"
 msgstr ""
@@ -2673,8 +2993,32 @@ msgstr ""
 msgid "Intersect"
 msgstr ""
 
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Invalid .hflevel path"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Invalid .map path"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Invalid library path"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Invalid settings file"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Invalid settings path"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Invert Selection"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Isolate Sel: select what to keep shown"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -2683,6 +3027,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Isolate Visgroups"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Isolate: highlight a visgroup, or select something in one"
 msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
@@ -2881,6 +3229,10 @@ msgstr ""
 msgid "Later"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Launching playtest..."
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Lay the selected trim run along the faces picked now in Face Select, keeping its settings"
 msgstr ""
@@ -2919,6 +3271,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Left"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Left as it was."
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -2978,6 +3334,14 @@ msgid "Link Faces"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
+msgid "Link: select two or more faces to make one surface of"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Link: the selected faces are one surface already"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
 msgid "Linked {count} face into one surface"
 msgid_plural "Linked {count} faces into one surface"
 msgstr[0] ""
@@ -3026,10 +3390,18 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: addons/hammerforge/dock_file_handler.gd
+msgid "Loaded .hflevel"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
 msgid "Loaded library; {count} of {total} materials is missing"
 msgid_plural "Loaded library; {count} of {total} materials are missing"
 msgstr[0] ""
 msgstr[1] ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Loaded material library"
+msgstr ""
 
 #: addons/hammerforge/ui/hf_quick_property.gd
 msgid "Local"
@@ -3137,6 +3509,10 @@ msgstr ""
 msgid "Material atlas"
 msgstr ""
 
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Material library not found"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "Material {number}"
 msgstr ""
@@ -3157,6 +3533,10 @@ msgstr ""
 msgid "Measure Tool"
 msgstr ""
 
+#: addons/hammerforge/plugin_dimensions.gd
+msgid "Measure a ruler with the Measure tool first"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Merge"
 msgstr ""
@@ -3169,8 +3549,16 @@ msgstr ""
 msgid "Merge Vertices"
 msgstr ""
 
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Merge Vertices: select two or more vertices of one brush"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Merge meshes"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Merge rejected: would leave the brush without a closed solid"
 msgstr ""
 
 #: addons/hammerforge/systems/hf_vertex_system.gd
@@ -3213,6 +3601,14 @@ msgstr ""
 msgid "Mirror Copy across Z"
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Mirror Copy needs the HammerForge plugin running"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Mirror Copy: tick X, Y or Z in Selection Tools first"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Mirror painting across the grid's X origin."
 msgstr ""
@@ -3247,6 +3643,22 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "More"
+msgstr ""
+
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Move rejected: finish the drag first"
+msgstr ""
+
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Move rejected: that place is not a number"
+msgstr ""
+
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Move rejected: the brush is squashed flat"
+msgstr ""
+
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Move rejected: the vertex is no longer on its brush"
 msgstr ""
 
 #: addons/hammerforge/systems/hf_vertex_system.gd
@@ -3319,6 +3731,10 @@ msgstr ""
 msgid "New brushes, entities, structures and placed or pasted prefabs join the highlighted visgroup. Untick for none"
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "New level created — floor, sun, and player spawn added"
+msgstr ""
+
 #: addons/hammerforge/hf_spiral_stairs_builder.gd
 msgid "Newel post"
 msgstr ""
@@ -3343,40 +3759,208 @@ msgstr ""
 msgid "Next Pick: Vertex Only"
 msgstr ""
 
+#: addons/hammerforge/plugin_snap_feedback.gd
+msgid "Next pick: X and Z from here, the height from where you click"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No EditorInterface — cannot launch"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "No Face"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No LevelRoot active"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No LevelRoot available"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "No LevelRoot for .glb export"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "No LevelRoot for .hflevel load"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "No LevelRoot for .hflevel save"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "No LevelRoot for .map export"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "No LevelRoot for .map import"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "No LevelRoot for autosave path"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No LevelRoot for bake dry run"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No LevelRoot for validation"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "No LevelRoot in scene — add one first"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "No LevelRoot in the scene — these switches turn on once a level is open."
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "No LevelRoot to keep an Active Material"
+msgstr ""
+
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "No active paint layer — add one first"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No bake issues found"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No brushes in selection"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "No brushes or faces selected"
+msgstr ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock_brush_handler.gd
+msgid "No brushes selected"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "No brushes selected to bake"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "No changed brushes since last bake"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_panel.gd
 msgid "No changes"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No clear place near the spawn. Move it by hand"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "No connections"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "No cut brushes to commit"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "No earlier visibility to go back to"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No editor camera available"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "No face of the selection lies flat against another solid brush"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "No face there wears that material."
+msgstr ""
+
+#: addons/hammerforge/plugin_material_commands.gd
+msgid "No face under cursor"
+msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "No face under drop position"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "No faces selected — select faces first"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_log_view.gd
 msgid "No lines match the current filter."
 msgstr ""
 
+#: addons/hammerforge/plugin_prefab_commands.gd
+msgid "No linked instances to propagate"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_log_view.gd
 msgid "No log attached."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "No look picked yet — use T to pick a face first"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "No material palette"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "No material selected"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_material_browser.gd
 msgid "No materials loaded. Refresh Prototypes is under Material Library."
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No player_start entity found"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No player_start found — auto-creating default spawn"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No player_start found, and none could be made. Add one and try again"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No player_start to preview"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "No plugin reference"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "No preferences to save the profile in"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "No rotation to clear"
+msgstr ""
+
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "No scatter instances to commit"
+msgstr ""
+
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "No sound at {path}"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "No texture picked yet — use T to pick first"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -3407,8 +3991,20 @@ msgstr ""
 msgid "Noise"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Noise applied to displacement"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Noise failed — face has no displacement"
+msgstr ""
+
 #: addons/hammerforge/hf_stairs_builder.gd
 msgid "Nosing"
+msgstr ""
+
+#: addons/hammerforge/plugin_prefab_commands.gd
+msgid "Not a prefab instance"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_shortcut_dialog.gd
@@ -3419,8 +4015,16 @@ msgstr ""
 msgid "Not saved: {error}"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Nothing applied"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_panel.gd
 msgid "Nothing compared. File > Compare With... in the dock compares the open level with a .hflevel."
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Nothing is left selected"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_log_view.gd
@@ -3429,6 +4033,38 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_console_log_view.gd
 msgid "Nothing logged yet. HammerForge writes here as you build."
+msgstr ""
+
+#: addons/hammerforge/plugin_adjust_last.gd
+msgid "Nothing to adjust: no command with settings is the last step"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Nothing to re-pick: those faces give the run it has"
+msgstr ""
+
+#: addons/hammerforge/plugin_commands.gd
+msgid "Nothing to repeat yet"
+msgstr ""
+
+#: addons/hammerforge/plugin_brush_stamp.gd
+msgid "Nothing to repeat yet: draw a brush first"
+msgstr ""
+
+#: addons/hammerforge/plugin_run.gd
+msgid "Nothing to repeat: run commands on a selection first"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Nothing to replace"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Nothing to update"
+msgstr ""
+
+#: addons/hammerforge/plugin_brush_stamp.gd
+msgid "Nothing under the cursor to stand the brush on"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/hf_keymap.gd
@@ -3453,6 +4089,14 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/hf_trim_run_builder.gd addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Offset"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Offset rejected: finish the drag first"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Offset rejected: two vertices of a brush would land on one point"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd
@@ -3509,6 +4153,14 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Open Group"
+msgstr ""
+
+#: addons/hammerforge/plugin_compare.gd
+msgid "Open a HammerForge level first."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Open or create a 3D scene first"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -3619,6 +4271,10 @@ msgstr ""
 msgid "Paint floor cells."
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Paint mode enabled"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Paint the blend between ground materials."
 msgstr ""
@@ -3643,12 +4299,24 @@ msgstr ""
 msgid "Paste at Cursor"
 msgstr ""
 
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Paste at Cursor: point at the level in the viewport"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Paste at Cursor: the clipboard holds nothing to paste"
+msgstr ""
+
 #: addons/hammerforge/hf_sweep_builder.gd
 msgid "Path"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_coach_marks.gd
 msgid "Path Tool"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "Per-face materials were not baked: Use Face Materials is off"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -3679,6 +4347,22 @@ msgstr ""
 msgid "Pick Pivot"
 msgstr ""
 
+#: addons/hammerforge/plugin_transform_tools.gd
+msgid "Pick Pivot: click a brush vertex, edge or face. Esc cancels"
+msgstr ""
+
+#: addons/hammerforge/plugin_transform_tools.gd
+msgid "Pick Pivot: no brush vertex, edge or face there. Click nearer one, or Esc"
+msgstr ""
+
+#: addons/hammerforge/plugin_groups.gd
+msgid "Pick a group in the Groups list, or open one"
+msgstr ""
+
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "Pick a mesh first"
+msgstr ""
+
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "Pick a sound first"
 msgstr ""
@@ -3689,6 +4373,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "Pick {kind}"
+msgstr ""
+
+#: addons/hammerforge/plugin_material_commands.gd
+msgid "Picked Hidden: Alt+T makes the selected faces Hidden"
 msgstr ""
 
 #: addons/hammerforge/plugin_paint_input.gd
@@ -3715,8 +4403,16 @@ msgstr ""
 msgid "Pivot:"
 msgstr ""
 
+#: addons/hammerforge/plugin_transform_tools.gd
+msgid "Pivot: back to the selection centre"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Place Entity Here"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Place Entity Here: point at a surface in the viewport"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -3779,6 +4475,14 @@ msgstr ""
 msgid "Point Filter: X and Z from Here"
 msgstr ""
 
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "Point at a surface in the viewport to place the prefab there"
+msgstr ""
+
+#: addons/hammerforge/plugin_snap_feedback.gd
+msgid "Point at the point to take X and Z from first"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Point entity classes"
 msgstr ""
@@ -3834,6 +4538,10 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: addons/hammerforge/dock_brush_handler.gd
+msgid "Press Update again to rebuild over the painted faces"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
 msgid "Press Update again to rebuild over {count} edited copy"
 msgid_plural "Press Update again to rebuild over {count} edited copies"
 msgstr[0] ""
@@ -3881,6 +4589,10 @@ msgstr ""
 msgid "Property, such as energy"
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Prototype materials loaded"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_material_browser.gd
 msgid "Prototypes"
 msgstr ""
@@ -3899,6 +4611,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Push to Source"
+msgstr ""
+
+#: addons/hammerforge/plugin_prefab_commands.gd
+msgid "Pushed changes to prefab source"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -3939,6 +4655,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Quick Play"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Quick Play cancelled"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
@@ -4053,6 +4773,10 @@ msgstr ""
 msgid "Re-pick Trim Run"
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Re-pick needs the HammerForge plugin running"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Re-project UVs"
 msgstr ""
@@ -4157,6 +4881,14 @@ msgstr ""
 msgid "Remove this cordon. The last one cannot go"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Removed duplicate array"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Removed output connection"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Removed {count} unused material"
 msgid_plural "Removed {count} unused materials"
@@ -4207,6 +4939,10 @@ msgstr ""
 msgid "Repeat Run: {run}"
 msgstr ""
 
+#: addons/hammerforge/plugin_brush_stamp.gd addons/hammerforge/plugin_shortcuts.gd
+msgid "Repeat stopped"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Repeat the last rectangle as a floor with walls round it."
 msgstr ""
@@ -4225,6 +4961,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "Replace Material"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Replace Material needs a level"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_material_browser.gd
@@ -4307,6 +5047,10 @@ msgstr ""
 msgid "Reset to Default"
 msgstr ""
 
+#: addons/hammerforge/plugin_snap_feedback.gd
+msgid "Rest the pointer on a vertex, a midpoint or a centre first"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Rest the pointer on a vertex, midpoint or centre and guides run from it along the world axes; a point placed near one lines up with it."
 msgstr ""
@@ -4380,7 +5124,19 @@ msgid "Rotate instances to match terrain normal"
 msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
+msgid "Rotate step is zero"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
 msgid "Rotated {angle}°"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Rotation and scale applied"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Rotation cleared"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_command_line.gd
@@ -4395,6 +5151,10 @@ msgstr ""
 msgid "Run Trim Along Faces"
 msgstr ""
 
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Run Trim Along Faces: pick the wall faces first — enter Face Select and click them"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Run a skirting or cornice along the wall faces picked in Face Select."
 msgstr ""
@@ -4405,6 +5165,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_trim_run_builder.gd
 msgid "Run along the faces' bottom edges, a skirting, or their top edges, a cornice"
+msgstr ""
+
+#: addons/hammerforge/plugin_commands.gd
+msgid "Run cleared: the next command starts a new one"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -4459,6 +5223,10 @@ msgstr ""
 msgid "Save View"
 msgstr ""
 
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Save View: name the view first"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Save a .tscn the game loads: the same geometry and the same real lights,\ndoors and triggers as a playtest, with no debug player, sun or environment"
 msgstr ""
@@ -4477,6 +5245,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Save into the project, so the team has it"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Save the material to disk before starring it"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -4499,6 +5271,14 @@ msgstr ""
 msgid "Save..."
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Saved .hflevel"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Saved material library"
+msgstr ""
+
 #: addons/hammerforge/plugin_prefab_commands.gd
 msgid "Saved prefab: {name}"
 msgstr ""
@@ -4517,12 +5297,20 @@ msgid_plural "Saved {saved} materials; {count} had no path and were left empty"
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Saved, but no material had a path to record"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_shortcut_dialog.gd
 msgid "Saved."
 msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Saved: {file}"
+msgstr ""
+
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Saving .hflevel..."
 msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
@@ -4537,8 +5325,16 @@ msgstr ""
 msgid "Scale Vertices..."
 msgstr ""
 
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Scale Vertices: select vertices first"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Scale multiplier for displacement heights"
+msgstr ""
+
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Scale rejected: each factor has to be more than 0"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -4613,6 +5409,14 @@ msgstr ""
 msgid "Select Group"
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Select Group: select a linked face first"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Select Group: the selected face is not linked to any other"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Select Inside"
 msgstr ""
@@ -4649,20 +5453,112 @@ msgstr ""
 msgid "Select With This Brush"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select a brush first"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select a brush or entity first"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select a brush to clip"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select a brush to hollow"
+msgstr ""
+
 #: addons/hammerforge/dock.gd addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Select a brush to use these tools"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select a displaced face first"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select a face first"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_commands.gd
+msgid "Select a face, brush or entity first"
+msgstr ""
+
+#: addons/hammerforge/plugin_groups.gd
+msgid "Select a group to open"
+msgstr ""
+
+#: addons/hammerforge/plugin_groups.gd
+msgid "Select a group to rename"
 msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Select a mesh resource for scattering"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select a piece of a structure to detach it"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select a piece of a structure to update it"
+msgstr ""
+
+#: addons/hammerforge/plugin_drop_handler.gd
+msgid "Select a prefab in the Prefab Library first"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select a quad face first"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "Select all brushes in visgroup '{name}'"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select an edge first (edge sub-mode)"
+msgstr ""
+
+#: addons/hammerforge/dock_entity_handler.gd
+msgid "Select an entity to add output"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Select at least 2 brushes to intersect"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Select at least 2 brushes to merge"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Select at least 2 brushes to wrap in a hull"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select brushes first"
+msgstr ""
+
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "Select brushes first to convert to heightmap"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Select brushes or entities by a typed rule, such as class is light_point and energy > 2."
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Select brushes to bake"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Select brushes to define play area"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select brushes to tie"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -4709,8 +5605,20 @@ msgstr ""
 msgid "Select only brushes to use brush editing tools."
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Select part of an array first"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Select the brushes whose faces against solids to hide"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Select the faces for {command}"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Select the faces to give the picked look to"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -4721,6 +5629,10 @@ msgstr ""
 msgid "Select the faces to make Normal"
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Select the faces to put in a smoothing group"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Select the faces, brushes or entities like the ones selected, on what Selection Filters ticks."
 msgstr ""
@@ -4729,8 +5641,16 @@ msgstr ""
 msgid "Select the picked face's material in the material browser."
 msgstr ""
 
+#: addons/hammerforge/plugin_groups.gd
+msgid "Select two or more things to group: a group counts as one"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Select what is not selected, and drop what is."
+msgstr ""
+
+#: addons/hammerforge/plugin_run.gd
+msgid "Select what to repeat the run on"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
@@ -4739,6 +5659,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Select {name} and {other}"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Selected brush is not part of an array"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
@@ -4861,6 +5785,10 @@ msgstr ""
 msgid "Set this entity's values from a named preset, as one undo step"
 msgstr ""
 
+#: addons/hammerforge/dock_file_handler.gd
+msgid "Settings file not found"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_adjust_last_panel.gd
 msgid "Settings saved under a name for this command"
 msgstr ""
@@ -4903,6 +5831,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Shear Tool"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Shear: select brushes or entities first"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -5181,6 +6113,10 @@ msgstr ""
 msgid "Smooth entire displacement surface"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Smooth failed — face has no displacement"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Smoothing"
 msgstr ""
@@ -5193,8 +6129,20 @@ msgstr ""
 msgid "Snap Vertices to Grid"
 msgstr ""
 
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Snap Vertices to Grid: select vertices first"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Snap presets, snap targets, axis locks, and collision layer."
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Snap rejected: finish the drag first"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Snap rejected: two vertices of a brush would land on one grid point"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -5207,6 +6155,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Snap:"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Snapped to the grid"
 msgstr ""
 
 #: addons/hammerforge/dock.tscn addons/hammerforge/ui/hf_context_toolbar.gd
@@ -5238,11 +6190,35 @@ msgid "Spawn debug"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
+msgid "Spawn fixed — launching playtest"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Spawn is valid"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
 msgid "Spawn issues: {issues}"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
+msgid "Spawn moved clear of the brush"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Spawn preview cancelled because the level could not be baked"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Spawn validation cancelled because the level could not be baked"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
 msgid "Spawn warning: {issues}"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Spawn was removed during bake"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd
@@ -5253,8 +6229,20 @@ msgstr ""
 msgid "Spline"
 msgstr ""
 
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "Spline scatter requires 2+ selected nodes to define the path"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Split Edge"
+msgstr ""
+
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Split Edge: select one edge first"
+msgstr ""
+
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Split Edge: the edge is no longer on its brush"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -5337,6 +6325,10 @@ msgstr ""
 msgid "Start the Shear tool: drag a handle on a side of the selection's box to lean everything between."
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Starting at the nearest clear spot to the camera"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Static World (Layer 1) - the player walks on it"
 msgstr ""
@@ -5411,6 +6403,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Strip"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Structure detached — its brushes are ordinary geometry now"
 msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
@@ -5535,6 +6531,14 @@ msgstr ""
 msgid "Test Level  (Bake + Play)"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Test cancelled because the level could not be baked"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Test cancelled because the selected area could not be baked"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_radial_menu.gd
 msgid "Tex Pick"
 msgstr ""
@@ -5552,6 +6556,10 @@ msgid "Texture Gizmo: drag in the viewport to slide, stretch and turn the textur
 msgstr ""
 
 #: addons/hammerforge/dock.gd
+msgid "Texture Gizmo: pick faces in Face Select Mode to see it"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
 msgid "Texture Lock"
 msgstr ""
 
@@ -5563,12 +6571,32 @@ msgstr ""
 msgid "Texture Picker"
 msgstr ""
 
+#: addons/hammerforge/plugin_shortcuts.gd addons/hammerforge/plugin_viewport_input.gd
+msgid "Texture Picker cancelled"
+msgstr ""
+
+#: addons/hammerforge/plugin_commands.gd addons/hammerforge/plugin_input_router.gd
+msgid "Texture Picker: click a face to sample its material"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Texture lock"
 msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Texture..."
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "That array's brushes are no longer in the level"
+msgstr ""
+
+#: addons/hammerforge/plugin_selection_input.gd
+msgid "That brush is locked"
+msgstr ""
+
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "That structure is no longer in the level"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
@@ -5595,6 +6623,10 @@ msgstr ""
 msgid "The core loop is Draw -> Test Level. Paint and Objects are optional; open Learn or Actions whenever you want more."
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "The face on show had changed; drag the corner again"
+msgstr ""
+
 #: addons/hammerforge/plugin_problem_report.gd
 msgid "The form opens in your browser. Nothing is sent until you submit it there."
 msgstr ""
@@ -5617,6 +6649,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "The key reminders overlaid on the 3D viewport."
+msgstr ""
+
+#: addons/hammerforge/plugin_commands.gd
+msgid "The level's entity definitions name no FGD to convert"
 msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
@@ -5651,12 +6687,36 @@ msgstr ""
 msgid "The next pick takes X and Z from the snap point under the pointer, and its height from where it lands."
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "The palette is already empty"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "The picked face's texture alignment cannot be laid on another face"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "The picked material is no longer in the palette — pick it again with T"
+msgstr ""
+
+#: addons/hammerforge/plugin_prefab_commands.gd
+msgid "The prefab file could not be read"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "The property Property compares"
 msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "The selected entities' colours differ"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "The selected faces already have the picked look"
+msgstr ""
+
+#: addons/hammerforge/plugin_texture_keys.gd
+msgid "The selected faces are edge on or Cylindrical; use the UV boxes for them"
 msgstr ""
 
 #: addons/hammerforge/hf_trim_run_builder.gd
@@ -5689,6 +6749,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
 msgid "This prefab has no variants beyond its base."
+msgstr ""
+
+#: addons/hammerforge/plugin.gd
+msgid "This scene has no HammerForge level. Use Create Starter or Create Empty in the dock."
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -5773,6 +6837,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "Toggle Solid/Cut: click to switch"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Tool settings are back to their defaults"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -5891,8 +6959,20 @@ msgstr ""
 msgid "Type a command and its values, such as hollow 0.125, on a line over the viewport."
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Type a name to save the settings under"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_selection_info.gd
 msgid "Type a place and press Enter, or leave the field, to move the vertex there"
+msgstr ""
+
+#: addons/hammerforge/plugin_vertex_ops.gd
+msgid "Type a place for one selected vertex at a time"
+msgstr ""
+
+#: addons/hammerforge/plugin_numeric_input.gd
+msgid "Type a size greater than 0"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_shortcut_dialog.gd
@@ -5979,6 +7059,22 @@ msgstr ""
 msgid "Unlink Prefab Copy"
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Unlink: none of the selected faces is linked"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Unlink: select the faces to unlink first"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Unlinked the selected faces"
+msgstr ""
+
+#: addons/hammerforge/plugin_prefab_commands.gd
+msgid "Unlinked: the copy is ordinary brushes and entities now"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Untick to hide every one in the editor"
 msgstr ""
@@ -6025,6 +7121,10 @@ msgstr ""
 msgid "Validate Level"
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Validate first, then Bake or Quick Play"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Validate lists each To Do note not marked Done. Kept in the level, so everyone's check of it agrees."
 msgstr ""
@@ -6043,6 +7143,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Validate: fixed {fixed}, {count} remaining"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Validate: no issues found"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
@@ -6260,7 +7364,43 @@ msgid "Wrap Texture"
 msgstr ""
 
 #: addons/hammerforge/plugin_uv_wrap.gd
+msgid "Wrap ended"
+msgstr ""
+
+#: addons/hammerforge/plugin_uv_wrap.gd
+msgid "Wrap ended: the face the texture came from is gone"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Wrap needs the HammerForge plugin running"
+msgstr ""
+
+#: addons/hammerforge/plugin_uv_wrap.gd
+msgid "Wrap: click a face beside the selected one to carry its texture over. Esc or right click ends"
+msgstr ""
+
+#: addons/hammerforge/plugin_uv_wrap.gd
+msgid "Wrap: no face under the cursor"
+msgstr ""
+
+#: addons/hammerforge/plugin_uv_wrap.gd
+msgid "Wrap: open a level first"
+msgstr ""
+
+#: addons/hammerforge/plugin_uv_wrap.gd
+msgid "Wrap: select the face whose texture to carry on first"
+msgstr ""
+
+#: addons/hammerforge/plugin_uv_wrap.gd
+msgid "Wrap: the selected face's brush has no id to keep"
+msgstr ""
+
+#: addons/hammerforge/plugin_uv_wrap.gd
 msgid "Wrapped, with the {axes} scale changed to meet the edge: this face measures it differently"
+msgstr ""
+
+#: addons/hammerforge/plugin_uv_wrap.gd
+msgid "Wrapped. Click the next face, or Esc to end"
 msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
@@ -6371,6 +7511,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "param"
+msgstr ""
+
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "player_start already exists — select and move it instead"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd

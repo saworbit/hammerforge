@@ -101,6 +101,32 @@ func test_a_word_is_found_as_a_control_would_show_it():
 	assert_eq(found[8], ["{count} brush", "{count} brushes", ""], "so is a plural")
 
 
+func test_a_toast_or_a_status_line_is_found_as_it_would_show():
+	var source := (
+		"\n"
+		. join(
+			[
+				'dock.show_toast("Saved", 1)',
+				'_set_status("Baking")',
+				'_say(plugin, "Grouped", 0)',
+				'_toast(plugin, "Stamped", 1)',
+				'root.user_message.emit("Nothing to paste", 1)',
+				"root.emit_signal(",
+				'	"user_message", "Pick a mesh first", 1',
+				")",
+				'show_toast("%d placed" % n)',
+				'root.emit_signal("user_message", "Failed: " + why, 2)',
+				'root.emit_signal("bake_finished", "NotShown")',
+				'done.emit("NotShown")',
+			]
+		)
+	)
+	var ids: Array = PotCatalog.script_words(source).map(func(word): return word[0])
+	assert_eq(
+		ids, ["Saved", "Baking", "Grouped", "Stamped", "Nothing to paste", "Pick a mesh first"]
+	)
+
+
 func test_every_surface_the_plugin_adds_to_the_editor_is_in_the_domain():
 	if rig.plugin == null:
 		fail_test(rig.error())
