@@ -6,6 +6,8 @@ extends VBoxContainer
 ## and "Study This" annotations. Provides Load button to instantiate
 ## brushes/entities into the current LevelRoot.
 
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+
 signal load_requested(example_id: String)
 
 const EXAMPLES_PATH := "res://addons/hammerforge/data/example_levels.json"
@@ -123,7 +125,7 @@ func _create_card(example: Dictionary) -> PanelContainer:
 	# Difficulty badge
 	var difficulty: String = example.get("difficulty", "Beginner")
 	var badge = Label.new()
-	badge.text = " %s " % difficulty
+	badge.text = " " + str(difficulty) + " "
 	badge.add_theme_font_size_override("font_size", 10)
 	badge.add_theme_color_override("font_color", DIFFICULTY_COLORS.get(difficulty, Color.WHITE))
 	title_row.add_child(badge)
@@ -170,7 +172,18 @@ func _create_card(example: Dictionary) -> PanelContainer:
 	var brushes: Array = example.get("brushes", [])
 	var entities: Array = example.get("entities", [])
 	var info = Label.new()
-	info.text = "%d brushes, %d entities" % [brushes.size(), entities.size()]
+	var brush_count := HFTranslationType.tn("{count} brush", "{count} brushes", brushes.size())
+	var entity_count := HFTranslationType.tn("{count} entity", "{count} entities", entities.size())
+	info.text = (
+		HFTranslationType
+		. t("{brushes}, {entities}")
+		. format(
+			{
+				"brushes": brush_count.format({"count": brushes.size()}),
+				"entities": entity_count.format({"count": entities.size()}),
+			}
+		)
+	)
 	info.add_theme_font_size_override("font_size", 9)
 	info.add_theme_color_override("font_color", Color(0.45, 0.5, 0.6, 0.6))
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -200,7 +213,7 @@ func _show_annotations(example: Dictionary) -> void:
 
 	# Header
 	var header = Label.new()
-	header.text = "Study: %s" % example.get("title", "")
+	header.text = HFTranslationType.t("Study: {title}").format({"title": example.get("title", "")})
 	header.add_theme_font_size_override("font_size", 12)
 	header.add_theme_color_override("font_color", Color(0.4, 0.7, 1.0, 0.9))
 	_annotation_list.add_child(header)
@@ -211,7 +224,7 @@ func _show_annotations(example: Dictionary) -> void:
 		row.add_theme_constant_override("separation", 6)
 
 		var num = Label.new()
-		num.text = "%d." % (i + 1)
+		num.text = str(i + 1) + "."
 		num.add_theme_font_size_override("font_size", 11)
 		num.add_theme_color_override("font_color", Color(0.4, 0.7, 1.0, 0.7))
 		num.custom_minimum_size = Vector2(18, 0)

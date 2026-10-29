@@ -5,6 +5,8 @@ extends PanelContainer
 ## Teaches one short success loop: draw geometry, then test it. Optional systems
 ## stay out of onboarding and remain discoverable from their contextual tabs.
 
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+
 signal completed
 signal dismissed(dont_show_again: bool)
 signal action_requested(action: String)
@@ -173,7 +175,9 @@ func _apply_step() -> void:
 	_title_label.text = step["title"]
 	_text_label.text = step["text"]
 	_progress.value = _current_step + 1
-	_step_counter.text = "Step %d of %d" % [_current_step + 1, STEPS.size()]
+	_step_counter.text = HFTranslationType.t("Step {step} of {steps}").format(
+		{"step": _current_step + 1, "steps": STEPS.size()}
+	)
 	_back_btn.visible = _current_step > 0
 	_action_btn.visible = true
 	_action_btn.text = str(step.get("action_label", "Set Up This Step"))

@@ -275,7 +275,7 @@ func _populate_steps(steps: Array) -> void:
 		row.add_theme_constant_override("separation", 6)
 
 		var num_label = Label.new()
-		num_label.text = "%d." % step_num
+		num_label.text = str(step_num) + "."
 		num_label.add_theme_font_size_override("font_size", 11)
 		num_label.add_theme_color_override("font_color", HFThemeUtils.accent())
 		num_label.custom_minimum_size = Vector2(18, 0)

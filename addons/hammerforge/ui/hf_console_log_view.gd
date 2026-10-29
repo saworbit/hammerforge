@@ -66,7 +66,7 @@ func _build() -> void:
 		toggle.toggle_mode = true
 		toggle.button_pressed = bool(DEFAULT_MASK & (1 << int(spec["level"])))
 		toggle.focus_mode = Control.FOCUS_NONE
-		toggle.text = "%s 0" % spec["label"]
+		toggle.text = str(spec["label"]) + " 0"
 		toggle.tooltip_text = (
 			"Show %s messages. The number is how many arrived this session."
 			% str(spec["label"]).to_lower()
@@ -384,7 +384,7 @@ func _update_summary(shown: int) -> void:
 	for spec in LEVEL_BUTTONS:
 		var toggle: Button = _level_toggles.get(int(spec["level"]))
 		if toggle:
-			toggle.text = "%s %d" % [spec["label"], int(counts.get(spec["count_key"], 0))]
+			toggle.text = str(spec["label"]) + " " + str(int(counts.get(spec["count_key"], 0)))
 			toggle.add_theme_color_override("font_color", _level_color(int(spec["level"])))
 	var visible_count: int = maxi(shown, 0)
 	_visible_count = visible_count

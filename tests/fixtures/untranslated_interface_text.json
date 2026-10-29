@@ -8,21 +8,5 @@
 	"res://addons/hammerforge/plugin_selection_state.gd": 1,
 	"res://addons/hammerforge/plugin_transform_tools.gd": 1,
 	"res://addons/hammerforge/plugin_uv_wrap.gd": 1,
-	"res://addons/hammerforge/systems/hf_vertex_system.gd": 6,
-	"res://addons/hammerforge/ui/hf_adjust_last_panel.gd": 1,
-	"res://addons/hammerforge/ui/hf_coach_marks.gd": 1,
-	"res://addons/hammerforge/ui/hf_console_log_view.gd": 2,
-	"res://addons/hammerforge/ui/hf_console_panel.gd": 2,
-	"res://addons/hammerforge/ui/hf_example_library.gd": 4,
-	"res://addons/hammerforge/ui/hf_hotkey_palette.gd": 2,
-	"res://addons/hammerforge/ui/hf_io_wiring_panel.gd": 1,
-	"res://addons/hammerforge/ui/hf_material_browser.gd": 1,
-	"res://addons/hammerforge/ui/hf_operation_replay.gd": 3,
-	"res://addons/hammerforge/ui/hf_replace_material_dialog.gd": 1,
-	"res://addons/hammerforge/ui/hf_selection_filter.gd": 1,
-	"res://addons/hammerforge/ui/hf_selection_info.gd": 2,
-	"res://addons/hammerforge/ui/hf_shortcut_dialog.gd": 6,
-	"res://addons/hammerforge/ui/hf_status_strip.gd": 1,
-	"res://addons/hammerforge/ui/hf_tutorial_wizard.gd": 1,
-	"res://addons/hammerforge/ui/manage_tab_builder.gd": 1
+	"res://addons/hammerforge/systems/hf_vertex_system.gd": 6
 }

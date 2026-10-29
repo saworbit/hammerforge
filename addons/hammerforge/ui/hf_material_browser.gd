@@ -21,6 +21,7 @@ signal material_add_requested(path: String)
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
 const HFHiddenFaces = preload("../hf_hidden_faces.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 const THUMB_SIZE := 64
 ## The thumbnail sizes the size slider goes between, in pixels (#1725).
@@ -558,7 +559,11 @@ func _make_use_marker(faces: int) -> Label:
 	var mark := Label.new()
 	mark.name = "InUse"
 	mark.text = "●"
-	mark.tooltip_text = "Used on %d face%s" % [faces, "" if faces == 1 else "s"]
+	mark.tooltip_text = (
+		HFTranslationType
+		. tn("Used on {count} face", "Used on {count} faces", faces)
+		. format({"count": faces})
+	)
 	mark.position = Vector2(_thumb_size - 6, 2)
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	mark.add_theme_font_size_override("font_size", 12)

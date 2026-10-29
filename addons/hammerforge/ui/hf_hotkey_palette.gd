@@ -325,7 +325,7 @@ func _show_reason() -> void:
 	if entry.is_empty() and searching and not _shown.is_empty():
 		entry = _shown[0]
 	var reason := str(entry.get("reason", "")) if not entry.is_empty() else ""
-	_reason_label.text = "%s: %s" % [entry.get("shown", ""), reason] if reason != "" else ""
+	_reason_label.text = str(entry.get("shown", "")) + ": " + reason if reason != "" else ""
 	_reason_label.visible = reason != ""
 
 
@@ -370,7 +370,7 @@ func _on_search_changed(text: String) -> void:
 		_list.move_child(btn, i)
 		btn.visible = true
 		if ranked[i]["alias"] != "":
-			btn.text = "%s (%s)" % [entry["shown"], ranked[i]["alias"]]
+			btn.text = str(entry["shown"]) + " (" + str(ranked[i]["alias"]) + ")"
 		_shown.append(entry)
 	if fuzzy and not ranked.is_empty():
 		_suggest_label.text = (HFTranslationType.t("Did you mean: {command}?").format(
