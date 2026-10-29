@@ -15,6 +15,7 @@ const HFGridSystem = preload("hf_grid_system.gd")
 const HFVertexWeld = preload("../hf_vertex_weld.gd")
 const HFSnapSystemType = preload("../hf_snap_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## How near two corners are to count as one, for `_vertex_key()`.
 const VERTEX_KEY_STEP := 0.001
@@ -270,7 +271,7 @@ func _move_to_targets(targets: Dictionary, refusal: String) -> bool:
 		var reason: String = check_solid(brush)
 		if not reason.is_empty():
 			_restore_face_snapshots()
-			_say("%s: %s" % [refusal, reason])
+			_say(refusal + ": " + reason)
 			return false
 	for brush_id in targets:
 		var brush = _find_brush(brush_id)
@@ -1148,7 +1149,7 @@ func end_drag() -> Dictionary:
 			# will be kept, so they are the ones that decide.
 			_restore_face_snapshots()
 			_rebuild_drag_previews()
-			_say("Move rejected: %s" % refusal)
+			_say(HFTranslationType.t("Move rejected: {reason}").format({"reason": refusal}))
 			_clear_drag_state()
 			return {}
 		# Only on commit. Promoting mid-drag would leave a canceled drag with a
@@ -1490,7 +1491,7 @@ func merge_vertices(brush_id: String, vert_indices: PackedInt32Array) -> bool:
 	var merge_reason: String = check_solid(brush)
 	if not merge_reason.is_empty():
 		_restore_face_snapshots()
-		_say("Merge rejected: %s" % merge_reason)
+		_say(HFTranslationType.t("Merge rejected: {reason}").format({"reason": merge_reason}))
 		return false
 	_commit_geometry(brush)
 	var moves: Dictionary = {}
@@ -1692,7 +1693,8 @@ func delete_selected() -> Dictionary:
 				kept.append(verts[i])
 		var faces := _hull_faces(kept, brush.faces)
 		if faces.is_empty():
-			_say("Delete rejected: %s would be left flat" % brush.name)
+			var flat := HFTranslationType.t("Delete rejected: {brush} would be left flat")
+			_say(flat.format({"brush": brush.name}))
 			return {}
 		plans[brush_id] = faces
 	return _apply_hull_plans(plans)
@@ -1733,7 +1735,7 @@ func add_corner(brush_id: String, world_point: Vector3) -> Dictionary:
 ## snapshots for undo, or {}.
 func transform_selected(xform: Transform3D, refusal: String) -> Dictionary:
 	if _drag_active:
-		_say("%s: finish the drag first" % refusal)
+		_say(HFTranslationType.t("{command}: finish the drag first").format({"command": refusal}))
 		return {}
 	var targets: Dictionary = {}
 	for brush_id in selected_vertices:
@@ -1753,7 +1755,10 @@ func transform_selected(xform: Transform3D, refusal: String) -> Dictionary:
 		if target_positions.is_empty():
 			continue
 		if _would_collapse(verts, target_positions):
-			_say("%s: two vertices of a brush would land on one point" % refusal)
+			var landed := HFTranslationType.t(
+				"{command}: two vertices of a brush would land on one point"
+			)
+			_say(landed.format({"command": refusal}))
 			return {}
 		targets[brush_id] = target_positions
 	if targets.is_empty():

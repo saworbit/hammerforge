@@ -95,7 +95,7 @@ static func run(plugin: Object, root: Node, values: Dictionary) -> bool:
 	var settings := settings_of(values)
 	var check := HFGeneratorSystem.can_build(HFGeneratorSystem.TYPE_SWEEP, settings, cut["run"])
 	if not check.ok:
-		_say(plugin, "%s. %s" % [check.message, check.fix_hint], 1)
+		_say(plugin, check.message + ". " + check.fix_hint, 1)
 		return false
 	var before: Dictionary = root.capture_state()
 	var known: Array = root.generator_system.generators.keys()

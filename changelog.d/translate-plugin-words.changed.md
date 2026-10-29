@@ -1,0 +1,1 @@
+- Vertex edit refusals, Compare, Repeat Run, Pick Pivot, Wrap and the other plugin messages go through the translation catalogs. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

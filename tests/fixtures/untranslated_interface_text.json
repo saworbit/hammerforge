@@ -1,12 +1,3 @@
 {
-	"res://addons/hammerforge/dock.gd": 59,
-	"res://addons/hammerforge/plugin_brush_stamp.gd": 1,
-	"res://addons/hammerforge/plugin_compare.gd": 2,
-	"res://addons/hammerforge/plugin_face_sweep.gd": 1,
-	"res://addons/hammerforge/plugin_paint_input.gd": 1,
-	"res://addons/hammerforge/plugin_run.gd": 1,
-	"res://addons/hammerforge/plugin_selection_state.gd": 1,
-	"res://addons/hammerforge/plugin_transform_tools.gd": 1,
-	"res://addons/hammerforge/plugin_uv_wrap.gd": 1,
-	"res://addons/hammerforge/systems/hf_vertex_system.gd": 6
+	"res://addons/hammerforge/dock.gd": 59
 }
