@@ -22,6 +22,7 @@ const DraftBrush = preload("brush_instance.gd")
 const HFUVWrap = preload("hf_uv_wrap.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## What a toast calls the axis whose scale a wrap changed.
 const ADJUSTED_AXES := ["U", "V", "U and V"]
@@ -130,14 +131,13 @@ static func wrap_onto_face_under_cursor(plugin: Object, root: Node) -> void:
 	root.toggle_face_selection(target, target_idx, false)
 	var adjusted := int(result.get("adjusted", -1))
 	if adjusted >= 0 and adjusted < ADJUSTED_AXES.size():
-		_toast(
-			plugin,
-			(
-				"Wrapped, with the %s scale changed to meet the edge: this face measures it differently"
-				% ADJUSTED_AXES[adjusted]
-			),
-			1
+		var wrapped := (
+			HFTranslationType
+			. t(
+				"Wrapped, with the {axes} scale changed to meet the edge: this face measures it differently"
+			)
 		)
+		_toast(plugin, wrapped.format({"axes": ADJUSTED_AXES[adjusted]}), 1)
 	else:
 		_toast(plugin, "Wrapped. Click the next face, or Esc to end", 0)
 

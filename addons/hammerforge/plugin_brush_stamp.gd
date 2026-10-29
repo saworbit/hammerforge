@@ -24,6 +24,7 @@ const HFNumberFormat = preload("hf_number_format.gd")
 const HFPluginToolModes = preload("plugin_tool_modes.gd")
 const LevelRootType = preload("level_root.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## The structure ghost's colour, for a brush that does not exist yet, and a red
 ## for a Cutout, as the subtract preview draws one.
@@ -83,11 +84,8 @@ func arm(plugin: Object, root: Node) -> bool:
 	_root_id = root.get_instance_id()
 	if plugin.last_3d_camera:
 		follow(root, plugin.last_3d_camera, plugin.last_3d_mouse_pos)
-	_toast(
-		plugin,
-		"Repeat %s: click to place, Esc or right-click to stop" % label(_brush, root.grid_snap),
-		0
-	)
+	var repeat := HFTranslationType.t("Repeat {brush}: click to place, Esc or right-click to stop")
+	_toast(plugin, repeat.format({"brush": label(_brush, root.grid_snap)}), 0)
 	plugin._update_hud_context()
 	return true
 

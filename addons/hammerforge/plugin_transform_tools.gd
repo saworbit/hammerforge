@@ -28,6 +28,7 @@ const HFTransformSystem = preload("systems/hf_transform_system.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## How near a click must land, in pixels: `pick_vertex()`'s own reach.
 const PICK_RADIUS_PX := 12.0
@@ -265,8 +266,15 @@ static func pick_pivot_at(plugin: Object, root: Node, camera: Camera3D, pos: Vec
 	root.transform_pivot_point = point
 	root.transform_pivot_mode = HFTransformSystem.PivotMode.CUSTOM
 	if plugin.dock:
+		var said: String = (
+			{
+				"vertex": HFTranslationType.t("Pivot set at a vertex ({point})"),
+				"edge": HFTranslationType.t("Pivot set at an edge ({point})"),
+			}
+			. get(str(hit["kind"]), HFTranslationType.t("Pivot set at a face ({point})"))
+		)
 		plugin.dock.show_toast(
-			"Pivot set at a %s (%s)" % [hit["kind"], HFNumberFormat.point(point, root.grid_snap)], 0
+			said.format({"point": HFNumberFormat.point(point, root.grid_snap)}), 0
 		)
 	plugin._update_hud_context()
 	return true

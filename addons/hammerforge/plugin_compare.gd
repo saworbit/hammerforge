@@ -12,6 +12,7 @@ const HFCompareOverlay = preload("hf_compare_overlay.gd")
 @warning_ignore_start("shadowed_global_identifier")
 const HFConsoleLog = preload("hf_console_log.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 
 ## Compare the open level with the file at `path`, and show what changed. The
@@ -23,7 +24,9 @@ static func start(plugin: Object, path: String) -> Dictionary:
 		return {}
 	var read: Dictionary = root.file_system.read_hflevel(path)
 	if not bool(read.get("ok", false)):
-		_say(plugin, "Compare: %s" % read.get("error", "could not read %s" % path.get_file()), 2)
+		var unread := HFTranslationType.t("could not read {file}").format({"file": path.get_file()})
+		var failed := HFTranslationType.t("Compare: {error}")
+		_say(plugin, failed.format({"error": read.get("error", unread)}), 2)
 		return {}
 	var result := HFLevelCompare.compare(
 		read["bundle"], root.state_system.capture_hflevel_payload()
@@ -38,7 +41,8 @@ static func start(plugin: Object, path: String) -> Dictionary:
 		panel.show_compare(path.get_file(), result)
 	var summary: String = result["lines"][0]
 	HFConsoleLog.shared().info("Compared with %s: %s" % [path.get_file(), summary], "compare")
-	_say(plugin, "Compared with %s: %s" % [path.get_file(), summary], 0)
+	var compared := HFTranslationType.t("Compared with {file}: {summary}")
+	_say(plugin, compared.format({"file": path.get_file(), "summary": summary}), 0)
 	return result
 
 

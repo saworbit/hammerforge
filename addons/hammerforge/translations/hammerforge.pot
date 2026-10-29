@@ -783,6 +783,14 @@ msgstr ""
 msgid "Compare: unchanged"
 msgstr ""
 
+#: addons/hammerforge/plugin_compare.gd
+msgid "Compare: {error}"
+msgstr ""
+
+#: addons/hammerforge/plugin_compare.gd
+msgid "Compared with {file}: {summary}"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Cone"
 msgstr ""
@@ -989,6 +997,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd addons/hammerforge/dock_visgroup_handler.gd addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_io_wiring_panel.gd addons/hammerforge/ui/hf_prefab_library.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Delete"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Delete rejected: {brush} would be left flat"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
@@ -2387,6 +2399,10 @@ msgstr ""
 msgid "Merge Vertices"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Merge rejected: {reason}"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Merge the selected vertices into one at their middle."
 msgstr ""
@@ -2453,6 +2469,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "More"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "Move rejected: {reason}"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -2811,8 +2831,24 @@ msgstr ""
 msgid "Pick {kind}"
 msgstr ""
 
+#: addons/hammerforge/plugin_paint_input.gd
+msgid "Picked floor material {index}"
+msgstr ""
+
 #: addons/hammerforge/plugin_material_commands.gd
 msgid "Picked material #{index}"
+msgstr ""
+
+#: addons/hammerforge/plugin_transform_tools.gd
+msgid "Pivot set at a face ({point})"
+msgstr ""
+
+#: addons/hammerforge/plugin_transform_tools.gd
+msgid "Pivot set at a vertex ({point})"
+msgstr ""
+
+#: addons/hammerforge/plugin_transform_tools.gd
+msgid "Pivot set at an edge ({point})"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
@@ -3205,8 +3241,16 @@ msgstr ""
 msgid "Repeat Run: {commands}"
 msgstr ""
 
+#: addons/hammerforge/plugin_run.gd
+msgid "Repeat Run: {run}"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Repeat the last rectangle as a floor with walls round it."
+msgstr ""
+
+#: addons/hammerforge/plugin_brush_stamp.gd
+msgid "Repeat {brush}: click to place, Esc or right-click to stop"
 msgstr ""
 
 #: addons/hammerforge/plugin_commands.gd addons/hammerforge/ui/hf_hotkey_palette.gd
@@ -4759,6 +4803,10 @@ msgstr ""
 msgid "Wrap Texture"
 msgstr ""
 
+#: addons/hammerforge/plugin_uv_wrap.gd
+msgid "Wrapped, with the {axes} scale changed to meet the edge: this face measures it differently"
+msgstr ""
+
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "Write Defaults"
 msgstr ""
@@ -4813,6 +4861,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "and {count} more"
+msgstr ""
+
+#: addons/hammerforge/plugin_compare.gd
+msgid "could not read {file}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
@@ -4885,8 +4937,16 @@ msgstr ""
 msgid "{brushes} selected"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "{command}: finish the drag first"
+msgstr ""
+
 #: addons/hammerforge/plugin_selection_commands.gd
 msgid "{command}: select the one brush to select with"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_vertex_system.gd
+msgid "{command}: two vertices of a brush would land on one point"
 msgstr ""
 
 #: addons/hammerforge/plugin_selection_commands.gd
@@ -4938,6 +4998,12 @@ msgstr[1] ""
 #: addons/hammerforge/plugin_edit_actions.gd
 msgid "{count} locked brush overlaps and is left alone."
 msgid_plural "{count} locked brushes overlap and are left alone."
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_selection_state.gd
+msgid "{count} locked: unlock its visgroup, or clear the lock in the Scene dock"
+msgid_plural "{count} locked: unlock their visgroups, or clear the locks in the Scene dock"
 msgstr[0] ""
 msgstr[1] ""
 

@@ -8,6 +8,7 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 
 static func should_start_displacement(
@@ -280,8 +281,9 @@ static func handle_paint(
 			plugin._update_paint_overlay(root)
 		if handled:
 			if eyedropper and root.get("paint_tool"):
+				var picked := HFTranslationType.t("Picked floor material {index}")
 				plugin.dock.show_toast(
-					"Picked floor material %d" % root.paint_tool.blend_material_id, 0
+					picked.format({"index": root.paint_tool.blend_material_id}), 0
 				)
 			elif height_confirm:
 				commit_floor_paint_undo(plugin, root, "Raise Paint Walls")
