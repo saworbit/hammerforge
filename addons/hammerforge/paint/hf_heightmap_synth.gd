@@ -43,7 +43,7 @@ func _build_chunk_mesh(
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var has_verts := false
-	var corners := layer.get_height_samples(origin, size + 1)
+	var corners := layer.get_height_samples(origin, Vector2i(size + 1, size + 1))
 
 	for ly in range(size):
 		for lx in range(size):

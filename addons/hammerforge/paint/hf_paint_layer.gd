@@ -102,15 +102,33 @@ func get_height_sample(corner: Vector2i) -> float:
 	return _base_sample(corner)
 
 
-## The samples at the corners `from` to `from + count - 1` on both axes, row by
-## row. A heightmap floor reads a chunk's corners once rather than four times a
-## cell, since a noise corner is a noise evaluation.
-func get_height_samples(from: Vector2i, count: int) -> PackedFloat32Array:
+## The samples at the corners from `from` to `from + size - 1`, row by row. A
+## heightmap floor reads a chunk's corners once rather than four times a cell,
+## and a sculpt reads its brush's box once. It goes a chunk at a time, so each
+## chunk is looked up once rather than once a corner.
+func get_height_samples(from: Vector2i, size: Vector2i) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
-	out.resize(count * count)
-	for y in range(count):
-		for x in range(count):
-			out[y * count + x] = get_height_sample(from + Vector2i(x, y))
+	out.resize(size.x * size.y)
+	var first := _cell_to_chunk(from)
+	var last := _cell_to_chunk(from + size - Vector2i.ONE)
+	for cy in range(first.y, last.y + 1):
+		for cx in range(first.x, last.x + 1):
+			var cid := Vector2i(cx, cy)
+			var start := cid * chunk_size
+			var lo := Vector2i(maxi(from.x, start.x), maxi(from.y, start.y))
+			var hi := Vector2i(
+				mini(from.x + size.x, start.x + chunk_size),
+				mini(from.y + size.y, start.y + chunk_size)
+			)
+			var sculpted: Image = _height_chunks.get(cid) as Image
+			for y in range(lo.y, hi.y):
+				var row := (y - from.y) * size.x - from.x
+				for x in range(lo.x, hi.x):
+					out[row + x] = (
+						sculpted.get_pixel(x - start.x, y - start.y).r
+						if sculpted != null
+						else _base_sample(Vector2i(x, y))
+					)
 	return out
 
 
@@ -205,7 +223,9 @@ func set_height_chunk(cid: Vector2i, img: Image) -> bool:
 
 func _base_sample(corner: Vector2i) -> float:
 	if _noise != null:
-		return _noise.get_noise_2d(corner.x, corner.y) * 0.5 + 0.5
+		# Through a Color's 32 bit channel, as a kept sample is, so a corner reads
+		# the same sculpted, filled or not.
+		return Color(_noise.get_noise_2d(corner.x, corner.y) * 0.5 + 0.5, 0, 0).r
 	if heightmap == null or heightmap.is_empty():
 		return 0.0
 	var size := heightmap.get_size()

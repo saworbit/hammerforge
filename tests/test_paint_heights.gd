@@ -80,8 +80,7 @@ func test_a_sculpt_on_noise_changes_only_the_ground_under_the_brush():
 
 
 ## The first change to a chunk fills it from the base. A corner of that chunk
-## outside the brush keeps the height it had, so no step forms at its edge. Kept
-## to a float's precision: noise is worked out in 64 bits and kept in 32.
+## outside the brush keeps the height it had, so no step forms at its edge.
 func test_a_sculpt_leaves_the_rest_of_its_chunks_where_they_were():
 	var layer := _layer()
 	layer.set_height_noise({"seed": 9, "frequency": 0.05})
@@ -96,7 +95,7 @@ func test_a_sculpt_leaves_the_rest_of_its_chunks_where_they_were():
 	for corner: Vector2i in before:
 		if corner.distance_to(Vector2i(32, 30)) <= 4.0:
 			continue
-		if absf(layer.get_height_sample(corner) - before[corner]) > 1e-6:
+		if layer.get_height_sample(corner) != before[corner]:
 			moved.append(corner)
 	assert_eq(moved, [], "only corners inside the brush moved")
 
@@ -302,3 +301,21 @@ func test_a_level_saved_before_keeps_its_ground():
 	var saved: Array = root.state_system.capture_paint_layers()
 	assert_false(saved[0].has("heightmap_origin"), "saved again, it still has no place")
 	assert_eq(saved[0]["heightmap_b64"], entry["heightmap_b64"], "and the same image")
+
+
+## A box of corners is read a chunk at a time. Across four chunks, one of them
+## sculpted, it reads what each corner reads alone.
+func test_a_box_of_corners_reads_what_each_corner_reads():
+	var layer := _layer(8)
+	layer.set_height_noise({"seed": 5, "frequency": 0.1})
+	_raise(layer, Vector2i(9, 9))
+	var from := Vector2i(3, -2)
+	var size := Vector2i(11, 13)
+	var box := layer.get_height_samples(from, size)
+	var differ := []
+	for y in range(size.y):
+		for x in range(size.x):
+			if box[y * size.x + x] != layer.get_height_sample(from + Vector2i(x, y)):
+				differ.append(from + Vector2i(x, y))
+	assert_eq(box.size(), size.x * size.y, "one sample a corner")
+	assert_eq(differ, [], "every corner as it reads alone")

@@ -123,10 +123,16 @@ How this could go wrong, and what stops it:
   chunk. Generate Noise and Import stayed a base instead, for the two workflows
   above, and only a sculpt writes samples. Memory stays where it was for an
   untouched layer.
-- **Filling is exact to a float.** A noise corner is worked out in 64 bits and
-  kept in a 32 bit sample, so a filled chunk reads under a ten millionth of a
-  unit off what the noise gave there before. Nothing can see that; the seam test
-  allows a millionth.
+- **A noise corner is rounded to 32 bits.** It was worked out in 64 bits and kept
+  in a 32 bit sample, so a filled chunk read a hair off the noise beside it, and
+  a box of corners read a hair off a corner read alone. A test of the box reader
+  caught it. The noise sample goes through a 32 bit channel now, so every path
+  reads the same number and the seam test compares exactly.
+- **The sculpt was 2.5 times slower at first.** A corner lookup per read cost a
+  smooth stamp 90 ms at radius 64, against 35 ms on the image. It reads its box
+  once, a chunk at a time, and now takes 24 ms. Building 64 noise chunks of floor
+  takes 824 ms, against 914 ms for the image, since a chunk's corners are read
+  once.
 - **Two tests pinned the repeat.** `test_sculpt_wraps_across_the_heightmap_edges`
   and `test_sculpt_marks_painted_chunks_a_width_away` said a sculpt reaches the
   opposite edge and the chunk a width on. Both now say it does not.

@@ -898,24 +898,31 @@ func _apply_terrain_brush(layer: HFPaintLayer, center_cell: Vector2i) -> void:
 	if not layer.has_heightmap():
 		return
 	var r = int(ceil(sculpt_radius))
-	# For FLATTEN, capture height at center on first application
-	if tool == HFStroke.Tool.SCULPT_FLATTEN and not _sculpt_flatten_captured:
-		_sculpt_flatten_height = layer.get_height_sample(center_cell)
-		_sculpt_flatten_captured = true
 	# A sculpt writes the layer's samples under the brush and nowhere else. It
 	# wrote the one image the ground was read from by `posmod`, so it landed again
-	# a width away on every side (#2007).
+	# a width away on every side (#2007). The brush's box, and a corner round it
+	# for Smooth, is read once and kept up to date as it is written, so Smooth
+	# reads what it has already changed, as it did on the image.
+	var box_from := center_cell - Vector2i(r + 1, r + 1)
+	var box := Vector2i(2 * r + 3, 2 * r + 3)
+	var heights := layer.get_height_samples(box_from, box)
+	var centre: int = (r + 1) * box.x + r + 1
+	# For FLATTEN, capture height at center on first application
+	if tool == HFStroke.Tool.SCULPT_FLATTEN and not _sculpt_flatten_captured:
+		_sculpt_flatten_height = heights[centre]
+		_sculpt_flatten_captured = true
 	for dy in range(-r, r + 1):
 		for dx in range(-r, r + 1):
 			var dist = sqrt(float(dx * dx + dy * dy))
 			if dist > sculpt_radius:
 				continue
 			var corner := center_cell + Vector2i(dx, dy)
+			var index: int = centre + dy * box.x + dx
 			# Falloff: 1.0 at center, 0.0 at edge (when falloff=1)
 			var t = dist / max(0.01, sculpt_radius)
 			var weight = 1.0 - t * sculpt_falloff
 			weight = clamp(weight, 0.0, 1.0)
-			var current := layer.get_height_sample(corner)
+			var current := heights[index]
 			var new_val = current
 			match tool:
 				HFStroke.Tool.SCULPT_RAISE:
@@ -928,7 +935,7 @@ func _apply_terrain_brush(layer: HFPaintLayer, center_cell: Vector2i) -> void:
 					var count := 0
 					for sy in range(-1, 2):
 						for sx in range(-1, 2):
-							avg += layer.get_height_sample(corner + Vector2i(sx, sy))
+							avg += heights[index + sy * box.x + sx]
 							count += 1
 					avg /= float(count)
 					new_val = lerp(current, avg, weight * 0.5)
@@ -942,6 +949,7 @@ func _apply_terrain_brush(layer: HFPaintLayer, center_cell: Vector2i) -> void:
 			)
 			if new_val != current:
 				layer.set_height_sample(corner, new_val)
+				heights[index] = new_val
 	# Mark chunks dirty for the affected area. A sample is also the far corner of
 	# the cell before it, which can be in the chunk before, so the range starts a
 	# cell early; it ended on the old height until a full rebuild (#2014).
