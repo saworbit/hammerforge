@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: October 26, 2026
+Last reviewed: October 31, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 
@@ -21,12 +21,11 @@ panel included; it says nothing of how deep each one goes.
 
 The last list is done, below. What comes after it has not been chosen yet.
 
-Under way: a translatable interface ([#1702](https://github.com/saworbit/hammerforge/issues/1702)). Its first step, a translation domain of HammerForge's own and a POT kept current, landed in #1890. Its second has begun: a test fails when a script gains text that skips the catalogs (#1920), and five scripts' messages go through them (#1922).
-
 What is done is below, newest first.
 
 ## Done (Late October 2026)
 
+- An interface that can be translated: HammerForge's words go through a translation domain of its own and a `hammerforge.pot` a test keeps current, while the Console's log and the agent bridge stay English; a language is one catalog away ([Translating](docs/translating.md), [#1702](https://github.com/saworbit/hammerforge/issues/1702)).
 - Sweep Faces kept as a structure whose values change after, with a pivot and an end handle in the viewport for an arc, and a far end that narrows or widens ([#1885](https://github.com/saworbit/hammerforge/issues/1885), [#1899](https://github.com/saworbit/hammerforge/issues/1899)).
 - A floor grid that turns to a picked edge, a turned brush or a typed angle, with draws, resizes, snaps and nudges square to it ([#1893](https://github.com/saworbit/hammerforge/issues/1893)).
 - Sweep Select: hold I and drag to add or take out each brush or face passed over ([#1886](https://github.com/saworbit/hammerforge/issues/1886)).
@@ -1254,7 +1253,7 @@ The file is still dominated by `_on_*` signal handlers wired to dock-internal st
 - Migrate `paint_tab_builder.gd` (50 call sites) and `manage_tab_builder.gd` (58 call sites) from `dock._make_*` to direct `HFUIFactory` calls. Mechanical churn — wait until shared with another tab-builder change.
 
 ### plugin.gd decomposition (Phase 3b)
-Current: 1,599 lines. Remaining work is concentrated in other coordinator responsibilities:
+Current: 2,186 lines on 31 Oct 2026, up from 1,599 on 8 Sept. Remaining work is concentrated in other coordinator responsibilities:
 - `_forward_3d_gui_input` and native RMB camera ownership now live in `plugin_viewport_input.gd` (`HFPluginViewportInput`).
 - Floor, surface, and displacement paint input now lives in `plugin_paint_input.gd` (`HFPluginPaintInput`).
 - Draw, extrude, motion, face hover, and prefab hover now live in `plugin_pointer_tools.gd` (`HFPluginPointerTools`).
