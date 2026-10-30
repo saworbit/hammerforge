@@ -1,1 +1,0 @@
-- Validate Spawn before a bake reads a room's floor, not the top of its ceiling, so a spawn standing on the floor is no longer called buried and too low. (issue [#2046](https://github.com/saworbit/hammerforge/issues/2046))

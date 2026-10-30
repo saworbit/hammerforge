@@ -1,1 +1,0 @@
-- Eight menu items, tooltips and screen reader names that were still put together in English go through the translation catalogs. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

@@ -1,1 +1,0 @@
-- Refusals from tools, structures and brush commands stay English for the bridge and show in the language shown, with each count taking its own plural. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))
