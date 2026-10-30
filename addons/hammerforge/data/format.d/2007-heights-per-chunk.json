@@ -1,0 +1,16 @@
+{
+	"what": "A paint layer's ground: where its image is placed, the noise it is, and its sculpts, each chunk on its own.",
+	"older_builds": "A placed image repeats past its edge, a noise layer is flat, and no sculpt made since shows; the next save drops them.",
+	"keys": [
+		"state.paint_layers[].height_chunks",
+		"state.paint_layers[].height_chunks[].cx",
+		"state.paint_layers[].height_chunks[].cy",
+		"state.paint_layers[].height_chunks[].heights",
+		"state.paint_layers[].heightmap_noise",
+		"state.paint_layers[].heightmap_noise.frequency",
+		"state.paint_layers[].heightmap_noise.octaves",
+		"state.paint_layers[].heightmap_noise.seed",
+		"state.paint_layers[].heightmap_noise.type",
+		"state.paint_layers[].heightmap_origin"
+	]
+}

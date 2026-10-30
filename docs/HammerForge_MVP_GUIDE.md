@@ -45,7 +45,7 @@ See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPME
 
 ### Floor Paint (`HFPaintSystem` + `paint/*.gd`)
 - Paint layers store grid occupancy in chunked bitsets with per-cell material_ids and blend weights (`blend_weights`, `blend_weights_2`, `blend_weights_3`).
-- Layers optionally have heightmaps (Image FORMAT_RF) for vertex displacement.
+- Layers optionally have ground heights for vertex displacement: a base (an image placed at a cell, or a noise field) and sculpted samples kept per chunk.
 - Geometry synthesis runs per dirty chunk:
   - Flat layers: greedy rectangles for floors, boundary edges + merged segments for walls.
   - Heightmap layers: per-cell displaced quads via `HFHeightmapSynth`, walls still flat.

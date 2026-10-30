@@ -12,20 +12,42 @@ static func load_from_file(path: String) -> Image:
 	return img
 
 
+## A noise image that tiles. A paint layer does not use one: Generate Noise
+## gives the layer the noise itself (`HFPaintLayer.set_height_noise()`).
 static func generate_noise(width: int, height: int, settings: Dictionary = {}) -> Image:
-	var noise := FastNoiseLite.new()
-	noise.noise_type = (
-		int(settings.get("type", FastNoiseLite.TYPE_SIMPLEX_SMOOTH)) as FastNoiseLite.NoiseType
-	)
-	noise.frequency = float(settings.get("frequency", 0.01))
-	noise.fractal_octaves = int(settings.get("octaves", 4))
-	noise.seed = int(settings.get("seed", 0))
-	# Seamless, because a layer reads the map wrapped: cell -1 is the last column.
-	# Plain noise put a cliff along x = 0 and z = 0 of any terrain across the
-	# origin (#2007).
+	var noise := make_noise(noise_settings(settings))
 	var img := noise.get_seamless_image(width, height, false, false)
 	img.convert(Image.FORMAT_RF)
 	return img
+
+
+## `settings` with each of type, frequency, octaves and seed filled in, and a
+## value that is not one of its kind, as a damaged file can hold, read as the
+## default.
+static func noise_settings(settings: Dictionary) -> Dictionary:
+	var frequency := _number(settings.get("frequency"), 0.01)
+	return {
+		"type": clampi(int(_number(settings.get("type"), FastNoiseLite.TYPE_SIMPLEX_SMOOTH)), 0, 5),
+		"frequency": frequency if frequency > 0.0 else 0.01,
+		"octaves": clampi(int(_number(settings.get("octaves"), 4)), 1, 10),
+		"seed": int(_number(settings.get("seed"), 0)),
+	}
+
+
+## The noise `settings` describe, from `noise_settings()`.
+static func make_noise(settings: Dictionary) -> FastNoiseLite:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = int(settings.get("type", 1)) as FastNoiseLite.NoiseType
+	noise.frequency = float(settings.get("frequency", 0.01))
+	noise.fractal_octaves = int(settings.get("octaves", 4))
+	noise.seed = int(settings.get("seed", 0))
+	return noise
+
+
+static func _number(value: Variant, fallback: float) -> float:
+	if (value is int or value is float) and is_finite(float(value)):
+		return float(value)
+	return fallback
 
 
 ## Heightmaps are FORMAT_RF - one 32 bit float per sample - so they are stored

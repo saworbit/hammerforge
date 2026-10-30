@@ -842,6 +842,12 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click **Convert Selection → Heightmap**. Confirm a toast appears ("Converted N brushes to heightmap layer 'Converted Terrain'").
 - Confirm the Paint layer dropdown now shows the new layer as active.
 - Confirm terrain geometry appears in the viewport where the brushes were.
+- Paint a few cells past the converted terrain. Confirm they are flat, not a copy of the brushes (#2007).
+
+### 18b. Heightmap ground that does not repeat
+- On a fresh layer, click **Generate Noise**, then paint a strip about 300 cells long. Confirm the hills along it never repeat.
+- Raise near one end of the strip with Sculpt. Confirm nothing changes 256 cells along, and that Ctrl+Z takes the hill away (#2007).
+- Paint a rectangle away from the origin and click **Import...** with a small PNG. Confirm the image lies on the rectangle from its top left corner, and that cells painted past it keep the height of its edge.
 
 ### 19. Foliage & Scatter
 - In Paint tab → Foliage & Scatter section, click the mesh picker and select any `.tres` or `.obj` mesh.

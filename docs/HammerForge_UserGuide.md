@@ -2802,6 +2802,14 @@ Heightmaps add vertical displacement to painted floors:
 
 When a layer has a heightmap, its floors are generated as displaced MeshInstance3D nodes (not DraftBrush). These live under `Generated/HeightmapFloors` and are baked directly (bypassing CSG) with trimesh collision shapes.
 
+Where the ground comes from, and where it ends:
+
+- **Generate Noise** gives the layer the noise itself, not a picture of it. Paint more ground later and the noise is there too, in any direction, and it never repeats.
+- **Import** lays the image on the painted ground, its top left pixel on the first painted cell. On a layer with nothing painted yet it starts at cell (0, 0). Ground painted past the image keeps the height of the image's nearest edge.
+- **Convert Selection → Heightmap** puts the converted brushes back where they were. Past them the ground is flat.
+- A **sculpt** changes the ground under the brush and nowhere else. Before October 31, 2026 the image repeated every width, so a sculpt also landed a width away on every side (#2007).
+- A level saved before then keeps its ground as it was saved, repeating image and all. A sculpt on it lands once.
+
 ### Material Blending
 The Blend tool paints per-cell material blend weights on filled cells:
 1. Fill cells first (Brush/Rect/etc.).
@@ -3024,7 +3032,7 @@ Use Face Materials (optional):
 
 ## Save/Load (.hflevel)
 - Save .hflevel stores brushes, entities, settings, materials palette, face data, and paint layers.
-- Paint layer data includes per-chunk `material_ids`, `blend_weights` (+ _2/_3), `height_scale`, optional `heightmap_b64`, and terrain slot settings.
+- Paint layer data includes per-chunk `material_ids`, `blend_weights` (+ _2/_3), `height_scale`, the ground (`heightmap_b64` and where it is placed, `heightmap_origin`, or `heightmap_noise`), the sculpts per chunk (`height_chunks`), and terrain slot settings.
 - Load .hflevel restores them. Missing heightmap/material fields default to zero (backward-compatible).
 - A file whose shape cannot be read leaves the open level exactly as it was and reports why, rather than clearing it first. A single brush or entity in an otherwise good file that cannot be read is skipped, the rest loads, and the count of what was skipped is reported.
 - Autosave can write to a configurable path.

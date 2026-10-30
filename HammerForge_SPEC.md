@@ -164,13 +164,13 @@ LevelRoot holds no object selection: Godot's `EditorSelection` does. The dock's 
 | Script | class_name | Responsibility |
 |--------|------------|----------------|
 | `hf_paint_grid.gd` | `HFPaintGrid` | Grid storage, coordinate conversion |
-| `hf_paint_layer.gd` | `HFPaintLayer` | Layer data: bitset + material_ids + blend_weights (+ _2/_3) + heightmap |
+| `hf_paint_layer.gd` | `HFPaintLayer` | Layer data: bitset + material_ids + blend_weights (+ _2/_3) + ground heights (a base and sculpted chunks) |
 | `hf_paint_layer_manager.gd` | `HFPaintLayerManager` | Multi-layer management, active layer |
 | `hf_paint_tool.gd` | `HFPaintTool` | Paint input, stroke handling, routes to appropriate synth. Shared `build_heightmap_model()` for heightmap reconciliation |
 | `hf_stroke.gd` | `HFStroke` | Stroke data (cells, timing, tool type, brush shape) |
 | `hf_geometry_synth.gd` | `HFGeometrySynth` | Greedy meshing for flat floors/walls |
 | `hf_heightmap_synth.gd` | `HFHeightmapSynth` | Heightmap-displaced mesh generation (SurfaceTool) |
-| `hf_heightmap_io.gd` | `HFHeightmapIO` | Load/generate/serialize heightmaps (base64 PNG) |
+| `hf_heightmap_io.gd` | `HFHeightmapIO` | Load heightmap images, build noise from its settings, serialize heightmaps (base64 raw floats) |
 | `hf_generated_model.gd` | `HFGeneratedModel` | Data model: FloorRect, WallSeg, HeightmapFloor |
 | `hf_reconciler.gd` | `HFGeneratedReconciler` | Stable-ID node reconciliation (floors, walls, heightmap floors) |
 | `hf_connector_tool.gd` | `HFConnectorTool` | Ramp/stair mesh generation between layers |
@@ -330,12 +330,12 @@ Entity types and brush entity classes are data-driven via `HFEntityDef` (`hf_ent
 
 Data
 - Grid -> Layer -> Chunked storage (bitset + material_ids + blend_weights + blend_weights_2 + blend_weights_3).
-- Each layer optionally has a `heightmap: Image` and `height_scale: float`.
+- Each layer optionally has ground heights and a `height_scale: float`: sculpted samples per chunk where a sculpt has been, and a base everywhere else, either an image placed at a cell (`heightmap`, read at its nearest edge past it), a noise field, or an image from an older level that repeats from cell (0, 0) (#2007).
 - Paint layers are stored under PaintLayers.
 
 Tools
 - Brush, Erase, Rect, Line, Bucket, Blend (enum `HFStroke.Tool`, values 0-5).
-- Sculpt Raise, Sculpt Lower, Sculpt Smooth, Sculpt Flatten (values 6-9) — operate directly on heightmap Image pixels with configurable strength, radius, and falloff.
+- Sculpt Raise, Sculpt Lower, Sculpt Smooth, Sculpt Flatten (values 6-9): change the layer's height samples under the brush and nowhere else, with configurable strength, radius, and falloff.
 - Blend tool writes per-cell blend weights to slots B/C/D on already-filled cells.
 
 Brush Shape
@@ -410,7 +410,7 @@ Scatter Brush
 - Brush records include face data (materials, UVs, paint layers, `smoothing_group`, and `uv_group` on a linked face), visgroup membership, group_id, `brush_entity_class`, and `bake_cast_shadow` and `bake_lightmap_scale` when the brush sets its own (`HFBakeSplit.fields()`).
 - Entity records include visgroup membership, group_id, `io_outputs` (Entity I/O connections), and, on a linked prefab copy's entity, the `prefab_entity_id` a Pull finds it by. A prefab or a duplicate does not carry it.
 - Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights` (+ _2/_3), and terrain slot settings.
-- Optional per-layer: `heightmap_b64` (base64 raw float buffer, zstd compressed; a base64 PNG from an older version still loads), `height_scale`. Missing keys = no heightmap (backward-compatible).
+- Optional per-layer: `heightmap_b64` (base64 raw float buffer, zstd compressed; a base64 PNG from an older version still loads), `heightmap_origin` (the cell the image is placed at; without it the image repeats from (0, 0)), `heightmap_noise` (`{type, frequency, octaves, seed}`), `height_chunks` (`[{cx, cy, heights}]`, the sculpted samples), `height_scale`. Missing keys = no heightmap (backward-compatible).
 - Level settings include `texture_lock`, `export_level_environment`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`, `cordon_aabb_name`, `cordon_aabb_active`, `cordon_extra_aabbs` (a list of `{"pos", "size", "name", "active"}` dictionaries), `bake_cast_shadows`, `transform_pivot_point`, `mirror_copy_axes` and `mirror_copy_at_edge`. `active_material` is saved with the scene, not in the file, because it is the next brush's material. A missing `cordon_extra_aabbs` leaves the level's extra cordons as they are. A cordon the file holds with no name or switch is unnamed and on.
 - Visgroup definitions and group registry stored in state via `capture_visgroups()` / `capture_groups()`.
 

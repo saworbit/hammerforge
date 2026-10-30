@@ -30,7 +30,12 @@ HFPaintLayer
 - Chunked grid storage using a bitset per chunk. A chunk is allocated on the first cell painted in it and dropped when its last cell is erased, so erasing paint gives the memory back and an all-zero chunk is never saved. Erasing over unpainted ground allocates nothing.
 - Per-chunk `material_ids` (PackedByteArray, 1 byte/cell) and blend weights (`blend_weights`, `blend_weights_2`, `blend_weights_3`).
 - Optional per-cell wall height overrides used by the paint-then-raise workflow.
-- Optional `heightmap: Image` (FORMAT_RF) and `height_scale: float` for vertex displacement.
+- Optional ground heights for vertex displacement, with `height_scale: float`. Where a sculpt has been, the heights are its samples, kept per chunk (a `chunk_size` square, FORMAT_RF, for each chunk a sculpt reached). Everywhere else they are the layer's base:
+  - an image (`heightmap`), from Import or Convert to Heightmap, placed at a cell. Past its edge a corner reads the nearest edge pixel, so nothing repeats;
+  - a noise field, from Generate Noise, sampled at each corner as `noise(x, y) * 0.5 + 0.5`. It goes on in every direction without repeating;
+  - an image from a level saved before October 31, 2026, which has no place and repeats from cell (0, 0) as it was saved (#2007);
+  - or nothing, which is flat.
+- `get_height_at(cell)` reads the height at a corner, with the Height Scale.
 - Per-layer terrain slot settings: `terrain_slot_paths`, `terrain_slot_uv_scales`, `terrain_slot_tints`.
 - Tracks dirty chunks for incremental regeneration.
 
@@ -77,7 +82,7 @@ HFStroke
 - The existing viewport banner reports the hovered cell and brush footprint, then live unique-cell count and world-space width/depth while painting.
 - A changed press-drag-release is one **Paint Floor** undo entry. Lost-release recovery closes that same entry; no-op strokes and material picks create none.
 
-Sculpt tools operate directly on heightmap Image pixels (not cell bits). Configurable: strength (0.1–10.0), radius (1–50 cells), falloff (0.0–1.0 Gaussian curve). Available in dock Paint tab → Heightmap section.
+Sculpt tools change the layer's height samples under the brush (not cell bits), and nothing else. The first stroke into a chunk fills its samples from the base, so the ground beside the stroke stays where it was. Configurable: strength (0.1 to 10.0), radius (1 to 50 cells), falloff (0.0 to 1.0 Gaussian curve). Available in dock Paint tab → Heightmap section.
 
 Brush Shape
 - **Square**: fills every cell in the [-r, r] range (full box).
@@ -137,7 +142,10 @@ Paint layers serialize into the level save:
 - chunks with bitset data, `material_ids`, and `blend_weights` / `blend_weights_2` / `blend_weights_3`
 - per-cell wall height overrides
 - `height_scale` per layer, with a heightmap or without one
-- `heightmap_b64` (base64-encoded raw float buffer, zstd compressed) per layer (optional, backward-compatible; a base64 PNG written by an older version still loads)
+- `heightmap_b64` (base64-encoded raw float buffer, zstd compressed) per layer (optional, backward-compatible; a base64 PNG written by an older version still loads). Each cell's pixel is at `posmod(cell, size)`, so a build from before #2007 reads a placed image right inside it
+- `heightmap_origin`: `[x, y]`, the cell the image is placed at. Without it the image repeats from (0, 0), as in a level saved before #2007
+- `heightmap_noise`: `{type, frequency, octaves, seed}`, when the ground is noise rather than an image
+- `height_chunks`: `[{cx, cy, heights}]`, the sculpted samples, each `heights` encoded as `heightmap_b64` is. They stay in the level file when regions stream
 - `terrain_slot_paths`, `terrain_slot_uv_scales`, `terrain_slot_tints` per layer
 - confirmed paint connector definitions
 
@@ -179,8 +187,9 @@ merge vertical by (x, outward) and contiguous y
 
 ## Heightmap I/O (`hf_heightmap_io.gd`)
 - `load_from_file(path) -> Image`: loads PNG/EXR, converts to FORMAT_RF.
-- `generate_noise(width, height, settings) -> Image`: procedural generation via FastNoiseLite.
-- `encode_to_base64(image) -> String`: PNG buffer to base64 for save.
+- `noise_settings(settings) -> Dictionary` and `make_noise(settings) -> FastNoiseLite`: the noise Generate Noise gives a layer.
+- `generate_noise(width, height, settings) -> Image`: a seamless noise image. A layer does not use it.
+- `encode_to_base64(image) -> String`: the raw float buffer, zstd compressed, to base64 for save.
 - `decode_from_base64(data) -> Image`: base64 to Image for load.
 
 ## Material Blending

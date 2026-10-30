@@ -1,0 +1,1 @@
+- Heightmap ground no longer repeats every image width, and a sculpt changes only the ground under the brush. (issue [#2007](https://github.com/saworbit/hammerforge/issues/2007))

@@ -269,12 +269,12 @@ func test_sculpt_raise_lifts_the_centre_most():
 	var layer = _make_sculpt_layer()
 	t.tool = HFStroke.Tool.SCULPT_RAISE
 	t._apply_terrain_brush(layer, Vector2i(16, 16))
-	var centre: float = layer.heightmap.get_pixel(16, 16).r
-	var edge: float = layer.heightmap.get_pixel(19, 16).r
+	var centre: float = layer.get_height_sample(Vector2i(16, 16))
+	var edge: float = layer.get_height_sample(Vector2i(19, 16))
 	assert_gt(centre, 0.5, "centre raised above the flat base")
 	assert_gt(centre, edge, "falloff means the centre rises more than the edge")
 	assert_almost_eq(
-		layer.heightmap.get_pixel(0, 0).r, 0.5, 0.0001, "outside the brush is untouched"
+		layer.get_height_sample(Vector2i(0, 0)), 0.5, 0.0001, "outside the brush is untouched"
 	)
 
 
@@ -283,7 +283,7 @@ func test_sculpt_lower_drops_the_centre_most():
 	var layer = _make_sculpt_layer()
 	t.tool = HFStroke.Tool.SCULPT_LOWER
 	t._apply_terrain_brush(layer, Vector2i(16, 16))
-	assert_lt(layer.heightmap.get_pixel(16, 16).r, 0.5, "centre lowered below the flat base")
+	assert_lt(layer.get_height_sample(Vector2i(16, 16)), 0.5, "centre lowered below the flat base")
 
 
 func test_sculpt_clamps_to_the_unit_range():
@@ -292,7 +292,7 @@ func test_sculpt_clamps_to_the_unit_range():
 	var layer = _make_sculpt_layer(32, 0.9)
 	t.tool = HFStroke.Tool.SCULPT_RAISE
 	t._apply_terrain_brush(layer, Vector2i(16, 16))
-	assert_almost_eq(layer.heightmap.get_pixel(16, 16).r, 1.0, 0.0001, "height clamps at 1.0")
+	assert_almost_eq(layer.get_height_sample(Vector2i(16, 16)), 1.0, 0.0001, "height clamps at 1.0")
 
 
 ## A heightmap imported in metres, or written by Convert to Heightmap, holds
@@ -303,11 +303,11 @@ func test_sculpt_moves_a_sample_outside_the_unit_range_the_way_it_says():
 	var high = _make_sculpt_layer(32, 2.0)
 	t.tool = HFStroke.Tool.SCULPT_RAISE
 	t._apply_terrain_brush(high, Vector2i(16, 16))
-	assert_gt(high.heightmap.get_pixel(16, 16).r, 2.0, "Raise lifts ground above 1")
+	assert_gt(high.get_height_sample(Vector2i(16, 16)), 2.0, "Raise lifts ground above 1")
 	var low = _make_sculpt_layer(32, -0.5)
 	t.tool = HFStroke.Tool.SCULPT_LOWER
 	t._apply_terrain_brush(low, Vector2i(16, 16))
-	assert_lt(low.heightmap.get_pixel(16, 16).r, -0.5, "Lower digs a pit below 0 deeper")
+	assert_lt(low.get_height_sample(Vector2i(16, 16)), -0.5, "Lower digs a pit below 0 deeper")
 
 
 func test_sculpt_smooth_pulls_a_spike_towards_its_neighbours():
@@ -316,7 +316,7 @@ func test_sculpt_smooth_pulls_a_spike_towards_its_neighbours():
 	layer.heightmap.set_pixel(16, 16, Color(1.0, 1.0, 1.0))
 	t.tool = HFStroke.Tool.SCULPT_SMOOTH
 	t._apply_terrain_brush(layer, Vector2i(16, 16))
-	var after: float = layer.heightmap.get_pixel(16, 16).r
+	var after: float = layer.get_height_sample(Vector2i(16, 16))
 	assert_lt(after, 1.0, "the spike was pulled down")
 	assert_gt(after, 0.5, "smoothing does not overshoot past the neighbourhood")
 
@@ -329,21 +329,26 @@ func test_sculpt_flatten_pulls_towards_the_captured_height():
 		for x in range(32):
 			layer.heightmap.set_pixel(x, y, Color(float(x) / 32.0, 0, 0))
 	t.tool = HFStroke.Tool.SCULPT_FLATTEN
-	var before: float = layer.heightmap.get_pixel(19, 16).r
+	var before: float = layer.get_height_sample(Vector2i(19, 16))
 	t._apply_terrain_brush(layer, Vector2i(16, 16))
 	var captured := 16.0 / 32.0
-	var after: float = layer.heightmap.get_pixel(19, 16).r
+	var after: float = layer.get_height_sample(Vector2i(19, 16))
 	assert_lt(
 		absf(after - captured), absf(before - captured), "texel moved towards the centre height"
 	)
 
 
-func test_sculpt_wraps_across_the_heightmap_edges():
+## The map repeated every width, so a brush at its corner raised the opposite
+## corner too. It sculpts the ground under it and nothing else (#2007).
+func test_sculpt_at_the_heightmap_edge_stays_under_the_brush():
 	var t = _make_tool()
 	var layer = _make_sculpt_layer()
 	t.tool = HFStroke.Tool.SCULPT_RAISE
 	t._apply_terrain_brush(layer, Vector2i(0, 0))
-	assert_gt(layer.heightmap.get_pixel(31, 31).r, 0.5, "the brush wraps to the opposite corner")
+	assert_gt(layer.get_height_sample(Vector2i(-1, -1)), 0.5, "the ground before the map rises")
+	assert_almost_eq(
+		layer.get_height_sample(Vector2i(31, 31)), 0.5, 0.0001, "the opposite corner does not"
+	)
 
 
 func test_sculpt_marks_the_touched_chunks_dirty():
@@ -367,10 +372,9 @@ func test_sculpt_at_a_chunks_first_column_marks_the_chunk_before():
 	assert_has(layer.consume_dirty_chunks(), Vector2i(0, 0), "the chunk before is rebuilt too")
 
 
-## The map repeats every width, so a sculpt also changes painted ground a width
-## away. That chunk is rebuilt with the rest rather than kept on the old heights
-## until the next full rebuild (#2007).
-func test_sculpt_marks_painted_chunks_a_width_away():
+## A sculpt changes no ground a width away any more, so the painted chunk there
+## is not rebuilt for it (#2007).
+func test_sculpt_leaves_painted_chunks_a_width_away():
 	var t = _make_tool()
 	var layer = _make_sculpt_layer()
 	layer.grid = HFPaintGrid.new()
@@ -378,7 +382,8 @@ func test_sculpt_marks_painted_chunks_a_width_away():
 	layer.consume_dirty_chunks()
 	t.tool = HFStroke.Tool.SCULPT_RAISE
 	t._apply_terrain_brush(layer, Vector2i(8, 8))
-	assert_has(layer.consume_dirty_chunks(), Vector2i(2, 0), "the copy 32 cells on is rebuilt")
+	assert_does_not_have(layer.consume_dirty_chunks(), Vector2i(2, 0), "32 cells on is left be")
+	assert_almost_eq(layer.get_height_sample(Vector2i(40, 8)), 0.5, 0.0001, "on its height")
 
 
 func test_sculpt_marks_no_chunks_without_a_grid():
@@ -396,7 +401,9 @@ func test_sculpt_handles_a_non_rf_heightmap():
 	layer.heightmap.fill(Color(0.5, 0.5, 0.5, 1.0))
 	t.tool = HFStroke.Tool.SCULPT_RAISE
 	t._apply_terrain_brush(layer, Vector2i(16, 16))
-	assert_gt(layer.heightmap.get_pixel(16, 16).r, 0.5, "sculpt applies to a non-RF heightmap")
+	assert_gt(
+		layer.get_height_sample(Vector2i(16, 16)), 0.5, "sculpt applies to a non-RF heightmap"
+	)
 
 
 func test_sculpt_ignores_a_layer_without_a_heightmap():
