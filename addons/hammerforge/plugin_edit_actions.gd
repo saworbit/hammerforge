@@ -205,22 +205,36 @@ static func paste_at_cursor(plugin: Object, root: Node, screen: Variant = null) 
 		before,
 		Callable(plugin, "_record_history")
 	)
-	var said := (
-		"Pasted %d brush%s and %d entit%s"
-		% [
-			brushes.size(),
-			"" if brushes.size() == 1 else "es",
-			entities.size(),
-			"y" if entities.size() == 1 else "ies"
-		]
-	)
-	if text != "":
-		said += " from .map text"
-	if dropped > 0:
-		said += (
-			"; left out %d line%s it could not read (%s)"
-			% [dropped, "" if dropped == 1 else "s", first_dropped]
+	# Two counts, so each says its own plural and the sentence takes them whole.
+	var parts := {
+		"brushes": HFTranslationType.message_n("{count} brush", "{count} brushes", brushes.size()),
+		"entities":
+		HFTranslationType.message_n("{count} entity", "{count} entities", entities.size()),
+		"lines": HFTranslationType.message_n("{count} line", "{count} lines", dropped),
+	}
+	var first := {"first": first_dropped}
+	var said := ""
+	if dropped > 0 and text != "":
+		said = HFTranslationType.message(
+			(
+				"Pasted {brushes} and {entities} from .map text; "
+				+ "left out {lines} it could not read ({first})"
+			),
+			first,
+			parts
 		)
+	elif dropped > 0:
+		said = HFTranslationType.message(
+			"Pasted {brushes} and {entities}; left out {lines} it could not read ({first})",
+			first,
+			parts
+		)
+	elif text != "":
+		said = HFTranslationType.message(
+			"Pasted {brushes} and {entities} from .map text", {}, parts
+		)
+	else:
+		said = HFTranslationType.message("Pasted {brushes} and {entities}", {}, parts)
 	root.user_message.emit(said, 1 if dropped > 0 else 0)
 	var selection = plugin.get_editor_interface().get_selection()
 	plugin.hf_selection.clear()

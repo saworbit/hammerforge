@@ -110,6 +110,17 @@ var said := HFTranslation.message_n("Scattered {count} instance", "Scattered {co
 root.user_message.emit(said, 0)
 ```
 
+A sentence with two counts gives each its own `message_n()` and takes them as
+words, the third argument, so each count gets the plural its language needs:
+
+```gdscript
+var parts := {
+	"brushes": HFTranslation.message_n("{count} brush", "{count} brushes", b),
+	"entities": HFTranslation.message_n("{count} entity", "{count} entities", e),
+}
+var said := HFTranslation.message("Pasted {brushes} and {entities}", {}, parts)
+```
+
 About a thousand strings were put together the old way before this was
 possible. `tests/test_untranslated_text_ratchet.gd` counts, for each script,
 the formatted strings handed straight to a label, a tooltip, a title or a

@@ -1681,7 +1681,7 @@ func _report_hidden_faces(brushes: Array) -> void:
 	last_hidden_faces = HFHiddenFaces.count(baked)
 	var line := HFHiddenFaces.summary(last_hidden_faces)
 	if line != "":
-		root.emit_signal("user_message", "Bake %s" % line, 0)
+		root.emit_signal("user_message", line, 0)
 
 
 ## A whole-level bake whose level left the tree: the dirty tags it claimed go back

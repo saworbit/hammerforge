@@ -91,9 +91,14 @@ static func tn(one: String, many: String, count: int, context := "") -> String:
 ## `text` filled in from `values`, in English, for a message the Console's log or
 ## the bridge reads as well as a toast or the status line. The log and an agent
 ## read the same words in every language; the toast and the status line show
-## `shown()` of it, in the language shown.
-static func message(text: String, values := {}) -> String:
-	return _remember(text.format(values), t(text).format(values))
+## `shown()` of it, in the language shown. `words` holds values that are words of
+## their own, such as a count's phrase from `message_n()` in a sentence with two
+## counts: the English takes them as they are, the language shown as `shown()`.
+static func message(text: String, values := {}, words := {}) -> String:
+	var shown_values := values.duplicate()
+	for key in words:
+		shown_values[key] = shown(str(words[key]))
+	return _remember(text.format(values.merged(words)), t(text).format(shown_values))
 
 
 ## `one` or `many` filled in from `values`, as `message()` does, by `count`. The

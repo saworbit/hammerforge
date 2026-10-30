@@ -633,6 +633,12 @@ msgstr ""
 msgid "Bake failed — check Output for details"
 msgstr ""
 
+#: addons/hammerforge/hf_hidden_faces.gd
+msgid "Bake left out {count} Hidden face, {area} square metres of mesh and lightmap"
+msgid_plural "Bake left out {count} Hidden faces, {area} square metres of mesh and lightmap"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Bake navmesh"
 msgstr ""
@@ -4449,6 +4455,22 @@ msgstr ""
 msgid "Paste at Cursor: the clipboard holds nothing to paste"
 msgstr ""
 
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Pasted {brushes} and {entities}"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Pasted {brushes} and {entities} from .map text"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Pasted {brushes} and {entities} from .map text; left out {lines} it could not read ({first})"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Pasted {brushes} and {entities}; left out {lines} it could not read ({first})"
+msgstr ""
+
 #: addons/hammerforge/hf_sweep_builder.gd
 msgid "Path"
 msgstr ""
@@ -7865,7 +7887,7 @@ msgid_plural "{copies} copies of {brushes}"
 msgstr[0] ""
 msgstr[1] ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/dock_brush_handler.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd addons/hammerforge/ui/hf_replace_material_dialog.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/dock_brush_handler.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "{count} brush"
 msgid_plural "{count} brushes"
 msgstr[0] ""
@@ -7889,7 +7911,7 @@ msgid_plural "{count} cuts that cut nothing"
 msgstr[0] ""
 msgstr[1] ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd
 msgid "{count} entity"
 msgid_plural "{count} entities"
 msgstr[0] ""
@@ -7928,6 +7950,12 @@ msgstr[1] ""
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "{count} later brush of a near pair"
 msgid_plural "{count} later brushes of near pairs"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "{count} line"
+msgid_plural "{count} lines"
 msgstr[0] ""
 msgstr[1] ""
 
