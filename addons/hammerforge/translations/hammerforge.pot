@@ -941,6 +941,10 @@ msgstr ""
 msgid "Centers"
 msgstr ""
 
+#: addons/hammerforge/hf_snap_system.gd
+msgid "Centre"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Centre the texture on the selected faces."
 msgstr ""
@@ -1877,6 +1881,10 @@ msgstr ""
 msgid "Edge snap (brush edge midpoints)"
 msgstr ""
 
+#: addons/hammerforge/hf_snap_system.gd
+msgid "Edge, level with the {source} on {axis}"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Edges"
 msgstr ""
@@ -2545,7 +2553,7 @@ msgstr ""
 msgid "Got it"
 msgstr ""
 
-#: addons/hammerforge/dock.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/hf_snap_system.gd
 msgid "Grid"
 msgstr ""
 
@@ -2628,6 +2636,18 @@ msgid "Grow added {count} face"
 msgid_plural "Grow added {count} faces"
 msgstr[0] ""
 msgstr[1] ""
+
+#: addons/hammerforge/hf_snap_system.gd
+msgid "Guide"
+msgstr ""
+
+#: addons/hammerforge/hf_snap_system.gd
+msgid "Guide on edge"
+msgstr ""
+
+#: addons/hammerforge/hf_snap_system.gd
+msgid "Guides"
+msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Guides from points"
@@ -3389,7 +3409,7 @@ msgstr ""
 msgid "Lightmap detail on these brushes, against the level's Texel Size: 2 is twice as fine, 0.5 half. Takes effect with Lightmap UV2 on"
 msgstr ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/hf_command_registry.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/hf_command_registry.gd addons/hammerforge/hf_snap_system.gd
 msgid "Line"
 msgstr ""
 
@@ -3659,6 +3679,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Merge the selected vertices into one at their middle."
+msgstr ""
+
+#: addons/hammerforge/hf_snap_system.gd
+msgid "Midpoint"
 msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
@@ -4487,6 +4511,10 @@ msgstr ""
 msgid "Perp"
 msgstr ""
 
+#: addons/hammerforge/hf_snap_system.gd
+msgid "Perpendicular"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Perpendicular snap (drop onto brush edges)"
 msgstr ""
@@ -4633,6 +4661,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Player spawn may be invalid:\n\n{issues}\n\n{ask}"
+msgstr ""
+
+#: addons/hammerforge/hf_snap_system.gd
+msgid "Point"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -7423,7 +7455,7 @@ msgstr ""
 msgid "Variant: {variant}"
 msgstr ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_radial_menu.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/hf_snap_system.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_radial_menu.gd
 msgid "Vertex"
 msgstr ""
 
@@ -7743,6 +7775,10 @@ msgstr ""
 msgid "and {count} more"
 msgstr ""
 
+#: addons/hammerforge/hf_snap_system.gd
+msgid "centre"
+msgstr ""
+
 #: addons/hammerforge/plugin_compare.gd
 msgid "could not read {file}"
 msgstr ""
@@ -7768,6 +7804,10 @@ msgid "left out {count} hidden"
 msgid_plural "left out {count} hidden"
 msgstr[0] ""
 msgstr[1] ""
+
+#: addons/hammerforge/hf_snap_system.gd
+msgid "midpoint"
+msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "mixed"
@@ -7795,8 +7835,16 @@ msgstr[1] ""
 msgid "param"
 msgstr ""
 
+#: addons/hammerforge/hf_snap_system.gd
+msgid "perpendicular"
+msgstr ""
+
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "player_start already exists — select and move it instead"
+msgstr ""
+
+#: addons/hammerforge/hf_snap_system.gd
+msgid "point"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
@@ -7871,6 +7919,10 @@ msgstr ""
 msgid "trigger_once"
 msgstr ""
 
+#: addons/hammerforge/hf_snap_system.gd
+msgid "vertex"
+msgstr ""
+
 #: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_adjust_last_panel.gd
 msgid "x"
 msgstr ""
@@ -7881,6 +7933,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "{action}: select a visgroup first"
+msgstr ""
+
+#: addons/hammerforge/hf_snap_system.gd
+msgid "{axis_a} from {source_a}, {axis_b} from {source_b}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_selection_info.gd
@@ -8211,6 +8267,14 @@ msgstr ""
 msgid "{folded} of {count} pieces fold back on themselves: widen the radius or cut more segments"
 msgstr ""
 
+#: addons/hammerforge/plugin_snap_feedback.gd
+msgid "{kind} only"
+msgstr ""
+
+#: addons/hammerforge/plugin_snap_feedback.gd
+msgid "{label}  ({distance} m, Enter)"
+msgstr ""
+
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "{label} ({have} of {count}):"
 msgstr ""
@@ -8233,6 +8297,14 @@ msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "{reason}. The settings are unchanged"
+msgstr ""
+
+#: addons/hammerforge/hf_snap_system.gd
+msgid "{source}: on it"
+msgstr ""
+
+#: addons/hammerforge/hf_snap_system.gd
+msgid "{source}: {distance} m along {sign}{axis}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_operation_replay.gd
