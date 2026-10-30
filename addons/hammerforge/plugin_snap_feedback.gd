@@ -150,9 +150,9 @@ static func marker_lines(kind: String, half: float = MARKER_HALF) -> PackedVecto
 ## What the label beside a marker says for `kind`, with the one-pick limit named
 ## when one is waiting.
 static func label_text(kind: String, limited_to: String = "") -> String:
-	var text := str(HFSnapSystemType.KIND_LABELS.get(kind, ""))
+	var text := HFSnapSystemType.kind_name(kind)
 	if limited_to != "" and text != "":
-		text += " only"
+		text = HFTranslationType.message("{kind} only", {}, {"kind": text})
 	return text
 
 
@@ -520,13 +520,16 @@ static func draw(plugin: Object, overlay: Control) -> void:
 	if str(pick.get("label", "")) != "":
 		text = str(pick["label"])
 	if str(snap.guide_text) != "":
-		text += "  (%s m, Enter)" % str(snap.guide_text)
+		var typed := {"distance": str(snap.guide_text)}
+		text = HFTranslationType.message("{label}  ({distance} m, Enter)", typed, {"label": text})
 	if text == "":
 		return
 	var font: Font = overlay.get_theme_default_font()
 	var font_size: int = overlay.get_theme_default_font_size()
 	if font == null:
 		return
+	# Drawn here, so nothing else looks the label up.
+	text = HFTranslationType.shown(text)
 	var baseline := at + Vector2(MARKER_HALF + 4.0, -MARKER_HALF - 2.0)
 	overlay.draw_string_outline(
 		font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 4, Color(0, 0, 0, 0.8)

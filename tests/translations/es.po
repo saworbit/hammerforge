@@ -17,6 +17,12 @@ msgstr "Ahuecar"
 msgid "Repeat: {command}"
 msgstr "Repetir: {command}"
 
+msgid "Vertex"
+msgstr "Vértice"
+
+msgid "{source}: on it"
+msgstr "{source}: encima"
+
 msgid "{count} brush"
 msgid_plural "{count} brushes"
 msgstr[0] "{count} pincel"

@@ -9,6 +9,7 @@ class_name HFSnapSystem
 const DraftBrush = preload("brush_instance.gd")
 const HFOverlayMesh = preload("hf_overlay_mesh.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4, EDGE = 8, PERPENDICULAR = 16 }
 
@@ -28,18 +29,6 @@ const KIND_GUIDE := "guide"
 const KIND_GUIDE_CROSS := "guides"
 ## Where a guide meets a brush's edge.
 const KIND_GUIDE_EDGE := "guide edge"
-## What the viewport calls each kind beside its marker.
-const KIND_LABELS := {
-	KIND_GRID: "Grid",
-	KIND_VERTEX: "Vertex",
-	KIND_MIDPOINT: "Midpoint",
-	KIND_CENTRE: "Centre",
-	KIND_PERPENDICULAR: "Perpendicular",
-	KIND_LINE: "Line",
-	KIND_GUIDE: "Guide",
-	KIND_GUIDE_CROSS: "Guides",
-	KIND_GUIDE_EDGE: "Guide on edge",
-}
 ## How many points guides run from at once. A new one past this lets the oldest
 ## go.
 const TRACK_MAX := 7
@@ -277,7 +266,7 @@ func _snap(point: Vector3, step: float, exclude_ids: Array) -> Vector3:
 		pick = {
 			"point": Vector3(held.x, from.y, held.z),
 			"kind": str(pick.get("kind", KIND_GRID)),
-			"label": "X and Z from the point taken, height from here",
+			"label": HFTranslationType.message("X and Z from the point taken, height from here"),
 		}
 	if _pointer_event:
 		_picked_in_event = true
@@ -452,14 +441,13 @@ func guide_choices(point: Vector3) -> Array:
 							"kind": KIND_GUIDE_CROSS,
 							"distance": d,
 							"label":
-							(
-								"%s from %s, %s from %s"
-								% [
-									AXIS_NAMES[axis_a],
-									str(KIND_LABELS.get(tracked[i]["kind"], "")).to_lower(),
-									AXIS_NAMES[axis_b],
-									str(KIND_LABELS.get(tracked[j]["kind"], "")).to_lower()
-								]
+							HFTranslationType.message(
+								"{axis_a} from {source_a}, {axis_b} from {source_b}",
+								{"axis_a": AXIS_NAMES[axis_a], "axis_b": AXIS_NAMES[axis_b]},
+								{
+									"source_a": kind_noun(tracked[i]["kind"]),
+									"source_b": kind_noun(tracked[j]["kind"])
+								}
 							),
 						}
 	if not best_guide.is_empty():
@@ -518,12 +506,10 @@ func _guide_on_edge(point: Vector3, near: Dictionary) -> Dictionary:
 						"kind": KIND_GUIDE_EDGE,
 						"distance": d,
 						"label":
-						(
-							"Edge, level with the %s on %s"
-							% [
-								str(KIND_LABELS.get(tracked[i]["kind"], "point")).to_lower(),
-								AXIS_NAMES[held]
-							]
+						HFTranslationType.message(
+							"Edge, level with the {source} on {axis}",
+							{"axis": AXIS_NAMES[held]},
+							{"source": kind_noun(tracked[i]["kind"])}
 						),
 					}
 	return best
@@ -541,17 +527,55 @@ static func _along_axis(held: int, tracked_point: Vector3, on: Vector3) -> int:
 	return 0 if absf(on.x - tracked_point.x) >= absf(on.z - tracked_point.z) else 2
 
 
+## What the viewport calls `kind` beside its marker, or "" for none.
+static func kind_name(kind: String) -> String:
+	match kind:
+		KIND_GRID:
+			return HFTranslationType.message("Grid")
+		KIND_VERTEX:
+			return HFTranslationType.message("Vertex")
+		KIND_MIDPOINT:
+			return HFTranslationType.message("Midpoint")
+		KIND_CENTRE:
+			return HFTranslationType.message("Centre")
+		KIND_PERPENDICULAR:
+			return HFTranslationType.message("Perpendicular")
+		KIND_LINE:
+			return HFTranslationType.message("Line")
+		KIND_GUIDE:
+			return HFTranslationType.message("Guide")
+		KIND_GUIDE_CROSS:
+			return HFTranslationType.message("Guides")
+		KIND_GUIDE_EDGE:
+			return HFTranslationType.message("Guide on edge")
+	return ""
+
+
+## What a sentence calls a tracked point of `kind`, as in "X from vertex".
+static func kind_noun(kind: String) -> String:
+	match kind:
+		KIND_VERTEX:
+			return HFTranslationType.message("vertex")
+		KIND_MIDPOINT:
+			return HFTranslationType.message("midpoint")
+		KIND_CENTRE:
+			return HFTranslationType.message("centre")
+		KIND_PERPENDICULAR:
+			return HFTranslationType.message("perpendicular")
+	return HFTranslationType.message("point")
+
+
 ## "Vertex: 2.5 m along +X": what the guide comes from, and how far along it
 ## `on` is.
 static func guide_label(kind: String, source: Vector3, on: Vector3, axis: int) -> String:
 	var along := on[axis] - source[axis]
-	var from := str(KIND_LABELS.get(kind, "Point"))
+	var from := kind_name(kind)
+	var named := {"source": from if from != "" else HFTranslationType.message("Point")}
 	if is_zero_approx(along):
-		return "%s: on it" % from
-	return (
-		"%s: %s m along %s%s"
-		% [from, String.num(absf(along), 3), "+" if along > 0.0 else "-", AXIS_NAMES[axis]]
-	)
+		return HFTranslationType.message("{source}: on it", {}, named)
+	var how := {"distance": String.num(absf(along), 3), "sign": "+" if along > 0.0 else "-"}
+	how["axis"] = AXIS_NAMES[axis]
+	return HFTranslationType.message("{source}: {distance} m along {sign}{axis}", how, named)
 
 
 ## Put the next pick `distance` along the guide the viewport shows, from its

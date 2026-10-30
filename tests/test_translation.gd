@@ -10,6 +10,7 @@ const PotCatalog = preload("res://tools/pot_catalog.gd")
 const HFTranslationScript = preload("res://addons/hammerforge/hf_translation.gd")
 const HFCommandRegistryScript = preload("res://addons/hammerforge/hf_command_registry.gd")
 const Toasts = preload("res://addons/hammerforge/ui/hf_toast.gd")
+const HFSnapSystemScript = preload("res://addons/hammerforge/hf_snap_system.gd")
 
 const SPANISH := "res://tests/translations"
 const PLACEHOLDER := "\\{[A-Za-z_][A-Za-z_0-9]*\\}"
@@ -161,6 +162,13 @@ func test_a_message_stays_english_for_the_log_and_shows_in_the_language():
 	)
 	var found: Array = PotCatalog.script_words(source)
 	assert_eq(found, [["Saved {file}", "", ""], ["{count} cut", "{count} cuts", ""]])
+
+
+func test_a_snap_marker_label_is_english_kept_and_drawn_in_the_language():
+	HFTranslationScript.load_catalogs()
+	var label := HFSnapSystemScript.guide_label("vertex", Vector3.ZERO, Vector3.ZERO, 0)
+	assert_eq(label, "Vertex: on it", "the pick keeps English")
+	assert_eq(HFTranslationScript.shown(label), "Vértice: encima", "the marker draws Spanish")
 
 
 func test_every_surface_the_plugin_adds_to_the_editor_is_in_the_domain():
