@@ -1,1 +1,0 @@
-- The Console, status strip, shortcut editor, example library, history replay and other panel words go through the translation catalogs. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

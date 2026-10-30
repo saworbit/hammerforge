@@ -1,1 +1,0 @@
-- An unanswered agent edit keeps its retry id when a separate edit with the same arguments answers first, so a retry cannot run it twice. (issue [#2058](https://github.com/saworbit/hammerforge/issues/2058))

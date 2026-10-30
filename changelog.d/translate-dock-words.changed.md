@@ -1,1 +1,0 @@
-- The Manage, File, array, hollow, sculpt and structure preset messages go through the translation catalogs, plurals included. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

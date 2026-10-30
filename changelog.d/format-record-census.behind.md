@@ -1,1 +1,0 @@
-- The format record names the keys saved beside a heightmap, a sculpt, face paint or a decal, and the test level has each. (issue [#2051](https://github.com/saworbit/hammerforge/issues/2051))

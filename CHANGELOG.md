@@ -39,7 +39,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 - Stairs turn at a landing, Door Frame and Trim Run join the Structure section, Clip cuts along a plane, Hull, Shear and Sweep Faces make, lean and bend brushes, and Extrude moves any face (#1410, #1416, #1411, #1711, #1715, #1718, #1714, #1712).
 - Visgroups can be current, locked, isolated or left out of the bake, View Filters hide things by kind, Hidden faces stay out of the bake's mesh, and a linked prefab copy keeps chosen properties (#1732, #1697, #1720, #1719, #1734).
 - The Console takes typed commands, compares the level with another version, counts entities by class, lists notes left in the level and reports a crash from the last session (#1696, #1701, #1709, #1700, #1654).
-- One table says what each file format keeps, entity classes come from an FGD, agents get hf_measure, hf_plan and recorded sessions, and a full bake of 1,000 brushes is 12 times faster (#1706, #1721, #1649, #1705, #1645, #1589).
+- The interface can be translated, entity classes come from an FGD, agents get hf_measure, hf_plan and recorded sessions, and a full bake of 1,000 brushes is 12 times faster (#1702, #1721, #1649, #1705, #1645, #1589).
 
 ### Week of 26 Oct 2026
 
@@ -50,11 +50,28 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Changed
 
+- **30 Oct** Eight menu items, tooltips and screen reader names that were still put together in English go through the translation catalogs. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2072](https://github.com/saworbit/hammerforge/pull/2072))
+- **30 Oct** Refusals from tools, structures and brush commands stay English for the bridge and show in the language shown, with each count taking its own plural. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2071](https://github.com/saworbit/hammerforge/pull/2071))
+- **30 Oct** The labels beside snap markers and alignment guides show in the language shown, with each kind of point named in its own word. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2070](https://github.com/saworbit/hammerforge/pull/2070))
+- **30 Oct** What an export or a prefab says it left out reads in whole phrases with their own plurals, so a catalog can translate the list. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2069](https://github.com/saworbit/hammerforge/pull/2069))
+- **30 Oct** Messages the Console log and the bridge read stay English while the toast and the status line show them in the language shown, and more of them read as whole sentences. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2068](https://github.com/saworbit/hammerforge/pull/2068))
+- **29 Oct** Twelve messages that glued a word from a table into a sentence go through the translation catalogs as whole sentences. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2067](https://github.com/saworbit/hammerforge/pull/2067))
+- **29 Oct** The translation template takes the words that tables hold for the dock and the Console, and the radial menu shows its items in the language shown. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2066](https://github.com/saworbit/hammerforge/pull/2066))
+- **29 Oct** The translation template takes the words of toasts, the status line and level messages, so a catalog can translate them. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2065](https://github.com/saworbit/hammerforge/pull/2065))
+- **29 Oct** The dock toolbar tooltips and its material, face, save, export and example messages go through the translation catalogs. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2063](https://github.com/saworbit/hammerforge/pull/2063))
+- **29 Oct** Vertex edit refusals, Compare, Repeat Run, Pick Pivot, Wrap and the other plugin messages go through the translation catalogs. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2062](https://github.com/saworbit/hammerforge/pull/2062))
+- **29 Oct** The Console, status strip, shortcut editor, example library, history replay and other panel words go through the translation catalogs. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2061](https://github.com/saworbit/hammerforge/pull/2061))
+- **29 Oct** The Manage, File, array, hollow, sculpt and structure preset messages go through the translation catalogs, plurals included. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2060](https://github.com/saworbit/hammerforge/pull/2060))
+- **29 Oct** Selection, Grow, Carve, Hull, Hide Faces, material and prefab messages go through the translation catalogs, and Carve asks "Carve 1 brush?". (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#2059](https://github.com/saworbit/hammerforge/pull/2059))
 - **26 Oct** Group, visgroup, cordon, entity panel, drop and context toolbar messages that carry a name or a count go through the translation catalogs, plurals included. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#1922](https://github.com/saworbit/hammerforge/pull/1922))
 - **26 Oct** An undo at 3,000 brushes takes 45 ms, from 74: it walks only the nodes it changed when nothing else can have changed. (issue [#1866](https://github.com/saworbit/hammerforge/issues/1866), PR [#1921](https://github.com/saworbit/hammerforge/pull/1921))
 
 #### Fixed
 
+- **31 Oct** Heightmap ground no longer repeats every image width, and a sculpt changes only the ground under the brush. (issue [#2007](https://github.com/saworbit/hammerforge/issues/2007), PR [#2074](https://github.com/saworbit/hammerforge/pull/2074))
+- **29 Oct** An unanswered agent edit keeps its retry id when a separate edit with the same arguments answers first, so a retry cannot run it twice. (issue [#2058](https://github.com/saworbit/hammerforge/issues/2058), PR [#2064](https://github.com/saworbit/hammerforge/pull/2064))
+- **29 Oct** Hull of Selection wraps a sphere beside a turned cylinder or capsule, and two ellipsoids, in one closed brush in a tenth of a second. (issue [#2049](https://github.com/saworbit/hammerforge/issues/2049), PR [#2055](https://github.com/saworbit/hammerforge/pull/2055))
+- **29 Oct** Validate Spawn before a bake reads a room's floor, not the top of its ceiling, so a spawn standing on the floor is no longer called buried and too low. (issue [#2046](https://github.com/saworbit/hammerforge/issues/2046), PR [#2053](https://github.com/saworbit/hammerforge/pull/2053))
 - **29 Oct** Agent Bridge calls time out while connecting or waiting to write, and cancelled edits keep their retry id. (issue [#2056](https://github.com/saworbit/hammerforge/issues/2056), PR [#2057](https://github.com/saworbit/hammerforge/pull/2057))
 - **29 Oct** Agent Bridge retries stay on their original scene; delayed replies no longer attach to an older scene. (issue [#2056](https://github.com/saworbit/hammerforge/issues/2056), PR [#2057](https://github.com/saworbit/hammerforge/pull/2057))
 - **29 Oct** Agent Bridge reports malformed replies and discovery files cleanly and closes failed handshakes. (issue [#2056](https://github.com/saworbit/hammerforge/issues/2056), PR [#2057](https://github.com/saworbit/hammerforge/pull/2057))
@@ -135,6 +152,8 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Behind the scenes
 
+- **29 Oct** The untranslated-text check accepts a fully translated addon while still detecting an empty scan and a new untranslated label. (PR [#2063](https://github.com/saworbit/hammerforge/pull/2063))
+- **29 Oct** The format record names the keys saved beside a heightmap, a sculpt, face paint or a decal, and the test level has each. (issue [#2051](https://github.com/saworbit/hammerforge/issues/2051), PR [#2054](https://github.com/saworbit/hammerforge/pull/2054))
 - **27 Oct** Thirty-one vibe scenarios on the features of 18 to 27 Oct, their filed findings recorded as known. (PR [#2010](https://github.com/saworbit/hammerforge/pull/2010))
 - **27 Oct** The nightly's command surfaces scenario counts a held key as read when any plugin input module asks for it, so Sweep Select's hold no longer flags. (PR [#1945](https://github.com/saworbit/hammerforge/pull/1945))
 - **26 Oct** A test counts, per script, the text shown without going through the translation catalogs, and fails when a count goes up. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702), PR [#1920](https://github.com/saworbit/hammerforge/pull/1920))

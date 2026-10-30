@@ -1,1 +1,0 @@
-- The untranslated-text check accepts a fully translated addon while still detecting an empty scan and a new untranslated label.

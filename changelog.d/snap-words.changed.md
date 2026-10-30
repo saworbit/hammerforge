@@ -1,1 +1,0 @@
-- The labels beside snap markers and alignment guides show in the language shown, with each kind of point named in its own word. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

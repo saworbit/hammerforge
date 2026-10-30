@@ -1,1 +1,0 @@
-- Hull of Selection wraps a sphere beside a turned cylinder or capsule, and two ellipsoids, in one closed brush in a tenth of a second. (issue [#2049](https://github.com/saworbit/hammerforge/issues/2049))

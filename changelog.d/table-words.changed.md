@@ -1,1 +1,0 @@
-- The translation template takes the words that tables hold for the dock and the Console, and the radial menu shows its items in the language shown. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))
