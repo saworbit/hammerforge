@@ -1000,7 +1000,10 @@ func update_drag_absolute(world_delta: Vector3) -> bool:
 		_drag_last_world_delta = Vector3.ZERO
 		_drag_has_valid_update = true
 		if touched and root and root.has_signal("user_message"):
-			root.emit_signal("user_message", "Move rejected: %s" % reason, 1)
+			var why := {"reason": reason}
+			root.emit_signal(
+				"user_message", HFTranslationType.message("Move rejected: {reason}", why), 1
+			)
 		return false
 
 	_rebuild_drag_previews()

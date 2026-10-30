@@ -9,6 +9,8 @@ extends RefCounted
 ## material is left out of the baked mesh, and so of the lightmap, while its
 ## triangles still go into the collision, so a floor stays solid from below.
 
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+
 ## Set on the Hidden look, so the bake knows it whichever level made it.
 const HIDDEN_META := "hf_hidden_face"
 ## What the material browser, the bake summary and a collision shape call it.
@@ -144,14 +146,16 @@ static func polygon_area(basis: Basis, corners: PackedVector3Array) -> float:
 	return twice.length() * 0.5
 
 
-## What the bake summary says it left out, or "" when it left out nothing.
+## What the bake says it left out, or "" when it left out nothing.
 static func summary(counted: Dictionary) -> String:
 	var faces := int(counted.get("faces", 0))
 	if faces <= 0:
 		return ""
-	return (
-		"left out %d Hidden face%s, %.1f square metres of mesh and lightmap"
-		% [faces, "" if faces == 1 else "s", float(counted.get("area", 0.0))]
+	return HFTranslationType.message_n(
+		"Bake left out {count} Hidden face, {area} square metres of mesh and lightmap",
+		"Bake left out {count} Hidden faces, {area} square metres of mesh and lightmap",
+		faces,
+		{"area": "%.1f" % float(counted.get("area", 0.0))}
 	)
 
 

@@ -1,0 +1,1 @@
+- Messages the Console log and the bridge read stay English while the toast and the status line show them in the language shown, and more of them read as whole sentences. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

@@ -1,1 +1,4 @@
-{}
+{
+	"res://addons/hammerforge/systems/hf_file_system.gd": 1,
+	"res://addons/hammerforge/systems/hf_prefab_system.gd": 1
+}

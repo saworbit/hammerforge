@@ -1156,8 +1156,12 @@ static func on_bake_profile_save(dock: Object) -> void:
 static func _save_project_bake_profile(dock: Object, profile_name: String) -> void:
 	var path := project_bake_profiles_path(dock)
 	if HFBakeProfilesType.project_file_unreadable(path):
-		var unread := HFTranslationType.t("{file} could not be read. Fix it before saving to it")
-		dock._set_status(unread.format({"file": path}), true)
+		dock._set_status(
+			HFTranslationType.message(
+				"{file} could not be read. Fix it before saving to it", {"file": path}
+			),
+			true
+		)
 		return
 	var profiles := HFBakeProfilesType.read_project_raw(path)
 	var replacing := profiles.has(profile_name)
@@ -1199,28 +1203,32 @@ static func on_bake_profile_delete(dock: Object) -> void:
 		return
 	if dock._bake_profile_delete_ack != profile_name:
 		dock._bake_profile_delete_ack = profile_name
+		var named := {"profile": profile_name}
 		var again := (
 			(
 				HFTranslationType
-				. t(
-					"Press Delete again to delete bake profile {profile} from the project. It cannot be undone"
+				. message(
+					"Press Delete again to delete bake profile {profile} from the project. It cannot be undone",
+					named
 				)
 			)
 			if shared
-			else HFTranslationType.t(
-				"Press Delete again to delete bake profile {profile}. It cannot be undone"
+			else HFTranslationType.message(
+				"Press Delete again to delete bake profile {profile}. It cannot be undone", named
 			)
 		)
-		dock._set_status(again.format({"profile": profile_name}), true)
+		dock._set_status(again, true)
 		return
 	dock._bake_profile_delete_ack = ""
 	if shared:
 		var path := project_bake_profiles_path(dock)
 		if HFBakeProfilesType.project_file_unreadable(path):
-			var unread := HFTranslationType.t(
-				"{file} could not be read. Fix it before deleting from it"
+			dock._set_status(
+				HFTranslationType.message(
+					"{file} could not be read. Fix it before deleting from it", {"file": path}
+				),
+				true
 			)
-			dock._set_status(unread.format({"file": path}), true)
 			return
 		var profiles := HFBakeProfilesType.read_project_raw(path)
 		profiles.erase(profile_name)
@@ -1237,7 +1245,7 @@ static func on_bake_profile_delete(dock: Object) -> void:
 
 
 static func _say_unwritten(dock: Object, path: String) -> void:
-	dock._set_status(HFTranslationType.t("Could not write {file}").format({"file": path}), true)
+	dock._set_status(HFTranslationType.message("Could not write {file}", {"file": path}), true)
 
 
 static func on_export_playtest(dock: Object) -> void:
@@ -1663,7 +1671,10 @@ static func warn_missing_dependencies(dock: Object) -> void:
 	var warnings: Array = dock.level_root.check_missing_dependencies()
 	if warnings.is_empty():
 		return
-	dock._set_status_warning("Missing dependencies: %d (see Output)" % warnings.size(), 5.0)
+	var missing := {"count": warnings.size()}
+	dock._set_status_warning(
+		HFTranslationType.message("Missing dependencies: {count} (see Output)", missing), 5.0
+	)
 	for warning in warnings:
 		dock._log("Dependency: %s" % str(warning), true)
 
@@ -1715,12 +1726,13 @@ static func run_validation(dock: Object, auto_fix: bool) -> void:
 		else:
 			dock._set_status("Validate: no issues found", false, 3.0)
 		return
-	var message := HFTranslationType.tn(
+	var message := HFTranslationType.message_n(
 		"Validate: {count} issue", "Validate: {count} issues", issues.size()
 	)
 	if auto_fix:
-		message = HFTranslationType.t("Validate: fixed {fixed}, {count} remaining")
-	message = message.format({"fixed": fixed, "count": issues.size()})
+		message = HFTranslationType.message(
+			"Validate: fixed {fixed}, {count} remaining", {"fixed": fixed, "count": issues.size()}
+		)
 	dock._set_status_warning(message, 6.0)
 	for issue in issues:
 		dock._log("[Validate] %s" % str(issue), true)

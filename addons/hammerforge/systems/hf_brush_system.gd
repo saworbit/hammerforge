@@ -21,6 +21,7 @@ const HFUVWrap = preload("../hf_uv_wrap.gd")
 const HFOverlayColors = preload("../hf_overlay_colors.gd")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFDimensions = preload("../hf_dimensions.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
 const ROLE_PENDING := "pending"
@@ -4301,13 +4302,13 @@ func _cleanup_brush_references(brush: Node) -> void:
 	if brush_name != "" and root.get("entity_system"):
 		var removed_count: int = root.entity_system.cleanup_connections_for_deleted(brush)
 		if removed_count > 0 and root.has_signal("user_message"):
-			root.user_message.emit(
-				(
-					"Removed %d I/O connection(s) targeting deleted brush '%s'"
-					% [removed_count, brush_name]
-				),
-				1
+			var removed := HFTranslationType.message_n(
+				"Removed {count} I/O connection targeting deleted brush '{brush}'",
+				"Removed {count} I/O connections targeting deleted brush '{brush}'",
+				removed_count,
+				{"brush": brush_name}
 			)
+			root.user_message.emit(removed, 1)
 
 
 # ---------------------------------------------------------------------------

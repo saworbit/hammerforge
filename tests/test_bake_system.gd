@@ -752,7 +752,7 @@ func test_warn_bake_failure_pending_cuts_hint():
 	_assert_captured_warning("Bake failed: no baked geometry")
 	assert_eq(msgs.size(), 1, "Should emit one message")
 	if msgs.size() > 0:
-		assert_string_contains(msgs[0], "pending cuts", "Should hint about pending cuts")
+		assert_string_contains(msgs[0], "You have 1 pending cut —", "one cut is one, not cuts")
 
 
 func test_warn_bake_failure_csg_fallback_hint():

@@ -12,6 +12,7 @@ const HFFormatRecord = preload("../hf_format_record.gd")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFHeightmapIO = preload("../paint/hf_heightmap_io.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 var root: Node3D
 
@@ -703,7 +704,8 @@ func restore_state(state: Dictionary) -> void:
 	if problem != "":
 		HFLog.warn("HFStateSystem: this level state cannot be read - %s" % problem)
 		if root.has_signal("user_message"):
-			root.user_message.emit("Level not loaded: %s" % problem, 2)
+			var why := {"reason": problem}
+			root.user_message.emit(HFTranslationType.message("Level not loaded: {reason}", why), 2)
 		return
 	# Undo and redo are whole-level snapshots, so taking back a nudge of one brush
 	# used to free and rebuild every brush in the level (#600). A brush whose
@@ -830,7 +832,12 @@ func restore_state(state: Dictionary) -> void:
 	if skipped > 0:
 		HFLog.warn("HFStateSystem: skipped %d entry this level could not use" % skipped)
 		if root.has_signal("user_message"):
-			root.user_message.emit("Skipped %d unreadable entry in this level" % skipped, 1)
+			var skip := HFTranslationType.message_n(
+				"Skipped {count} unreadable entry in this level",
+				"Skipped {count} unreadable entries in this level",
+				skipped
+			)
+			root.user_message.emit(skip, 1)
 	# The paint layers went back above, and the Paint tab reads them only when
 	# told, as the layer commands tell it. An undo of Rename left the new name on
 	# its row, and of Height Scale the value typed in its spin (#2029, #2030).

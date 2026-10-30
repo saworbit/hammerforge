@@ -557,6 +557,10 @@ msgstr ""
 msgid "Autosave path set"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_file_system.gd
+msgid "Autosave refused: this level {newer}. Saving it here would drop what that build added."
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Axis Lock"
 msgstr ""
@@ -593,6 +597,10 @@ msgstr ""
 msgid "Bake Preview — show wireframe of final mesh before committing"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "Bake Selected baked the whole level: the last full bake holds {count} of these brushes merged with others"
+msgstr ""
+
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Bake check: no issues"
 msgstr ""
@@ -624,6 +632,12 @@ msgstr ""
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Bake failed — check Output for details"
 msgstr ""
+
+#: addons/hammerforge/hf_hidden_faces.gd
+msgid "Bake left out {count} Hidden face, {area} square metres of mesh and lightmap"
+msgid_plural "Bake left out {count} Hidden faces, {area} square metres of mesh and lightmap"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Bake navmesh"
@@ -1137,6 +1151,10 @@ msgstr ""
 msgid "Collision"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "Collision Mode {mode} baked the cut mesh's triangles instead of hulls: {reason}"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_overlay_colors_panel.gd
 msgid "Colours"
 msgstr ""
@@ -1233,6 +1251,10 @@ msgstr ""
 msgid "Convert failed: no paint layer manager"
 msgstr ""
 
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "Convert failed: {error}"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Convert selected solid brushes into a sculptable heightmap layer\nUses mesh bounds (including displacements). Cut brushes are skipped."
 msgstr ""
@@ -1244,6 +1266,12 @@ msgstr ""
 #: addons/hammerforge/plugin_edit_actions.gd
 msgid "Convert to Brushes: select a MeshInstance3D or a CSG node"
 msgstr ""
+
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "Converted {count} brush to heightmap layer '{layer}'"
+msgid_plural "Converted {count} brushes to heightmap layer '{layer}'"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/dock.gd
 msgid "Copied only the picked face's settings to {faces}: its hand-made UV layout does not travel"
@@ -1287,6 +1315,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Cordon 1"
+msgstr ""
+
+#: addons/hammerforge/dock_visgroup_handler.gd
+msgid "Cordon set past +/-{limit}; the spins cannot show it all"
 msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
@@ -2155,6 +2187,10 @@ msgstr ""
 msgid "Failed to load .hflevel: {error}"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_paint_system.gd
+msgid "Failed to load heightmap from '{file}'"
+msgstr ""
+
 #: addons/hammerforge/dock_file_handler.gd
 msgid "Failed to open settings file"
 msgstr ""
@@ -2185,6 +2221,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_material_browser.gd
 msgid "Favorites"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_file_system.gd
+msgid "File save failed: {file}"
 msgstr ""
 
 #: addons/hammerforge/hf_stairs_builder.gd
@@ -3211,6 +3251,10 @@ msgstr ""
 msgid "Kept in the project, so everyone on it has this profile"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_paint_system.gd
+msgid "Kept region {region} loaded: its paint could not be written"
+msgstr ""
+
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Kept the first of each pair: deleted {count} brush"
 msgid_plural "Kept the first of each pair: deleted {count} brushes"
@@ -3319,6 +3363,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Let the face marquee take covered and back faces."
+msgstr ""
+
+#: addons/hammerforge/systems/hf_file_system.gd addons/hammerforge/systems/hf_state_system.gd
+msgid "Level not loaded: {reason}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -3529,6 +3577,10 @@ msgstr[1] ""
 msgid "Map export format"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_file_system.gd
+msgid "Map import failed ({file}): {reason}"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "Map targets:"
 msgstr ""
@@ -3669,6 +3721,10 @@ msgstr ""
 msgid "Mirror:"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "Missing dependencies: {count} (see Output)"
+msgstr ""
+
 #: addons/hammerforge/hf_path_tool.gd
 msgid "Miter Joints"
 msgstr ""
@@ -3754,6 +3810,24 @@ msgstr ""
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Navmesh Cell"
 msgstr ""
+
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "Navmesh is empty: {source} produced nothing walkable"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "Navmesh is empty: {source} produced nothing walkable (geometry reached the parse, but agent radius {radius} / height {height} left no polygon)"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "Navmesh is empty: {source} produced nothing walkable (no geometry reached the parse)"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "Navmesh: {count} polygon from {source}"
+msgid_plural "Navmesh: {count} polygons from {source}"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/hf_console_panel.gd
 msgid "Needs attention only"
@@ -4331,6 +4405,20 @@ msgstr ""
 msgid "Paint floor cells."
 msgstr ""
 
+#: addons/hammerforge/systems/hf_paint_system.gd
+msgid "Paint layer \"{layer}\" took {count} confirmed connector with it"
+msgid_plural "Paint layer \"{layer}\" took {count} confirmed connectors with it"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/systems/hf_paint_system.gd
+msgid "Paint memory is {used} MB against a {budget} MB budget and nothing more can be streamed out."
+msgstr ""
+
+#: addons/hammerforge/systems/hf_paint_system.gd
+msgid "Paint memory is {used} MB against a {budget} MB budget. Save the level before streaming can reclaim any of it."
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Paint mode enabled"
 msgstr ""
@@ -4365,6 +4453,22 @@ msgstr ""
 
 #: addons/hammerforge/plugin_edit_actions.gd
 msgid "Paste at Cursor: the clipboard holds nothing to paste"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Pasted {brushes} and {entities}"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Pasted {brushes} and {entities} from .map text"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Pasted {brushes} and {entities} from .map text; left out {lines} it could not read ({first})"
+msgstr ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "Pasted {brushes} and {entities}; left out {lines} it could not read ({first})"
 msgstr ""
 
 #: addons/hammerforge/hf_sweep_builder.gd
@@ -4949,6 +5053,18 @@ msgstr ""
 msgid "Removed output connection"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Removed {count} I/O connection targeting deleted brush '{brush}'"
+msgid_plural "Removed {count} I/O connections targeting deleted brush '{brush}'"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/systems/hf_entity_system.gd
+msgid "Removed {count} I/O connection targeting deleted entity '{entity}'"
+msgid_plural "Removed {count} I/O connections targeting deleted entity '{entity}'"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/dock.gd
 msgid "Removed {count} unused material"
 msgid_plural "Removed {count} unused materials"
@@ -5267,6 +5383,10 @@ msgstr ""
 msgid "Save HammerForge log"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_file_system.gd
+msgid "Save Level refused: this level {newer}. Saving it here would drop what that build added."
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Save Library"
 msgstr ""
@@ -5412,6 +5532,16 @@ msgstr ""
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Scatter"
 msgstr ""
+
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "Scatter preview: {count} instances ({filtered} filtered)"
+msgstr ""
+
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "Scattered {count} instance"
+msgid_plural "Scattered {count} instances"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Sculpt:"
@@ -5858,6 +5988,10 @@ msgid "Settings saved under a name for this command"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
+msgid "Settings: '{key}' is a {type}, not a value this setting takes. The current one is kept."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
 msgid "Sew"
 msgstr ""
 
@@ -6168,6 +6302,12 @@ msgstr ""
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Skip hidden visgroups and invisible brushes during bake"
 msgstr ""
+
+#: addons/hammerforge/systems/hf_state_system.gd
+msgid "Skipped {count} unreadable entry in this level"
+msgid_plural "Skipped {count} unreadable entries in this level"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Skips hidden visgroups and invisible brushes. Fast iteration on one area."
@@ -6513,6 +6653,10 @@ msgstr ""
 msgid "Structure preset {name} updated. Commit {file} to share it"
 msgstr ""
 
+#: addons/hammerforge/dock_brush_handler.gd
+msgid "Structure section set back to the selected {structure}. Change a setting and press Update"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_example_library.gd
 msgid "Study This"
 msgstr ""
@@ -6719,6 +6863,10 @@ msgstr ""
 msgid "The face on show had changed; drag the corner again"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_paint_system.gd
+msgid "The files of paint regions {regions} could not be brought up to date; they stay loaded so their old paint is not read back"
+msgstr ""
+
 #: addons/hammerforge/plugin_problem_report.gd
 msgid "The form opens in your browser. Nothing is sent until you submit it there."
 msgstr ""
@@ -6837,6 +6985,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "This is meant: stop listing it until what it names changes"
+msgstr ""
+
+#: addons/hammerforge/level_root.gd
+msgid "This level keeps only its baked geometry in the scene, and {file} is not there, so its brushes could not be loaded."
 msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
@@ -7535,6 +7687,12 @@ msgstr ""
 msgid "Writes a .hflevel snapshot on a timer, separate from Godot's scene saving."
 msgstr ""
 
+#: addons/hammerforge/plugin_commands.gd
+msgid "Wrote {count} entity class to {file}. Point the level's entity definitions at it to edit them as JSON"
+msgid_plural "Wrote {count} entity classes to {file}. Point the level's entity definitions at it to edit them as JSON"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/dock.gd addons/hammerforge/ui/selection_tools_builder.gd
 msgid "X"
 msgstr ""
@@ -7558,6 +7716,12 @@ msgstr ""
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Y offset per copy"
 msgstr ""
+
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "You have {count} pending cut — try 'Commit Cuts' before baking"
+msgid_plural "You have {count} pending cuts — try 'Commit Cuts' before baking"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/ui/hf_tutorial_wizard.gd
 msgid "You're ready"
@@ -7705,6 +7869,10 @@ msgstr ""
 msgid "{command}: the selected faces are aligned that way already"
 msgstr ""
 
+#: addons/hammerforge/plugin_edit_actions.gd
+msgid "{command}: the selected {structure} is not built along faces"
+msgstr ""
+
 #: addons/hammerforge/systems/hf_vertex_system.gd
 msgid "{command}: two vertices of a brush would land on one point"
 msgstr ""
@@ -7719,7 +7887,7 @@ msgid_plural "{copies} copies of {brushes}"
 msgstr[0] ""
 msgstr[1] ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/dock_brush_handler.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd addons/hammerforge/ui/hf_replace_material_dialog.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/dock_brush_handler.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "{count} brush"
 msgid_plural "{count} brushes"
 msgstr[0] ""
@@ -7743,7 +7911,7 @@ msgid_plural "{count} cuts that cut nothing"
 msgstr[0] ""
 msgstr[1] ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd
 msgid "{count} entity"
 msgid_plural "{count} entities"
 msgstr[0] ""
@@ -7786,6 +7954,12 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: addons/hammerforge/plugin_edit_actions.gd
+msgid "{count} line"
+msgid_plural "{count} lines"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/plugin_edit_actions.gd
 msgid "{count} locked brush overlaps and is left alone."
 msgid_plural "{count} locked brushes overlap and are left alone."
 msgstr[0] ""
@@ -7813,12 +7987,22 @@ msgid_plural "{count} sculpts cannot follow this cut and will be dropped."
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/systems/hf_bake_system.gd
+msgid "{count} stair with Ramp collision kept the collision of its steps. The Console says why"
+msgid_plural "{count} stairs with Ramp collision kept the collision of their steps. The Console says why"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "{entities} selected"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "{entity}, placed with the {preset} preset"
+msgstr ""
+
+#: addons/hammerforge/level_root.gd addons/hammerforge/systems/hf_file_system.gd
+msgid "{export} export left out {count} in visgroups kept out of the bake"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_context_toolbar.gd
@@ -7923,6 +8107,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "{summary}, listed under Check Bake Issues"
+msgstr ""
+
+#: addons/hammerforge/hf_tool_registry.gd
+msgid "{tool} cannot run right now"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd

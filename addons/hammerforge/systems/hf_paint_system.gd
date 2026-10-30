@@ -23,6 +23,7 @@ const HFConnectorTool = preload("../paint/hf_connector_tool.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
 const HFStateSystemType = preload("hf_state_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 var root: Node3D
 var region_manager: HFTerrainRegionManager
@@ -710,13 +711,13 @@ func remove_active_paint_layer() -> void:
 	# The confirmed connectors name layers by their place in the list (#2009).
 	var dropped: int = root.paint_tool.forget_layer(idx) if root.paint_tool else 0
 	if dropped > 0:
-		root.user_message.emit(
-			(
-				'Paint layer "%s" took %d confirmed connector%s with it'
-				% [shown, dropped, "" if dropped == 1 else "s"]
-			),
-			1
+		var took := HFTranslationType.message_n(
+			'Paint layer "{layer}" took {count} confirmed connector with it',
+			'Paint layer "{layer}" took {count} confirmed connectors with it',
+			dropped,
+			{"layer": shown}
 		)
+		root.user_message.emit(took, 1)
 	regenerate_paint_layers()
 
 
@@ -1134,7 +1135,10 @@ func import_heightmap(path: String) -> void:
 		regenerate_paint_layers()
 	else:
 		push_warning("HammerForge: failed to load heightmap from '%s'" % path)
-		root.user_message.emit("Failed to load heightmap from '%s'" % path, 2)
+		var failed := HFTranslationType.message(
+			"Failed to load heightmap from '{file}'", {"file": path}
+		)
+		root.user_message.emit(failed, 2)
 
 
 func generate_heightmap_noise(settings: Dictionary = {}) -> void:
@@ -1375,9 +1379,12 @@ func restore_region_files(capture: Variant) -> void:
 		_stale_region_files[region_id] = true
 		names.append(str(region_id))
 	if root.has_signal("user_message"):
-		var text := (
-			"The files of paint regions %s could not be brought up to date; " % ", ".join(names)
-			+ "they stay loaded so their old paint is not read back"
+		var text := HFTranslationType.message(
+			(
+				"The files of paint regions {regions} could not be brought up to date; "
+				+ "they stay loaded so their old paint is not read back"
+			),
+			{"regions": ", ".join(names)}
 		)
 		root.user_message.emit(text, 2)
 
@@ -1679,19 +1686,28 @@ func _warn_budget_not_met(total: int, budget_bytes: int) -> void:
 	_region_budget_warned = true
 	if not root.has_signal("user_message"):
 		return
+	var sizes := {
+		"used": "%.1f" % (float(total) / 1048576.0),
+		"budget": "%.1f" % (float(budget_bytes) / 1048576.0),
+	}
 	var over := (
-		"Paint memory is %.1f MB against a %.1f MB budget"
-		% [
-			float(total) / 1048576.0,
-			float(budget_bytes) / 1048576.0,
-		]
-	)
-	if region_manager.region_base_path == "":
-		root.user_message.emit(
-			"%s. Save the level before streaming can reclaim any of it." % over, 2
+		HFTranslationType.message(
+			(
+				"Paint memory is {used} MB against a {budget} MB budget. "
+				+ "Save the level before streaming can reclaim any of it."
+			),
+			sizes
 		)
-	else:
-		root.user_message.emit("%s and nothing more can be streamed out." % over, 2)
+		if region_manager.region_base_path == ""
+		else HFTranslationType.message(
+			(
+				"Paint memory is {used} MB against a {budget} MB budget "
+				+ "and nothing more can be streamed out."
+			),
+			sizes
+		)
+	)
+	root.user_message.emit(over, 2)
 
 
 func _load_region(region_id: Vector2i) -> void:
@@ -1749,8 +1765,12 @@ func _unload_region(region_id: Vector2i) -> bool:
 		if not _region_save_warned.has(region_id):
 			_region_save_warned[region_id] = true
 			if root.has_signal("user_message"):
+				var kept := {"region": str(region_id)}
 				root.user_message.emit(
-					"Kept region %s loaded: its paint could not be written" % str(region_id), 2
+					HFTranslationType.message(
+						"Kept region {region} loaded: its paint could not be written", kept
+					),
+					2
 				)
 		return false
 	_region_save_warned.erase(region_id)

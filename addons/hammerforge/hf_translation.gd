@@ -9,7 +9,9 @@ extends RefCounted
 ## given the domain with `adopt()`, and its controls look their text up there by
 ## themselves. Text put together in code goes through `t()` or `tn()` first, with
 ## named placeholders filled in after:
-## `HFTranslation.t("Repeat: {command}").format({"command": label})`.
+## `HFTranslation.t("Repeat: {command}").format({"command": label})`. A message
+## the Console's log or the bridge reads too goes through `message()` instead,
+## which keeps it English and lets the toast or the status line show `shown()`.
 ##
 ## Any `.po` file in `translations/` loads when the plugin starts, and a word a
 ## catalog does not have stays English. The Console's log, the bridge's replies
@@ -19,11 +21,17 @@ extends RefCounted
 const DOMAIN := "hammerforge"
 const CATALOGS := "res://addons/hammerforge/translations"
 const EXTENSIONS := ["po", "mo"]
+## How many messages `shown()` remembers. Far more than are on screen at once.
+const SHOWN_LIMIT := 256
 
 ## Where `load_catalogs()` reads, and the language it shows: the editor's when
 ## empty. A test points these at its own and puts them back.
 static var folder := CATALOGS
 static var language := ""
+
+## English message -> the same message in the language shown, for the messages
+## `message()` and `message_n()` made that read differently. Oldest first.
+static var _shown := {}
 
 
 static func domain() -> TranslationDomain:
@@ -56,6 +64,7 @@ static func load_catalogs() -> PackedStringArray:
 
 ## Take the catalogs out again, as the plugin stops.
 static func unload() -> void:
+	_shown.clear()
 	if TranslationServer.has_domain(DOMAIN):
 		TranslationServer.remove_domain(DOMAIN)
 
@@ -77,3 +86,40 @@ static func t(text: String, context := "") -> String:
 ## rules. Put the number in with a `{count}` placeholder, never by gluing it on.
 static func tn(one: String, many: String, count: int, context := "") -> String:
 	return String(domain().translate_plural(one, many, count, context))
+
+
+## `text` filled in from `values`, in English, for a message the Console's log or
+## the bridge reads as well as a toast or the status line. The log and an agent
+## read the same words in every language; the toast and the status line show
+## `shown()` of it, in the language shown. `words` holds values that are words of
+## their own, such as a count's phrase from `message_n()` in a sentence with two
+## counts: the English takes them as they are, the language shown as `shown()`.
+static func message(text: String, values := {}, words := {}) -> String:
+	var shown_values := values.duplicate()
+	for key in words:
+		shown_values[key] = shown(str(words[key]))
+	return _remember(text.format(values.merged(words)), t(text).format(shown_values))
+
+
+## `one` or `many` filled in from `values`, as `message()` does, by `count`. The
+## count goes in as `{count}` without being named in `values`.
+static func message_n(one: String, many: String, count: int, values := {}) -> String:
+	var filled := values.duplicate()
+	filled["count"] = count
+	var english := one if count == 1 else many
+	return _remember(english.format(filled), tn(one, many, count).format(filled))
+
+
+## What a toast or the status line shows for `text`: the language shown when
+## `message()` or `message_n()` made it, and `text` as it is otherwise.
+static func shown(text: String) -> String:
+	return str(_shown.get(text, text))
+
+
+static func _remember(english: String, translated: String) -> String:
+	if translated != english:
+		_shown.erase(english)
+		_shown[english] = translated
+		while _shown.size() > SHOWN_LIMIT:
+			_shown.erase(_shown.keys()[0])
+	return english

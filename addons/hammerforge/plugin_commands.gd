@@ -928,17 +928,19 @@ static func convert_entity_definitions(plugin: Object, root: Node) -> String:
 			var failed := HFTranslationType.t("Could not write {file}: {error}")
 			dock.show_toast(failed.format({"file": out, "error": error_string(err)}), 2)
 		return ""
-	(
-		root
-		. emit_signal(
-			"user_message",
-			(
-				"Wrote %d entity classes to %s. Point the level's entity definitions at it to edit them as JSON"
-				% [(read["entries"] as Array).size(), out]
-			),
-			0
-		)
+	var wrote := HFTranslationType.message_n(
+		(
+			"Wrote {count} entity class to {file}. "
+			+ "Point the level's entity definitions at it to edit them as JSON"
+		),
+		(
+			"Wrote {count} entity classes to {file}. "
+			+ "Point the level's entity definitions at it to edit them as JSON"
+		),
+		(read["entries"] as Array).size(),
+		{"file": out}
 	)
+	root.emit_signal("user_message", wrote, 0)
 	return out
 
 

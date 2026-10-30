@@ -63,8 +63,8 @@ const SIGNALS := ["user_message"]
 ## Calls with a plural: the singular's index and the plural's.
 const PLURAL_CALLS := {"tr_n": [0, 1], "atr_n": [0, 1]}
 ## `HFTranslation`'s own, found only after a name that ends in one of `OWNERS`.
-const OWN_CALLS := {"t": [0]}
-const OWN_PLURAL_CALLS := {"tn": [0, 1]}
+const OWN_CALLS := {"t": [0], "message": [0]}
+const OWN_PLURAL_CALLS := {"tn": [0, 1], "message_n": [0, 1]}
 const OWNERS := ["HFTranslation", "HFTranslationType"]
 ## Keys whose literal a table holds for a control to show, as in
 ## `{"label": "Width", "tooltip": "How wide the flight is"}`.

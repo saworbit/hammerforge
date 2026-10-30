@@ -5,7 +5,9 @@ extends GutTest
 ## translate it (#1702). About a thousand strings were written before that was
 ## possible, so this does not ask for all of them at once. It counts, per file,
 ## the formatted strings given straight to a label, a tooltip, a title or a
-## toast, and fails when a file's count goes up. A file whose count goes down
+## toast, or sent with the level's `user_message` signal, and fails when a file's
+## count goes up. A message the Console's log or the bridge reads as well goes
+## through `HFTranslation.message()`, which keeps it English for them. A file whose count goes down
 ## fails too, until its line in the baseline is lowered, so the count only ever
 ## moves one way.
 ##
@@ -23,7 +25,8 @@ const ENGLISH_ONLY := ["res://addons/hammerforge/mcp"]
 var _sink := RegEx.create_from_string(
 	(
 		"(?:\\.text|\\btooltip_text|\\bplaceholder_text|\\bdialog_text|(?:^\\s*|\\.)title)"
-		+ "\\s*=(?!=)(.*)$|\\b(?:show_toast|_set_status|set_status|_toast|_say)\\((.*)$"
+		+ "\\s*=(?!=)(.*)$|(?:\\b(?:show_toast|_set_status|set_status|_toast|_say)\\("
+		+ '|\\bemit_signal\\(\\s*"user_message"\\s*,|\\buser_message\\.emit\\()(.*)$'
 	)
 )
 var _formatted := RegEx.create_from_string('"(?:[^"\\\\]|\\\\.)*"\\s*(?:%|\\.format\\()')
@@ -85,6 +88,9 @@ func test_the_detector_still_finds_untranslated_formatted_text():
 	assert_eq(_hits('label.text = "Name %s" % str(value)').size(), 1, "str() is not tr()")
 	assert_eq(_hits('label.text = tr("Name %s") % value'), [])
 	assert_eq(_hits('label.text = HFTranslation.t("Name {name}").format({"name": value})'), [])
+	assert_eq(_hits('root.user_message.emit("Saved %s" % path, 0)').size(), 1, "a level message")
+	assert_eq(_hits('root.emit_signal("user_message", "Saved %s" % path, 0)').size(), 1)
+	assert_eq(_hits('root.user_message.emit(HFTranslation.message("Saved {file}", f), 0)'), [])
 
 
 func _baseline() -> Dictionary:

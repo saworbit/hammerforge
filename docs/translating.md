@@ -22,8 +22,9 @@ rest left in English.
 - Toasts and the dock's status line, and the text HammerForge puts together in
   code with a number or a name in it before it shows it.
 
-Still English for now: a message put together in code and sent with the level's
-`user_message` signal, such as "Scattered 12 instances", and the words the snap
+Still English for now: a refusal a tool or a command reports through its
+result, such as "Arch: radius must be greater than zero", which the bridge reports too,
+a message that wraps a phrase another part builds, and the words the snap
 markers draw beside a point. The next steps of #1702 put them through the
 catalogs.
 
@@ -97,10 +98,34 @@ rules:
 HFTranslation.tn("{count} brush", "{count} brushes", n).format({"count": n})
 ```
 
+A message the Console's log or the bridge reads as well as the mapper, such as
+one sent with the level's `user_message` signal or a status line that is an
+error or a warning, goes through `HFTranslation.message()` or
+`HFTranslation.message_n()` instead. Each takes the English and the values, and
+gives back the message in English, so the log and an agent read it as it is in
+every language. The toast and the status line show it in the language shown:
+
+```gdscript
+var said := HFTranslation.message_n("Scattered {count} instance", "Scattered {count} instances", n)
+root.user_message.emit(said, 0)
+```
+
+A sentence with two counts gives each its own `message_n()` and takes them as
+words, the third argument, so each count gets the plural its language needs:
+
+```gdscript
+var parts := {
+	"brushes": HFTranslation.message_n("{count} brush", "{count} brushes", b),
+	"entities": HFTranslation.message_n("{count} entity", "{count} entities", e),
+}
+var said := HFTranslation.message("Pasted {brushes} and {entities}", {}, parts)
+```
+
 About a thousand strings were put together the old way before this was
 possible. `tests/test_untranslated_text_ratchet.gd` counts, for each script,
 the formatted strings handed straight to a label, a tooltip, a title or a
-toast without `HFTranslation.t()` or `tn()`, and keeps the counts in
+toast, or sent with `user_message`, without `HFTranslation.t()`, `tn()` or
+`message()`, and keeps the counts in
 `tests/fixtures/untranslated_interface_text.json`. It fails when a script's
 count goes up, so new text goes through the catalogs. It also fails when a
 count goes down, until that script's line in the file is lowered to match, so

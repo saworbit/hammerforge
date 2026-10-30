@@ -2,6 +2,8 @@
 class_name HFToolRegistry
 extends RefCounted
 
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+
 ## Manages registration and dispatch of HFEditorTool instances.
 
 ## Where `HFEditorTool` lives, so a candidate script can be checked against it
@@ -204,7 +206,8 @@ func activate_tool(
 	if not candidate.can_activate(root):
 		var reason := candidate.get_poll_fail_reason(root)
 		if reason == "":
-			reason = "%s cannot run right now" % candidate.tool_name()
+			var named := {"tool": candidate.tool_name()}
+			reason = HFTranslationType.message("{tool} cannot run right now", named)
 		HFLog.warn("HammerForge: %s" % reason)
 		if root and root.has_signal("user_message"):
 			root.user_message.emit(reason, 1)

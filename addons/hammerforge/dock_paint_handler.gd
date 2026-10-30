@@ -14,6 +14,7 @@ const HFPaintGrid = preload("paint/hf_paint_grid.gd")
 const HFStroke = preload("paint/hf_stroke.gd")
 const DraftBrush = preload("brush_instance.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 
 static func on_paint_layer_selected(dock: Object, index: int) -> void:
@@ -126,7 +127,8 @@ static func on_heightmap_convert(dock: Object) -> void:
 	var before_convert: Dictionary = dock.level_root.capture_full_state()
 	var result := converter.convert(brushes, settings)
 	if result.error != "":
-		dock.level_root.emit_signal("user_message", "Convert failed: " + result.error, 2)
+		var failed := HFTranslationType.message("Convert failed: {error}", {"error": result.error})
+		dock.level_root.emit_signal("user_message", failed, 2)
 		return
 	if not dock.level_root.get("paint_layers") or not dock.level_root.paint_layers:
 		dock.level_root.emit_signal("user_message", "Convert failed: no paint layer manager", 2)
@@ -152,14 +154,13 @@ static func on_heightmap_convert(dock: Object) -> void:
 	dock._commit_done_state_action("Convert to Heightmap", before_convert)
 	if result.notice != "":
 		dock.level_root.emit_signal("user_message", result.notice, 1)
-	dock.level_root.emit_signal(
-		"user_message",
-		(
-			"Converted %d brushes to heightmap layer '%s'"
-			% [result.brush_count, result.layer.display_name]
-		),
-		0
+	var converted := HFTranslationType.message_n(
+		"Converted {count} brush to heightmap layer '{layer}'",
+		"Converted {count} brushes to heightmap layer '{layer}'",
+		result.brush_count,
+		{"layer": result.layer.display_name}
 	)
+	dock.level_root.emit_signal("user_message", converted, 0)
 	dock._refresh_paint_layers()
 
 
@@ -314,8 +315,11 @@ static func on_scatter_preview(dock: Object) -> void:
 		mmi.material_override = mat
 		dock.level_root.add_child(mmi)
 		dock._scatter_preview_node = mmi
-	var msg := "%d instances (%d filtered)" % [result.transforms.size(), result.rejected_count]
-	dock.level_root.emit_signal("user_message", "Scatter preview: " + msg, 0)
+	var counts := {"count": result.transforms.size(), "filtered": result.rejected_count}
+	var msg := HFTranslationType.message(
+		"Scatter preview: {count} instances ({filtered} filtered)", counts
+	)
+	dock.level_root.emit_signal("user_message", msg, 0)
 
 
 static func on_scatter_commit(dock: Object) -> void:
@@ -345,7 +349,10 @@ static func on_scatter_commit(dock: Object) -> void:
 		return
 	var placed: int = dock._scatter_last_result.size()
 	_commit_scatter_node(dock, parent, mmi)
-	dock.level_root.emit_signal("user_message", "Scattered %d instances" % placed, 0)
+	var scattered := HFTranslationType.message_n(
+		"Scattered {count} instance", "Scattered {count} instances", placed
+	)
+	dock.level_root.emit_signal("user_message", scattered, 0)
 	_set_scatter_result(dock, [])
 
 
