@@ -16,6 +16,7 @@ const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFMapAdapterType = preload("../map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("../map_adapters/hf_map_quake.gd")
 const HFMapValve220Type = preload("../map_adapters/hf_map_valve220.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 var root: Node3D
 var _hflevel_thread: Thread = null
@@ -51,9 +52,23 @@ func save_hflevel(path: String = "", force: bool = false, autosave: bool = false
 	# A scene a newer build saved holds what this build would leave out (#1638).
 	var newer: String = root.format_refusal() if root.has_method("format_refusal") else ""
 	if newer != "":
+		var why := {"newer": newer}
 		var refused := (
-			"%s refused: this level %s. Saving it here would drop what that build added."
-			% ["Autosave" if autosave else "Save Level", newer]
+			(
+				HFTranslationType
+				. message(
+					"Autosave refused: this level {newer}. Saving it here would drop what that build added.",
+					why
+				)
+			)
+			if autosave
+			else (
+				HFTranslationType
+				. message(
+					"Save Level refused: this level {newer}. Saving it here would drop what that build added.",
+					why
+				)
+			)
 		)
 		HFLog.warn("HammerForge: %s" % refused)
 		if autosave and root.has_signal("autosave_failed"):
@@ -171,7 +186,8 @@ func load_hflevel(path: String = "") -> bool:
 		var message := str(read.get("error", ""))
 		HFLog.warn("HFFileSystem: %s" % message)
 		if root.has_signal("user_message"):
-			root.user_message.emit("Level not loaded: %s" % message, 2)
+			var why := {"reason": message}
+			root.user_message.emit(HFTranslationType.message("Level not loaded: {reason}", why), 2)
 		return false
 	# Only once the file is known to load. A region that unloads writes its paint
 	# under this path, so pointing it at a file that was then refused sent the
@@ -420,7 +436,8 @@ func validate_map(
 
 
 func _report_map_error(path: String, message: String) -> void:
-	var text := "Map import failed (%s): %s" % [path.get_file(), message]
+	var why := {"file": path.get_file(), "reason": message}
+	var text := HFTranslationType.message("Map import failed ({file}): {reason}", why)
 	push_error(text)
 	if root and root.has_signal("user_message"):
 		root.user_message.emit(text, 2)
@@ -699,7 +716,8 @@ func export_map(
 	if err != OK:
 		push_error("HFLevel: .map export failed for %s (error: %d)" % [path, err])
 		if root and root.has_signal("user_message"):
-			root.user_message.emit("File save failed: %s" % path.get_file(), 2)
+			var named := {"file": path.get_file()}
+			root.user_message.emit(HFTranslationType.message("File save failed: {file}", named), 2)
 		return err
 	_say_left_out(".map")
 	return OK
@@ -714,8 +732,12 @@ func _say_left_out(format: String) -> void:
 		root.user_message.emit("%s export %s" % [format, dropped], 0)
 	var count: int = root.visgroup_system.left_out_count() if root.visgroup_system else 0
 	if count > 0 and root.has_signal("user_message"):
+		var left := {"export": format, "count": count}
 		root.user_message.emit(
-			"%s export left out %d in visgroups kept out of the bake" % [format, count], 0
+			HFTranslationType.message(
+				"{export} export left out {count} in visgroups kept out of the bake", left
+			),
+			0
 		)
 
 

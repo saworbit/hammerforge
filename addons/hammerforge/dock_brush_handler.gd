@@ -436,12 +436,14 @@ static func _confirm_hollow_overwrite(dock: Object, hollow_id: String, thickness
 		return true
 	dock._hollow_overwrite_ack = token
 	_refresh_hollow_warning(dock, hollow_id)
-	var again := HFTranslationType.tn(
-		"Press Re-hollow again to rebuild over {count} reworked wall",
-		"Press Re-hollow again to rebuild over {count} reworked walls",
-		edited
+	dock._set_status(
+		HFTranslationType.message_n(
+			"Press Re-hollow again to rebuild over {count} reworked wall",
+			"Press Re-hollow again to rebuild over {count} reworked walls",
+			edited
+		),
+		true
 	)
-	dock._set_status(again.format({"count": edited}), true)
 	return false
 
 
@@ -1069,12 +1071,14 @@ static func _confirm_array_overwrite(dock: Object, record: Variant, params: Dict
 		return true
 	dock._array_overwrite_ack = token
 	_refresh_array_warning(dock, duplicator_id, edited)
-	var again := HFTranslationType.tn(
-		"Press Update again to rebuild over {count} edited copy",
-		"Press Update again to rebuild over {count} edited copies",
-		edited
+	dock._set_status(
+		HFTranslationType.message_n(
+			"Press Update again to rebuild over {count} edited copy",
+			"Press Update again to rebuild over {count} edited copies",
+			edited
+		),
+		true
 	)
-	dock._set_status(again.format({"count": edited}), true)
 	return false
 
 
@@ -1625,8 +1629,12 @@ static func on_structure_preset_selected(dock: Object, index: int) -> void:
 	var raw := HFStructurePresets.read_raw(structure_presets_path(dock))
 	var read := HFStructurePresets.settings_of(raw, type, preset_name)
 	if not read["ok"]:
-		var unchanged := HFTranslationType.t("{reason}. The settings are unchanged")
-		dock._set_status(unchanged.format({"reason": str(read["message"])}), true)
+		dock._set_status(
+			HFTranslationType.message(
+				"{reason}. The settings are unchanged", {"reason": str(read["message"])}
+			),
+			true
+		)
 		sync_structure_presets(dock)
 		return
 	dock._structure_preset_picked = preset_name
@@ -1685,13 +1693,21 @@ static func save_structure_preset(dock: Object, typed: String, replace := false)
 		dock._set_status("Type a name to save the settings under", true)
 		return
 	if HFStructurePresets.is_reserved_name(preset_name):
-		var taken := HFTranslationType.t("The list already uses {name}. Save under another name")
-		dock._set_status(taken.format({"name": preset_name}), true)
+		dock._set_status(
+			HFTranslationType.message(
+				"The list already uses {name}. Save under another name", {"name": preset_name}
+			),
+			true
+		)
 		return
 	var path := structure_presets_path(dock)
 	if HFStructurePresets.file_unreadable(path):
-		var unread := HFTranslationType.t("{file} could not be read. Fix it before saving to it")
-		dock._set_status(unread.format({"file": path}), true)
+		dock._set_status(
+			HFTranslationType.message(
+				"{file} could not be read. Fix it before saving to it", {"file": path}
+			),
+			true
+		)
 		return
 	var type := structure_type(dock)
 	var raw := HFStructurePresets.read_raw(path)
@@ -1716,7 +1732,7 @@ static func save_structure_preset(dock: Object, typed: String, replace := false)
 
 
 static func _say_unwritten(dock: Object, path: String) -> void:
-	dock._set_status(HFTranslationType.t("Could not write {file}").format({"file": path}), true)
+	dock._set_status(HFTranslationType.message("Could not write {file}", {"file": path}), true)
 
 
 ## The Create button's words for the structure type picked.
@@ -1761,21 +1777,29 @@ static func on_structure_preset_delete(dock: Object) -> void:
 		return
 	if dock._structure_preset_delete_ack != preset_name:
 		dock._structure_preset_delete_ack = preset_name
-		var again := (
-			HFTranslationType
-			. t(
-				"Press Delete again to delete structure preset {name} from the project. It cannot be undone"
+		(
+			dock
+			. _set_status(
+				(
+					HFTranslationType
+					. message(
+						"Press Delete again to delete structure preset {name} from the project. It cannot be undone",
+						{"name": preset_name}
+					)
+				),
+				true
 			)
 		)
-		dock._set_status(again.format({"name": preset_name}), true)
 		return
 	dock._structure_preset_delete_ack = ""
 	var path := structure_presets_path(dock)
 	if HFStructurePresets.file_unreadable(path):
-		var unread := HFTranslationType.t(
-			"{file} could not be read. Fix it before deleting from it"
+		dock._set_status(
+			HFTranslationType.message(
+				"{file} could not be read. Fix it before deleting from it", {"file": path}
+			),
+			true
 		)
-		dock._set_status(unread.format({"file": path}), true)
 		return
 	var type := structure_type(dock)
 	var raw := HFStructurePresets.read_raw(path)
@@ -1859,8 +1883,9 @@ static func on_create_structure(dock: Object) -> void:
 		var made := HFTranslationType.t("Created a {structure}")
 		dock._set_status(made.format({"structure": label.to_lower()}))
 	else:
-		var failed := HFTranslationType.t("{structure} was not created")
-		dock._set_status(failed.format({"structure": label}), true)
+		dock._set_status(
+			HFTranslationType.message("{structure} was not created", {"structure": label}), true
+		)
 	refresh_structure_section(dock)
 	# The ghost showed what was not there yet. It is there now, so it stops
 	# standing on top of itself; the next change to the settings brings it back.
@@ -1875,8 +1900,12 @@ static func _create_along_faces(dock: Object) -> void:
 	var command := "sweep_faces" if sweep else "run_trim_along_faces"
 	if dock.command_requested.get_connections().is_empty():
 		var label := "Sweep Faces" if sweep else "Run Trim Along Faces"
-		var needs := HFTranslationType.t("{command} needs the HammerForge plugin running")
-		dock._set_status(needs.format({"command": label}), true)
+		dock._set_status(
+			HFTranslationType.message(
+				"{command} needs the HammerForge plugin running", {"command": label}
+			),
+			true
+		)
 		return
 	dock.command_requested.emit(command)
 
@@ -1899,8 +1928,11 @@ static func on_update_structure(dock: Object) -> void:
 			var record = dock.level_root.generator_for_id(dock._active_generator_id)
 			var label := HFGeneratorSystem.display_name(record.type).to_lower()
 			var message := (
-				"Structure section set back to the selected %s. Change a setting and press Update"
-				% label
+				HFTranslationType
+				. message(
+					"Structure section set back to the selected {structure}. Change a setting and press Update",
+					{"structure": label}
+				)
 			)
 			dock._set_status(message, true)
 			return
@@ -1942,8 +1974,9 @@ static func _update_structure(dock: Object, generator_id: String, settings: Dict
 	if dock.level_root.has_generator(generator_id):
 		dock._set_status(HFTranslationType.t("{structure} rebuilt").format({"structure": label}))
 	else:
-		var failed := HFTranslationType.t("{structure} was not rebuilt")
-		dock._set_status(failed.format({"structure": label}), true)
+		dock._set_status(
+			HFTranslationType.message("{structure} was not rebuilt", {"structure": label}), true
+		)
 	refresh_structure_section(dock)
 	dock.level_root.clear_structure_preview()
 

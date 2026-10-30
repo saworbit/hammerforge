@@ -815,17 +815,25 @@ static func repick_trim_run(plugin: Object, root: Node) -> bool:
 	var label := "Re-pick Trim Run"
 	var record = root.generator_for_selection(clip_target_brush_ids(plugin, root))
 	if record == null:
-		var how := "select a piece of the trim run, then pick the faces it should follow"
-		root.user_message.emit("%s: %s in Face Select" % [label, how], 1)
+		var how := (
+			"{command}: select a piece of the trim run, then pick the faces it should follow "
+			+ "in Face Select"
+		)
+		root.user_message.emit(HFTranslationType.message(how, {"command": label}), 1)
 		return false
 	if not HFGeneratorSystem.follows_run(record.type):
 		var named := HFGeneratorSystem.display_name(record.type)
+		var built := {"command": label, "structure": named.to_lower()}
 		root.user_message.emit(
-			"%s: the selected %s is not built along faces" % [label, named.to_lower()], 1
+			HFTranslationType.message(
+				"{command}: the selected {structure} is not built along faces", built
+			),
+			1
 		)
 		return false
 	if root.face_selection.is_empty():
-		root.user_message.emit("%s: pick the faces it should follow in Face Select" % label, 1)
+		var pick := "{command}: pick the faces it should follow in Face Select"
+		root.user_message.emit(HFTranslationType.message(pick, {"command": label}), 1)
 		return false
 	# Read as its own type reads a run: a Trim Run's walls or a Sweep's faces (#1885).
 	var read: Dictionary = root.run_from_faces(record.type, root.face_selection)

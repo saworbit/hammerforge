@@ -4,6 +4,7 @@ extends VBoxContainer
 ## Stacks up to MAX_TOASTS transient labels that auto-fade after a duration.
 
 const HFAccessibility = preload("../hf_accessibility.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 const MAX_TOASTS := 5
 
@@ -49,7 +50,8 @@ func show_toast(message: String, level: int = Level.INFO) -> void:
 	panel.add_theme_stylebox_override("panel", style)
 
 	var label = Label.new()
-	label.text = message
+	# A message the log keeps in English shows here in the language shown.
+	label.text = HFTranslationType.shown(message)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# A screen reader reads it out: a refusal at once, the rest when it is free

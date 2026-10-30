@@ -4876,7 +4876,7 @@ func _on_hflevel_save_completed(path: String) -> void:
 func _on_hflevel_save_failed(path: String, error_message: String) -> void:
 	push_warning("HammerForge save failed for %s: %s" % [path, error_message])
 	_set_status(
-		HFTranslationType.t("Failed to save .hflevel: {file}").format({"file": path}), true, 5.0
+		HFTranslationType.message("Failed to save .hflevel: {file}", {"file": path}), true, 5.0
 	)
 	show_toast(HFTranslationType.t("Save failed: {file}").format({"file": path}), 2)
 
@@ -6651,8 +6651,13 @@ func _on_surface_paint_layer_add() -> void:
 	if _surface_active_face.paint_layers.size() >= level_root.MAX_SURFACE_PAINT_LAYERS:
 		# Checked before the undo action opens, so Add does not report success
 		# over a layer the face cannot blend.
-		var most := HFTranslationType.t("A face blends at most {count} surface paint layers")
-		_set_status(most.format({"count": level_root.MAX_SURFACE_PAINT_LAYERS}), true)
+		_set_status(
+			HFTranslationType.message(
+				"A face blends at most {count} surface paint layers",
+				{"count": level_root.MAX_SURFACE_PAINT_LAYERS}
+			),
+			true
+		)
 		return
 	_commit_state_action("Add Surface Paint Layer", "add_surface_paint_layer", [brush_id, face_idx])
 	_refresh_surface_paint_layers()
@@ -7060,9 +7065,9 @@ func _setting_bool(source: Dictionary, key: String, fallback: bool) -> bool:
 
 
 func _reject_setting(key: String, value: Variant) -> void:
-	var message := (
-		"Settings: '%s' is a %s, not a value this setting takes. The current one is kept."
-		% [key, type_string(typeof(value))]
+	var message := HFTranslationType.message(
+		"Settings: '{key}' is a {type}, not a value this setting takes. The current one is kept.",
+		{"key": key, "type": type_string(typeof(value))}
 	)
 	HFLog.warn(message)
 	_set_status_warning(message)
@@ -7274,7 +7279,7 @@ var _status_timer: Timer = null
 
 func _set_status(message: String, is_error: bool = false, timeout: float = 0.0) -> void:
 	if status_label:
-		status_label.text = message
+		status_label.text = HFTranslationType.shown(message)
 		if is_error:
 			var error_color = _get_editor_color("error_color", Color(0.95, 0.3, 0.3))
 			status_label.add_theme_color_override("font_color", error_color)
@@ -7294,7 +7299,7 @@ func _set_status(message: String, is_error: bool = false, timeout: float = 0.0) 
 ## wants to be seen has to ask for one (#773).
 func _set_status_success(message: String, timeout: float = 0.0) -> void:
 	if status_label:
-		status_label.text = message
+		status_label.text = HFTranslationType.shown(message)
 		var ok_color = _get_editor_color("success_color", Color(0.45, 0.95, 0.5))
 		status_label.add_theme_color_override("font_color", ok_color)
 	if timeout > 0.0:
@@ -7305,7 +7310,7 @@ func _set_status_success(message: String, timeout: float = 0.0) -> void:
 
 func _set_status_warning(message: String, timeout: float = 5.0) -> void:
 	if status_label:
-		status_label.text = message
+		status_label.text = HFTranslationType.shown(message)
 		var warn_color = _get_editor_color("warning_color", Color(0.95, 0.8, 0.2))
 		status_label.add_theme_color_override("font_color", warn_color)
 	_log(message, true)

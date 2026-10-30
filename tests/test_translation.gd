@@ -9,6 +9,7 @@ const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const PotCatalog = preload("res://tools/pot_catalog.gd")
 const HFTranslationScript = preload("res://addons/hammerforge/hf_translation.gd")
 const HFCommandRegistryScript = preload("res://addons/hammerforge/hf_command_registry.gd")
+const Toasts = preload("res://addons/hammerforge/ui/hf_toast.gd")
 
 const SPANISH := "res://tests/translations"
 const PLACEHOLDER := "\\{[A-Za-z_][A-Za-z_0-9]*\\}"
@@ -125,6 +126,26 @@ func test_a_toast_or_a_status_line_is_found_as_it_would_show():
 	assert_eq(
 		ids, ["Saved", "Baking", "Grouped", "Stamped", "Nothing to paste", "Pick a mesh first"]
 	)
+
+
+func test_a_message_stays_english_for_the_log_and_shows_in_the_language():
+	HFTranslationScript.load_catalogs()
+	var english := HFTranslationScript.message("Repeat: {command}", {"command": "Hollow"})
+	assert_eq(english, "Repeat: Hollow", "the log and the bridge read English")
+	assert_eq(HFTranslationScript.shown(english), "Repetir: Hollow", "a toast shows Spanish")
+	var counted := HFTranslationScript.message_n("{count} brush", "{count} brushes", 3)
+	assert_eq(counted, "3 brushes")
+	assert_eq(HFTranslationScript.shown(counted), "3 pinceles")
+	assert_eq(HFTranslationScript.shown("Not a message"), "Not a message")
+	var toasts: Node = add_child_autofree(Toasts.new())
+	toasts.show_toast(english)
+	assert_eq(toasts.get_child(0).get_child(0).text, "Repetir: Hollow", "the toast's label")
+	var source := (
+		'x(HFTranslationType.message("Saved {file}", {"file": f}))\n'
+		+ 'x(HFTranslation.message_n("{count} cut", "{count} cuts", n))'
+	)
+	var found: Array = PotCatalog.script_words(source)
+	assert_eq(found, [["Saved {file}", "", ""], ["{count} cut", "{count} cuts", ""]])
 
 
 func test_every_surface_the_plugin_adds_to_the_editor_is_in_the_domain():

@@ -19,6 +19,7 @@ const HFSmoothing = preload("../hf_smoothing.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFPlayerMetrics = preload("../hf_player_metrics.gd")
 const HFHiddenFaces = preload("../hf_hidden_faces.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## What a baked static body detects: nothing.
 ##
@@ -513,17 +514,14 @@ func bake_selected(
 	var plan := _selection_bake_plan(brush_nodes)
 	var held := int(plan["held_by_full_bake"])
 	if held > 0:
-		root.emit_signal(
-			"user_message",
+		var whole := HFTranslationType.message(
 			(
-				(
-					"Bake Selected baked the whole level: the last full bake holds %d of "
-					+ "these brushes merged with others"
-				)
-				% held
+				"Bake Selected baked the whole level: the last full bake holds {count} of "
+				+ "these brushes merged with others"
 			),
-			1
+			{"count": held}
 		)
+		root.emit_signal("user_message", whole, 1)
 		# Handed to bake(), which takes the flag back before its first await.
 		_bake_in_flight = false
 		return await bake(false, false, collision_layer_mask, preview_mode)
@@ -1724,7 +1722,11 @@ func warn_bake_failure() -> void:
 	if draft_count == 0:
 		hint = "No draft brushes found — draw some brushes first"
 	elif pending_count > 0:
-		hint = "You have %d pending cuts — try 'Commit Cuts' before baking" % pending_count
+		hint = HFTranslationType.message_n(
+			"You have {count} pending cut — try 'Commit Cuts' before baking",
+			"You have {count} pending cuts — try 'Commit Cuts' before baking",
+			pending_count
+		)
 	else:
 		hint = "CSG produced no geometry — check brush operations and overlaps"
 	root.emit_signal("user_message", hint, 2)
@@ -2191,9 +2193,9 @@ func _csg_bake_options(csg: CSGCombiner3D, options: Dictionary) -> Dictionary:
 	var out := options.duplicate()
 	var pieces := _csg_collision_pieces(csg)
 	if pieces.has("error"):
-		var message := (
-			"Collision Mode %d baked the cut mesh's triangles instead of hulls: %s"
-			% [collision_mode, pieces["error"]]
+		var message := HFTranslationType.message(
+			"Collision Mode {mode} baked the cut mesh's triangles instead of hulls: {reason}",
+			{"mode": collision_mode, "reason": pieces["error"]}
 		)
 		root.emit_signal("user_message", message, 1)
 		root._log(message)
@@ -3681,17 +3683,32 @@ func report_navmesh_bake(nav_mesh: NavigationMesh, source_vertices: int) -> void
 	var source_name := parsed_geometry_name(nav_mesh)
 	var polygons := nav_mesh.get_polygon_count()
 	if polygons > 0:
-		var plural := "" if polygons == 1 else "s"
-		var line := "Navmesh: %d polygon%s from %s" % [polygons, plural, source_name]
+		var line := HFTranslationType.message_n(
+			"Navmesh: {count} polygon from {source}",
+			"Navmesh: {count} polygons from {source}",
+			polygons,
+			{"source": source_name}
+		)
 		root.emit_signal("user_message", line, 0)
 		return
-	var detail := "Navmesh is empty: %s produced nothing walkable" % source_name
+	var named := {"source": source_name}
+	var detail := HFTranslationType.message(
+		"Navmesh is empty: {source} produced nothing walkable", named
+	)
 	if source_vertices == 0:
-		detail += " (no geometry reached the parse)"
+		detail = HFTranslationType.message(
+			"Navmesh is empty: {source} produced nothing walkable (no geometry reached the parse)",
+			named
+		)
 	elif source_vertices > 0:
-		detail += (
-			" (geometry reached the parse, but agent radius %.2f / height %.2f left no polygon)"
-			% [nav_mesh.agent_radius, nav_mesh.agent_height]
+		named["radius"] = "%.2f" % nav_mesh.agent_radius
+		named["height"] = "%.2f" % nav_mesh.agent_height
+		detail = HFTranslationType.message(
+			(
+				"Navmesh is empty: {source} produced nothing walkable (geometry reached the parse, "
+				+ "but agent radius {radius} / height {height} left no polygon)"
+			),
+			named
 		)
 	HFLog.warn(detail)
 	root.emit_signal("user_message", detail, 1)
@@ -3863,17 +3880,18 @@ func _plan_ramps(brushes: Array) -> Dictionary:
 		)
 	if not kept.is_empty():
 		var count := kept.size()
-		(
-			root
-			. emit_signal(
-				"user_message",
+		var kept_steps := (
+			HFTranslationType
+			. message_n(
+				"{count} stair with Ramp collision kept the collision of its steps. The Console says why",
 				(
-					"%d stair%s with Ramp collision kept the collision of %s steps. The Console says why"
-					% [count, "" if count == 1 else "s", "its" if count == 1 else "their"]
+					"{count} stairs with Ramp collision kept the collision of their steps. "
+					+ "The Console says why"
 				),
-				1
+				count
 			)
 		)
+		root.emit_signal("user_message", kept_steps, 1)
 	return plan
 
 

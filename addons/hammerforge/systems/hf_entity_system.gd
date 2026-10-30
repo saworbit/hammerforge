@@ -10,6 +10,7 @@ const HFEntityDef = preload("../hf_entity_def.gd")
 const HFPrefabSystem = preload("hf_prefab_system.gd")
 const HFGridSystem = preload("hf_grid_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 var root: Node3D
 
@@ -460,13 +461,13 @@ func delete_entities_by_paths(entity_paths: Array) -> void:
 			root.visgroup_system._cleanup_empty_group(group_id)
 		var removed_count := cleanup_connections_for_deleted(entity)
 		if removed_count > 0 and root.has_signal("user_message"):
-			root.user_message.emit(
-				(
-					"Removed %d I/O connection(s) targeting deleted entity '%s'"
-					% [removed_count, entity_name]
-				),
-				1
+			var removed := HFTranslationType.message_n(
+				"Removed {count} I/O connection targeting deleted entity '{entity}'",
+				"Removed {count} I/O connections targeting deleted entity '{entity}'",
+				removed_count,
+				{"entity": entity_name}
 			)
+			root.user_message.emit(removed, 1)
 		_emit_entity_signal("entity_removed", entity)
 		var parent := entity.get_parent()
 		if parent:

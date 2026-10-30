@@ -47,6 +47,7 @@ const HFHiddenFaces = preload("hf_hidden_faces.gd")
 ## Both halves of the playtest request live in one leaf script, so neither this
 ## nor the dock handler has to name the other's class (#771).
 const HFPlaytestRequest = preload("hf_playtest_request.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
 const RELOAD_POLL_SECONDS := 0.5
@@ -4289,8 +4290,12 @@ func export_playtest_scene(
 	var left_out: int = visgroup_system.left_out_count() if visgroup_system else 0
 	if left_out > 0:
 		var export_name := "Playtest" if include_debug_rig else "Game scene"
+		var left := {"export": export_name, "count": left_out}
 		user_message.emit(
-			"%s export left out %d in visgroups kept out of the bake" % [export_name, left_out], 0
+			HFTranslationType.message(
+				"{export} export left out {count} in visgroups kept out of the bake", left
+			),
+			0
 		)
 	return true
 
@@ -5504,12 +5509,12 @@ func _load_hflevel_for_bake_only_scene() -> void:
 		return
 	var path := resolved_hflevel_path()
 	if not FileAccess.file_exists(path):
-		var message := (
+		var message := HFTranslationType.message(
 			(
-				"This level keeps only its baked geometry in the scene, and %s is not there, "
+				"This level keeps only its baked geometry in the scene, and {file} is not there, "
 				+ "so its brushes could not be loaded."
-			)
-			% path
+			),
+			{"file": path}
 		)
 		HFLog.warn("HammerForge: %s" % message)
 		if has_signal("user_message"):

@@ -828,8 +828,7 @@ static func require_visgroup_name(dock: Object, action: String) -> String:
 	var visgroup_name := get_selected_visgroup_name(dock)
 	if visgroup_name == "" and dock:
 		dock._set_status(
-			HFTranslationType.t("{action}: select a visgroup first").format({"action": action}),
-			true
+			HFTranslationType.message("{action}: select a visgroup first", {"action": action}), true
 		)
 	return visgroup_name
 
@@ -1336,8 +1335,11 @@ static func sync_cordon_ui(dock: Object, select: int = -1) -> bool:
 
 static func _show_cordon_from_selection(dock: Object, index: int) -> void:
 	if sync_cordon_ui(dock, index):
+		var past := {"limit": int(CORDON_LIMIT)}
 		dock._set_status_warning(
-			"Cordon set past +/-%d; the spins cannot show it all" % int(CORDON_LIMIT)
+			HFTranslationType.message(
+				"Cordon set past +/-{limit}; the spins cannot show it all", past
+			)
 		)
 	if dock.cordon_enabled_check:
 		dock.cordon_enabled_check.button_pressed = true
