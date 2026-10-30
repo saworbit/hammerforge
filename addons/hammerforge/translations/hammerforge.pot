@@ -293,6 +293,10 @@ msgstr ""
 msgid "Also make the cut for the opening, a Pending Cut until it is applied"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_shortcut_dialog.gd
+msgid "Also used by {commands}. Only one of them fires."
+msgstr ""
+
 #: addons/hammerforge/plugin_edit_actions.gd
 msgid "Amount"
 msgstr ""
@@ -3623,6 +3627,10 @@ msgstr ""
 msgid "Layer 0"
 msgstr ""
 
+#: addons/hammerforge/dock.gd
+msgid "Layer {number}"
+msgstr ""
+
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Layout:"
 msgstr ""
@@ -4975,6 +4983,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Place what is on the clipboard where it was copied from, or .map text copied since at the cursor."
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "Place {prefab} Here"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -7221,6 +7233,22 @@ msgstr ""
 msgid "Static World (Layer 1) - the player walks on it"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_status_lamp.gd
+msgid "Status: Attention"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_status_lamp.gd
+msgid "Status: Not measured"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_status_lamp.gd
+msgid "Status: OK"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_status_lamp.gd
+msgid "Status: Problem"
+msgstr ""
+
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Step H:"
 msgstr ""
@@ -9079,6 +9107,10 @@ msgstr ""
 msgid "{folded} of {count} pieces fold back on themselves: widen the radius or cut more segments"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_console_panel.gd
+msgid "{kind} ({count} open)"
+msgstr ""
+
 #: addons/hammerforge/plugin_snap_feedback.gd
 msgid "{kind} only"
 msgstr ""
@@ -9103,6 +9135,10 @@ msgstr ""
 msgid "{ms} ms"
 msgstr ""
 
+#: addons/hammerforge/ui/hf_io_wiring_panel.gd
+msgid "{name} (self)"
+msgstr ""
+
 #: addons/hammerforge/systems/hf_brush_system.gd
 msgid "{operation}: produced no geometry"
 msgstr ""
@@ -9115,8 +9151,16 @@ msgstr ""
 msgid "{preset} is in the settings. Press Update to rebuild with it"
 msgstr ""
 
+#: addons/hammerforge/dock_manage_handler.gd
+msgid "{profile} (project)"
+msgstr ""
+
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "{reason}. The settings are unchanged"
+msgstr ""
+
+#: addons/hammerforge/ui/hf_viewport_context_menu.gd
+msgid "{size} m"
 msgstr ""
 
 #: addons/hammerforge/hf_snap_system.gd

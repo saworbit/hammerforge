@@ -2,6 +2,8 @@
 extends VBoxContainer
 class_name HFIOWiringPanel
 
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+
 ## Visual I/O wiring panel — shows source entity's outputs as draggable ports,
 ## available targets as drop zones, and a preset picker for quick wiring.
 ## Embedded in the Entities tab when an entity is selected.
@@ -406,7 +408,7 @@ func _refresh_target_dropdown() -> void:
 		if not is_instance_valid(child):
 			continue
 		if child == _source_entity:
-			_wire_target.add_item("%s (self)" % child.name)
+			_wire_target.add_item(HFTranslationType.t("{name} (self)").format({"name": child.name}))
 		else:
 			_wire_target.add_item(child.name)
 	# Also list brush entities, a named one once by its name. The bake names its

@@ -195,7 +195,8 @@ func _add_row(parent: TreeItem, action: String, selected: bool) -> void:
 	var clashes: PackedStringArray = _keymap.conflicts_for(action)
 	if not clashes.is_empty():
 		item.set_custom_color(1, CLASH_COLOR)
-		item.set_tooltip_text(1, "Also used by %s. Only one of them fires." % _labels(clashes))
+		var also := HFTranslationType.t("Also used by {commands}. Only one of them fires.")
+		item.set_tooltip_text(1, also.format({"commands": _labels(clashes)}))
 	if selected:
 		item.select(0)
 

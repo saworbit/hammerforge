@@ -1631,7 +1631,7 @@ func _refresh_history_list() -> void:
 			var entry_name = str(entry.get("name", ""))
 			var version = int(entry.get("version", 0))
 			var prefix = "• " if version <= current_version else "  "
-			history_list.add_item("%s%s" % [prefix, entry_name])
+			history_list.add_item(prefix + entry_name)
 	_update_history_buttons()
 
 
@@ -5460,7 +5460,8 @@ func _refresh_surface_paint_layers() -> void:
 	var layer_count = _surface_active_face.paint_layers.size()
 	var label_count = max(layer_count, 1)
 	for i in range(label_count):
-		surface_paint_layer_select.add_item("Layer %d" % i, i)
+		var named := HFTranslationType.t("Layer {number}").format({"number": i})
+		surface_paint_layer_select.add_item(named, i)
 	surface_paint_layer_select.disabled = false
 	if surface_paint_layer_add:
 		surface_paint_layer_add.disabled = false

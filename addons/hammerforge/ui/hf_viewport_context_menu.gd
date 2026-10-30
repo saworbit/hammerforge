@@ -3,6 +3,8 @@ extends PopupMenu
 ## Space-key context menu that appears at cursor position in the 3D viewport.
 ## Context-sensitive: shows different actions based on current selection and mode.
 
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+
 signal action_requested(action: String, args: Array)
 
 enum Context { NONE, BRUSH_SELECTED, FACE_SELECTED, ENTITY_SELECTED, DRAW_IDLE, VERTEX_EDIT }
@@ -103,7 +105,8 @@ func _init() -> void:
 	# cannot carry one.
 	for index in range(HFSnapSystem.GRID_PRESETS.size()):
 		var val: float = HFSnapSystem.GRID_PRESETS[index]
-		_grid_submenu.add_item("%s m" % str(val), _ID_GRID_BASE + index)
+		var step := HFTranslationType.t("{size} m").format({"size": str(val)})
+		_grid_submenu.add_item(step, _ID_GRID_BASE + index)
 	_grid_submenu.id_pressed.connect(_on_grid_id_pressed)
 	add_child(_grid_submenu)
 	# UV submenu
@@ -174,7 +177,8 @@ func show_at(pos: Vector2, state: Dictionary) -> void:
 		var library_prefab := str(state.get("library_prefab", ""))
 		if library_prefab != "" and state.get("has_root", false):
 			add_separator()
-			add_item("Place %s Here" % library_prefab.get_file().get_basename(), _ID_PLACE_PREFAB)
+			var named := {"prefab": library_prefab.get_file().get_basename()}
+			add_item(HFTranslationType.t("Place {prefab} Here").format(named), _ID_PLACE_PREFAB)
 	# Common footer
 	add_separator()
 	add_item("Select All", _ID_SELECT_ALL)

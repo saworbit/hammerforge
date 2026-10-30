@@ -10,6 +10,7 @@ extends Control
 ## place the user is looking for an answer.
 
 const HFStatusBoardType = preload("../hf_status_board.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## Diameter the lamp draws at unless a caller overrides custom_minimum_size.
 const DEFAULT_SIZE := 16.0
@@ -38,7 +39,13 @@ func _init() -> void:
 
 ## The lamp's state as its name, since the colour and the glyph are drawn (#1703).
 func _name_state() -> void:
-	accessibility_name = "Status: %s" % HFStatusBoardType.SEVERITY_LABELS.get(severity, "")
+	var said := {
+		HFStatusBoardType.Severity.OK: HFTranslationType.t("Status: OK"),
+		HFStatusBoardType.Severity.WARN: HFTranslationType.t("Status: Attention"),
+		HFStatusBoardType.Severity.PROBLEM: HFTranslationType.t("Status: Problem"),
+		HFStatusBoardType.Severity.UNKNOWN: HFTranslationType.t("Status: Not measured"),
+	}
+	accessibility_name = str(said.get(severity, said[HFStatusBoardType.Severity.UNKNOWN]))
 
 
 ## The lamp colour for a severity, in the current editor theme.

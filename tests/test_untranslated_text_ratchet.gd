@@ -4,8 +4,9 @@ extends GutTest
 ## `HFTranslation.t()` or `tn()`, with named placeholders, or no catalog can
 ## translate it (#1702). About a thousand strings were written before that was
 ## possible, so this does not ask for all of them at once. It counts, per file,
-## the formatted strings given straight to a label, a tooltip, a title or a
-## toast, or sent with the level's `user_message` signal, and fails when a file's
+## the formatted strings given straight to a label, a tooltip, a title, a menu
+## item, a screen reader's name, drawn text or a toast, sent with the level's
+## `user_message` signal, or made a refusal with `HFOpResult`, and fails when a file's
 ## count goes up. A message the Console's log or the bridge reads as well goes
 ## through `HFTranslation.message()`, which keeps it English for them. A file whose count goes down
 ## fails too, until its line in the baseline is lowered, so the count only ever
@@ -24,10 +25,15 @@ const ENGLISH_ONLY := ["res://addons/hammerforge/mcp"]
 
 var _sink := RegEx.create_from_string(
 	(
-		"(?:\\.text|\\btooltip_text|\\bplaceholder_text|\\bdialog_text|(?:^\\s*|\\.)title)"
+		"(?:\\.text|\\btooltip_text|\\bplaceholder_text|\\bdialog_text|(?:^\\s*|\\.)title"
+		+ "|\\baccessibility_name|\\baccessibility_description)"
 		+ "\\s*=(?!=)(.*)$|(?:\\b(?:show_toast|_set_status|set_status|_toast|_say)\\("
 		+ '|\\bemit_signal\\(\\s*"user_message"\\s*,|\\buser_message\\.emit\\('
-		+ "|\\bHFOpResult\\.(?:fail|success)\\(|\\b_op_fail\\()(.*)$"
+		+ "|\\bHFOpResult\\.(?:fail|success)\\(|\\b_op_fail\\("
+		+ "|\\b(?:add_item|add_check_item|add_radio_check_item|add_icon_item|add_icon_check_item"
+		+ "|add_submenu_item|set_item_text|set_item_tooltip|set_tab_title|set_tab_tooltip"
+		+ "|set_text|set_tooltip_text|make_button|make_check|make_label_row"
+		+ "|draw_string|draw_multiline_string)\\()(.*)$"
 	)
 )
 var _formatted := RegEx.create_from_string('"(?:[^"\\\\]|\\\\.)*"\\s*(?:%|\\.format\\()')
@@ -93,6 +99,8 @@ func test_the_detector_still_finds_untranslated_formatted_text():
 	assert_eq(_hits('root.emit_signal("user_message", "Saved %s" % path, 0)').size(), 1)
 	assert_eq(_hits('root.user_message.emit(HFTranslation.message("Saved {file}", f), 0)'), [])
 	assert_eq(_hits('return HFOpResult.fail("Arch: %s" % x, "Use %d" % n)').size(), 1, "a refusal")
+	assert_eq(_hits('menu.add_item("Place %s Here" % name, 3)').size(), 1, "a menu item")
+	assert_eq(_hits('lamp.accessibility_name = "Status: %s" % word').size(), 1, "a screen reader's")
 
 
 func _baseline() -> Dictionary:
