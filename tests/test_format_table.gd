@@ -67,7 +67,7 @@ func _table(problems: PackedStringArray = []) -> Dictionary:
 	var text := FileAccess.get_file_as_string(DOC)
 	var keys := {}
 	for row in HFFormatCensus.ROWS:
-		keys[str(row[2])] = str(row[0])
+		keys[str(row[1])] = str(row[0])
 	var out := {}
 	var columns: Array = []
 	for line in text.split("\n"):
@@ -108,7 +108,7 @@ static func _kind(cell: String) -> String:
 static func _label(key: String) -> String:
 	for row in HFFormatCensus.ROWS:
 		if row[0] == key:
-			return str(row[2]).to_lower()
+			return str(row[1]).to_lower()
 	return key
 
 
@@ -117,7 +117,7 @@ func test_the_table_has_every_row_and_column_and_says_one_thing_in_each_cell():
 	var table := _table(problems)
 	for row in HFFormatCensus.ROWS:
 		if not table.has(row[0]):
-			problems.append("the table has no row %s" % row[2])
+			problems.append("the table has no row %s" % row[1])
 			continue
 		for format in COLUMNS:
 			var cell := str(table[row[0]].get(format, ""))
@@ -704,7 +704,7 @@ func test_each_export_names_what_it_left_out():
 	assert_eq(level.export_baked_gltf(DIR + "said.glb"), OK)
 	var said := _said(level)
 	for format in [".map", ".glb"]:
-		var expected := "%s export %s" % [format, HFFormatCensus.left_out(level, format)]
+		var expected := "%s export left out %s" % [format, HFFormatCensus.left_out(level, format)]
 		assert_has(said, expected, "the %s export says what it left out" % format)
 	assert_string_contains(HFFormatCensus.left_out(level, ".map"), "2 cordons")
 

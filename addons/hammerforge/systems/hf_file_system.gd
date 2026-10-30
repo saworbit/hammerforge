@@ -729,7 +729,10 @@ func export_map(
 func _say_left_out(format: String) -> void:
 	var dropped := HFFormatCensus.left_out(root, format)
 	if dropped != "" and root.has_signal("user_message"):
-		root.user_message.emit("%s export %s" % [format, dropped], 0)
+		var said := HFTranslationType.message(
+			"{export} export left out {items}", {"export": format}, {"items": dropped}
+		)
+		root.user_message.emit(said, 0)
 	var count: int = root.visgroup_system.left_out_count() if root.visgroup_system else 0
 	if count > 0 and root.has_signal("user_message"):
 		var left := {"export": format, "count": count}

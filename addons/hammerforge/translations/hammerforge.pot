@@ -4663,6 +4663,10 @@ msgstr ""
 msgid "Power-user overlays"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_prefab_system.gd
+msgid "Prefab '{prefab}' left out {items}"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_prefab_library.gd
 msgid "Prefab name..."
 msgstr ""
@@ -7781,6 +7785,12 @@ msgstr ""
 msgid "of"
 msgstr ""
 
+#: addons/hammerforge/hf_format_census.gd
+msgid "paint on {count} face"
+msgid_plural "paint on {count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "param"
 msgstr ""
@@ -7792,6 +7802,66 @@ msgstr ""
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "spacing = offset"
 msgstr ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "the bake options of {count} brush"
+msgid_plural "the bake options of {count} brushes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "the hand laid UVs of {count} face"
+msgid_plural "the hand laid UVs of {count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "the material of {count} face"
+msgid_plural "the material of {count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "the properties of {count} entity"
+msgid_plural "the properties of {count} entities"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "the sculpt of {count} face"
+msgid_plural "the sculpt of {count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "the shape of {count} brush"
+msgid_plural "the shape of {count} brushes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "the smoothing of {count} face"
+msgid_plural "the smoothing of {count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "the texture groups of {count} face"
+msgid_plural "the texture groups of {count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "the texture settings of {count} face"
+msgid_plural "the texture settings of {count} faces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "the wires of {count} entity"
+msgid_plural "the wires of {count} entities"
+msgstr[0] ""
+msgstr[1] ""
 
 #: addons/hammerforge/dock.gd
 msgid "trigger_multiple"
@@ -7887,9 +7957,27 @@ msgid_plural "{copies} copies of {brushes}"
 msgstr[0] ""
 msgstr[1] ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/dock_brush_handler.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd addons/hammerforge/ui/hf_replace_material_dialog.gd
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} Hidden face"
+msgid_plural "{count} Hidden faces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} bake option"
+msgid_plural "{count} bake options"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/dock.gd addons/hammerforge/dock_brush_handler.gd addons/hammerforge/hf_format_census.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "{count} brush"
 msgid_plural "{count} brushes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} brush entity"
+msgid_plural "{count} brush entities"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -7902,6 +7990,18 @@ msgstr[1] ""
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "{count} copy of {prefab} in the level"
 msgid_plural "{count} copies of {prefab} in the level"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} cordon"
+msgid_plural "{count} cordons"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} cut"
+msgid_plural "{count} cuts"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -7941,6 +8041,18 @@ msgid_plural "{count} faces made Normal"
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} floor paint layer"
+msgid_plural "{count} floor paint layers"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} group"
+msgid_plural "{count} groups"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/plugin_edit_actions.gd
 msgid "{count} hidden brush overlaps and is left alone."
 msgid_plural "{count} hidden brushes overlap and are left alone."
@@ -7971,6 +8083,12 @@ msgid_plural "{count} locked: unlock their visgroups, or clear the locks in the 
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} note"
+msgid_plural "{count} notes"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "{count} pending"
 msgstr ""
@@ -7978,6 +8096,18 @@ msgstr ""
 #: addons/hammerforge/plugin_face_sweep.gd
 msgid "{count} piece"
 msgid_plural "{count} pieces"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} point entity"
+msgid_plural "{count} point entities"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} prefab copy"
+msgid_plural "{count} prefab copies"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -7993,6 +8123,18 @@ msgid_plural "{count} stairs with Ramp collision kept the collision of their ste
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} structure"
+msgid_plural "{count} structures"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_format_census.gd
+msgid "{count} visgroup"
+msgid_plural "{count} visgroups"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "{entities} selected"
 msgstr ""
@@ -8003,6 +8145,10 @@ msgstr ""
 
 #: addons/hammerforge/level_root.gd addons/hammerforge/systems/hf_file_system.gd
 msgid "{export} export left out {count} in visgroups kept out of the bake"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_file_system.gd
+msgid "{export} export left out {items}"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_context_toolbar.gd
