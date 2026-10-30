@@ -126,8 +126,9 @@ var said := HFTranslation.message("Pasted {brushes} and {entities}", {}, parts)
 
 About a thousand strings were put together the old way before this was
 possible. `tests/test_untranslated_text_ratchet.gd` counts, for each script,
-the formatted strings handed straight to a label, a tooltip, a title or a
-toast, or sent with `user_message`, without `HFTranslation.t()`, `tn()` or
+the formatted strings handed straight to a label, a tooltip, a title, a menu
+item, a screen reader's name, drawn text or a toast, sent with `user_message`
+or made a refusal with `HFOpResult`, without `HFTranslation.t()`, `tn()` or
 `message()`, and keeps the counts in
 `tests/fixtures/untranslated_interface_text.json`. It fails when a script's
 count goes up, so new text goes through the catalogs. It also fails when a

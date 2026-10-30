@@ -988,7 +988,10 @@ static func sync_bake_profile_ui(dock: Object) -> void:
 		for profile_name in HFBakeProfilesType.names(saved):
 			# The project's are marked; the item's metadata is the name either way.
 			var shared: bool = sources["project"].has(profile_name)
-			opt.add_item("%s (project)" % profile_name if shared else profile_name)
+			var marked := HFTranslationType.t("{profile} (project)").format(
+				{"profile": profile_name}
+			)
+			opt.add_item(marked if shared else profile_name)
 			opt.set_item_metadata(opt.item_count - 1, profile_name)
 			if shared:
 				opt.set_item_tooltip(

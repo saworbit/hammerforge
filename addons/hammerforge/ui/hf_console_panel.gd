@@ -408,7 +408,8 @@ func refresh_notes() -> void:
 			continue
 		var open := mine.filter(func(row): return not row[3]).size()
 		var group := _notes_tree.create_item(top)
-		group.set_text(0, "%s (%d open)" % [kind, open])
+		var heading := {"kind": HFTranslationType.t(str(kind)), "count": open}
+		group.set_text(0, HFTranslationType.t("{kind} ({count} open)").format(heading))
 		group.set_selectable(0, false)
 		group.set_selectable(1, false)
 		group.set_selectable(2, false)
