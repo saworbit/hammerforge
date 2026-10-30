@@ -24,6 +24,7 @@ const HFGeneratorSchema = preload("hf_generator_schema.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 const MAX_STEPS := 128
 
@@ -155,8 +156,11 @@ static func validate(settings: Dictionary) -> HFOpResult:
 		return HFOpResult.fail("Spiral stairs: needs at least one tread", "Set steps to 1 or more")
 	if steps > MAX_STEPS:
 		return HFOpResult.fail(
-			"Spiral stairs: %d treads is more brushes than a staircase should be" % steps,
-			"Use %d steps or fewer" % MAX_STEPS
+			HFTranslationType.message(
+				"Spiral stairs: {steps} treads is more brushes than a staircase should be",
+				{"steps": steps}
+			),
+			HFTranslationType.message("Use {max_steps} steps or fewer", {"max_steps": MAX_STEPS})
 		)
 	if outer <= 0.0:
 		return HFOpResult.fail(
@@ -168,8 +172,13 @@ static func validate(settings: Dictionary) -> HFOpResult:
 		)
 	if inner >= outer:
 		return HFOpResult.fail(
-			"Spiral stairs: an inner radius of %.1f leaves no tread inside %.1f" % [inner, outer],
-			"Use an inner radius below %.1f" % outer
+			HFTranslationType.message(
+				"Spiral stairs: an inner radius of {inner} leaves no tread inside {outer}",
+				{"inner": "%.1f" % (inner), "outer": "%.1f" % (outer)}
+			),
+			HFTranslationType.message(
+				"Use an inner radius below {outer}", {"outer": "%.1f" % (outer)}
+			)
 		)
 	if float(merged["tread_thickness"]) <= 0.0:
 		return HFOpResult.fail(
@@ -186,8 +195,14 @@ static func validate(settings: Dictionary) -> HFOpResult:
 		)
 	if absf(turn) > MAX_STEP_DEGREES:
 		return HFOpResult.fail(
-			"Spiral stairs: a tread turning %.0f degrees is not convex" % absf(turn),
-			"Use %.0f degrees or fewer a step" % MAX_STEP_DEGREES
+			HFTranslationType.message(
+				"Spiral stairs: a tread turning {turn} degrees is not convex",
+				{"turn": "%.0f" % (absf(turn))}
+			),
+			HFTranslationType.message(
+				"Use {max_step_degrees} degrees or fewer a step",
+				{"max_step_degrees": "%.0f" % (MAX_STEP_DEGREES)}
+			)
 		)
 	if bool(merged["center_post"]) and inner <= 0.0:
 		return HFOpResult.fail(
@@ -214,15 +229,21 @@ static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 	var deep := (outer - inner) * cos(turn * 0.5)
 	var wide := outer * sin(turn)
 	if minf(deep, wide) < MIN_PIECE:
-		return HFOpResult.fail(
-			(
-				"Spiral stairs: a tread %s across at its narrowest is thinner than a brush can be"
-				% _number(minf(deep, wide))
-			),
-			(
-				"Leave more between Inner R and Outer R, or turn each tread less"
-				if deep < wide
-				else "Use a larger Outer R, or a Turn nearer 90 degrees"
+		return (
+			HFOpResult
+			. fail(
+				(
+					HFTranslationType
+					. message(
+						"Spiral stairs: a tread {narrowest} across at its narrowest is thinner than a brush can be",
+						{"narrowest": _number(minf(deep, wide))}
+					)
+				),
+				(
+					"Leave more between Inner R and Outer R, or turn each tread less"
+					if deep < wide
+					else "Use a larger Outer R, or a Turn nearer 90 degrees"
+				)
 			)
 		)
 	if bool(merged["center_post"]):
@@ -230,13 +251,13 @@ static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 		var flats := cos(PI / float(POST_SIDES)) * 2.0
 		if inner * flats < MIN_PIECE:
 			return HFOpResult.fail(
-				(
-					"Spiral stairs: a newel post %s across is thinner than a brush can be"
-					% _number(inner * flats)
+				HFTranslationType.message(
+					"Spiral stairs: a newel post {across} across is thinner than a brush can be",
+					{"across": _number(inner * flats)}
 				),
-				(
-					"Use an Inner R of %s or more, or turn the post off"
-					% _number(ceilf(MIN_PIECE / flats * 100.0) / 100.0)
+				HFTranslationType.message(
+					"Use an Inner R of {least} or more, or turn the post off",
+					{"least": _number(ceilf(MIN_PIECE / flats * 100.0) / 100.0)}
 				)
 			)
 	return null

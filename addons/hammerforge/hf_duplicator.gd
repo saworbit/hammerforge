@@ -14,6 +14,7 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const HFBrushEntity = preload("hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 enum ArrayMode { LINEAR, RADIAL, GRID }
 
@@ -189,7 +190,10 @@ static func can_generate(copy_count: int, source_count: int, params: Dictionary 
 	# wrong axis.
 	if params.has("axis_index") and not HFTransformSystem.is_valid_axis(int(params["axis_index"])):
 		return HFOpResult.fail(
-			"Array: %d does not name an axis" % int(params["axis_index"]),
+			HFTranslationType.message(
+				"Array: {axis_index} does not name an axis",
+				{"axis_index": int(params["axis_index"])}
+			),
 			"Use 0 for X, 1 for Y or 2 for Z"
 		)
 	if source_count < 1:
@@ -199,13 +203,19 @@ static func can_generate(copy_count: int, source_count: int, params: Dictionary 
 	var total := copy_count * source_count
 	if total > MAX_COPY_BRUSHES:
 		return HFOpResult.fail(
-			(
-				"Array: %d copies of %d brush%s is %d brushes"
-				% [copy_count, source_count, "" if source_count == 1 else "es", total]
+			HFTranslationType.message(
+				"Array: {copies} copies of {brushes} is {total} brushes",
+				{"copies": copy_count, "total": total},
+				{
+					"brushes":
+					HFTranslationType.message_n("{count} brush", "{count} brushes", source_count)
+				}
 			),
-			"Keep the total at or below %d" % MAX_COPY_BRUSHES
+			HFTranslationType.message(
+				"Keep the total at or below {most}", {"most": MAX_COPY_BRUSHES}
+			)
 		)
-	return HFOpResult.success("%d copies" % copy_count)
+	return HFOpResult.success(HFTranslationType.message("{count} copies", {"count": copy_count}))
 
 
 ## How many copies a grid of these counts makes. The counts include the source

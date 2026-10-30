@@ -30,6 +30,7 @@ const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFTrimRunBuilder = preload("../hf_trim_run_builder.gd")
 const HFSweepBuilder = preload("../hf_sweep_builder.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 const GENERATOR_META := &"hf_generator_id"
 
@@ -167,22 +168,31 @@ static func validate(type: String, settings: Dictionary) -> HFOpResult:
 	var builder = builder_for(type)
 	if builder == null:
 		return HFOpResult.fail(
-			"Structure: '%s' is not a structure type" % type,
-			"Known types: %s" % ", ".join(known_types())
+			HFTranslationType.message(
+				"Structure: '{type}' is not a structure type", {"type": type}
+			),
+			HFTranslationType.message("Known types: {types}", {"types": ", ".join(known_types())})
 		)
 	# Before the builder, because the builder cannot catch either of these: a
 	# non-finite number passes every comparison it makes, and the upper bounds
 	# live in the schema rather than in the builder at all.
 	var range_problem := HFGeneratorSchema.check_ranges(builder.settings_schema(), settings)
 	if range_problem != "":
-		return HFOpResult.fail("%s: %s" % [display_name(type), range_problem])
+		return HFOpResult.fail(
+			HFTranslationType.message(
+				"{structure}: {problem}",
+				{"structure": display_name(type), "problem": range_problem}
+			)
+		)
 	var result = builder.validate(settings)
 	# A builder that returns nothing is a bug in the builder, but it must not
 	# become a null out of create_generator(), which is declared to hand back a
 	# result every caller then reads `.ok` off.
 	if result == null:
 		return HFOpResult.fail(
-			"Structure: '%s' could not check those settings" % type,
+			HFTranslationType.message(
+				"Structure: '{type}' could not check those settings", {"type": type}
+			),
 			"Check the settings for a value of the wrong type"
 		)
 	return result
@@ -260,7 +270,9 @@ static func can_build(type: String, settings: Dictionary, run: Dictionary = {}) 
 			return along
 	if build_faces(type, settings, run).is_empty():
 		return HFOpResult.fail(
-			"%s: those settings produce no geometry" % display_name(type),
+			HFTranslationType.message(
+				"{structure}: those settings produce no geometry", {"structure": display_name(type)}
+			),
 			"Widen the structure or add segments"
 		)
 	return HFOpResult.success()
@@ -289,7 +301,9 @@ func create(
 		return check
 	var face_sets := build_faces(type, settings, run)
 	if face_sets.is_empty():
-		return HFOpResult.fail("Structure: '%s' produced no geometry" % type)
+		return HFOpResult.fail(
+			HFTranslationType.message("Structure: '{type}' produced no geometry", {"type": type})
+		)
 
 	var record := HFGenerator.new()
 	record.type = type
@@ -300,7 +314,9 @@ func create(
 	var cuts := _cuts_of(type, settings, true)
 	record.brush_ids = _spawn(face_sets, placement, record.generator_id, null, material, cuts)
 	if record.brush_ids.is_empty():
-		return HFOpResult.fail("Structure: '%s' produced no geometry" % type)
+		return HFOpResult.fail(
+			HFTranslationType.message("Structure: '{type}' produced no geometry", {"type": type})
+		)
 	_record_signatures(record)
 
 	generators[record.generator_id] = record
@@ -324,7 +340,11 @@ func create(
 ## rebuild that puts back the same pieces still gives each a new id.
 func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	if not generators.has(generator_id):
-		return HFOpResult.fail("Structure: no structure with id '%s'" % generator_id)
+		return HFOpResult.fail(
+			HFTranslationType.message(
+				"Structure: no structure with id '{generator_id}'", {"generator_id": generator_id}
+			)
+		)
 	var record: HFGenerator = generators[generator_id]
 	return _rebuild(record, settings, record.run, null)
 
@@ -334,11 +354,18 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 ## and nothing is deleted unless the new run builds.
 func repick(generator_id: String, run: Dictionary, placement: Transform3D) -> HFOpResult:
 	if not generators.has(generator_id):
-		return HFOpResult.fail("Structure: no structure with id '%s'" % generator_id)
+		return HFOpResult.fail(
+			HFTranslationType.message(
+				"Structure: no structure with id '{generator_id}'", {"generator_id": generator_id}
+			)
+		)
 	var record: HFGenerator = generators[generator_id]
 	if not follows_run(record.type):
 		return HFOpResult.fail(
-			"%s is not built along faces, so it has no run to re-pick" % display_name(record.type)
+			HFTranslationType.message(
+				"{structure} is not built along faces, so it has no run to re-pick",
+				{"structure": display_name(record.type)}
+			)
 		)
 	return _rebuild(record, record.settings, run, placement)
 
@@ -349,7 +376,11 @@ func repick(generator_id: String, run: Dictionary, placement: Transform3D) -> HF
 func can_rebuild(generator_id: String, settings: Dictionary) -> HFOpResult:
 	var record: HFGenerator = generators.get(generator_id, null)
 	if record == null:
-		return HFOpResult.fail("Structure: no structure with id '%s'" % generator_id)
+		return HFOpResult.fail(
+			HFTranslationType.message(
+				"Structure: no structure with id '{generator_id}'", {"generator_id": generator_id}
+			)
+		)
 	return can_build(record.type, settings, record.run)
 
 

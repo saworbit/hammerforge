@@ -29,6 +29,7 @@ const HFGeneratorSchema = preload("hf_generator_schema.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFFaceSweep = preload("hf_face_sweep.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## Which way an arc turns or an S bend steps aside is an angle in the faces'
 ## plane, in degrees from the faces' own right toward their up, so a pivot dragged
@@ -393,9 +394,9 @@ static func check_along(settings: Dictionary, run: Dictionary) -> HFOpResult:
 	var folded := int(made["folded"])
 	if folded > 0:
 		return HFOpResult.fail(
-			(
-				"Sweep: %d of %d pieces fold back on themselves"
-				% [folded, (made["pieces"] as Array).size()]
+			HFTranslationType.message(
+				"Sweep: {folded} of {pieces} pieces fold back on themselves",
+				{"folded": folded, "pieces": (made["pieces"] as Array).size()}
 			),
 			"Widen the radius or cut more segments"
 		)

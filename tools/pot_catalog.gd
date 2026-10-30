@@ -56,7 +56,10 @@ const CALLS := {
 	"_set_status": [0],
 	"_set_status_success": [0],
 	"_set_status_warning": [0],
+	"_op_fail": [0, 1],
 }
+## Calls found only after the class they belong to, as `HFOpResult.fail(...)`.
+const CLASS_CALLS := {"HFOpResult": {"fail": [0, 1], "success": [0]}}
 ## Signals whose first argument a toast shows, sent with `emit_signal()` or
 ## `.emit()`. The Console's log and the bridge get the same text in English.
 const SIGNALS := ["user_message"]
@@ -173,6 +176,12 @@ static func script_words(source: String) -> Array:
 				sent = sent.slice(1) if not sent.is_empty() and SIGNALS.has(sent[0]) else []
 			if not sent.is_empty() and sent[0] is String:
 				out.append([sent[0], "", ""])
+			continue
+		if (CLASS_CALLS.get(holder, {}) as Dictionary).has(name):
+			var given := _arguments(tokens, i + 1)
+			for index in CLASS_CALLS[holder][name]:
+				if given.size() > index and given[index] is String:
+					out.append([given[index], "", ""])
 			continue
 		var own := OWNERS.has(holder)
 		if own and not (OWN_CALLS.has(name) or OWN_PLURAL_CALLS.has(name)):

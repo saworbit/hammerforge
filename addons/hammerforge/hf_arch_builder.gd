@@ -22,6 +22,7 @@ const HFGeneratorSchema = preload("hf_generator_schema.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## A segment spanning half a turn or more is not convex, and every brush in
 ## HammerForge is convex. Three segments is the fewest that can close a ring.
@@ -126,11 +127,11 @@ static func validate(settings: Dictionary) -> HFOpResult:
 		)
 	if thickness >= radius:
 		return HFOpResult.fail(
-			(
-				"Arch: wall thickness %s leaves no opening inside radius %s"
-				% [_number(thickness), _number(radius)]
+			HFTranslationType.message(
+				"Arch: wall thickness {thickness} leaves no opening inside radius {radius}",
+				{"thickness": _number(thickness), "radius": _number(radius)}
 			),
-			"Use a thickness below %s" % _number(radius)
+			HFTranslationType.message("Use a thickness below {radius}", {"radius": _number(radius)})
 		)
 	if is_zero_approx(arc):
 		return HFOpResult.fail(
@@ -138,17 +139,24 @@ static func validate(settings: Dictionary) -> HFOpResult:
 		)
 	if absf(arc) > 360.0:
 		return HFOpResult.fail(
-			"Arch: arc angle %.0f is more than a full turn" % arc, "Use 360 degrees or less"
+			HFTranslationType.message(
+				"Arch: arc angle {arc} is more than a full turn", {"arc": "%.0f" % (arc)}
+			),
+			"Use 360 degrees or less"
 		)
 	var step: float = absf(arc) / float(segments)
 	if step > MAX_SEGMENT_DEGREES:
 		var needed := int(ceil(absf(arc) / MAX_SEGMENT_DEGREES))
 		return HFOpResult.fail(
-			(
-				"Arch: %.0f degrees across %d segment(s) is too coarse to stay convex"
-				% [absf(arc), segments]
+			HFTranslationType.message_n(
+				"Arch: {arc} degrees across {count} segment is too coarse to stay convex",
+				"Arch: {arc} degrees across {count} segments is too coarse to stay convex",
+				segments,
+				{"arc": "%.0f" % absf(arc)}
 			),
-			"Use at least %d segments for this arc" % needed
+			HFTranslationType.message(
+				"Use at least {needed} segments for this arc", {"needed": needed}
+			)
 		)
 	var thin_refusal := _thin_refusal(merged)
 	if thin_refusal != null:
@@ -179,7 +187,11 @@ static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 		# Near half a turn, both ends of a segment lie almost along one line.
 		hint = "Use more segments"
 	return HFOpResult.fail(
-		"Arch: a segment %s across is a sliver, too thin to build" % _number(across), hint
+		HFTranslationType.message(
+			"Arch: a segment {across} across is a sliver, too thin to build",
+			{"across": _number(across)}
+		),
+		hint
 	)
 
 

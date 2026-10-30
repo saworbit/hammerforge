@@ -41,6 +41,7 @@ const HFOpResult = preload("hf_op_result.gd")
 const PathSweep = preload("hf_path_sweep.gd")
 const TrimProfile = preload("hf_trim_profile.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 const EDGE_BOTTOM := 0
 const EDGE_TOP := 1
@@ -142,7 +143,10 @@ static func validate(settings: Dictionary) -> HFOpResult:
 	for key in ["width", "height"]:
 		if float(merged[key]) <= 0.0:
 			return HFOpResult.fail(
-				"Trim Run: %s must be greater than zero" % key, "Set a positive %s" % key
+				HFTranslationType.message(
+					"Trim Run: {field} must be greater than zero", {"field": key}
+				),
+				HFTranslationType.message("Set a positive {field}", {"field": key})
 			)
 	return HFOpResult.success()
 
@@ -510,7 +514,13 @@ static func check_along(settings: Dictionary, run: Dictionary) -> HFOpResult:
 	var runs := _runs_of(run, top)
 	if runs.is_empty():
 		return HFOpResult.fail(
-			"Trim Run: its faces have no %s edge to run along" % ("top" if top else "bottom"),
+			(
+				HFTranslationType.message("Trim Run: its faces have no top edge to run along")
+				if top
+				else HFTranslationType.message(
+					"Trim Run: its faces have no bottom edge to run along"
+				)
+			),
 			"Re-pick faces that have one, or switch Edge"
 		)
 	var width: float = merged["width"]
@@ -521,19 +531,33 @@ static func check_along(settings: Dictionary, run: Dictionary) -> HFOpResult:
 		var at := int(swept["at"])
 		match str(swept["fault"]):
 			"doubles_back":
-				return HFOpResult.fail(
-					(
-						"Trim Run: %s and %s meet back to back, so the trim cannot turn there"
-						% [_face_name(faces, at - 1), _face_name(faces, at)]
-					),
-					"Re-pick without one of them"
+				return (
+					HFOpResult
+					. fail(
+						(
+							HFTranslationType
+							. message(
+								"Trim Run: {first} and {second} meet back to back, so the trim cannot turn there",
+								{
+									"first": _face_name(faces, at - 1),
+									"second": _face_name(faces, at)
+								}
+							)
+						),
+						"Re-pick without one of them"
+					)
 				)
 			"too_short":
-				var short := [_face_name(faces, at), float(swept["length"]), width]
-				var text := "Trim Run: %s is %.2f long, too short for trim %.2f wide to turn its corners"
-				return HFOpResult.fail(
-					text % short, "Narrow the trim, or Re-pick without that face"
+				var short := {"face": _face_name(faces, at), "width": "%.2f" % width}
+				short["length"] = "%.2f" % float(swept["length"])
+				var text := (
+					HFTranslationType
+					. message(
+						"Trim Run: {face} is {length} long, too short for trim {width} wide to turn its corners",
+						short
+					)
 				)
+				return HFOpResult.fail(text, "Narrow the trim, or Re-pick without that face")
 	return HFOpResult.success()
 
 
