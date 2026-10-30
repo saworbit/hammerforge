@@ -22,9 +22,10 @@ rest left in English.
 - Toasts and the dock's status line, and the text HammerForge puts together in
   code with a number or a name in it before it shows it.
 
-Still English for now: a refusal a tool or a command reports through its
-result, such as "Arch: radius must be greater than zero", which the bridge
-reports too. The next step of #1702 puts it through the catalogs.
+A refusal a tool or a command reports, such as "Arch: radius must be greater
+than zero", reads the same way: English for the log and the bridge, and in the
+language shown on screen. Text that reaches the screen by a path the ratchet
+below does not read may still be English.
 
 These stay English in every language, so a bug report and an agent read the
 same words:
@@ -97,16 +98,20 @@ HFTranslation.tn("{count} brush", "{count} brushes", n).format({"count": n})
 ```
 
 A message the Console's log or the bridge reads as well as the mapper, such as
-one sent with the level's `user_message` signal or a status line that is an
-error or a warning, goes through `HFTranslation.message()` or
-`HFTranslation.message_n()` instead. Each takes the English and the values, and
-gives back the message in English, so the log and an agent read it as it is in
-every language. The toast and the status line show it in the language shown:
+one sent with the level's `user_message` signal, a status line that is an error
+or a warning, or a refusal in an `HFOpResult`, goes through
+`HFTranslation.message()` or `HFTranslation.message_n()` instead. Each takes the
+English and the values, and gives back the message in English, so the log and
+an agent read it as it is in every language. The toast and the status line show
+it in the language shown:
 
 ```gdscript
 var said := HFTranslation.message_n("Scattered {count} instance", "Scattered {count} instances", n)
 root.user_message.emit(said, 0)
 ```
+
+`HFOpResult.fail()` and `success()` do this for a plain literal themselves. A
+refusal put together in code is made with `message()` first.
 
 A sentence with two counts gives each its own `message_n()` and takes them as
 words, the third argument, so each count gets the plural its language needs:

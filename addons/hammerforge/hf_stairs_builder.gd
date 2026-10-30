@@ -28,6 +28,7 @@ const HFGeneratorSchema = preload("hf_generator_schema.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## Each step is a brush, so the count is the cost. A flight past this is a ramp
 ## with extra steps, and the refusal says so rather than making 500 brushes.
@@ -265,7 +266,10 @@ static func validate(settings: Dictionary) -> HFOpResult:
 	for pair in [["width", "width"], ["tread", "tread depth"], ["rise", "rise"]]:
 		if float(merged[pair[0]]) <= 0.0:
 			return HFOpResult.fail(
-				"Stairs: %s must be greater than zero" % pair[1], "Set a positive %s" % pair[1]
+				HFTranslationType.message(
+					"Stairs: {field} must be greater than zero", {"field": pair[1]}
+				),
+				HFTranslationType.message("Set a positive {field}", {"field": pair[1]})
 			)
 	var height_from := int(merged["height_from"])
 	if height_from != HEIGHT_FROM_RISE and float(merged["total"]) <= 0.0:
@@ -280,24 +284,36 @@ static func validate(settings: Dictionary) -> HFOpResult:
 	if steps > MAX_STEPS:
 		if height_from == HEIGHT_FROM_FIT:
 			return HFOpResult.fail(
-				(
-					"Stairs: climbing %s in risers of %s or less takes %d steps"
-					% [_number(merged["total"]), _number(merged["rise"]), steps]
+				HFTranslationType.message(
+					"Stairs: climbing {total} in risers of {rise} or less takes {steps} steps",
+					{
+						"total": _number(merged["total"]),
+						"rise": _number(merged["rise"]),
+						"steps": steps
+					}
 				),
-				"Raise the rise, so it fits in %d steps or fewer" % MAX_STEPS
+				HFTranslationType.message(
+					"Raise the rise, so it fits in {max_steps} steps or fewer",
+					{"max_steps": MAX_STEPS}
+				)
 			)
 		return HFOpResult.fail(
-			"Stairs: %d steps is more brushes than a staircase should be" % steps,
-			"Use %d steps or fewer, or build the flight in sections" % MAX_STEPS
+			HFTranslationType.message(
+				"Stairs: {steps} steps is more brushes than a staircase should be", {"steps": steps}
+			),
+			HFTranslationType.message(
+				"Use {max_steps} steps or fewer, or build the flight in sections",
+				{"max_steps": MAX_STEPS}
+			)
 		)
 	# A solid flight's first step is one riser tall. Rise starts at the minimum,
 	# but a Total shared between Steps, or Fit, can come to a thinner riser. The
 	# slack lets a division a rounding under, as 0.3 over 3 is, build.
 	if int(merged["fill"]) == FILL_SOLID and rise < MIN_PIECE - FIT_SLACK:
 		return HFOpResult.fail(
-			(
-				"Stairs: %d steps of %s make a solid first step thinner than a box can be"
-				% [steps, _number(rise, 0.0001)]
+			HFTranslationType.message(
+				"Stairs: {steps} steps of {rise} make a solid first step thinner than a box can be",
+				{"steps": steps, "rise": _number(rise, 0.0001)}
 			),
 			_thin_riser_hint(merged, height_from)
 		)
@@ -309,9 +325,9 @@ static func validate(settings: Dictionary) -> HFOpResult:
 			)
 		if thickness > rise * float(steps):
 			return HFOpResult.fail(
-				(
-					"Stairs: a tread %.1f thick is deeper than the whole %.1f climb"
-					% [thickness, rise * float(steps)]
+				HFTranslationType.message(
+					"Stairs: a tread {thickness} thick is deeper than the whole {rise} climb",
+					{"thickness": "%.1f" % (thickness), "rise": "%.1f" % (rise * float(steps))}
 				),
 				"Use a thickness below the total rise"
 			)
@@ -324,7 +340,10 @@ static func validate(settings: Dictionary) -> HFOpResult:
 	var pieces := _piece_count(merged, steps)
 	if pieces > MAX_PIECES:
 		return HFOpResult.fail(
-			"Stairs: %d pieces is more brushes than a staircase should be" % pieces,
+			HFTranslationType.message(
+				"Stairs: {pieces} pieces is more brushes than a staircase should be",
+				{"pieces": pieces}
+			),
 			"Use fewer steps, or no nosing on a solid flight"
 		)
 	return HFOpResult.success()
@@ -354,8 +373,13 @@ static func _nosing_refusal(merged: Dictionary, rise: float) -> HFOpResult:
 		return HFOpResult.fail("Stairs: a nosing cannot be negative", "Use 0 for no nosing")
 	if nosing >= tread:
 		return HFOpResult.fail(
-			"Stairs: a nosing of %s reaches over the whole tread below" % _number(nosing),
-			"Use a nosing under the %s tread" % _number(tread)
+			HFTranslationType.message(
+				"Stairs: a nosing of {nosing} reaches over the whole tread below",
+				{"nosing": _number(nosing)}
+			),
+			HFTranslationType.message(
+				"Use a nosing under the {tread} tread", {"tread": _number(tread)}
+			)
 		)
 	var thickness: float = merged["tread_thickness"]
 	# A solid step's nosing is a slab square to the axes, so a box, held to a box's
@@ -363,22 +387,33 @@ static func _nosing_refusal(merged: Dictionary, rise: float) -> HFOpResult:
 	if nosing > 0.0 and int(merged["fill"]) == FILL_SOLID:
 		for pair in [[nosing, "deep", "a nosing"], [thickness, "thick", "a Slab"]]:
 			if float(pair[0]) < MIN_PIECE:
-				return HFOpResult.fail(
-					(
-						"Stairs: a solid step's nosing %s %s is thinner than a box can be"
-						% [_number(float(pair[0])), pair[1]]
-					),
-					"Use %s of %s or more, or Open fill" % [pair[2], _number(MIN_PIECE)]
+				return (
+					HFOpResult
+					. fail(
+						(
+							HFTranslationType
+							. message(
+								"Stairs: a solid step's nosing {size} {measure} is thinner than a box can be",
+								{"size": _number(float(pair[0])), "measure": pair[1]}
+							)
+						),
+						HFTranslationType.message(
+							"Use {field} of {min_piece} or more, or Open fill",
+							{"field": pair[2], "min_piece": _number(MIN_PIECE)}
+						)
+					)
 				)
 	# A nosing hangs at the top of its step, one slab deep. Deeper than the riser
 	# under it, it reaches down into the step below.
 	if nosing > 0.0 and thickness > rise:
 		return HFOpResult.fail(
-			(
-				"Stairs: a nosing %s thick runs into the step below a %s riser"
-				% [_number(thickness), _number(rise, 0.0001)]
+			HFTranslationType.message(
+				"Stairs: a nosing {thickness} thick runs into the step below a {rise} riser",
+				{"thickness": _number(thickness), "rise": _number(rise, 0.0001)}
 			),
-			"Use a Slab of %s or less, or no nosing" % _number(rise, 0.0001)
+			HFTranslationType.message(
+				"Use a Slab of {rise} or less, or no nosing", {"rise": _number(rise, 0.0001)}
+			)
 		)
 	return null
 
@@ -391,9 +426,14 @@ static func _turn_refusal(merged: Dictionary, steps: int) -> HFOpResult:
 	var before: int = merged["before_landing"]
 	if before < 1 or before >= steps:
 		return HFOpResult.fail(
-			"Stairs: a landing after %d of %d risers leaves no flight after it" % [before, steps],
+			HFTranslationType.message(
+				"Stairs: a landing after {before} of {steps} risers leaves no flight after it",
+				{"before": before, "steps": steps}
+			),
 			(
-				"Set Before landing from 1 to %d" % (steps - 1)
+				HFTranslationType.message(
+					"Set Before landing from 1 to {last}", {"last": steps - 1}
+				)
 				if steps > 1
 				else "Use two steps or more"
 			)
@@ -407,12 +447,20 @@ static func _turn_refusal(merged: Dictionary, steps: int) -> HFOpResult:
 	if (turn == TURN_L_LEFT or turn == TURN_L_RIGHT) and landing < width:
 		# The second flight leaves from the landing's side, and it is as wide as the
 		# first. A shallower landing would leave part of it standing on nothing.
-		return HFOpResult.fail(
-			(
-				"Stairs: an L landing %s deep is shallower than the %s wide flight that leaves it"
-				% [_number(landing), _number(width)]
-			),
-			"Make the landing at least %s deep" % _number(width)
+		return (
+			HFOpResult
+			. fail(
+				(
+					HFTranslationType
+					. message(
+						"Stairs: an L landing {landing} deep is shallower than the {width} wide flight that leaves it",
+						{"landing": _number(landing), "width": _number(width)}
+					)
+				),
+				HFTranslationType.message(
+					"Make the landing at least {width} deep", {"width": _number(width)}
+				)
+			)
 		)
 	if float(merged["gap"]) < 0.0:
 		return HFOpResult.fail("Stairs: the gap cannot be negative", "Use 0 for flights that touch")

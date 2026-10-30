@@ -171,6 +171,26 @@ func test_a_snap_marker_label_is_english_kept_and_drawn_in_the_language():
 	assert_eq(HFTranslationScript.shown(label), "Vértice: encima", "the marker draws Spanish")
 
 
+func test_a_refusal_stays_english_for_the_bridge_and_shows_in_the_language():
+	HFTranslationScript.load_catalogs()
+	var named := HFTranslationScript.message("Repeat: {command}", {"command": "Hollow"})
+	var refusal := HFOpResult.fail(named, "Hollow")
+	assert_eq(refusal.user_text(), "Repeat: Hollow — Hollow", "the bridge reads English")
+	assert_eq(HFTranslationScript.shown(refusal.user_text()), "Repetir: Hollow — Ahuecar")
+	var source := (
+		"\n"
+		. join(
+			[
+				'return HFOpResult.fail("Arch: bad", "Fix it")',
+				'return _op_fail("Clip: no", "Try again")',
+				'return other.fail("NotOurs")',
+			]
+		)
+	)
+	var ids: Array = PotCatalog.script_words(source).map(func(word): return word[0])
+	assert_eq(ids, ["Arch: bad", "Fix it", "Clip: no", "Try again"])
+
+
 func test_every_surface_the_plugin_adds_to_the_editor_is_in_the_domain():
 	if rig.plugin == null:
 		fail_test(rig.error())

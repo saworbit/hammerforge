@@ -316,7 +316,11 @@ func delete_brush_by_id(brush_id: String) -> HFOpResult:
 		return _op_fail("Delete: no brush ID provided")
 	var brush = _find_brush_by_id(brush_id)
 	if not brush:
-		return _op_fail("Delete: brush '%s' not found" % brush_id)
+		return _op_fail(
+			HFTranslationType.message(
+				"Delete: brush '{brush_id}' not found", {"brush_id": brush_id}
+			)
+		)
 	delete_brush(brush)
 	return HFOpResult.success()
 
@@ -1878,7 +1882,8 @@ func can_clip_bounds(bounds: AABB, axis: int, split_pos: float) -> HFOpResult:
 	# The same refusal the operation makes, so the ghost and the cut agree.
 	if not HFTransformSystem.is_valid_axis(axis):
 		return HFOpResult.fail(
-			"Clip: %d does not name an axis" % axis, "Use 0 for X, 1 for Y or 2 for Z"
+			HFTranslationType.message("Clip: {axis} does not name an axis", {"axis": axis}),
+			"Use 0 for X, 1 for Y or 2 for Z"
 		)
 	var axis_index := axis
 	var brush_min: float = bounds.position[axis_index]
@@ -1890,7 +1895,10 @@ func can_clip_bounds(bounds: AABB, axis: int, split_pos: float) -> HFOpResult:
 	if split_pos <= brush_min + margin or split_pos >= brush_max - margin:
 		var axis_name = ["X", "Y", "Z"][axis_index]
 		return HFOpResult.fail(
-			"Clip: split position %.1f is outside brush bounds on %s axis" % [split_pos, axis_name],
+			HFTranslationType.message(
+				"Clip: split position {split_pos} is outside brush bounds on {axis_name} axis",
+				{"split_pos": "%.1f" % (split_pos), "axis_name": axis_name}
+			),
 			"Click inside the brush face to pick a valid split point"
 		)
 	return HFOpResult.success()
@@ -1993,12 +2001,21 @@ func _plan_hollow_faces(faces: Array, wall_thickness: float) -> Dictionary:
 	if not budget["ok"]:
 		return {
 			"result":
-			HFOpResult.fail(
-				(
-					"Hollow: this brush has %d distinct faces, so it would become %d walls"
-					% [budget["planes"], budget["planes"]]
-				),
-				"Hollow works on brushes with up to %d faces." % HFConvexClip.MAX_BOOLEAN_PLANES
+			(
+				HFOpResult
+				. fail(
+					(
+						HFTranslationType
+						. message(
+							"Hollow: this brush has {planes} distinct faces, so it would become {planes} walls",
+							{"planes": budget["planes"]}
+						)
+					),
+					HFTranslationType.message(
+						"Hollow works on brushes with up to {most} faces.",
+						{"most": HFConvexClip.MAX_BOOLEAN_PLANES}
+					)
+				)
 			),
 			"walls": empty
 		}
@@ -2025,14 +2042,20 @@ func _plan_hollow_faces(faces: Array, wall_thickness: float) -> Dictionary:
 		return {
 			"result":
 			HFOpResult.fail(
-				"Wall thickness %.1f leaves no room inside the brush" % wall_thickness,
-				"Use a thickness less than %.1f" % largest
+				HFTranslationType.message(
+					"Wall thickness {wall_thickness} leaves no room inside the brush",
+					{"wall_thickness": "%.1f" % (wall_thickness)}
+				),
+				HFTranslationType.message(
+					"Use a thickness less than {largest}", {"largest": "%.1f" % (largest)}
+				)
 			),
 			"walls": empty
 		}
 	_smooth_inner_walls(walls, shelled["origins"], faces, interior, wall_thickness)
 	return {
-		"result": HFOpResult.success("%d walls" % walls.size()),
+		"result":
+		HFOpResult.success(HFTranslationType.message("{walls} walls", {"walls": walls.size()})),
 		"walls": walls,
 		"origins": shelled["origins"],
 	}
@@ -2187,7 +2210,11 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 	for brush_id in brush_ids:
 		var brush = _find_brush_by_id(str(brush_id))
 		if not brush or not (brush is DraftBrush):
-			plan["result"] = HFOpResult.fail("Merge: brush '%s' not found" % str(brush_id))
+			plan["result"] = HFOpResult.fail(
+				HFTranslationType.message(
+					"Merge: brush '{brush_id}' not found", {"brush_id": str(brush_id)}
+				)
+			)
 			return plan
 		var draft := brush as DraftBrush
 		drafts.append(draft)
@@ -2261,7 +2288,9 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 	)
 	if lost > 0:
 		plan["result"] = HFOpResult.fail(
-			"Merge: %d sculpt%s would be lost" % [lost, "" if lost == 1 else "s"],
+			HFTranslationType.message_n(
+				"Merge: {count} sculpt would be lost", "Merge: {count} sculpts would be lost", lost
+			),
 			(
 				"A sculpt is laid on a face with four corners, and these brushes join a "
 				+ "sculpted face into one with more. Merge brushes whose sculpted faces "
@@ -2276,7 +2305,9 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 	var moving := HFConvexClip.sculpts_a_union_would_move(union["faces"], union["parts"])
 	if moving > 0:
 		plan["result"] = HFOpResult.fail(
-			"Merge: %d sculpt%s would move" % [moving, "" if moving == 1 else "s"],
+			HFTranslationType.message_n(
+				"Merge: {count} sculpt would move", "Merge: {count} sculpts would move", moving
+			),
 			(
 				"One sculpt over the merged face has 4, 8 or 16 cells a side, and no such "
 				+ "grid has every point of these. Merge sculpted faces that halve evenly, "
@@ -2482,7 +2513,7 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 
 	var count: int = brushes.size()
 	root._log("Merge: combined %d brushes into one" % count)
-	return HFOpResult.success("Merged %d brushes" % count)
+	return HFOpResult.success(HFTranslationType.message("Merged {count} brushes", {"count": count}))
 
 
 # ---------------------------------------------------------------------------
@@ -2669,7 +2700,10 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 	# operation it never described. The dropdown passes 1 today; `LevelRoot`
 	# exposes this and the preview takes an axis from anyone.
 	if not HFTransformSystem.is_valid_axis(axis):
-		return _op_fail("Clip: %d does not name an axis" % axis, "Use 0 for X, 1 for Y or 2 for Z")
+		return _op_fail(
+			HFTranslationType.message("Clip: {axis} does not name an axis", {"axis": axis}),
+			"Use 0 for X, 1 for Y or 2 for Z"
+		)
 	var axis_index := axis
 	var bounds := world_bounds_of(draft)
 	var brush_min: float = bounds.position[axis_index]
@@ -2685,7 +2719,10 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 	if split_pos <= brush_min + margin or split_pos >= brush_max - margin:
 		var axis_name = ["X", "Y", "Z"][axis_index]
 		return _op_fail(
-			"Clip: split position %.1f is outside brush bounds on %s axis" % [split_pos, axis_name],
+			HFTranslationType.message(
+				"Clip: split position {split_pos} is outside brush bounds on {axis_name} axis",
+				{"split_pos": "%.1f" % (split_pos), "axis_name": axis_name}
+			),
 			"Click inside the brush face to pick a valid split point"
 		)
 
@@ -2968,7 +3005,9 @@ func _replace_brush_with_pieces(
 		if piece:
 			created.append(piece)
 	if created.is_empty():
-		return _op_fail("%s: produced no geometry" % op_name)
+		return _op_fail(
+			HFTranslationType.message("{operation}: produced no geometry", {"operation": op_name})
+		)
 	# A dimension's end goes to the piece that keeps its corner (#2003).
 	HFDimensions.carry_to_pieces(root, _find_brush_by_id(brush_id), created)
 	delete_brush_by_id(brush_id)

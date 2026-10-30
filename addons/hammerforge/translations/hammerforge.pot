@@ -49,6 +49,10 @@ msgstr ""
 msgid "A bake is already running"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "A brush is convex, and these brushes make an L, a U or another shape with a corner cut out. Merge the parts that make a box, a wedge or a slope"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "A face blends at most {count} surface paint layers"
 msgstr ""
@@ -63,6 +67,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_selection_filter.gd
 msgid "A property, a test and a value: is, is not, >, <, or matches with * for any run.\nJoin more with and. An entity takes its own properties by name too."
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "A sculpt is laid on a face with four corners, and these brushes join a sculpted face into one with more. Merge brushes whose sculpted faces make a four-cornered face, or take the sculpt off first"
 msgstr ""
 
 #: addons/hammerforge/hf_sweep_builder.gd
@@ -457,6 +465,10 @@ msgstr ""
 msgid "Apply the pending cuts and bake."
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Apply the pending cuts first, or merge only the pending ones"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Apply to Brush"
 msgstr ""
@@ -477,6 +489,44 @@ msgstr ""
 msgid "Arc"
 msgstr ""
 
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Arch: a segment {across} across is a sliver, too thin to build"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Arch: arc angle must not be zero"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Arch: arc angle {arc} is more than a full turn"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Arch: depth must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Arch: needs at least one segment"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Arch: radius must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Arch: wall thickness must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Arch: wall thickness {thickness} leaves no opening inside radius {radius}"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Arch: {arc} degrees across {count} segment is too coarse to stay convex"
+msgid_plural "Arch: {arc} degrees across {count} segments is too coarse to stay convex"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Arm a stamp of the brush the last Draw made; each click places one."
 msgstr ""
@@ -487,6 +537,26 @@ msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "Array updated — {summary}"
+msgstr ""
+
+#: addons/hammerforge/hf_duplicator.gd
+msgid "Array: nothing selected to copy"
+msgstr ""
+
+#: addons/hammerforge/hf_duplicator.gd
+msgid "Array: that layout has a number that is not a number"
+msgstr ""
+
+#: addons/hammerforge/hf_duplicator.gd
+msgid "Array: that layout makes no copies"
+msgstr ""
+
+#: addons/hammerforge/hf_duplicator.gd
+msgid "Array: {axis_index} does not name an axis"
+msgstr ""
+
+#: addons/hammerforge/hf_duplicator.gd
+msgid "Array: {copies} copies of {brushes} is {total} brushes"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
@@ -887,6 +957,10 @@ msgstr ""
 msgid "Cancel drag (Right-click)"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Cannot merge solid brushes and cuts together"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Carry the faces picked in Face Select along a straight run, an arc or an S bend, as a run of brushes."
 msgstr ""
@@ -975,6 +1049,14 @@ msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Check the level without baking or running it"
+msgstr ""
+
+#: addons/hammerforge/hf_duplicator.gd
+msgid "Check the offset, spacing, step and rise fields"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_generator_system.gd
+msgid "Check the settings for a value of the wrong type"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_console_panel.gd
@@ -1079,6 +1161,10 @@ msgstr ""
 msgid "Click a note to select it. F frames it in the viewport."
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Click inside the brush face to pick a valid split point"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_radial_menu.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Clip"
 msgstr ""
@@ -1125,6 +1211,38 @@ msgstr ""
 
 #: addons/hammerforge/plugin_edit_actions.gd
 msgid "Clip to Face: the selected face has no usable plane"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Clip: brush has no usable geometry"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Clip: brush not found"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Clip: no brush ID provided"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Clip: no usable reference face selected"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Clip: split position {split_pos} is outside brush bounds on {axis_name} axis"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Clip: the cut plane does not pass through the brush"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Clip: the cut plane has no direction"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Clip: {axis} does not name an axis"
 msgstr ""
 
 #: addons/hammerforge/plugin_vertex_ops.gd
@@ -1621,6 +1739,14 @@ msgid_plural "Delete {count} HammerForge objects? This can be undone with Ctrl+Z
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Delete: brush '{brush_id}' not found"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Delete: no brush ID provided"
+msgstr ""
+
 #: addons/hammerforge/hf_arch_builder.gd
 msgid "Depth"
 msgstr ""
@@ -1693,6 +1819,56 @@ msgstr ""
 msgid "Distance to inset the face boundary"
 msgstr ""
 
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: a panel {across} across is a sliver, too thin to build"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: a ring {across} tall is a sliver, too thin to build"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: a wall {thickness} thick is more than the whole {radius} radius"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: arc angle must not be zero"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: arc angle {arc} is more than a full turn"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: needs at least one ring"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: radius must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: sweep must be between 1 and 90 degrees"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: wall thickness must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: {arc} degrees across {count} segment is too coarse to stay convex"
+msgid_plural "Dome: {arc} degrees across {count} segments is too coarse to stay convex"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: {rings} rings of {segments} segments is {panels} brushes"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Dome: {segments} segments cannot close a ring"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_coach_marks.gd
 msgid "Don't show again"
 msgstr ""
@@ -1703,6 +1879,28 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_tutorial_wizard.gd
 msgid "Done!"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Door Frame: an arched head of {count} segment cannot be built"
+msgid_plural "Door Frame: an arched head of {count} segments cannot be built"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Door Frame: an arched head on a {width} wide opening needs a height of {least} or more"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Door Frame: an arched head piece {across} across is a sliver, too thin to build"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Door Frame: proud cannot be negative"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Door Frame: {field} must be greater than zero"
 msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
@@ -1951,6 +2149,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "End Isolate"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Enter a positive wall thickness"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd
@@ -2821,6 +3023,46 @@ msgstr ""
 msgid "Hollow detached — its walls are ordinary brushes now"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Hollow works on brushes with up to {most} faces."
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Hollow works on convex brushes. A torus is not one"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Hollow: brush has no usable geometry"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Hollow: brush not found"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Hollow: no brush ID provided"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Hollow: that hollow is no longer in the level"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Hollow: the original solid could not be rebuilt"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Hollow: this brush has {planes} distinct faces, so it would become {planes} walls"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Hollow: this brush is not convex, so its walls would follow its hull"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Hollow: wall thickness must be greater than zero"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_operation_replay.gd
 msgid "Hover an operation to see details"
 msgstr ""
@@ -2965,6 +3207,10 @@ msgstr ""
 msgid "Hull of Selection"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_carve_system.gd
+msgid "Hull: produced no geometry"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "I/O Connections"
 msgstr ""
@@ -3075,6 +3321,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Intersect"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_carve_system.gd
+msgid "Intersect: produced no geometry"
 msgstr ""
 
 #: addons/hammerforge/dock_file_handler.gd
@@ -3215,6 +3465,10 @@ msgid_plural "Keep only the volume {count} brushes share?"
 msgstr[0] ""
 msgstr[1] ""
 
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Keep rings x segments at or below {max_panels}"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Keep texture alignment while moving, resizing, hollowing, or clipping brushes"
 msgstr ""
@@ -3237,6 +3491,14 @@ msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Keep the selection and add mirrored copies across the ticked axes"
+msgstr ""
+
+#: addons/hammerforge/paint/hf_scatter_brush.gd
+msgid "Keep the total at or below {max_scatter_instances} by lowering the radius or the density"
+msgstr ""
+
+#: addons/hammerforge/hf_duplicator.gd
+msgid "Keep the total at or below {most}"
 msgstr ""
 
 #: addons/hammerforge/dock.gd
@@ -3315,6 +3577,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_shortcut_dialog.gd
 msgid "Keyboard Shortcuts"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_generator_system.gd
+msgid "Known types: {types}"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -3575,6 +3841,10 @@ msgstr ""
 msgid "Make a new visgroup holding the selected brushes and entities."
 msgstr ""
 
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Make the landing at least {width} deep"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Make the selected convex mesh or CSG node a brush where it stands."
 msgstr ""
@@ -3669,6 +3939,10 @@ msgstr ""
 msgid "Merge meshes"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge only joins brushes that share a face or overlap"
+msgstr ""
+
 #: addons/hammerforge/systems/hf_vertex_system.gd
 msgid "Merge rejected: would leave the brush without a closed solid"
 msgstr ""
@@ -3677,8 +3951,60 @@ msgstr ""
 msgid "Merge rejected: {reason}"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge the brushes of one door or trigger, or plain brushes. Tie or untie them first"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Merge the selected vertices into one at their middle."
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge: all brushes must have the same operation type"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge: brush '{brush_id}' not found"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge: produced no geometry"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge: select at least 2 brushes"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge: some of these cuts are pending and some applied"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge: the merged brush would not be convex"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge: the selected brushes are not all one entity"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge: the selected brushes do not touch"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge: {count} sculpt would be lost"
+msgid_plural "Merge: {count} sculpts would be lost"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merge: {count} sculpt would move"
+msgid_plural "Merge: {count} sculpts would move"
+msgstr[0] ""
+msgstr[1] ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Merged {count} brushes"
 msgstr ""
 
 #: addons/hammerforge/hf_snap_system.gd
@@ -3805,6 +4131,10 @@ msgstr ""
 msgid "Move the selection, its vertices or its faces by a typed X, Y and Z."
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Move the split point inside the brush"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Move to Ceiling"
 msgstr ""
@@ -3829,6 +4159,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Name the snap"
+msgstr ""
+
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "Narrow the trim, or Re-pick without that face"
 msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
@@ -4031,6 +4365,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "No editor camera available"
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "No face in that scope wears the material"
 msgstr ""
 
 #: addons/hammerforge/plugin_edit_actions.gd
@@ -4297,6 +4635,10 @@ msgstr ""
 msgid "One brush per tread"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "One sculpt over the merged face has 4, 8 or 16 cells a side, and no such grid has every point of these. Merge sculpted faces that halve evenly, such as two halves at power 2 or 3, or take the sculpts off first"
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Only bake geometry inside the cordons"
 msgstr ""
@@ -4561,6 +4903,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
 msgid "Pick a {kind} file"
+msgstr ""
+
+#: addons/hammerforge/hf_sweep_builder.gd
+msgid "Pick faces in Face Select"
 msgstr ""
 
 #: addons/hammerforge/dock_entity_handler.gd
@@ -4929,8 +5275,20 @@ msgstr ""
 msgid "Raise Painted Walls"
 msgstr ""
 
+#: addons/hammerforge/hf_duplicator.gd
+msgid "Raise the count"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Raise the drawing plane one grid step."
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Raise the height, narrow the opening, or use a flat head"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Raise the rise, so it fits in {max_steps} steps or fewer"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -4973,8 +5331,16 @@ msgstr ""
 msgid "Re-pick Trim Run"
 msgstr ""
 
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "Re-pick faces that have one, or switch Edge"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Re-pick needs the HammerForge plugin running"
+msgstr ""
+
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "Re-pick without one of them"
 msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
@@ -4995,6 +5361,10 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Rebuild each brush with vertices selected from its convex hull, when it is no longer convex."
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Rebuild or redraw the brush and try again"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -5287,6 +5657,44 @@ msgstr ""
 msgid "Ring Segments"
 msgstr ""
 
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Ring: a piece {across} across is a sliver, too thin to build"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Ring: a sweep of {sweep} degrees is more than a full turn"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Ring: a tube of {tube_segments} sides cannot be built"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Ring: a tube radius of {tube} reaches the centre of a {radius} ring"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Ring: needs at least one segment"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Ring: radius must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Ring: sweep must not be zero"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Ring: tube radius must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Ring: {sweep} degrees across {count} segment is too coarse to stay convex"
+msgid_plural "Ring: {sweep} degrees across {count} segments is too coarse to stay convex"
+msgstr[0] ""
+msgstr[1] ""
+
 #: addons/hammerforge/hf_dome_builder.gd
 msgid "Rings"
 msgstr ""
@@ -5341,6 +5749,18 @@ msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "Rotate step is zero"
+msgstr ""
+
+#: addons/hammerforge/level_root.gd
+msgid "Rotate: brush not found"
+msgstr ""
+
+#: addons/hammerforge/level_root.gd
+msgid "Rotate: no brush ID provided"
+msgstr ""
+
+#: addons/hammerforge/level_root.gd
+msgid "Rotate: the angle must be finite"
 msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
@@ -5573,6 +5993,10 @@ msgstr ""
 msgid "Scatter preview: {count} instances ({filtered} filtered)"
 msgstr ""
 
+#: addons/hammerforge/paint/hf_scatter_brush.gd
+msgid "Scatter: {what} at this density is {count} instances"
+msgstr ""
+
 #: addons/hammerforge/dock_paint_handler.gd
 msgid "Scattered {count} instance"
 msgid_plural "Scattered {count} instances"
@@ -5683,7 +6107,7 @@ msgstr ""
 msgid "Select With This Brush"
 msgstr ""
 
-#: addons/hammerforge/dock_brush_handler.gd
+#: addons/hammerforge/dock_brush_handler.gd addons/hammerforge/hf_duplicator.gd
 msgid "Select a brush first"
 msgstr ""
 
@@ -5709,6 +6133,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "Select a face first"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Select a face to cut along, then clip"
 msgstr ""
 
 #: addons/hammerforge/plugin_selection_commands.gd
@@ -5825,6 +6253,10 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Select every one of the later brushes of near pairs"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Select multiple brushes before merging"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -5991,12 +6423,68 @@ msgstr ""
 msgid "Selection: the centre of the selected objects. World Origin: (0, 0, 0). Active: the first selected object. Pick: a brush vertex, edge midpoint or face centre you click in the viewport, marked with a cross; Pick Pivot (Alt+P) picks again, Clear Pivot (Shift+Alt+P) goes back to Selection."
 msgstr ""
 
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Set 0 for a flush frame"
+msgstr ""
+
 #: addons/hammerforge/dock.tscn
 msgid "Set Autosave Path"
 msgstr ""
 
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Set Before landing from 1 to {last}"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Set Grid Snap"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Set Ring Segments to 1 or more"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_grid_system.gd
+msgid "Set a grid size first"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Set a positive Total"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Set a positive depth"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Set a positive landing depth"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Set a positive outer radius"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd addons/hammerforge/hf_dome_builder.gd addons/hammerforge/hf_ring_builder.gd
+msgid "Set a positive radius"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd addons/hammerforge/hf_stairs_builder.gd
+msgid "Set a positive thickness"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Set a positive tube radius"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd addons/hammerforge/hf_dome_builder.gd
+msgid "Set a positive wall thickness"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd addons/hammerforge/hf_stairs_builder.gd addons/hammerforge/hf_trim_run_builder.gd
+msgid "Set a positive {field}"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Set an inner radius, or turn the post off"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_material_browser.gd
@@ -6005,6 +6493,18 @@ msgstr ""
 
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Set from Selection"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Set rings to 1 or more"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Set segments to 1 or more"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd addons/hammerforge/hf_stairs_builder.gd
+msgid "Set steps to 1 or more"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -6421,6 +6921,10 @@ msgstr ""
 msgid "Snap to Grid (Ctrl+B)"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_grid_system.gd
+msgid "Snap to Grid: grid snap is off"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "Snap:"
 msgstr ""
@@ -6493,6 +6997,54 @@ msgstr ""
 msgid "Sphere"
 msgstr ""
 
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: a newel post needs an inner radius to occupy"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: a newel post {across} across is thinner than a brush can be"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: a tread turning {turn} degrees is not convex"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: a tread {narrowest} across at its narrowest is thinner than a brush can be"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: an inner radius of {inner} leaves no tread inside {outer}"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: inner radius cannot be negative"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: needs at least one tread"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: outer radius must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: rise cannot be negative"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: tread thickness must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: treads that turn through zero degrees sit on top of each other"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Spiral stairs: {steps} treads is more brushes than a staircase should be"
+msgstr ""
+
 #: addons/hammerforge/ui/paint_tab_builder.gd
 msgid "Spline"
 msgstr ""
@@ -6539,6 +7091,74 @@ msgstr ""
 
 #: addons/hammerforge/ui/manage_tab_builder.gd
 msgid "Stairs"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: a landing after {before} of {steps} risers leaves no flight after it"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: a nosing cannot be negative"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: a nosing of {nosing} reaches over the whole tread below"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: a nosing {thickness} thick runs into the step below a {rise} riser"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: a solid step's nosing {size} {measure} is thinner than a box can be"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: a tread {thickness} thick is deeper than the whole {rise} climb"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: an L landing {landing} deep is shallower than the {width} wide flight that leaves it"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: climbing {total} in risers of {rise} or less takes {steps} steps"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: needs at least one step"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: the gap cannot be negative"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: the landing must be deeper than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: the total height must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: tread thickness must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: {field} must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: {pieces} pieces is more brushes than a staircase should be"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: {steps} steps is more brushes than a staircase should be"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Stairs: {steps} steps of {rise} make a solid first step thinner than a box can be"
 msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd
@@ -6693,6 +7313,30 @@ msgstr ""
 msgid "Structure section set back to the selected {structure}. Change a setting and press Update"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_generator_system.gd
+msgid "Structure: '{type}' could not check those settings"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_generator_system.gd
+msgid "Structure: '{type}' is not a structure type"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_generator_system.gd
+msgid "Structure: '{type}' produced no geometry"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_generator_system.gd
+msgid "Structure: no structure with id '{generator_id}'"
+msgstr ""
+
+#: addons/hammerforge/level_root.gd
+msgid "Structure: system unavailable"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_generator_system.gd
+msgid "Structure: those settings produce no geometry"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_example_library.gd
 msgid "Study This"
 msgstr ""
@@ -6727,6 +7371,14 @@ msgstr ""
 
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/plugin_face_sweep.gd
 msgid "Sweep Faces"
+msgstr ""
+
+#: addons/hammerforge/hf_sweep_builder.gd
+msgid "Sweep: there are no faces to sweep"
+msgstr ""
+
+#: addons/hammerforge/hf_sweep_builder.gd
+msgid "Sweep: {folded} of {pieces} pieces fold back on themselves"
 msgstr ""
 
 #: addons/hammerforge/plugin_face_sweep.gd
@@ -7171,12 +7823,48 @@ msgstr ""
 msgid "Trim Profile"
 msgstr ""
 
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "Trim Run: its faces have no bottom edge to run along"
+msgstr ""
+
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "Trim Run: its faces have no top edge to run along"
+msgstr ""
+
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "Trim Run: {face} is {length} long, too short for trim {width} wide to turn its corners"
+msgstr ""
+
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "Trim Run: {field} must be greater than zero"
+msgstr ""
+
+#: addons/hammerforge/hf_trim_run_builder.gd
+msgid "Trim Run: {first} and {second} meet back to back, so the trim cannot turn there"
+msgstr ""
+
 #: addons/hammerforge/hf_path_tool.gd
 msgid "Trim Segments"
 msgstr ""
 
 #: addons/hammerforge/hf_path_tool.gd
 msgid "Trim Width"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Try 180 degrees for a half arch"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Try 30 degrees a step"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Try 360 degrees for a whole ring"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Try 360 for a whole dome"
 msgstr ""
 
 #: addons/hammerforge/hf_ring_builder.gd
@@ -7383,8 +8071,116 @@ msgstr ""
 msgid "Update {structure}"
 msgstr ""
 
+#: addons/hammerforge/hf_duplicator.gd addons/hammerforge/systems/hf_brush_system.gd
+msgid "Use 0 for X, 1 for Y or 2 for Z"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Use 0 for flights that touch"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Use 0 for no nosing"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd addons/hammerforge/hf_dome_builder.gd addons/hammerforge/hf_ring_builder.gd
+msgid "Use 360 degrees or less"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Use 90 for a hemisphere"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "Use Picked"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Use a Slab of {rise} or less, or no nosing"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Use a nosing under the {tread} tread"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Use a thickness below the total rise"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd
+msgid "Use a thickness below {radius}"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Use a thickness less than {largest}"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Use a tube radius below {radius}"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Use an Inner R of {least} or more, or turn the post off"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Use an inner radius below {outer}"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Use at least 3 segments"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Use at least {needed} ring segments for this sweep"
+msgstr ""
+
+#: addons/hammerforge/hf_arch_builder.gd addons/hammerforge/hf_dome_builder.gd
+msgid "Use at least {needed} segments for this arc"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Use fewer steps, or no nosing on a solid flight"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Use fewer than {segments} segments, or a wider opening"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Use zero for a flat fan of treads"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Use zero for treads that meet"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Use {field} of {min_piece} or more, or Open fill"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Use {max_step_degrees} degrees or fewer a step"
+msgstr ""
+
+#: addons/hammerforge/hf_spiral_stairs_builder.gd
+msgid "Use {max_steps} steps or fewer"
+msgstr ""
+
+#: addons/hammerforge/hf_stairs_builder.gd
+msgid "Use {max_steps} steps or fewer, or build the flight in sections"
+msgstr ""
+
+#: addons/hammerforge/hf_door_frame_builder.gd
+msgid "Use {min_segments} to {max_segments} segments"
+msgstr ""
+
+#: addons/hammerforge/hf_ring_builder.gd
+msgid "Use {min_tube_segments} to {max_tube_segments} tube segments"
+msgstr ""
+
+#: addons/hammerforge/hf_dome_builder.gd
+msgid "Use {radius} for a solid dome, or less for a shell"
 msgstr ""
 
 #: addons/hammerforge/ui/hf_material_browser.gd
@@ -7543,6 +8339,10 @@ msgstr ""
 msgid "Wall"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "Wall thickness {wall_thickness} leaves no room inside the brush"
+msgstr ""
+
 #: addons/hammerforge/ui/selection_tools_builder.gd
 msgid "Wall:"
 msgstr ""
@@ -7605,6 +8405,14 @@ msgstr ""
 
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "Why this is fine, such as decorative, not walked"
+msgstr ""
+
+#: addons/hammerforge/hf_sweep_builder.gd
+msgid "Widen the radius or cut more segments"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_generator_system.gd
+msgid "Widen the structure or add segments"
 msgstr ""
 
 #: addons/hammerforge/hf_door_frame_builder.gd addons/hammerforge/hf_path_tool.gd addons/hammerforge/hf_stairs_builder.gd addons/hammerforge/hf_trim_run_builder.gd
@@ -8025,7 +8833,7 @@ msgid_plural "{count} bake options"
 msgstr[0] ""
 msgstr[1] ""
 
-#: addons/hammerforge/dock.gd addons/hammerforge/dock_brush_handler.gd addons/hammerforge/hf_format_census.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd addons/hammerforge/ui/hf_replace_material_dialog.gd
+#: addons/hammerforge/dock.gd addons/hammerforge/dock_brush_handler.gd addons/hammerforge/hf_duplicator.gd addons/hammerforge/hf_format_census.gd addons/hammerforge/plugin_edit_actions.gd addons/hammerforge/ui/hf_context_toolbar.gd addons/hammerforge/ui/hf_example_library.gd addons/hammerforge/ui/hf_replace_material_dialog.gd
 msgid "{count} brush"
 msgid_plural "{count} brushes"
 msgstr[0] ""
@@ -8042,6 +8850,10 @@ msgid "{count} brush inside another"
 msgid_plural "{count} brushes inside another"
 msgstr[0] ""
 msgstr[1] ""
+
+#: addons/hammerforge/hf_duplicator.gd
+msgid "{count} copies"
+msgstr ""
 
 #: addons/hammerforge/ui/hf_context_toolbar.gd
 msgid "{count} copy of {prefab} in the level"
@@ -8283,8 +9095,16 @@ msgstr ""
 msgid "{label}:"
 msgstr ""
 
+#: addons/hammerforge/hf_op_result.gd
+msgid "{message} — {hint}"
+msgstr ""
+
 #: addons/hammerforge/dock.gd
 msgid "{ms} ms"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "{operation}: produced no geometry"
 msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
@@ -8311,6 +9131,10 @@ msgstr ""
 msgid "{step}  (click Replay to undo/redo to this point)"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_generator_system.gd
+msgid "{structure} is not built along faces, so it has no run to re-pick"
+msgstr ""
+
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "{structure} rebuilt"
 msgstr ""
@@ -8323,12 +9147,24 @@ msgstr ""
 msgid "{structure} was not rebuilt"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_generator_system.gd
+msgid "{structure}: those settings produce no geometry"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_generator_system.gd
+msgid "{structure}: {problem}"
+msgstr ""
+
 #: addons/hammerforge/dock_manage_handler.gd
 msgid "{summary}, listed under Check Bake Issues"
 msgstr ""
 
 #: addons/hammerforge/hf_tool_registry.gd
 msgid "{tool} cannot run right now"
+msgstr ""
+
+#: addons/hammerforge/systems/hf_brush_system.gd
+msgid "{walls} walls"
 msgstr ""
 
 #: addons/hammerforge/ui/selection_tools_builder.gd

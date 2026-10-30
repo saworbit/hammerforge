@@ -29,6 +29,7 @@ const HFGeneratorSchema = preload("hf_generator_schema.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## Panels are `rings × segments`, and each one is a brush. Four rings of twelve is
 ## a convincing dome at forty-eight brushes; ten of thirty-six is nine hundred and
@@ -142,23 +143,31 @@ static func validate(settings: Dictionary) -> HFOpResult:
 		)
 	if thickness > radius:
 		return HFOpResult.fail(
-			(
-				"Dome: a wall %s thick is more than the whole %s radius"
-				% [_number(thickness), _number(radius)]
+			HFTranslationType.message(
+				"Dome: a wall {thickness} thick is more than the whole {radius} radius",
+				{"thickness": _number(thickness), "radius": _number(radius)}
 			),
-			"Use %s for a solid dome, or less for a shell" % _number(radius)
+			HFTranslationType.message(
+				"Use {radius} for a solid dome, or less for a shell", {"radius": _number(radius)}
+			)
 		)
 	if rings < 1:
 		return HFOpResult.fail("Dome: needs at least one ring", "Set rings to 1 or more")
 	if segments < 3:
 		return HFOpResult.fail(
-			"Dome: %d segments cannot close a ring" % segments, "Use at least 3 segments"
+			HFTranslationType.message(
+				"Dome: {segments} segments cannot close a ring", {"segments": segments}
+			),
+			"Use at least 3 segments"
 		)
 	if is_zero_approx(arc):
 		return HFOpResult.fail("Dome: arc angle must not be zero", "Try 360 for a whole dome")
 	if absf(arc) > 360.0:
 		return HFOpResult.fail(
-			"Dome: arc angle %.0f is more than a full turn" % arc, "Use 360 degrees or less"
+			HFTranslationType.message(
+				"Dome: arc angle {arc} is more than a full turn", {"arc": "%.0f" % (arc)}
+			),
+			"Use 360 degrees or less"
 		)
 	if sweep <= 0.0 or sweep > 90.0:
 		return HFOpResult.fail(
@@ -168,17 +177,26 @@ static func validate(settings: Dictionary) -> HFOpResult:
 	if step > MAX_SEGMENT_DEGREES:
 		var needed := int(ceil(absf(arc) / MAX_SEGMENT_DEGREES))
 		return HFOpResult.fail(
-			(
-				"Dome: %.0f degrees across %d segment(s) is too coarse to stay convex"
-				% [absf(arc), segments]
+			HFTranslationType.message_n(
+				"Dome: {arc} degrees across {count} segment is too coarse to stay convex",
+				"Dome: {arc} degrees across {count} segments is too coarse to stay convex",
+				segments,
+				{"arc": "%.0f" % absf(arc)}
 			),
-			"Use at least %d segments for this arc" % needed
+			HFTranslationType.message(
+				"Use at least {needed} segments for this arc", {"needed": needed}
+			)
 		)
 	var panels := rings * segments
 	if panels > MAX_PANELS:
 		return HFOpResult.fail(
-			"Dome: %d rings of %d segments is %d brushes" % [rings, segments, panels],
-			"Keep rings x segments at or below %d" % MAX_PANELS
+			HFTranslationType.message(
+				"Dome: {rings} rings of {segments} segments is {panels} brushes",
+				{"rings": rings, "segments": segments, "panels": panels}
+			),
+			HFTranslationType.message(
+				"Keep rings x segments at or below {max_panels}", {"max_panels": MAX_PANELS}
+			)
 		)
 	var thin_refusal := _thin_refusal(merged)
 	if thin_refusal != null:
@@ -219,10 +237,18 @@ static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 		hint = "Use a Wall of %s or more" % _number(MIN_PIECE)
 	if way == "rings":
 		return HFOpResult.fail(
-			"Dome: a ring %s tall is a sliver, too thin to build" % _number(across), hint
+			HFTranslationType.message(
+				"Dome: a ring {across} tall is a sliver, too thin to build",
+				{"across": _number(across)}
+			),
+			hint
 		)
 	return HFOpResult.fail(
-		"Dome: a panel %s across is a sliver, too thin to build" % _number(across), hint
+		HFTranslationType.message(
+			"Dome: a panel {across} across is a sliver, too thin to build",
+			{"across": _number(across)}
+		),
+		hint
 	)
 
 

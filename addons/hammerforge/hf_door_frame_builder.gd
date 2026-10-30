@@ -30,6 +30,7 @@ const HFGeneratorSchema = preload("hf_generator_schema.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 const HEAD_FLAT := 0
 const HEAD_ARCHED := 1
@@ -142,7 +143,10 @@ static func validate(settings: Dictionary) -> HFOpResult:
 	for pair in [["width", "width"], ["height", "height"], ["wall", "wall"], ["frame", "frame"]]:
 		if float(merged[pair[0]]) <= 0.0:
 			return HFOpResult.fail(
-				"Door Frame: %s must be greater than zero" % pair[1], "Set a positive %s" % pair[1]
+				HFTranslationType.message(
+					"Door Frame: {field} must be greater than zero", {"field": pair[1]}
+				),
+				HFTranslationType.message("Set a positive {field}", {"field": pair[1]})
 			)
 	if float(merged["proud"]) < 0.0:
 		return HFOpResult.fail("Door Frame: proud cannot be negative", "Set 0 for a flush frame")
@@ -150,29 +154,51 @@ static func validate(settings: Dictionary) -> HFOpResult:
 		var segments: int = merged["segments"]
 		if segments < MIN_SEGMENTS or segments > MAX_SEGMENTS:
 			return HFOpResult.fail(
-				"Door Frame: an arched head of %d segment(s) cannot be built" % segments,
-				"Use %d to %d segments" % [MIN_SEGMENTS, MAX_SEGMENTS]
+				HFTranslationType.message_n(
+					"Door Frame: an arched head of {count} segment cannot be built",
+					"Door Frame: an arched head of {count} segments cannot be built",
+					segments
+				),
+				HFTranslationType.message(
+					"Use {min_segments} to {max_segments} segments",
+					{"min_segments": MIN_SEGMENTS, "max_segments": MAX_SEGMENTS}
+				)
 			)
 		# The posts stand up to where the arch springs, so they need a brush's height.
 		var least := float(merged["width"]) * 0.5 + MIN_PIECE
 		if float(merged["height"]) < least - THIN_SLACK:
-			return HFOpResult.fail(
-				(
-					"Door Frame: an arched head on a %s wide opening needs a height of %s or more"
-					% [_number(float(merged["width"])), _number(least)]
-				),
-				"Raise the height, narrow the opening, or use a flat head"
+			return (
+				HFOpResult
+				. fail(
+					(
+						HFTranslationType
+						. message(
+							"Door Frame: an arched head on a {width} wide opening needs a height of {least} or more",
+							{"width": _number(float(merged["width"])), "least": _number(least)}
+						)
+					),
+					"Raise the height, narrow the opening, or use a flat head"
+				)
 			)
 		# The head is measured as the Arch measures its segments: only against a
 		# sliver, since a piece square to an axis is a box only at the minimum.
 		var thin := HFArchBuilder.thin_segment(_arch_settings(merged))
 		if not thin.is_empty():
-			return HFOpResult.fail(
-				(
-					"Door Frame: an arched head piece %s across is a sliver, too thin to build"
-					% _number(thin["across"])
-				),
-				"Use fewer than %d segments, or a wider opening" % segments
+			return (
+				HFOpResult
+				. fail(
+					(
+						HFTranslationType
+						. message(
+							"Door Frame: an arched head piece {across} across is a sliver, too thin to build",
+							{"across": _number(thin["across"])}
+						)
+					),
+					HFTranslationType.message(
+						"Use fewer than {segments} segments, or a wider opening",
+						{"segments": segments}
+					)
+				)
 			)
 	return HFOpResult.success()
 

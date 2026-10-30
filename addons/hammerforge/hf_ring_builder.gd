@@ -25,6 +25,7 @@ const HFGeneratorSchema = preload("hf_generator_schema.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## A piece spanning half a turn or more is not convex, as an Arch segment is not.
 const MAX_SEGMENT_DEGREES := 179.0
@@ -124,8 +125,14 @@ static func validate(settings: Dictionary) -> HFOpResult:
 		return HFOpResult.fail("Ring: needs at least one segment", "Set Ring Segments to 1 or more")
 	if tube_segments < MIN_TUBE_SEGMENTS or tube_segments > MAX_TUBE_SEGMENTS:
 		return HFOpResult.fail(
-			"Ring: a tube of %d sides cannot be built" % tube_segments,
-			"Use %d to %d tube segments" % [MIN_TUBE_SEGMENTS, MAX_TUBE_SEGMENTS]
+			HFTranslationType.message(
+				"Ring: a tube of {tube_segments} sides cannot be built",
+				{"tube_segments": tube_segments}
+			),
+			HFTranslationType.message(
+				"Use {min_tube_segments} to {max_tube_segments} tube segments",
+				{"min_tube_segments": MIN_TUBE_SEGMENTS, "max_tube_segments": MAX_TUBE_SEGMENTS}
+			)
 		)
 	if radius <= 0.0:
 		return HFOpResult.fail("Ring: radius must be greater than zero", "Set a positive radius")
@@ -137,25 +144,37 @@ static func validate(settings: Dictionary) -> HFOpResult:
 	# being convex.
 	if tube >= radius:
 		return HFOpResult.fail(
-			"Ring: a tube radius of %.2f reaches the centre of a %.2f ring" % [tube, radius],
-			"Use a tube radius below %.2f" % radius
+			HFTranslationType.message(
+				"Ring: a tube radius of {tube} reaches the centre of a {radius} ring",
+				{"tube": "%.2f" % (tube), "radius": "%.2f" % (radius)}
+			),
+			HFTranslationType.message(
+				"Use a tube radius below {radius}", {"radius": "%.2f" % (radius)}
+			)
 		)
 	if is_zero_approx(sweep):
 		return HFOpResult.fail("Ring: sweep must not be zero", "Try 360 degrees for a whole ring")
 	if absf(sweep) > 360.0:
 		return HFOpResult.fail(
-			"Ring: a sweep of %.0f degrees is more than a full turn" % sweep,
+			HFTranslationType.message(
+				"Ring: a sweep of {sweep} degrees is more than a full turn",
+				{"sweep": "%.0f" % (sweep)}
+			),
 			"Use 360 degrees or less"
 		)
 	var step: float = absf(sweep) / float(ring_segments)
 	if step > MAX_SEGMENT_DEGREES:
 		var needed := int(ceil(absf(sweep) / MAX_SEGMENT_DEGREES))
 		return HFOpResult.fail(
-			(
-				"Ring: %.0f degrees across %d segment(s) is too coarse to stay convex"
-				% [absf(sweep), ring_segments]
+			HFTranslationType.message_n(
+				"Ring: {sweep} degrees across {count} segment is too coarse to stay convex",
+				"Ring: {sweep} degrees across {count} segments is too coarse to stay convex",
+				ring_segments,
+				{"sweep": "%.0f" % absf(sweep)}
 			),
-			"Use at least %d ring segments for this sweep" % needed
+			HFTranslationType.message(
+				"Use at least {needed} ring segments for this sweep", {"needed": needed}
+			)
 		)
 	var thin_refusal := _thin_refusal(merged)
 	if thin_refusal != null:
@@ -201,7 +220,11 @@ static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 	elif absf(direction.dot(middle.normalized())) >= sqrt(0.5):
 		hint = "Use a larger Tube Radius, or more Ring Segments"
 	return HFOpResult.fail(
-		"Ring: a piece %s across is a sliver, too thin to build" % _number(across), hint
+		HFTranslationType.message(
+			"Ring: a piece {across} across is a sliver, too thin to build",
+			{"across": _number(across)}
+		),
+		hint
 	)
 
 

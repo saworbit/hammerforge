@@ -11,6 +11,7 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const HFHash = preload("hf_hash.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## The most instances one scatter stroke may lay out.
 ##
@@ -172,11 +173,20 @@ func scatter_spline(layer: HFPaintLayer, settings: ScatterSettings) -> ScatterRe
 func check_candidate_count(count: int, what: String) -> HFOpResult:
 	if count <= MAX_SCATTER_INSTANCES:
 		return null
-	return HFOpResult.fail(
-		"Scatter: %s at this density is %d instances" % [what, count],
-		(
-			"Keep the total at or below %d by lowering the radius or the density"
-			% MAX_SCATTER_INSTANCES
+	return (
+		HFOpResult
+		. fail(
+			HFTranslationType.message(
+				"Scatter: {what} at this density is {count} instances",
+				{"what": what, "count": count}
+			),
+			(
+				HFTranslationType
+				. message(
+					"Keep the total at or below {max_scatter_instances} by lowering the radius or the density",
+					{"max_scatter_instances": MAX_SCATTER_INSTANCES}
+				)
+			)
 		)
 	)
 

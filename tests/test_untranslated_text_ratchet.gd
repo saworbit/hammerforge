@@ -26,7 +26,8 @@ var _sink := RegEx.create_from_string(
 	(
 		"(?:\\.text|\\btooltip_text|\\bplaceholder_text|\\bdialog_text|(?:^\\s*|\\.)title)"
 		+ "\\s*=(?!=)(.*)$|(?:\\b(?:show_toast|_set_status|set_status|_toast|_say)\\("
-		+ '|\\bemit_signal\\(\\s*"user_message"\\s*,|\\buser_message\\.emit\\()(.*)$'
+		+ '|\\bemit_signal\\(\\s*"user_message"\\s*,|\\buser_message\\.emit\\('
+		+ "|\\bHFOpResult\\.(?:fail|success)\\(|\\b_op_fail\\()(.*)$"
 	)
 )
 var _formatted := RegEx.create_from_string('"(?:[^"\\\\]|\\\\.)*"\\s*(?:%|\\.format\\()')
@@ -91,6 +92,7 @@ func test_the_detector_still_finds_untranslated_formatted_text():
 	assert_eq(_hits('root.user_message.emit("Saved %s" % path, 0)').size(), 1, "a level message")
 	assert_eq(_hits('root.emit_signal("user_message", "Saved %s" % path, 0)').size(), 1)
 	assert_eq(_hits('root.user_message.emit(HFTranslation.message("Saved {file}", f), 0)'), [])
+	assert_eq(_hits('return HFOpResult.fail("Arch: %s" % x, "Use %d" % n)').size(), 1, "a refusal")
 
 
 func _baseline() -> Dictionary:
