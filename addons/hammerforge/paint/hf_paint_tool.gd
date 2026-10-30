@@ -878,7 +878,7 @@ func _begin_sculpt_stroke(camera: Camera3D, screen_pos: Vector2) -> bool:
 
 
 func _apply_sculpt_at_screen(camera: Camera3D, screen_pos: Vector2, layer: HFPaintLayer) -> void:
-	if not camera or not layer or not layer.heightmap:
+	if not camera or not layer or not layer.has_heightmap():
 		return
 	var cell = _screen_to_cell(camera, screen_pos)
 	if cell == null:
@@ -895,30 +895,27 @@ func _apply_sculpt_at_screen(camera: Camera3D, screen_pos: Vector2, layer: HFPai
 
 
 func _apply_terrain_brush(layer: HFPaintLayer, center_cell: Vector2i) -> void:
-	var img = layer.heightmap
-	if not img:
+	if not layer.has_heightmap():
 		return
-	var w = img.get_width()
-	var h = img.get_height()
 	var r = int(ceil(sculpt_radius))
 	# For FLATTEN, capture height at center on first application
 	if tool == HFStroke.Tool.SCULPT_FLATTEN and not _sculpt_flatten_captured:
-		var cx = posmod(center_cell.x, w)
-		var cy = posmod(center_cell.y, h)
-		_sculpt_flatten_height = img.get_pixel(cx, cy).r
+		_sculpt_flatten_height = layer.get_height_sample(center_cell)
 		_sculpt_flatten_captured = true
+	# A sculpt writes the layer's samples under the brush and nowhere else. It
+	# wrote the one image the ground was read from by `posmod`, so it landed again
+	# a width away on every side (#2007).
 	for dy in range(-r, r + 1):
 		for dx in range(-r, r + 1):
 			var dist = sqrt(float(dx * dx + dy * dy))
 			if dist > sculpt_radius:
 				continue
-			var px = posmod(center_cell.x + dx, w)
-			var py = posmod(center_cell.y + dy, h)
+			var corner := center_cell + Vector2i(dx, dy)
 			# Falloff: 1.0 at center, 0.0 at edge (when falloff=1)
 			var t = dist / max(0.01, sculpt_radius)
 			var weight = 1.0 - t * sculpt_falloff
 			weight = clamp(weight, 0.0, 1.0)
-			var current = img.get_pixel(px, py).r
+			var current := layer.get_height_sample(corner)
 			var new_val = current
 			match tool:
 				HFStroke.Tool.SCULPT_RAISE:
@@ -931,7 +928,7 @@ func _apply_terrain_brush(layer: HFPaintLayer, center_cell: Vector2i) -> void:
 					var count := 0
 					for sy in range(-1, 2):
 						for sx in range(-1, 2):
-							avg += img.get_pixel(posmod(px + sx, w), posmod(py + sy, h)).r
+							avg += layer.get_height_sample(corner + Vector2i(sx, sy))
 							count += 1
 					avg /= float(count)
 					new_val = lerp(current, avg, weight * 0.5)
@@ -944,7 +941,7 @@ func _apply_terrain_brush(layer: HFPaintLayer, center_cell: Vector2i) -> void:
 				new_val, 0.0 if current >= 0.0 else -INF, 1.0 if current <= 1.0 else INF
 			)
 			if new_val != current:
-				img.set_pixel(px, py, Color(new_val, new_val, new_val))
+				layer.set_height_sample(corner, new_val)
 	# Mark chunks dirty for the affected area. A sample is also the far corner of
 	# the cell before it, which can be in the chunk before, so the range starts a
 	# cell early; it ended on the old height until a full rebuild (#2014).
@@ -959,27 +956,3 @@ func _apply_terrain_brush(layer: HFPaintLayer, center_cell: Vector2i) -> void:
 		for cy in range(min_cy, max_cy + 1):
 			for cx in range(min_cx, max_cx + 1):
 				layer._dirty_chunks[Vector2i(cx, cy)] = true
-		# The heightmap repeats every width, so the samples changed here are also
-		# under every painted chunk a whole number of widths away, which kept the
-		# old heights until a rebuild (#2007).
-		for cid in layer.get_chunk_ids():
-			var c0 := Vector2i(cid.x * chunk_size, cid.y * chunk_size)
-			var c1 := c0 + Vector2i(chunk_size - 1, chunk_size - 1)
-			if (
-				_overlaps_wrapped(c0.x, c1.x, lo.x, hi.x, w)
-				and _overlaps_wrapped(c0.y, c1.y, lo.y, hi.y, h)
-			):
-				layer._dirty_chunks[cid] = true
-
-
-## Whether the span `a0..a1` meets `b0..b1` shifted by any whole number of
-## `period`s.
-static func _overlaps_wrapped(a0: int, a1: int, b0: int, b1: int, period: int) -> bool:
-	if period <= 0:
-		return a0 <= b1 and b0 <= a1
-	var first := floori(float(a0 - b1) / float(period))
-	var last := floori(float(a1 - b0) / float(period))
-	for k in range(first, last + 1):
-		if a0 <= b1 + k * period and b0 + k * period <= a1:
-			return true
-	return false

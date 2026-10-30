@@ -1467,8 +1467,21 @@ func capture_paint_layers(include_chunks: bool = true) -> Array:
 		# Every layer's, not only one with a heightmap. Set before an import, it
 		# went back to 10 at the next undo or reopen, and the import took 10 (#2030).
 		entry["height_scale"] = layer.height_scale
-		if layer.has_heightmap():
+		# The ground: its base and its sculpts, each written only when it holds
+		# something, so a level saved before #2007 saves as it did.
+		if layer.heightmap != null and not layer.heightmap.is_empty():
 			entry["heightmap_b64"] = HFHeightmapIO.encode_to_base64(layer.heightmap)
+			if not layer.heightmap_repeats:
+				entry["heightmap_origin"] = [layer.heightmap_origin.x, layer.heightmap_origin.y]
+		var noise: Dictionary = layer.get_height_noise()
+		if not noise.is_empty():
+			entry["heightmap_noise"] = noise
+		var sculpts: Array = []
+		for cid in layer.get_height_chunk_ids():
+			var heights := HFHeightmapIO.encode_to_base64(layer.get_height_chunk(cid))
+			sculpts.append({"cx": cid.x, "cy": cid.y, "heights": heights})
+		if not sculpts.is_empty():
+			entry["height_chunks"] = sculpts
 		if include_chunks:
 			for cid in layer.get_chunk_ids():
 				# An all-zero chunk describes nothing. Serializing one writes its

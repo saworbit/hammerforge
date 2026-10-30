@@ -43,6 +43,7 @@ func _build_chunk_mesh(
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var has_verts := false
+	var corners := layer.get_height_samples(origin, size + 1)
 
 	for ly in range(size):
 		for lx in range(size):
@@ -50,7 +51,7 @@ func _build_chunk_mesh(
 			if not layer.get_cell(cell):
 				continue
 			has_verts = true
-			_add_cell_quad(st, layer, grid, cell, size)
+			_add_cell_quad(st, layer, grid, cell, size, corners)
 
 	if not has_verts:
 		return null
@@ -69,16 +70,26 @@ func _build_chunk_mesh(
 	return result
 
 
+## `samples` holds the chunk's corners, `chunk_size + 1` a row, from
+## `HFPaintLayer.get_height_samples()`.
 func _add_cell_quad(
-	st: SurfaceTool, layer: HFPaintLayer, grid: HFPaintGrid, cell: Vector2i, chunk_size: int
+	st: SurfaceTool,
+	layer: HFPaintLayer,
+	grid: HFPaintGrid,
+	cell: Vector2i,
+	chunk_size: int,
+	samples: PackedFloat32Array
 ) -> void:
 	var cs := grid.cell_size
+	var row := chunk_size + 1
+	var local := Vector2i(posmod(cell.x, chunk_size), posmod(cell.y, chunk_size))
 	# 4 corner positions: (0,0), (1,0), (1,1), (0,1)
 	var offsets: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 1)]
 	var corners: Array[Vector3] = []
 	for off in offsets:
 		var corner_cell := cell + off
-		var h := layer.get_height_at(corner_cell)
+		var at := local + off
+		var h := samples[at.y * row + at.x] * layer.height_scale
 		corners.append(Vector3(corner_cell.x * cs, grid.layer_y + h, corner_cell.y * cs))
 
 	# UVs tiled per cell
@@ -88,8 +99,8 @@ func _add_cell_quad(
 	var uv01 := Vector2(0.0, 1.0)
 
 	# UV2 for blend map: position within chunk
-	var local_x := posmod(cell.x, chunk_size)
-	var local_y := posmod(cell.y, chunk_size)
+	var local_x := local.x
+	var local_y := local.y
 	var inv := 1.0 / float(chunk_size)
 	var uv2_00 := Vector2(float(local_x) * inv, float(local_y) * inv)
 	var uv2_10 := Vector2(float(local_x + 1) * inv, float(local_y) * inv)

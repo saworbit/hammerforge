@@ -1038,9 +1038,7 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 		layer._ensure_terrain_slots()
 		# The layer's own, with a heightmap or without one (#2030).
 		layer.height_scale = float(entry.get("height_scale", layer.height_scale))
-		var hm_b64 = str(entry.get("heightmap_b64", ""))
-		if hm_b64 != "":
-			layer.heightmap = HFHeightmapIO.decode_from_base64(hm_b64)
+		_restore_layer_heights(layer, entry)
 		var chunks = entry.get("chunks", [])
 		if chunks is Array:
 			_deserialize_chunks_to_layer(layer, chunks)
@@ -1049,6 +1047,47 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 			active_index, 0, root.paint_layers.layers.size() - 1
 		)
 	regenerate_paint_layers()
+
+
+## A layer's ground as `HFStateSystem.capture_paint_layers()` saved it: its
+## base, an image or noise, and its sculpted chunks (#2007). An image with no
+## `heightmap_origin` is from a level saved before them, and repeats from cell
+## (0, 0) as it did.
+func _restore_layer_heights(layer: HFPaintLayer, entry: Dictionary) -> void:
+	var noise = entry.get("heightmap_noise")
+	var hm_b64 = str(entry.get("heightmap_b64", ""))
+	if noise is Dictionary:
+		layer.set_height_noise(noise)
+	elif hm_b64 != "":
+		layer.heightmap = HFHeightmapIO.decode_from_base64(hm_b64)
+		# Saved as the layer keeps it, each pixel at `posmod(cell, size)`, so it is
+		# put back as it is rather than placed again.
+		var origin = entry.get("heightmap_origin")
+		if (
+			origin is Array
+			and origin.size() == 2
+			and (origin[0] is int or origin[0] is float)
+			and (origin[1] is int or origin[1] is float)
+			and is_finite(float(origin[0]))
+			and is_finite(float(origin[1]))
+		):
+			layer.heightmap_origin = Vector2i(int(origin[0]), int(origin[1]))
+			layer.heightmap_repeats = false
+	var sculpts = entry.get("height_chunks", [])
+	if not sculpts is Array:
+		return
+	for sculpt in sculpts:
+		if not sculpt is Dictionary:
+			continue
+		var cid := Vector2i(int(sculpt.get("cx", 0)), int(sculpt.get("cy", 0)))
+		var heights := HFHeightmapIO.decode_from_base64(str(sculpt.get("heights", "")))
+		if not layer.set_height_chunk(cid, heights):
+			HFLog.warn(
+				(
+					"HFPaint: layer '%s' sculpt at chunk %s is not %d square, skipped"
+					% [str(layer.layer_id), str(cid), layer.chunk_size]
+				)
+			)
 
 
 ## Deserialize an array of chunk dictionaries into a paint layer.
@@ -1131,7 +1170,9 @@ func import_heightmap(path: String) -> void:
 		return
 	var img := HFHeightmapIO.load_from_file(path)
 	if img:
-		layer.heightmap = img
+		# Over the painted ground, from its first cell, so an image the size of
+		# the painted area lies on it. It no longer repeats past its edge (#2007).
+		layer.set_height_image(img, layer.painted_corner())
 		regenerate_paint_layers()
 	else:
 		push_warning("HammerForge: failed to load heightmap from '%s'" % path)
@@ -1145,8 +1186,9 @@ func generate_heightmap_noise(settings: Dictionary = {}) -> void:
 	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
 	if not layer:
 		return
-	var s := maxi(layer.chunk_size * 4, 256)
-	layer.heightmap = HFHeightmapIO.generate_noise(s, s, settings)
+	# The noise itself rather than an image of it, which repeated every width
+	# (#2007).
+	layer.set_height_noise(settings)
 	regenerate_paint_layers()
 
 

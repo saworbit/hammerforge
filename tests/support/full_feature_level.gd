@@ -69,8 +69,13 @@ static func fill(level: Node, tree: SceneTree) -> void:
 	if level.visgroup_system and level.visgroup_system.has_method("save_view"):
 		level.visgroup_system.save_view("everything")
 	if level.paint_layers and not level.paint_layers.layers.is_empty():
-		level.paint_layers.layers[0].set_cell(Vector2i(2, 2), true)
-		level.paint_layers.layers[0].heightmap = Image.create(4, 4, false, Image.FORMAT_RF)
+		var ground: HFPaintLayer = level.paint_layers.layers[0]
+		ground.set_cell(Vector2i(2, 2), true)
+		ground.set_height_image(Image.create(4, 4, false, Image.FORMAT_RF), Vector2i(1, 1))
+		ground.set_height_sample(Vector2i(2, 2), 0.5)
+		var hills: HFPaintLayer = level.paint_layers.create_layer(&"hills", 0.0)
+		hills.set_cell(Vector2i(0, 0), true)
+		hills.set_height_noise({"seed": 1})
 	var sculpted = level.create_brush_from_info(
 		{"shape": 0, "size": Vector3(2, 2, 2), "center": Vector3(70, 1, 0)}
 	)

@@ -23,13 +23,16 @@ func summary() -> String:
 	return "what a sculpt stroke rebuilds against what it changed, and where noise terrain meets itself"
 
 
+## #2007, #2008 and #2014 are fixed, so each of them flags as new if it comes
+## back.
 func expected_issues() -> Array[int]:
-	return [2007, 2008, 2014]
+	return []
 
 
 func run() -> void:
 	await _sculpt_at_a_chunk_edge()
 	await _a_sculpt_a_heightmap_away()
+	await _a_sculpt_on_noise_and_the_ground_256_cells_on()
 	await _noise_across_the_origin()
 	await _sculpt_through_undo()
 	await _sculpt_above_one()
@@ -166,8 +169,7 @@ func _sculpt_at_a_chunk_edge() -> void:
 		note("chunk %s corners that disagree with the heightmap" % tag, per_chunk[tag].size())
 	var left: Array = per_chunk.get("0,0", [])
 	if not left.is_empty():
-		known(
-			2014,
+		flag(
 			"a sculpt at a chunk's first column leaves the chunk before it on the old heights",
 			(
 				(
@@ -192,8 +194,9 @@ func _sculpt_at_a_chunk_edge() -> void:
 	await drop_root(root)
 
 
-## The heightmap is read with posmod, so it repeats every `width` cells. A sculpt
-## writes pixels, and so it moves the ground at every cell that reads them.
+## A heightmap with no place, as a level saved before #2007 has, reads repeating
+## every `width` cells. A sculpt wrote its pixels, and so moved the ground at
+## every cell that read them; it keeps its own samples per chunk now.
 func _a_sculpt_a_heightmap_away() -> void:
 	note("-- a sculpt, and the ground a heightmap's width away --")
 	var root: Node3D = await fresh_root("SculptFar")
@@ -218,8 +221,7 @@ func _a_sculpt_a_heightmap_away() -> void:
 	var stale_far: Array = _stale_vertices(layer, nodes["2,0"]) if nodes.has("2,0") else []
 	note("corners of chunk 2,0 off the heightmap after the sculpt", stale_far.size())
 	if not is_equal_approx(before_there, after_there):
-		known(
-			2007,
+		flag(
 			"a sculpt also raises the ground a heightmap's width away, unseen until a rebuild",
 			(
 				(
@@ -237,9 +239,49 @@ func _a_sculpt_a_heightmap_away() -> void:
 	await drop_root(root)
 
 
-## Generate Noise makes a 256 square map that is not seamless, and the terrain
-## reads it with posmod, so cell -1 reads pixel 255 next to cell 0 reading pixel
-## 0. Ground painted round the origin is where a level starts.
+## Generate Noise made a 256 square map, so on ground wider than 256 cells every
+## sculpt landed twice (#2007).
+func _a_sculpt_on_noise_and_the_ground_256_cells_on() -> void:
+	note("-- a sculpt on noise ground, and the ground 256 cells on --")
+	var root: Node3D = await fresh_root("SculptNoiseFar")
+	root.grid_snap = 1.0
+	await frame()
+	root.generate_heightmap_noise({})
+	root.set_heightmap_scale(4.0)
+	var layer = root.paint_layers.get_active_layer()
+	_paint_rect(layer, Vector2i(0, 0), Vector2i(300, 4))
+	root.paint_system.regenerate_paint_layers()
+	await frame()
+	var here := Vector2i(10, 2)
+	var there := Vector2i(10 + 256, 2)
+	var before_here: float = layer.get_height_at(here)
+	var before_there: float = layer.get_height_at(there)
+	_sculpt(root, here, HFStroke.Tool.SCULPT_RAISE, 2.0)
+	await frame()
+	note("height at %s before / after" % here, [before_here, layer.get_height_at(here)])
+	note("height at %s before / after" % there, [before_there, layer.get_height_at(there)])
+	var nodes := _chunk_nodes(root)
+	var stale: Array = []
+	for tag in nodes:
+		stale.append_array(_stale_vertices(layer, nodes[tag]))
+	note("terrain corners off the ground after the sculpt", stale.size())
+	if not is_equal_approx(before_there, layer.get_height_at(there)):
+		flag(
+			"a sculpt on noise ground also lands 256 cells on",
+			(
+				"Raise at %s moved the ground at %s from %.3f to %.3f"
+				% [here, there, before_there, layer.get_height_at(there)]
+			)
+		)
+	if not stale.is_empty():
+		flag("a sculpt on noise ground leaves terrain corners on the old height", stale.slice(0, 6))
+	await drop_root(root)
+
+
+## Generate Noise made a 256 square map that was not seamless, and the terrain
+## read it with posmod, so cell -1 read pixel 255 next to cell 0 reading pixel 0.
+## The layer samples the noise itself now (#2007). Ground painted round the
+## origin is where a level starts.
 func _noise_across_the_origin() -> void:
 	note("-- Generate Noise over ground painted across the origin --")
 	var root: Node3D = await fresh_root("NoiseOrigin")
@@ -249,7 +291,7 @@ func _noise_across_the_origin() -> void:
 	await frame()
 	root.set_heightmap_scale(4.0)
 	var layer = root.paint_layers.get_active_layer()
-	note("heightmap size", [layer.heightmap.get_width(), layer.heightmap.get_height()])
+	note("noise", layer.get_height_noise())
 	_paint_rect(layer, Vector2i(-16, -16), Vector2i(15, 15))
 	root.paint_system.regenerate_paint_layers()
 	await frame()
@@ -301,23 +343,16 @@ func _noise_across_the_origin() -> void:
 		[mesh_y.get(below, "<none>"), mesh_y.get(worst_at, "<none>")]
 	)
 	if worst_across > worst_elsewhere * 3.0 and worst_across > 0.25:
-		known(
-			2007,
+		flag(
 			"noise terrain painted across the origin has a ridge along x = 0 and z = 0",
 			(
 				(
-					"Generate Noise makes a %dx%d map that is not seamless, and"
-					+ " HFPaintLayer.get_height_at() wraps a cell with posmod, so cell -1 reads"
-					+ " pixel %d beside cell 0 reading pixel 0: two unrelated samples. Ground"
-					+ " painted from -16 to 15 at height scale 4 rises %.2f units over one cell"
-					+ " at %s (%.0f degrees) where the noise elsewhere never rises more than %.2f"
-					+ " (%.0f degrees), a straight wall or trench along both axes through the"
-					+ " level's origin"
+					"Ground painted from -16 to 15 at height scale 4 after Generate Noise rises"
+					+ " %.2f units over one cell at %s (%.0f degrees) where the noise elsewhere"
+					+ " never rises more than %.2f (%.0f degrees), a straight wall or trench"
+					+ " along both axes through the level's origin"
 				)
 				% [
-					layer.heightmap.get_width(),
-					layer.heightmap.get_height(),
-					layer.heightmap.get_width() - 1,
 					worst_across,
 					worst_at,
 					rad_to_deg(atan(worst_across / cs)),
@@ -405,8 +440,7 @@ func _sculpt_above_one() -> void:
 	note("Raise at %s: ground before / after" % high, [high_before, high_after])
 	note("Lower at %s: ground before / after" % low, [low_before, low_after])
 	if high_after < high_before or low_after > low_before:
-		known(
-			2008,
+		flag(
 			"Raise lowers, and Lower raises, ground whose heightmap lies outside 0..1",
 			(
 				(

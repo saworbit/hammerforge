@@ -135,9 +135,8 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 		_rasterize_brush(brush, raw_heights, width, height, cell_min, cs, y_min)
 
 	# --- 5. Build the heightmap Image ---
-	# HFPaintLayer.get_height_at(cell) reads pixel at posmod(cell.x, img_w),
-	# posmod(cell.y, img_h). We must write each cell's height to the pixel
-	# index that get_height_at will read it from — i.e. the posmod position.
+	# Pixel (0, 0) is cell_min, and the layer places it there: past the box the
+	# ground reads the margin's zero rather than the map again (#2007).
 	var hs: float = maxf(settings.height_scale, 0.01)
 	var img := Image.create(width, height, false, Image.FORMAT_RF)
 	if img == null:
@@ -145,12 +144,8 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 		return result
 	for ly in range(height):
 		for lx in range(width):
-			var abs_x := cell_min.x + lx
-			var abs_y := cell_min.y + ly
-			var px := posmod(abs_x, width)
-			var py := posmod(abs_y, height)
 			var raw_h: float = raw_heights[ly * width + lx]
-			img.set_pixel(px, py, Color(raw_h / hs, 0, 0, 1))
+			img.set_pixel(lx, ly, Color(raw_h / hs, 0, 0, 1))
 
 	# --- 6. Build / update paint layer ---
 	var layer: HFPaintLayer = settings.target_layer
@@ -164,7 +159,7 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 		# Before the fill below, not after it.
 		layer.chunk_size = settings.chunk_size
 
-	layer.heightmap = img
+	layer.set_height_image(img, cell_min)
 	layer.height_scale = hs
 
 	# Fill cells so the layer renders

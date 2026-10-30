@@ -2,6 +2,12 @@
 class_name HFPaintLayer
 extends Node
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFHeightmapIO = preload("hf_heightmap_io.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 const TERRAIN_SLOTS := 4
 const TERRAIN_BLEND_SLOTS := 3  # slots 1..3 have explicit weights; slot 0 is implicit base
 
@@ -42,9 +48,20 @@ var _chunk_size: int = 32
 @export var layer_id: StringName = &"layer_0"
 var display_name: String = ""
 
-# Heightmap data (optional; null = flat layer)
+# Heights. Where a sculpt has been, the ground is the sculpted samples kept per
+# chunk. Everywhere else it is the base: `heightmap`, a noise field, or flat.
+# One image read by `posmod(cell, width)` repeated the ground every width, and
+# a sculpt landed again a width away (#2007).
 var heightmap: Image = null
+## The cell `heightmap` is placed at by `set_height_image()`.
+var heightmap_origin := Vector2i.ZERO
+## A level saved before #2007 has an image with no place, read repeating from
+## cell (0, 0) as it was saved. A placed one reads its nearest edge outside it.
+var heightmap_repeats := true
 var height_scale: float = 10.0
+var _height_noise: Dictionary = {}
+var _noise: FastNoiseLite = null
+var _height_chunks: Dictionary = {}  # Dictionary[Vector2i, Image], FORMAT_RF chunk_size square
 
 # Terrain slot settings (per-layer)
 var terrain_slot_paths: Array[String] = ["", "", "", ""]
@@ -62,17 +79,176 @@ var _wall_heights: Dictionary = {}  # Dictionary[Vector2i, float]
 
 
 func has_heightmap() -> bool:
-	return heightmap != null and not heightmap.is_empty()
+	return (
+		(heightmap != null and not heightmap.is_empty())
+		or _noise != null
+		or not _height_chunks.is_empty()
+	)
 
 
+## The height at corner `cell`, with the Height Scale.
 func get_height_at(cell: Vector2i) -> float:
-	if not has_heightmap():
+	return get_height_sample(cell) * height_scale
+
+
+## The ground at corner `corner` before the Height Scale: the sculpted sample
+## where a sculpt has been, the base everywhere else.
+func get_height_sample(corner: Vector2i) -> float:
+	if not _height_chunks.is_empty():
+		var sculpted: Image = _height_chunks.get(_cell_to_chunk(corner)) as Image
+		if sculpted != null:
+			var local := _cell_to_local(corner)
+			return sculpted.get_pixel(local.x, local.y).r
+	return _base_sample(corner)
+
+
+## The samples at the corners `from` to `from + count - 1` on both axes, row by
+## row. A heightmap floor reads a chunk's corners once rather than four times a
+## cell, since a noise corner is a noise evaluation.
+func get_height_samples(from: Vector2i, count: int) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(count * count)
+	for y in range(count):
+		for x in range(count):
+			out[y * count + x] = get_height_sample(from + Vector2i(x, y))
+	return out
+
+
+## Sculpt the sample at corner `corner`. The chunk is filled from the base before
+## its first change, so no height beside the change moves. False when the sample
+## already held `value`.
+func set_height_sample(corner: Vector2i, value: float) -> bool:
+	var cid := _cell_to_chunk(corner)
+	var local := _cell_to_local(corner)
+	var sculpted: Image = _height_chunks.get(cid) as Image
+	if sculpted == null:
+		if _base_sample(corner) == value:
+			return false
+		sculpted = _base_chunk(cid)
+		_height_chunks[cid] = sculpted
+	if sculpted.get_pixel(local.x, local.y).r == value:
+		return false
+	sculpted.set_pixel(local.x, local.y, Color(value, 0, 0))
+	return true
+
+
+## Give the layer `img` as its ground, its top left pixel on cell `origin`. Past
+## the image a corner reads the nearest edge, so nothing repeats. The sculpts and
+## any noise go, as they always went with a new heightmap.
+##
+## Kept with each cell's pixel at `posmod(cell, size)`, as a build from before
+## #2007 reads it, so that build shows the ground right inside the image.
+func set_height_image(img: Image, origin: Vector2i) -> void:
+	clear_heights()
+	if img == null or img.is_empty():
+		return
+	heightmap = _placed(img, origin)
+	heightmap_origin = origin
+	heightmap_repeats = false
+
+
+## Give the layer a noise field as its ground, sampled at each corner, so it goes
+## on in every direction without repeating. `settings` as
+## `HFHeightmapIO.noise_settings()` reads them. The sculpts and any image go.
+func set_height_noise(settings: Dictionary) -> void:
+	clear_heights()
+	_height_noise = HFHeightmapIO.noise_settings(settings)
+	_noise = HFHeightmapIO.make_noise(_height_noise)
+
+
+## The noise the ground is, as a save writes it, or empty.
+func get_height_noise() -> Dictionary:
+	return _height_noise.duplicate()
+
+
+## Flat ground: no image, no noise, no sculpt.
+func clear_heights() -> void:
+	heightmap = null
+	heightmap_origin = Vector2i.ZERO
+	heightmap_repeats = true
+	_height_noise = {}
+	_noise = null
+	_height_chunks.clear()
+
+
+func get_height_chunk_ids() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for cid: Vector2i in _height_chunks:
+		out.append(cid)
+	return out
+
+
+## The sculpted samples of chunk `cid`, a copy, or null where nothing is sculpted.
+func get_height_chunk(cid: Vector2i) -> Image:
+	var sculpted: Image = _height_chunks.get(cid) as Image
+	if sculpted == null:
+		return null
+	var copy := Image.new()
+	copy.copy_from(sculpted)
+	return copy
+
+
+## Put back the sculpted samples of chunk `cid`. False, keeping nothing, for an
+## image that is not this layer's chunk size square.
+func set_height_chunk(cid: Vector2i, img: Image) -> bool:
+	if img == null or img.get_width() != chunk_size or img.get_height() != chunk_size:
+		return false
+	var copy := Image.new()
+	copy.copy_from(img)
+	if copy.get_format() != Image.FORMAT_RF:
+		copy.convert(Image.FORMAT_RF)
+	_height_chunks[cid] = copy
+	_mark_dirty(cid)
+	_mark_dirty_neighbours(cid)
+	return true
+
+
+func _base_sample(corner: Vector2i) -> float:
+	if _noise != null:
+		return _noise.get_noise_2d(corner.x, corner.y) * 0.5 + 0.5
+	if heightmap == null or heightmap.is_empty():
 		return 0.0
-	var w := heightmap.get_width()
-	var h := heightmap.get_height()
-	var px := posmod(cell.x, w)
-	var py := posmod(cell.y, h)
-	return heightmap.get_pixel(px, py).r * height_scale
+	var size := heightmap.get_size()
+	var at := corner
+	if not heightmap_repeats:
+		at = corner.clamp(heightmap_origin, heightmap_origin + size - Vector2i.ONE)
+	return heightmap.get_pixel(posmod(at.x, size.x), posmod(at.y, size.y)).r
+
+
+func _base_chunk(cid: Vector2i) -> Image:
+	var img := Image.create(chunk_size, chunk_size, false, Image.FORMAT_RF)
+	var first := cid * chunk_size
+	for y in range(chunk_size):
+		for x in range(chunk_size):
+			img.set_pixel(x, y, Color(_base_sample(first + Vector2i(x, y)), 0, 0))
+	return img
+
+
+## `img` with its pixel (x, y) moved to `posmod(origin + (x, y), size)`, in up to
+## four blits.
+static func _placed(img: Image, origin: Vector2i) -> Image:
+	var src := Image.new()
+	src.copy_from(img)
+	if src.get_format() != Image.FORMAT_RF:
+		src.convert(Image.FORMAT_RF)
+	var size := src.get_size()
+	var shift := Vector2i(posmod(origin.x, size.x), posmod(origin.y, size.y))
+	if shift == Vector2i.ZERO:
+		return src
+	var out := Image.create(size.x, size.y, false, Image.FORMAT_RF)
+	# Each run of columns and of rows as (first, count): the run that moves on by
+	# the shift, and the run that wraps round to the start.
+	var columns: Array[Vector2i] = [
+		Vector2i(0, size.x - shift.x), Vector2i(size.x - shift.x, shift.x)
+	]
+	var rows: Array[Vector2i] = [Vector2i(0, size.y - shift.y), Vector2i(size.y - shift.y, shift.y)]
+	for column in columns:
+		for row in rows:
+			if column.y == 0 or row.y == 0:
+				continue
+			var to := Vector2i((column.x + shift.x) % size.x, (row.x + shift.y) % size.y)
+			out.blit_rect(src, Rect2i(column.x, row.x, column.y, row.y), to)
+	return out
 
 
 func set_cell(cell: Vector2i, filled: bool) -> void:
@@ -239,6 +415,24 @@ func is_chunk_empty(cid: Vector2i) -> bool:
 	return chunk == null or chunk.is_empty()
 
 
+## The first painted cell on each axis: the corner of the painted ground's
+## bounds, or cell (0, 0) when nothing is painted.
+func painted_corner() -> Vector2i:
+	var corner := Vector2i(2147483647, 2147483647)
+	for cid: Vector2i in _chunks:
+		var chunk: HFChunkData = _chunks[cid] as HFChunkData
+		var first := cid * chunk_size
+		if chunk == null or chunk.is_empty():
+			continue
+		if first.x >= corner.x and first.y >= corner.y:
+			continue
+		for y in range(chunk_size):
+			for x in range(chunk_size):
+				if chunk.get_bit(Vector2i(x, y)):
+					corner = Vector2i(mini(corner.x, first.x + x), mini(corner.y, first.y + y))
+	return Vector2i.ZERO if corner.x == 2147483647 else corner
+
+
 ## How many cells are filled, from each chunk's counter rather than its bits.
 func filled_cell_count() -> int:
 	var total := 0
@@ -367,7 +561,9 @@ func get_memory_bytes() -> int:
 		total += chunk.blend_weights_2.size()
 		total += chunk.blend_weights_3.size()
 	total += _wall_heights.size() * 12
-	if has_heightmap() and heightmap:
+	for sculpted: Image in _height_chunks.values():
+		total += sculpted.get_data_size()
+	if heightmap:
 		var data := heightmap.get_data()
 		if data:
 			total += data.size()
