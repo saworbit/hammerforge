@@ -20,6 +20,7 @@ const HFBrushEntity = preload("hf_brush_entity.gd")
 const HFNotes = preload("hf_notes.gd")
 const HFBakeSplit = preload("hf_bake_split.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## The metas that tie a piece to a structure and to a prefab copy, as
@@ -27,33 +28,33 @@ const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const GENERATOR_META := &"hf_generator_id"
 const INSTANCE_META := &"hf_prefab_instance"
 
-## The rows, in the table's order: the key, how a count of it reads, and the
-## row's name in the table.
+## The rows, in the table's order: the key and the row's name in the table.
+## `_phrase()` says how a count of each reads.
 const ROWS := [
-	["brushes", "%d brush%s", "Brushes"],
-	["shapes", "the shape of %d brush%s", "Brush shapes"],
-	["cuts", "%d cut%s", "Cuts"],
-	["face_materials", "the material of %d face%s", "Face materials"],
-	["uv_settings", "the texture settings of %d face%s", "Texture settings"],
-	["custom_uvs", "the hand laid UVs of %d face%s", "Hand laid UVs"],
-	["paint", "paint on %d face%s", "Face paint"],
-	["sculpts", "the sculpt of %d face%s", "Sculpts"],
-	["smoothing", "the smoothing of %d face%s", "Smoothing groups"],
-	["hidden_faces", "%d Hidden face%s", "Hidden faces"],
-	["texture_groups", "the texture groups of %d face%s", "Texture groups"],
-	["entities", "%d point entit%s", "Point entities"],
-	["entity_properties", "the properties of %d entit%s", "Entity properties"],
-	["wires", "the wires of %d entit%s", "I/O wires"],
-	["brush_entities", "%d brush entit%s", "Brush entities"],
-	["visgroups", "%d visgroup%s", "Visgroups"],
-	["groups", "%d group%s", "Groups"],
-	["structures", "%d structure%s", "Structures"],
-	["prefab_links", "%d prefab cop%s", "Prefab copies"],
-	["cordons", "%d cordon%s", "Cordons"],
-	["bake_settings", "%d bake option%s", "Bake options"],
-	["brush_bake", "the bake options of %d brush%s", "A brush's bake options"],
-	["floor_paint", "%d floor paint layer%s", "Floor paint"],
-	["notes", "%d note%s", "Notes"],
+	["brushes", "Brushes"],
+	["shapes", "Brush shapes"],
+	["cuts", "Cuts"],
+	["face_materials", "Face materials"],
+	["uv_settings", "Texture settings"],
+	["custom_uvs", "Hand laid UVs"],
+	["paint", "Face paint"],
+	["sculpts", "Sculpts"],
+	["smoothing", "Smoothing groups"],
+	["hidden_faces", "Hidden faces"],
+	["texture_groups", "Texture groups"],
+	["entities", "Point entities"],
+	["entity_properties", "Entity properties"],
+	["wires", "I/O wires"],
+	["brush_entities", "Brush entities"],
+	["visgroups", "Visgroups"],
+	["groups", "Groups"],
+	["structures", "Structures"],
+	["prefab_links", "Prefab copies"],
+	["cordons", "Cordons"],
+	["bake_settings", "Bake options"],
+	["brush_bake", "A brush's bake options"],
+	["floor_paint", "Floor paint"],
+	["notes", "Notes"],
 ]
 
 ## What each format loses: the rows it has as Lost in the table.
@@ -150,7 +151,8 @@ static func count(root: Node, row: String, only: Array = []) -> int:
 
 
 ## What exporting `root`, or the nodes in `only`, as `format` leaves out, as
-## "left out 2 cordons, 1 note", or "" when it leaves out nothing there.
+## "2 cordons, 1 note", or "" when it leaves out nothing there. The sender puts it
+## in its sentence as a word of `HFTranslation.message()`.
 static func left_out(root: Node, format: String, only: Array = []) -> String:
 	var parts: PackedStringArray = []
 	for row in ROWS:
@@ -158,16 +160,92 @@ static func left_out(root: Node, format: String, only: Array = []) -> String:
 			continue
 		var many := count(root, row[0], only)
 		if many > 0:
-			parts.append(_say(str(row[1]), many))
-	return "left out " + ", ".join(parts) if not parts.is_empty() else ""
+			parts.append(_phrase(str(row[0]), many))
+	return HFTranslationType.joined(parts)
 
 
-static func _say(pattern: String, many: int) -> String:
-	if pattern.ends_with("entit%s") or pattern.ends_with("cop%s"):
-		return pattern % [many, "y" if many == 1 else "ies"]
-	if pattern.ends_with("brush%s"):
-		return pattern % [many, "" if many == 1 else "es"]
-	return pattern % [many, "" if many == 1 else "s"]
+## How `many` of the row `key` reads in what an export says it left out.
+static func _phrase(key: String, many: int) -> String:
+	match key:
+		"brushes":
+			return HFTranslationType.message_n("{count} brush", "{count} brushes", many)
+		"shapes":
+			return HFTranslationType.message_n(
+				"the shape of {count} brush", "the shape of {count} brushes", many
+			)
+		"cuts":
+			return HFTranslationType.message_n("{count} cut", "{count} cuts", many)
+		"face_materials":
+			return HFTranslationType.message_n(
+				"the material of {count} face", "the material of {count} faces", many
+			)
+		"uv_settings":
+			return HFTranslationType.message_n(
+				"the texture settings of {count} face",
+				"the texture settings of {count} faces",
+				many
+			)
+		"custom_uvs":
+			return HFTranslationType.message_n(
+				"the hand laid UVs of {count} face", "the hand laid UVs of {count} faces", many
+			)
+		"paint":
+			return HFTranslationType.message_n(
+				"paint on {count} face", "paint on {count} faces", many
+			)
+		"sculpts":
+			return HFTranslationType.message_n(
+				"the sculpt of {count} face", "the sculpt of {count} faces", many
+			)
+		"smoothing":
+			return HFTranslationType.message_n(
+				"the smoothing of {count} face", "the smoothing of {count} faces", many
+			)
+		"hidden_faces":
+			return HFTranslationType.message_n("{count} Hidden face", "{count} Hidden faces", many)
+		"texture_groups":
+			return HFTranslationType.message_n(
+				"the texture groups of {count} face", "the texture groups of {count} faces", many
+			)
+		"entities":
+			return HFTranslationType.message_n(
+				"{count} point entity", "{count} point entities", many
+			)
+		"entity_properties":
+			return HFTranslationType.message_n(
+				"the properties of {count} entity", "the properties of {count} entities", many
+			)
+		"wires":
+			return HFTranslationType.message_n(
+				"the wires of {count} entity", "the wires of {count} entities", many
+			)
+		"brush_entities":
+			return HFTranslationType.message_n(
+				"{count} brush entity", "{count} brush entities", many
+			)
+		"visgroups":
+			return HFTranslationType.message_n("{count} visgroup", "{count} visgroups", many)
+		"groups":
+			return HFTranslationType.message_n("{count} group", "{count} groups", many)
+		"structures":
+			return HFTranslationType.message_n("{count} structure", "{count} structures", many)
+		"prefab_links":
+			return HFTranslationType.message_n("{count} prefab copy", "{count} prefab copies", many)
+		"cordons":
+			return HFTranslationType.message_n("{count} cordon", "{count} cordons", many)
+		"bake_settings":
+			return HFTranslationType.message_n("{count} bake option", "{count} bake options", many)
+		"brush_bake":
+			return HFTranslationType.message_n(
+				"the bake options of {count} brush", "the bake options of {count} brushes", many
+			)
+		"floor_paint":
+			return HFTranslationType.message_n(
+				"{count} floor paint layer", "{count} floor paint layers", many
+			)
+		"notes":
+			return HFTranslationType.message_n("{count} note", "{count} notes", many)
+	return ""
 
 
 static func _within(nodes: Array, only: Array) -> Array:

@@ -1,0 +1,1 @@
+- What an export or a prefab says it left out reads in whole phrases with their own plurals, so a catalog can translate the list. (issue [#1702](https://github.com/saworbit/hammerforge/issues/1702))

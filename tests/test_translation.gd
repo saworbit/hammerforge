@@ -141,6 +141,17 @@ func test_a_message_stays_english_for_the_log_and_shows_in_the_language():
 	var nested := HFTranslationScript.message("Repeat: {command}", {}, two)
 	assert_eq(nested, "Repeat: 2 brushes", "a count's phrase inside a sentence, in English")
 	assert_eq(HFTranslationScript.shown(nested), "Repetir: 2 pinceles", "and both in Spanish")
+	var parts := PackedStringArray(
+		[
+			HFTranslationScript.message_n("{count} brush", "{count} brushes", 2),
+			HFTranslationScript.message_n("{count} brush", "{count} brushes", 1),
+		]
+	)
+	var listed := HFTranslationScript.message(
+		"Repeat: {command}", {}, {"command": HFTranslationScript.joined(parts)}
+	)
+	assert_eq(listed, "Repeat: 2 brushes, 1 brush", "a list inside a sentence")
+	assert_eq(HFTranslationScript.shown(listed), "Repetir: 2 pinceles, 1 pincel")
 	var toasts: Node = add_child_autofree(Toasts.new())
 	toasts.show_toast(english)
 	assert_eq(toasts.get_child(0).get_child(0).text, "Repetir: Hollow", "the toast's label")

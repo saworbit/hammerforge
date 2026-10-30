@@ -24,8 +24,7 @@ rest left in English.
 
 Still English for now: a refusal a tool or a command reports through its
 result, such as "Arch: radius must be greater than zero", which the bridge reports too,
-a message that wraps a phrase another part builds, and the words the snap
-markers draw beside a point. The next steps of #1702 put them through the
+and the words the snap markers draw beside a point. The next steps of #1702 put them through the
 catalogs.
 
 These stay English in every language, so a bug report and an agent read the

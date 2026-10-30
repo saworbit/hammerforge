@@ -110,6 +110,15 @@ static func message_n(one: String, many: String, count: int, values := {}) -> St
 	return _remember(english.format(filled), tn(one, many, count).format(filled))
 
 
+## `parts` joined into one list, in English, as `message()` keeps it, with the
+## list of their `shown()` remembered beside it. A sentence takes it as a word.
+static func joined(parts: PackedStringArray, separator := ", ") -> String:
+	var shown_parts := PackedStringArray()
+	for part in parts:
+		shown_parts.append(shown(part))
+	return _remember(separator.join(parts), separator.join(shown_parts))
+
+
 ## What a toast or the status line shows for `text`: the language shown when
 ## `message()` or `message_n()` made it, and `text` as it is otherwise.
 static func shown(text: String) -> String:

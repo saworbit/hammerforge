@@ -18,6 +18,7 @@ const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
 const HFFileNames = preload("res://addons/hammerforge/hf_file_names.gd")
 const HFRebuildCarry = preload("res://addons/hammerforge/hf_rebuild_carry.gd")
 const HFFormatCensus = preload("res://addons/hammerforge/hf_format_census.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFDimensions = preload("res://addons/hammerforge/hf_dimensions.gd")
 
@@ -1391,7 +1392,10 @@ func quick_save_prefab(
 	# Before the pieces are tagged as a copy of this one.
 	var dropped := HFFormatCensus.left_out(root, ".hfprefab", brush_nodes + entity_nodes)
 	if dropped != "" and root.has_signal("user_message"):
-		root.user_message.emit("Prefab '%s' %s" % [prefab_name, dropped], 0)
+		var said := HFTranslationType.message(
+			"Prefab '{prefab}' left out {items}", {"prefab": prefab_name}, {"items": dropped}
+		)
+		root.user_message.emit(said, 0)
 
 	# Register as a linked instance if requested
 	if linked:
