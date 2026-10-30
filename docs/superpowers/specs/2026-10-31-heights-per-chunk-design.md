@@ -116,3 +116,22 @@ How this could go wrong, and what stops it:
    sculpted chunks keep their samples. FastNoiseLite's output has not changed
    since Godot 4.0, and baking every painted chunk to samples to guard against it
    would cost the memory this design saves.
+
+## After building
+
+- **The comment's plan changed.** It had every writer fill samples per painted
+  chunk. Generate Noise and Import stayed a base instead, for the two workflows
+  above, and only a sculpt writes samples. Memory stays where it was for an
+  untouched layer.
+- **Filling is exact to a float.** A noise corner is worked out in 64 bits and
+  kept in a 32 bit sample, so a filled chunk reads under a ten millionth of a
+  unit off what the noise gave there before. Nothing can see that; the seam test
+  allows a millionth.
+- **Two tests pinned the repeat.** `test_sculpt_wraps_across_the_heightmap_edges`
+  and `test_sculpt_marks_painted_chunks_a_width_away` said a sculpt reaches the
+  opposite edge and the chunk a width on. Both now say it does not.
+- **The vibe scenario expected the bug.** `terrain-sculpt` reported #2007, #2008
+  and #2014 as known. All three are closed, so it flags each as new if it comes
+  back. Run against the old sculpt it flags the far hill.
+- **The cost.** An older build opens a noise layer flat. Writing an image beside
+  the noise for it would put that image into every save and every undo step.
