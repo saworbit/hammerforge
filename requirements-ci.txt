@@ -10,7 +10,7 @@ gdtoolkit==4.5.0
 zizmor==1.31.1
 
 # Lint and format check for tools/*.py and hammerforge_mcp/.
-ruff==0.17.1
+ruff==0.17.2
 
 # hammerforge_mcp/: the MCP SDK its server is built on, and the test runner for
 # its tests. pyproject.toml there says mcp>=2.3,<3; CI pins the exact one.
@@ -19,7 +19,7 @@ pytest==9.1.1
 
 # Schema validation for .github/dependabot.yml. A broken config does not fail
 # anything -- Dependabot simply stops running -- so it is checked in CI.
-check-jsonschema==0.38.2
+check-jsonschema==0.39.0
 
 # tools/run_local_checks.py --check parses .github/workflows/ci.yml to prove the
 # local runner still covers every step of CI's two lint jobs. gdtoolkit happens
