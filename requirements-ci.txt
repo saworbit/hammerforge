@@ -10,12 +10,12 @@ gdtoolkit==4.5.0
 zizmor==1.31.1
 
 # Lint and format check for tools/*.py and hammerforge_mcp/.
-ruff==0.17.2
+ruff==0.17.3
 
 # hammerforge_mcp/: the MCP SDK its server is built on, and the test runner for
 # its tests. pyproject.toml there says mcp>=2.3,<3; CI pins the exact one.
 mcp==2.3.0
-pytest==9.1.1
+pytest==9.2.0
 
 # Schema validation for .github/dependabot.yml. A broken config does not fail
 # anything -- Dependabot simply stops running -- so it is checked in CI.
