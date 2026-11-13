@@ -479,6 +479,7 @@ static func export_map_from_level(
 		return ""
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
+	adapter.multiline_property = ""
 	adapter.units_per_metre = (
 		units_per_metre if is_finite(units_per_metre) and units_per_metre > 0.0 else 1.0
 	)
@@ -563,7 +564,7 @@ static func export_map_from_level(
 	for key in entity_brush_blocks:
 		var block: Dictionary = entity_brush_blocks[key]
 		lines.append("{")
-		lines.append('"classname" "%s"' % escape_property(str(block["classname"])))
+		lines.append_array(adapter.format_entity_properties({"classname": block["classname"]}))
 		# The authored name is the address every connection targets, and the
 		# outputs are the wiring itself. Both live in metadata rather than in
 		# entity_data, so neither was reaching the file. From every brush of the
@@ -594,6 +595,14 @@ static func export_map_from_level(
 			if ent_lines.is_empty():
 				continue
 			lines.append_array(ent_lines)
+	if adapter.multiline_property != "":
+		var reason := (
+			"Cannot export .map: property %s contains a line break." % adapter.multiline_property
+		)
+		HFLog.warn(reason)
+		if level_root.has_signal("user_message"):
+			level_root.user_message.emit(reason, 2)
+		return ""
 	if not substituted_scales.is_empty():
 		HFLog.warn(
 			(

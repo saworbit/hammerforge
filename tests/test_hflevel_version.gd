@@ -89,13 +89,14 @@ func test_the_payload_still_encodes_to_the_same_level():
 
 
 ## Write a bundle at a chosen version, the way capture_hflevel_state() writes one.
-func _write_bundle(path: String, version: int) -> void:
+func _write_bundle(path: String, version: Variant, include_version := true) -> void:
 	var bundle := {
-		"version": version,
 		"saved_at": "now",
 		"settings": root._capture_hflevel_settings(),
 		"state": root.capture_state(),
 	}
+	if include_version:
+		bundle["version"] = version
 	HFLevelIO.save_to_path(path, HFLevelIO.encode_variant(bundle), false)
 
 
@@ -115,7 +116,7 @@ func test_a_bundle_at_this_build_s_version_loads():
 func test_a_bundle_with_no_version_still_loads():
 	var path := _path()
 	root.create_brush_from_info({"size": Vector3(32, 32, 32), "brush_id": "b1"})
-	_write_bundle(path, 0)
+	_write_bundle(path, 0, false)
 	root.clear_brushes()
 
 	assert_true(root.file_system.load_hflevel(path))
@@ -155,6 +156,23 @@ func test_a_refused_bundle_says_so():
 	assert_eq(messages.size(), 1, "a silent refusal is the thing being fixed")
 	assert_string_contains(str(messages[0][0]), "newer build")
 	assert_eq(messages[0][1], 2, "reported as an error, the way a bad state is")
+	DirAccess.remove_absolute(path)
+
+
+func test_a_malformed_version_is_named_and_leaves_the_level_alone():
+	var path := _path()
+	for version in [{}, [], 0.5, -1, "1", null, true, 1e30]:
+		_write_bundle(path, version)
+		var brush := root.create_brush_from_info({"size": Vector3.ONE, "brush_id": "keep_me"})
+		var before := root.capture_state()
+		var preflight := root.validate_hflevel(path)
+		assert_false(preflight["ok"])
+		assert_string_contains(preflight.get("error", ""), path.get_file())
+		assert_string_contains(preflight.get("error", ""), "version")
+		assert_false(root.load_hflevel(path))
+		assert_same(root.find_brush_by_id("keep_me"), brush)
+		assert_eq(root.capture_state(), before)
+		root.clear_brushes()
 	DirAccess.remove_absolute(path)
 
 

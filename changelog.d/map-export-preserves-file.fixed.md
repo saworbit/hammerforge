@@ -1,0 +1,1 @@
+- A refused multiline property leaves the previous map export intact. (issue [#2082](https://github.com/saworbit/hammerforge/issues/2082))

@@ -31,6 +31,8 @@ var convert_axes: bool = false
 ## and scale are written in texels of (#894). The export fills it from the
 ## level's palette. A face whose slot is not here is `DEFAULT_TEXTURE_SIZE`.
 var texture_sizes: Array = []
+## First property this export could not write, quoted for the diagnostic.
+var multiline_property := ""
 
 
 func format_name() -> String:
@@ -147,18 +149,18 @@ static func format_texture_scale(value: float) -> String:
 func format_entity_properties(properties: Dictionary) -> Array[String]:
 	var lines: Array[String] = []
 	for key in properties:
-		(
-			lines
-			. append(
-				(
-					'"%s" "%s"'
-					% [
-						MapIO.escape_property(str(key)),
-						MapIO.escape_property(format_property_value(properties[key])),
-					]
-				)
-			)
-		)
+		var name := str(key)
+		var value := format_property_value(properties[key])
+		if (
+			name.contains("\n")
+			or name.contains("\r")
+			or value.contains("\n")
+			or value.contains("\r")
+		):
+			if multiline_property == "":
+				multiline_property = '"%s"' % name.c_escape()
+			return []
+		lines.append('"%s" "%s"' % [MapIO.escape_property(name), MapIO.escape_property(value)])
 	return lines
 
 
