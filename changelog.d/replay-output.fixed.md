@@ -1,1 +1,0 @@
-- A failed MCP batch export leaves the existing output intact. (issue [#2085](https://github.com/saworbit/hammerforge/issues/2085))
