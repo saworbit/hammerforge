@@ -3788,8 +3788,8 @@ func handle_paint_input(
 	)
 
 
-func prepare_paint_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
-	paint_system.prepare_paint_stroke(camera, screen_pos)
+func prepare_paint_stroke(camera: Camera3D, screen_pos: Vector2, tool_id := -1) -> void:
+	paint_system.prepare_paint_stroke(camera, screen_pos, tool_id)
 
 
 func get_paint_layer_names() -> Array:
@@ -3961,8 +3961,8 @@ func _capture_hflevel_state() -> Dictionary:
 
 ## The level in its own types, Resources resolved, ready for the write thread to
 ## encode. This is what a save hands over (#601).
-func _capture_hflevel_payload() -> Dictionary:
-	return state_system.capture_hflevel_payload()
+func _capture_hflevel_payload(regions_written := false) -> Dictionary:
+	return state_system.capture_hflevel_payload(regions_written)
 
 
 func _capture_hflevel_settings() -> Dictionary:

@@ -2791,7 +2791,7 @@ Notes
 - Streaming a region out writes it to disk first, so a level that has never been saved has nowhere to put one and nothing can be reclaimed. The eviction pass says so rather than leaving the budget quietly ignored.
 - Region data is saved to `.hfr` files in `<level>.hfregions/`. A save under a new name, or an autosave to a path of its own, copies the files of the regions streamed out at the time into the new folder, so the level it writes opens with all its paint ([#1665](https://github.com/saworbit/hammerforge/issues/1665)).
 - Removing a paint layer leaves its paint in the region files that held it, so undoing the removal, or reading a region streamed out at the time, still finds it. Its id is never given to a new layer, so that paint never turns up on another one. Region files therefore keep growing across layer removals ([#1664](https://github.com/saworbit/hammerforge/issues/1664)).
-- The `.hflevel` stores a region index and layer settings.
+- The `.hflevel` stores a region index, layer settings, and each layer's base image or noise. Sculpted heights stream with the paint in the region files.
 
 ### Heightmap Terrain
 Heightmaps add vertical displacement to painted floors:

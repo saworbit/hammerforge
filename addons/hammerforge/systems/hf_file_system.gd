@@ -167,7 +167,9 @@ func _write_hflevel(target: String, force: bool, autosave: bool) -> int:
 	# it, so the deep copy this used to take was protecting it from nobody. The
 	# encode that used to happen here happens on the write thread now (#601).
 	var payload: Dictionary = {}
-	var captured: Variant = root._capture_hflevel_payload()
+	var captured: Variant = root._capture_hflevel_payload(
+		root.paint_system != null and root.paint_system.sculpts_are_in_region_files()
+	)
 	if captured is Dictionary:
 		payload = captured
 	var compress := true

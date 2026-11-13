@@ -110,6 +110,61 @@ func stream_out_and_in(level: Node, at: Vector2i) -> void:
 	sys._ensure_regions_for_cell(at)
 
 
+func test_a_region_streams_out_a_sculpt_even_without_paint_cells() -> void:
+	var level := streamed_level()
+	var sys := level.paint_system
+	level.generate_heightmap_noise({"seed": 37})
+	sys._ensure_regions_for_cell(CELL)
+	var layer := level.paint_layers.get_active_layer()
+	var base := layer.get_height_sample(CELL)
+	assert_true(layer.set_height_sample(CELL, 0.875))
+	var before := layer.get_memory_bytes()
+	assert_true(sys._unload_region(REGION))
+	assert_true(layer.get_height_chunk_ids().is_empty())
+	assert_lt(layer.get_memory_bytes(), before)
+	assert_almost_eq(layer.get_height_sample(CELL), base, 0.000001)
+	assert_true(FileAccess.file_exists(region_file(level, REGION)))
+	sys._ensure_regions_for_cell(CELL)
+	assert_eq(layer.get_height_sample(CELL), 0.875)
+
+
+func test_legacy_inline_sculpt_survives_loading_paint_from_a_region_file() -> void:
+	var level := streamed_level()
+	var sys := level.paint_system
+	level.generate_heightmap_noise({"seed": 17})
+	sys._ensure_regions_for_cell(CELL)
+	var layer := level.paint_layers.get_active_layer()
+	layer.set_cell(CELL, true)
+	assert_true(sys._unload_region(REGION), "the region file holds paint only")
+	layer.set_height_sample(CELL, 0.875)
+	var inline: Array = level.state_system.capture_paint_layers()
+	level.paint_system.restore_paint_layers(inline, 0)
+	sys._ensure_regions_for_cell(CELL)
+	layer = level.paint_layers.get_active_layer()
+	assert_true(layer.get_cell(CELL))
+	assert_eq(layer.get_height_sample(CELL), 0.875)
+
+
+func test_undo_restores_the_sculpt_that_noise_replaced_on_disk() -> void:
+	var level := streamed_level()
+	var sys := level.paint_system
+	level.generate_heightmap_noise({"seed": 17})
+	sys._ensure_regions_for_cell(CELL)
+	var layer := level.paint_layers.get_active_layer()
+	layer.set_height_sample(CELL, 0.875)
+	assert_true(sys._unload_region(REGION))
+	sys.prepare_heightmap_replacement()
+	var before := level.capture_state()
+	level.generate_heightmap_noise({"seed": 37})
+	var fresh := layer.get_height_sample(CELL)
+	assert_true(sys._unload_region(REGION))
+	sys._ensure_regions_for_cell(CELL)
+	assert_eq(layer.get_height_sample(CELL), fresh)
+	level.restore_state(before)
+	stream_out_and_in(level, CELL)
+	assert_eq(level.paint_layers.get_active_layer().get_height_sample(CELL), 0.875)
+
+
 # ===========================================================================
 # Through the bridge
 # ===========================================================================

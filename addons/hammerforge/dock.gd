@@ -5497,10 +5497,14 @@ func _on_heightmap_import() -> void:
 
 
 func _on_heightmap_import_selected(path: String) -> void:
+	if level_root:
+		level_root.paint_system.prepare_heightmap_replacement()
 	HFDockPaintHandler.on_heightmap_import_selected(self, path)
 
 
 func _on_heightmap_generate() -> void:
+	if level_root:
+		level_root.paint_system.prepare_heightmap_replacement()
 	HFDockPaintHandler.on_heightmap_generate(self)
 
 

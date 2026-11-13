@@ -1,5 +1,7 @@
 extends GutTest
 
+const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
+
 ## Floor paint saved with the scene (#1854).
 ##
 ## A paint layer is a node and the scene writes it (#665), but its cells, its
@@ -245,6 +247,24 @@ func test_a_save_after_reopening_keeps_the_region_files():
 	assert_true(loaded.load_hflevel(LEVEL), "the level loads")
 	loaded.paint_system._ensure_regions_for_cell(FAR)
 	assert_true(_layer(loaded, 0).get_cell(FAR), "with its far paint")
+
+
+func test_a_streamed_level_saves_its_sculpt_in_the_region_file():
+	var root := await _streamed_and_saved()
+	root.generate_heightmap_noise({"seed": 13})
+	root.paint_system._ensure_regions_for_cell(FAR)
+	assert_true(_layer(root, 0).set_height_sample(FAR, 0.875))
+	assert_eq(root.save_hflevel(LEVEL, true), OK)
+	await _drain_save(root)
+	var data: Dictionary = HFLevelIO.load_from_path(LEVEL)
+	var saved_layer: Dictionary = data["state"]["paint_layers"][0]
+	assert_true(saved_layer.has("heightmap_noise"))
+	assert_false(saved_layer.has("height_chunks"))
+	var loaded := _fresh_root()
+	assert_true(loaded.load_hflevel(LEVEL))
+	assert_true(_layer(loaded, 0).get_height_chunk_ids().is_empty())
+	loaded.paint_system._ensure_regions_for_cell(FAR)
+	assert_eq(_layer(loaded, 0).get_height_sample(FAR), 0.875)
 
 
 ## A level that names regions it has not loaded, and has lost the folder they are

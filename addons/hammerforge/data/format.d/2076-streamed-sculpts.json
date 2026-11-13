@@ -1,0 +1,10 @@
+{
+	"what": "Region sidecars store sculpted height chunks alongside paint chunks.",
+	"older_builds": "A build without this change would lose sculpts that are stored only in a region file.",
+	"keys": [
+		"layers[].height_chunks",
+		"layers[].height_chunks[].cx",
+		"layers[].height_chunks[].cy",
+		"layers[].height_chunks[].heights"
+	]
+}
