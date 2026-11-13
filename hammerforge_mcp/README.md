@@ -40,7 +40,8 @@ level the bridge is on or what is wrong, says when this server is not the one fo
 the editor's HammerForge and which to install, and prints the lines to add the
 server to Claude Code or Claude Desktop with this interpreter's full path.
 
-To add it to Claude Code:
+To add it to Claude Code, use the command printed by `--check`. On Windows,
+paste that command into PowerShell.
 
 ```bash
 claude mcp add hammerforge -- uvx --from "git+https://github.com/saworbit/hammerforge#subdirectory=hammerforge_mcp" hammerforge-mcp --project /path/to/your/godot/project

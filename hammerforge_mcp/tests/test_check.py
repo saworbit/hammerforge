@@ -2,11 +2,14 @@ import asyncio
 import io
 import json
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
 
-from hammerforge_mcp.check import run_check
+import pytest
+
+from hammerforge_mcp.check import config_lines, run_check
 from hammerforge_mcp.discovery import discovery_path
 
 from .conftest import TOKEN, FakeListener, failed, make_project, ok
@@ -94,12 +97,13 @@ def test_the_configuration_names_this_python_and_the_project(tmp_path):
     project = make_project(tmp_path)
     with ListenerThread(project, _status):
         _, text = _run(project)
-    command = next(line for line in text.splitlines() if "claude mcp add" in line)
+    command = next(line.strip() for line in text.splitlines() if "--transport" in line)
     if sys.platform == "win32":
-        assert subprocess.list2cmdline([sys.executable]) in command
+        assert "PowerShell" in text
+        assert command.startswith("& 'claude' 'mcp' 'add'")
     else:
         assert shlex.quote(sys.executable) in command
-    assert command.strip().startswith("claude mcp add --transport stdio hammerforge --")
+        assert command.startswith("claude mcp add --transport stdio hammerforge --")
     block = text[text.index("{") : text.rindex("}") + 1]
     config = json.loads(block)["mcpServers"]["hammerforge"]
     assert config["command"] == sys.executable
@@ -148,14 +152,54 @@ def test_a_relative_discovery_path_is_made_absolute(tmp_path, monkeypatch):
 
 
 def test_a_path_with_spaces_and_a_dollar_reads_back_whole(tmp_path):
-    from hammerforge_mcp.check import config_lines
-
     odd = tmp_path / "my game $1"
-    command = next(line for line in config_lines(odd, None) if "claude mcp add" in line)
+    command = next(line for line in config_lines(odd, None) if "--transport" in line)
     if sys.platform == "win32":
-        assert subprocess.list2cmdline([str(odd)]) in command
+        assert f"'{odd}'" in command
     else:
         assert shlex.split(command)[-1] == str(odd)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows setup command")
+def test_powershell_passes_literal_project_and_discovery_paths(tmp_path):
+    powershell = shutil.which("powershell")
+    if powershell is None:
+        pytest.skip("PowerShell is unavailable")
+    project = tmp_path / "Map $HF_QA_LITERAL's"
+    discovery = project / "Bridge '$HF_QA_LITERAL'.json"
+    command = next(
+        line for line in config_lines(project, discovery) if "--transport" in line
+    )
+    script = (
+        "$HF_QA_LITERAL = 'EXPANDED'; "
+        "function claude { ConvertTo-Json -InputObject $args -Compress }; "
+        + command.strip()
+    )
+    result = subprocess.run(
+        [powershell, "-NoProfile", "-Command", script],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    args = json.loads(result.stdout)
+    assert args[-3] == str(project)
+    assert args[-1] == str(discovery)
+    assert args == [
+        "mcp",
+        "add",
+        "--transport",
+        "stdio",
+        "hammerforge",
+        "--",
+        sys.executable,
+        "-m",
+        "hammerforge_mcp",
+        "--project",
+        str(project),
+        "--discovery",
+        str(discovery),
+    ]
 
 
 def _status_for(version):

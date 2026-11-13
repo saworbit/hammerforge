@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import json
 import shlex
-import subprocess
 import sys
 from pathlib import Path
 from typing import TextIO
@@ -78,7 +77,10 @@ def _describe(status: dict) -> list[str]:
 def _command_line(words: list[str]) -> str:
     """Words as this platform's shell reads them back."""
     if sys.platform == "win32":
-        return subprocess.list2cmdline(words)
+        # PowerShell treats curly single quotes as delimiters too.
+        quotes = str.maketrans({quote: quote * 2 for quote in "'\u2018\u2019"})
+        quoted = ("'" + word.translate(quotes) + "'" for word in words)
+        return "& " + " ".join(quoted)
     return shlex.join(words)
 
 
@@ -90,9 +92,10 @@ def config_lines(project: Path, discovery: Path | None) -> list[str]:
         args += ["--discovery", str(discovery)]
     desktop = {"mcpServers": {"hammerforge": {"command": python, "args": args}}}
     claude = ["claude", "mcp", "add", "--transport", "stdio", "hammerforge", "--"]
+    shell = " in PowerShell" if sys.platform == "win32" else ""
     return [
         "",
-        "To add it to Claude Code, run:",
+        f"To add it to Claude Code, run{shell}:",
         "  " + _command_line([*claude, python, *args]),
         "or, if that will not run in your shell, save the block below as .mcp.json",
         "in the project's root. It holds this machine's paths, so keep it out of git.",
