@@ -45,25 +45,19 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Added
 
-- **13 Nov** New Seed picks a different terrain pattern to use when generating noise. (issue [#2075](https://github.com/saworbit/hammerforge/issues/2075), PR [#2096](https://github.com/saworbit/hammerforge/pull/2096))
-- **13 Nov** Generate Noise has seed, scale and detail controls for each paint layer. (issue [#2075](https://github.com/saworbit/hammerforge/issues/2075))
+- **13 Nov** Generate Noise has seed, scale and detail controls for each paint layer. New Seed picks a new pattern. (issue [#2075](https://github.com/saworbit/hammerforge/issues/2075), PR [#2096](https://github.com/saworbit/hammerforge/pull/2096))
 
 #### Fixed
 
-- **13 Nov** The MCP setup output labels the PowerShell command and still provides JSON configuration. (issue [#2086](https://github.com/saworbit/hammerforge/issues/2086), PR [#2093](https://github.com/saworbit/hammerforge/pull/2093))
-- **13 Nov** Unloaded paint regions release the memory used by their sculpted height samples. (issue [#2076](https://github.com/saworbit/hammerforge/issues/2076), PR [#2097](https://github.com/saworbit/hammerforge/pull/2097))
-- **13 Nov** The guided playtest shows how to move and release the mouse while the cursor is captured. (issue [#2089](https://github.com/saworbit/hammerforge/issues/2089), PR [#2095](https://github.com/saworbit/hammerforge/pull/2095))
-- **13 Nov** A refused multiline property leaves the previous map export intact. (issue [#2082](https://github.com/saworbit/hammerforge/issues/2082), PR [#2092](https://github.com/saworbit/hammerforge/pull/2092))
-- **13 Nov** A failed MCP batch export leaves the existing output intact. (issue [#2085](https://github.com/saworbit/hammerforge/issues/2085), PR [#2091](https://github.com/saworbit/hammerforge/pull/2091))
-- **13 Nov** The MCP setup command keeps Windows paths literal when pasted into PowerShell. (issue [#2086](https://github.com/saworbit/hammerforge/issues/2086))
-- **13 Nov** Level loads name invalid versions and map exports refuse multiline properties before writing. (issues [#2081](https://github.com/saworbit/hammerforge/issues/2081), [#2082](https://github.com/saworbit/hammerforge/issues/2082))
-- **13 Nov** Sculpted terrain streams with its paint region and keeps its heights when loaded again. (issue [#2076](https://github.com/saworbit/hammerforge/issues/2076))
-- **13 Nov** MCP replay keeps literal names and reports invalid recording lines and batch write failures. (issues [#2083](https://github.com/saworbit/hammerforge/issues/2083), [#2084](https://github.com/saworbit/hammerforge/issues/2084), [#2085](https://github.com/saworbit/hammerforge/issues/2085))
-- **13 Nov** Draw and Paint actions fit next to the grid, and the guided playtest shows how to release the mouse. (issues [#2087](https://github.com/saworbit/hammerforge/issues/2087), [#2089](https://github.com/saworbit/hammerforge/issues/2089))
+- **13 Nov** The MCP setup command keeps Windows paths literal in PowerShell. JSON setup is also available. (issue [#2086](https://github.com/saworbit/hammerforge/issues/2086), PR [#2093](https://github.com/saworbit/hammerforge/pull/2093))
+- **13 Nov** Sculpts release their memory when their paint region unloads and recover their heights when it loads again. (issue [#2076](https://github.com/saworbit/hammerforge/issues/2076), PR [#2097](https://github.com/saworbit/hammerforge/pull/2097))
+- **13 Nov** Draw and Paint actions fit beside the grid, and the guided playtest shows how to move and release the mouse. (issues [#2087](https://github.com/saworbit/hammerforge/issues/2087), [#2089](https://github.com/saworbit/hammerforge/issues/2089), PR [#2095](https://github.com/saworbit/hammerforge/pull/2095))
+- **13 Nov** Level loads name invalid versions. Map exports refuse multiline properties and preserve the previous file. (issues [#2081](https://github.com/saworbit/hammerforge/issues/2081), [#2082](https://github.com/saworbit/hammerforge/issues/2082), PR [#2092](https://github.com/saworbit/hammerforge/pull/2092))
+- **13 Nov** MCP replay keeps literal names, reports bad input, and preserves existing output when a batch write fails. (issues [#2083](https://github.com/saworbit/hammerforge/issues/2083), [#2084](https://github.com/saworbit/hammerforge/issues/2084), [#2085](https://github.com/saworbit/hammerforge/issues/2085), PR [#2091](https://github.com/saworbit/hammerforge/pull/2091))
 
 #### Behind the scenes
 
-- **13 Nov** Exploratory tests use the current alias, group, plan, grid and undo behavior. (issues [#2088](https://github.com/saworbit/hammerforge/issues/2088), [#2090](https://github.com/saworbit/hammerforge/issues/2090))
+- **13 Nov** Exploratory tests use the current alias, group, plan, grid and undo behavior. (issues [#2088](https://github.com/saworbit/hammerforge/issues/2088), [#2090](https://github.com/saworbit/hammerforge/issues/2090), PR [#2094](https://github.com/saworbit/hammerforge/pull/2094))
 
 ### Week of 26 Oct 2026
 
