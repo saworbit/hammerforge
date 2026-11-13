@@ -2804,7 +2804,7 @@ When a layer has a heightmap, its floors are generated as displaced MeshInstance
 
 Where the ground comes from, and where it ends:
 
-- **Generate Noise** gives the layer the noise itself, not a picture of it. Paint more ground later and the noise is there too, in any direction, and it never repeats.
+- **Generate Noise** gives the layer the noise itself, not a picture of it. Paint more ground later and the noise is there too, in any direction, and it never repeats. Change **Seed** or click **New Seed** for a different pattern. A larger **Noise Scale** makes wider hills, and higher **Detail** adds smaller features. The fields show the active layer's saved settings.
 - **Import** lays the image on the painted ground, its top left pixel on the first painted cell. On a layer with nothing painted yet it starts at cell (0, 0). Ground painted past the image keeps the height of the image's nearest edge.
 - **Convert Selection → Heightmap** puts the converted brushes back where they were. Past them the ground is flat.
 - A **sculpt** changes the ground under the brush and nowhere else. Before October 31, 2026 the image repeated every width, so a sculpt also landed a width away on every side (#2007).

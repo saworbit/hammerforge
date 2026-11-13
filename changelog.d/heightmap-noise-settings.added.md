@@ -1,0 +1,1 @@
+- New Seed picks a different terrain pattern to use when generating noise. (issue [#2075](https://github.com/saworbit/hammerforge/issues/2075))

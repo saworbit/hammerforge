@@ -515,6 +515,36 @@ func test_the_spins_show_the_active_layer_after_a_switch_and_an_undo() -> void:
 	undo.free_histories()
 
 
+func test_generate_noise_uses_the_dock_fields_and_one_undo_step() -> void:
+	var root := _fresh_root()
+	var dock = _bound_dock(root)
+	var undo = dock.undo_redo
+	dock.noise_seed_spin.value = 37
+	dock.noise_scale_spin.value = 50.0
+	dock.noise_detail_spin.value = 6
+	dock._on_heightmap_generate()
+	var layer := root.paint_layers.get_active_layer()
+	var first := layer.get_height_sample(Vector2i(37, 19))
+	assert_eq(layer.get_height_noise()["seed"], 37)
+	assert_almost_eq(layer.get_height_noise()["frequency"], 0.02, 0.00001)
+	assert_eq(layer.get_height_noise()["octaves"], 6)
+	assert_eq(undo.step_count(), 1)
+
+	dock.noise_seed_spin.value = 91
+	dock._on_heightmap_generate()
+	assert_ne(layer.get_height_sample(Vector2i(37, 19)), first)
+	assert_eq(undo.step_count(), 2)
+	undo.press_undo()
+	assert_eq(dock.noise_seed_spin.value, 37.0)
+	dock._on_paint_layer_add()
+	assert_eq(dock.noise_seed_spin.value, 0.0)
+	dock._on_paint_layer_selected(0)
+	assert_eq(dock.noise_seed_spin.value, 37.0)
+	assert_eq(dock.noise_scale_spin.value, 50.0)
+	assert_eq(dock.noise_detail_spin.value, 6.0)
+	undo.free_histories()
+
+
 func test_the_terrain_slot_controls_follow_an_undo_and_a_redo() -> void:
 	# They read the active layer as the spins above do, and kept what was typed or
 	# picked through an undo or a redo of it in the same way.
