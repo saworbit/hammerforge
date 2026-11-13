@@ -43,6 +43,10 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 ### Week of 9 Nov 2026
 
+#### Fixed
+
+- **13 Nov** MCP replay keeps literal names and reports invalid recording lines and batch write failures. (issues [#2083](https://github.com/saworbit/hammerforge/issues/2083), [#2084](https://github.com/saworbit/hammerforge/issues/2084), [#2085](https://github.com/saworbit/hammerforge/issues/2085))
+
 #### Behind the scenes
 
 - **13 Nov** Exploratory tests use the current alias, group, plan, grid and undo behavior. (issues [#2088](https://github.com/saworbit/hammerforge/issues/2088), [#2090](https://github.com/saworbit/hammerforge/issues/2090))
