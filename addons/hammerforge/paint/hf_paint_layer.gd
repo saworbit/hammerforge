@@ -196,6 +196,16 @@ func get_height_chunk_ids() -> Array[Vector2i]:
 	return out
 
 
+func height_chunk_bytes(cid: Vector2i) -> int:
+	var sculpted: Image = _height_chunks.get(cid)
+	return sculpted.get_data_size() if sculpted else 0
+
+
+func remove_height_chunk(cid: Vector2i) -> void:
+	_height_chunks.erase(cid)
+	_mark_dirty_neighbours(cid)
+
+
 ## The sculpted samples of chunk `cid`, a copy, or null where nothing is sculpted.
 func get_height_chunk(cid: Vector2i) -> Image:
 	var sculpted: Image = _height_chunks.get(cid) as Image

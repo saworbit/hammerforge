@@ -29,7 +29,12 @@ func _init(level_root: Node3D) -> void:
 ## only an undo step takes (#1866): a save, a compare and every other reader take
 ## the faces as they are now, so a face a script changed without a tag is never
 ## written from a kept record.
-func capture_state(include_transient: bool = true, kept_faces: bool = false) -> Dictionary:
+func capture_state(
+	include_transient: bool = true,
+	kept_faces: bool = false,
+	include_paint_chunks := true,
+	include_sculpts := true
+) -> Dictionary:
 	var state: Dictionary = {}
 	state["brushes"] = []
 	state["pending"] = []
@@ -44,7 +49,7 @@ func capture_state(include_transient: bool = true, kept_faces: bool = false) -> 
 		root.baked_container != null and is_instance_valid(root.baked_container)
 	)
 	state["bake_preview_mode"] = root._last_bake_preview_mode
-	state["paint_layers"] = capture_paint_layers(true)
+	state["paint_layers"] = capture_paint_layers(include_paint_chunks, include_sculpts)
 	state["paint_active_layer"] = root.paint_layers.active_layer_index if root.paint_layers else 0
 	state["paint_connectors"] = (
 		root.paint_tool.capture_connector_defs() if root.paint_tool else []
@@ -877,11 +882,11 @@ func capture_hflevel_state() -> Dictionary:
 ## belongs on the write thread (#601). What cannot go there is the scene walk
 ## above and the Resource reads inside `resolve_resources()`, because both are
 ## the editor's to make. So this is the blocking half, and it is the small half.
-func capture_hflevel_payload() -> Dictionary:
-	var state = capture_state(false)
-	if root.paint_system and root.paint_system.region_streaming_enabled:
+func capture_hflevel_payload(regions_written := false) -> Dictionary:
+	var streamed: bool = root.paint_system != null and root.paint_system.region_streaming_enabled
+	var state = capture_state(false, false, not streamed, not (streamed and regions_written))
+	if streamed:
 		state["terrain_regions"] = root.paint_system.capture_region_index()
-		state["paint_layers"] = capture_paint_layers(false)
 	var data: Dictionary = {
 		"version": HFLevelIO.FORMAT_VERSION,
 		# `saved_at` is stamped by `HFLevelIO.encode_payload_job()` on the way to
@@ -1438,7 +1443,7 @@ func restore_sun_info(info: Dictionary) -> void:
 	sun.light_energy = info.get("light_energy", 1.0)
 
 
-func capture_paint_layers(include_chunks: bool = true) -> Array:
+func capture_paint_layers(include_chunks: bool = true, include_sculpts := true) -> Array:
 	var out: Array = []
 	if not root.paint_layers:
 		return out
@@ -1477,9 +1482,10 @@ func capture_paint_layers(include_chunks: bool = true) -> Array:
 		if not noise.is_empty():
 			entry["heightmap_noise"] = noise
 		var sculpts: Array = []
-		for cid in layer.get_height_chunk_ids():
-			var heights := HFHeightmapIO.encode_to_base64(layer.get_height_chunk(cid))
-			sculpts.append({"cx": cid.x, "cy": cid.y, "heights": heights})
+		if include_sculpts:
+			for cid in layer.get_height_chunk_ids():
+				var heights := HFHeightmapIO.encode_to_base64(layer.get_height_chunk(cid))
+				sculpts.append({"cx": cid.x, "cy": cid.y, "heights": heights})
 		if not sculpts.is_empty():
 			entry["height_chunks"] = sculpts
 		if include_chunks:

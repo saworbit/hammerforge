@@ -122,7 +122,7 @@ func handle_paint_input(
 				and not (event as InputEventMouseButton).is_command_or_control_pressed()
 			)
 			if root.paint_tool.is_stroke_active() or starts_stroke:
-				_pin_paint_region(region_manager.region_id_from_cell(cell))
+				_pin_stroke_regions(cell, root.paint_tool.tool)
 	var handled: bool = root.paint_tool.handle_input(camera, event, screen_pos)
 	if (
 		region_streaming_enabled
@@ -141,14 +141,30 @@ func _sync_connector_settings() -> void:
 	root.paint_tool.connector_settings = HFAutoConnector.Settings.from_level(root)
 
 
-func prepare_paint_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
+func prepare_paint_stroke(camera: Camera3D, screen_pos: Vector2, tool_id := -1) -> void:
 	if not region_streaming_enabled:
 		return
 	var cell = _screen_to_cell(camera, screen_pos)
 	if cell == null:
 		return
 	_ensure_regions_for_cell(cell)
-	_pin_paint_region(region_manager.region_id_from_cell(cell))
+	_pin_stroke_regions(cell, tool_id)
+
+
+func _pin_stroke_regions(cell: Vector2i, tool_id: int) -> void:
+	var radius := 0
+	if tool_id >= HFStroke.Tool.SCULPT_RAISE and tool_id <= HFStroke.Tool.SCULPT_FLATTEN:
+		# Smooth reads one sample past the brush.
+		radius = ceili(root.paint_tool.sculpt_radius) + 1
+	var extent := Vector2i(radius, radius)
+	var first := region_manager.region_id_from_cell(cell - extent)
+	var last := region_manager.region_id_from_cell(cell + extent)
+	for y in range(first.y, last.y + 1):
+		for x in range(first.x, last.x + 1):
+			var region := Vector2i(x, y)
+			_pin_paint_region(region)
+			if not region_manager.is_loaded(region):
+				_load_region(region)
 
 
 # ---------------------------------------------------------------------------
@@ -584,6 +600,8 @@ func rename_paint_layer(index: int, new_name: String) -> bool:
 func set_region_streaming_enabled(value: bool) -> void:
 	if region_streaming_enabled == value:
 		return
+	if not value:
+		prepare_heightmap_replacement(true)
 	region_streaming_enabled = value
 	if region_streaming_enabled:
 		load_initial_regions()
@@ -1073,21 +1091,43 @@ func _restore_layer_heights(layer: HFPaintLayer, entry: Dictionary) -> void:
 		):
 			layer.heightmap_origin = Vector2i(int(origin[0]), int(origin[1]))
 			layer.heightmap_repeats = false
-	var sculpts = entry.get("height_chunks", [])
+	_restore_sculpt_chunks(layer, entry.get("height_chunks", []))
+
+
+func _restore_sculpt_chunks(
+	layer: HFPaintLayer, sculpts: Variant, bounds := Rect2i()
+) -> Array[Vector2i]:
+	var restored: Array[Vector2i] = []
 	if not sculpts is Array:
-		return
+		return restored
 	for sculpt in sculpts:
 		if not sculpt is Dictionary:
 			continue
-		var cid := Vector2i(int(sculpt.get("cx", 0)), int(sculpt.get("cy", 0)))
+		var x: Variant = sculpt.get("cx")
+		var y: Variant = sculpt.get("cy")
+		if not (
+			(x is int or x is float)
+			and (y is int or y is float)
+			and absf(float(x)) <= 2147483647.0
+			and absf(float(y)) <= 2147483647.0
+			and floorf(float(x)) == float(x)
+			and floorf(float(y)) == float(y)
+		):
+			continue
+		var cid := Vector2i(int(x), int(y))
+		if bounds.has_area() and (not bounds.has_point(cid) or layer.height_chunk_bytes(cid) > 0):
+			continue
 		var heights := HFHeightmapIO.decode_from_base64(str(sculpt.get("heights", "")))
-		if not layer.set_height_chunk(cid, heights):
+		if layer.set_height_chunk(cid, heights):
+			restored.append(cid)
+		else:
 			HFLog.warn(
 				(
 					"HFPaint: layer '%s' sculpt at chunk %s is not %d square, skipped"
 					% [str(layer.layer_id), str(cid), layer.chunk_size]
 				)
 			)
+	return restored
 
 
 ## Deserialize an array of chunk dictionaries into a paint layer.
@@ -1170,6 +1210,7 @@ func import_heightmap(path: String) -> void:
 		return
 	var img := HFHeightmapIO.load_from_file(path)
 	if img:
+		prepare_heightmap_replacement()
 		# Over the painted ground, from its first cell, so an image the size of
 		# the painted area lies on it. It no longer repeats past its edge (#2007).
 		layer.set_height_image(img, layer.painted_corner())
@@ -1186,10 +1227,34 @@ func generate_heightmap_noise(settings: Dictionary = {}) -> void:
 	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
 	if not layer:
 		return
+	prepare_heightmap_replacement()
 	# The noise itself rather than an image of it, which repeated every width
 	# (#2007).
 	layer.set_height_noise(settings)
 	regenerate_paint_layers()
+
+
+## Put disk-only sculpts in memory before replacing the base or taking the
+## undo capture for that replacement. A later undo can then put them back.
+func prepare_heightmap_replacement(all_layers := false) -> void:
+	if not region_streaming_enabled:
+		return
+	var layer: HFPaintLayer = root.paint_layers.get_active_layer() if root.paint_layers else null
+	for region_id in _region_ids_on_disk():
+		if region_manager.is_loaded(region_id):
+			continue
+		var layers = HFLevelIO.load_from_path(_region_file_path(region_id)).get("layers")
+		if not layers is Array:
+			continue
+		for entry in layers:
+			if not entry is Dictionary:
+				continue
+			if not all_layers and (not layer or str(layer.layer_id) != str(entry.get("id"))):
+				continue
+			var sculpts: Variant = entry.get("height_chunks", [])
+			if sculpts is Array and not sculpts.is_empty():
+				_load_region(region_id)
+				break
 
 
 ## How flat a heightmap may be scaled before it is not a sculpt any more.
@@ -1287,7 +1352,9 @@ func save_loaded_regions() -> Dictionary:
 	if not DirAccess.dir_exists_absolute(dir):
 		DirAccess.make_dir_recursive_absolute(dir)
 	var failed: Array[Vector2i] = []
-	for rid in region_manager.loaded_regions.keys():
+	for rid in _regions_in_memory():
+		if not region_manager.is_loaded(rid):
+			_load_region(rid)
 		if _save_region_file(rid) != OK:
 			failed.append(rid)
 	if failed.is_empty():
@@ -1297,6 +1364,10 @@ func save_loaded_regions() -> Dictionary:
 		"failed": failed,
 		"error": "Could not write %d region file(s) next to the level" % failed.size(),
 	}
+
+
+func sculpts_are_in_region_files() -> bool:
+	return region_streaming_enabled and region_manager.region_base_path != ""
 
 
 func load_region_index(index_data: Dictionary, hflevel_path: String = "") -> void:
@@ -1441,7 +1512,7 @@ func _regions_in_memory() -> Dictionary:
 	for layer in root.paint_layers.layers:
 		if not layer:
 			continue
-		for cid in layer.get_chunk_ids():
+		for cid in layer.get_chunk_ids() + layer.get_height_chunk_ids():
 			out[region_manager.region_id_from_cell(cid * chunk_cells)] = true
 	return out
 
@@ -1642,7 +1713,7 @@ func _region_has_data(region_id: Vector2i) -> bool:
 	for layer in root.paint_layers.layers:
 		if not layer:
 			continue
-		for cid in layer.get_chunk_ids():
+		for cid in layer.get_chunk_ids() + layer.get_height_chunk_ids():
 			if cid.x < min_chunk.x or cid.x > max_chunk.x:
 				continue
 			if cid.y < min_chunk.y or cid.y > max_chunk.y:
@@ -1671,6 +1742,9 @@ func _estimate_region_bytes(region_id: Vector2i) -> int:
 			total += layer.get_chunk_blend_weights(cid).size()
 			total += layer.get_chunk_blend_weights_slot(cid, 2).size()
 			total += layer.get_chunk_blend_weights_slot(cid, 3).size()
+		for cid in layer.get_height_chunk_ids():
+			if chunk_bounds.has_point(cid):
+				total += layer.height_chunk_bytes(cid)
 	return total
 
 
@@ -1775,6 +1849,7 @@ func _load_region(region_id: Vector2i) -> void:
 		return
 	var held := PackedStringArray()
 	var dirty_chunks: Dictionary = {}
+	var bounds := _region_chunk_bounds(region_id)
 	for entry in layers:
 		if not (entry is Dictionary):
 			continue
@@ -1784,11 +1859,13 @@ func _load_region(region_id: Vector2i) -> void:
 		if not layer:
 			continue
 		var chunks = entry.get("chunks", [])
-		if not (chunks is Array):
-			continue
-		var loaded_cids = _deserialize_chunks_to_layer(layer, chunks)
-		for cid in loaded_cids:
-			dirty_chunks[cid] = true
+		if chunks is Array:
+			for cid in _deserialize_chunks_to_layer(layer, chunks):
+				dirty_chunks[cid] = true
+		for cid in _restore_sculpt_chunks(layer, entry.get("height_chunks", []), bounds):
+			for y in range(-1, 2):
+				for x in range(-1, 2):
+					dirty_chunks[cid + Vector2i(x, y)] = true
 	_region_file_layers[region_id] = held
 	var dirty_list: Array[Vector2i] = []
 	for cid in dirty_chunks.keys():
@@ -1823,6 +1900,14 @@ func _unload_region(region_id: Vector2i) -> bool:
 		if not layer:
 			continue
 		var removed = layer.remove_chunks_in_range(min_chunk, max_chunk)
+		for cid in layer.get_height_chunk_ids():
+			if chunk_bounds.has_point(cid):
+				layer.remove_height_chunk(cid)
+				for y in range(-1, 2):
+					for x in range(-1, 2):
+						var neighbour: Vector2i = cid + Vector2i(x, y)
+						if not removed.has(neighbour):
+							removed.append(neighbour)
 		if not removed.is_empty():
 			_reconcile_dirty_chunks(removed, layer)
 	region_manager.mark_unloaded(region_id)
@@ -1886,7 +1971,22 @@ func _save_region_file(region_id: Vector2i) -> int:
 			var chunk: Dictionary = layer.packed_chunk(cid)
 			chunk["wall_heights"] = layer.get_chunk_wall_height_entries(cid)
 			entry["chunks"].append(chunk)
-		if not entry["chunks"].is_empty():
+		var sculpts: Array = []
+		for cid in layer.get_height_chunk_ids():
+			if chunk_bounds.has_point(cid):
+				(
+					sculpts
+					. append(
+						{
+							"cx": cid.x,
+							"cy": cid.y,
+							"heights": HFHeightmapIO.encode_to_base64(layer.get_height_chunk(cid)),
+						}
+					)
+				)
+		if not sculpts.is_empty():
+			entry["height_chunks"] = sculpts
+		if not entry["chunks"].is_empty() or not sculpts.is_empty():
 			data["layers"].append(entry)
 	var path: String = _region_file_path(region_id)
 	# What the file holds for a layer the level does not have goes back in, so a
@@ -2001,6 +2101,7 @@ func _remove_region_file(region_id: Vector2i, path: String) -> int:
 				err = removed
 	if err == OK:
 		_stale_region_files.erase(region_id)
+		region_manager.region_index.erase(region_id)
 	return err
 
 

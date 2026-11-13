@@ -21,7 +21,7 @@ class CapturingRoot:
 	func _capture_hflevel_state() -> Dictionary:
 		return captured
 
-	func _capture_hflevel_payload() -> Dictionary:
+	func _capture_hflevel_payload(_regions_written := false) -> Dictionary:
 		return captured
 
 

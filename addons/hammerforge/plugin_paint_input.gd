@@ -256,7 +256,7 @@ static func handle_paint(
 			# Region sidecars must be loaded before the pre-stroke snapshot, or Undo
 			# would mistake their existing cells for paint created by this stroke.
 			if root.has_method("prepare_paint_stroke"):
-				root.prepare_paint_stroke(camera, position)
+				root.prepare_paint_stroke(camera, position, plugin.dock.get_paint_tool_id())
 			begin_floor_paint_undo(plugin, root)
 		var handled = (
 			root
@@ -292,6 +292,7 @@ static func handle_paint(
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		if floor_press:
 			plugin._floor_paint_pre_state = {}
+			_release_region_pins(root)
 			if root.has_signal("user_message"):
 				root.user_message.emit("Floor Paint could not reach the active layer plane", 1)
 			# Paint mode owns LMB even when the ray misses. Passing it onward can
