@@ -25,10 +25,6 @@ func summary() -> String:
 	return "nested groups through copies, undo, save and edge cases"
 
 
-func expected_issues() -> Array[int]:
-	return [1975]
-
-
 func run() -> void:
 	await _duplicate_twice()
 	await _group_edits_through_undo()
@@ -314,15 +310,15 @@ func _delete_and_merge_members() -> void:
 			merged = b
 	var gid := str(merged.get_meta("group_id", "")) if merged else ""
 	var house_after: int = vg.group_members_deep("House").size()
+	var chain: Array = vg.group_chain_of(merged) if merged else []
 	note("merge", result.message if result else null)
 	note(
 		"after merging Roof's two brushes: groups, parents",
 		HFVibe.canonical([Array(vg.get_group_names()), vg.group_parents])
 	)
-	note(
-		"merged brush's group_id, its chain, brushes in House",
-		[gid, vg.group_chain_of(merged), house_after]
-	)
+	note("merged brush's group_id, its chain, brushes in House", [gid, chain, house_after])
+	if gid != "Roof" or not vg.groups.has(gid) or chain != ["Roof", "House"] or house_after != 3:
+		flag("Merge did not keep the roof brush in House", [gid, chain, house_after])
 	root.restore_state(before)
 	await frame()
 	note(
@@ -367,24 +363,10 @@ func _delete_and_merge_members() -> void:
 		[walls_named, vg.groups.has("Solo")]
 	)
 
-	if (
-		(gid != "" and not vg.groups.has(gid))
-		or members != 2
-		or (walls_named > 0 and not vg.groups.has("Solo"))
-	):
-		known(
-			1975,
-			"Merge, and Hollow of a group's last brush, leave the result naming a group the registry has dropped",
-			(
-				(
-					"merging Roof's two brushes in House: the merged brush carries group_id '%s', which the registry no longer lists, so it is in no group and House holds %d brushes, not 3; "
-					+ "merging the pair '%s' and grouping two other brushes, which are offered the same name, gives a group of %d with the merged brush in it; "
-					+ "hollowing a group of one gives %d walls naming 'Solo' with no 'Solo' registered. "
-					+ "The sources are deleted first, and _cleanup_brush_references() erases the emptied group before the result is given its name"
-				)
-				% [gid, house_after, first_name, members, walls_named]
-			)
-		)
+	if members != 2:
+		flag("grouping after Merge did not make a separate pair", [first_name, offered, members])
+	if walls_named != 6 or not vg.groups.has("Solo"):
+		flag("Hollow did not keep all six pieces in Solo", [walls_named, vg.groups.has("Solo")])
 	await drop_root(root)
 
 

@@ -23,10 +23,6 @@ func summary() -> String:
 	return "snapping, nudges, a draw, Repeat and round trips on a grid turned through an odd point"
 
 
-func expected_issues() -> Array[int]:
-	return [2005]
-
-
 func run() -> void:
 	await _snapping_through_an_odd_origin()
 	await _a_long_run_of_nudges()
@@ -228,7 +224,7 @@ func _a_draw_on_the_turned_grid() -> void:
 
 
 ## Repeat's copies stand centred on the grid point under the cursor. The guide
-## says a copy whose sides are whole steps has its corners on the grid's points.
+## says a copy whose sides are even steps has its corners on the grid's points.
 func _repeat_on_the_turned_grid() -> void:
 	_x += 100.0
 	var origin := Vector3(_x, 0, 0)
@@ -246,7 +242,14 @@ func _repeat_on_the_turned_grid() -> void:
 				{"shape": 0, "size": size, "operation": CSGShape3D.OPERATION_UNION}, base
 			)
 			var brush: Node = root.create_brush_from_info(info)
-			results[str(size)] = snappedf(_worst_off(frame, _corners(brush), 1.0), 0.0001)
+			var off := _worst_off(frame, _corners(brush), 1.0)
+			results[str(size)] = snappedf(off, 0.0001)
+			var half_steps := Vector2(float(int(size.x) % 2), float(int(size.z) % 2)) * 0.5
+			var expected := half_steps.length()
+			if absf(off - expected) > 0.0005:
+				flag(
+					"Repeat corners miss their expected grid offset", [degrees, size, off, expected]
+				)
 			root.delete_brush_by_id(str(brush.brush_id))
 		note(
 			(
@@ -255,19 +258,6 @@ func _repeat_on_the_turned_grid() -> void:
 			),
 			results
 		)
-		var odd_off := false
-		for key in results:
-			if results[key] > 0.0005:
-				odd_off = true
-		if odd_off and degrees != 0.0:
-			known(
-				2005,
-				"the guide says a Repeat copy whose sides are whole steps has its corners on the turned grid's points; an odd number of steps does not",
-				(
-					"worst corner off the grid by size %s: repeat_frame() centres the copy on the grid point, so a 1 or 3 step side puts its corners half a step off, on the world's grid too. #1923 and the code comment say even numbers of steps; docs/HammerForge_UserGuide.md (Repeat Last Brush) says whole steps"
-					% [results]
-				)
-			)
 		await drop_root(root)
 
 

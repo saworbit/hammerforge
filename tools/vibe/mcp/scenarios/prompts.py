@@ -93,11 +93,21 @@ async def run(v):
     )
     undone = await v.call("hf_undo")
     v.expect(
-        undone.get("error", {}).get("code") == "undo_conflict",
-        "undo refuses past the bake that applied the doorway",
+        undone.get("ok")
+        and undone.get("result", {}).get("undone") == "MCP: apply pending cuts",
+        "undo takes back the doorway cut applied by the bake",
         undone,
     )
     panel = v.order("panel")
     v.expect(
-        panel["last"] == "Last: undo refused: undo_conflict", "the panel says so", panel
+        panel["last"].startswith("Last: undo, "),
+        "the panel reports a successful undo",
+        panel,
+    )
+    pending = await v.call("hf_get_status")
+    v.expect(
+        pending.get("ok")
+        and pending.get("result", {}).get("counts", {}).get("pending_cuts") == 1,
+        "the doorway cut is pending again",
+        pending,
     )
