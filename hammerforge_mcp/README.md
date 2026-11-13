@@ -76,7 +76,8 @@ changes that built the session's level as `hf_batch` payloads of up to 100 ops,
 one per line, for a test. Refused changes, a change an undo took back and that
 undo, and bakes are left out. Within a payload a brush an earlier op placed is
 named `$N.brush_id`. The file can be replayed the same way. Invalid recording
-lines and batch write failures report the affected path and exit with status 2.
+lines report the path and line number. Input or batch write errors exit with
+status 2, and a failed batch write leaves the previous output file intact.
 
 The server also lists three prompts: `block_out_room`, `review_level` and
 `bake_for_playtest`.

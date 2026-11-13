@@ -100,8 +100,9 @@ You need Python 3.10 or newer, and an MCP client.
     read your shell's PATH, so a bare `hammerforge-mcp` may not be found.
 
 4. **Add it to your client.** For Claude Code, run the `claude mcp add` line the
-   check printed. It adds the server for you in that folder. If that command will
-   not run in your shell, save the JSON block as `.mcp.json` in the project's root
+   check printed. On Windows, paste it into PowerShell. It adds the server for
+   you in that folder. If the command does not run in your shell, save the JSON
+   block as `.mcp.json` in the project's root
    instead; Claude Code asks you to approve it the first time. It holds your
    machine's paths, so keep it out of git. For
    Claude Desktop, put the JSON block in `claude_desktop_config.json` and restart
@@ -459,8 +460,9 @@ It makes a starter level, unless the recording made one, then sends the
 recorded changes in order. Reads are skipped. It stops at the first call whose
 outcome is not the recorded one and prints both, such as
 `call 41 (hf_run_command) differs`, `recorded: ok, made 6`,
-`replayed: refused: invalid_argument`. A brush the replay makes gets a new id,
-and later calls that named the old one are sent the new one.
+`replayed: refused: invalid_argument`. Replay updates brush and entity
+references to the IDs created during replay. Authored names and property text
+that match an old ID keep their literal values.
 
 - `--until N` stops after call N.
 - `--keep-going` reports every difference instead of stopping at the first.
@@ -470,6 +472,10 @@ and later calls that named the old one are sent the new one.
   test. Refused changes, a change an undo took back and that undo, and bakes are
   left out. Within a payload, a brush an earlier op placed is named
   `$N.brush_id`. `replay` plays this file back as well.
+
+Replay validates the recording before sending changes. Malformed calls report
+the file and line number. An input or batch output error exits with status 2.
+A failed batch write leaves any existing output file intact.
 
 ## Limits
 
