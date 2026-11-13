@@ -1439,6 +1439,7 @@ Floor paint
 
 Heightmap + blend
 - Paint cells on a layer, then import a heightmap (PNG/EXR) or generate noise.
+- Generate noise with two seeds. Confirm one undo restores the earlier ground and that Seed, Noise Scale and Detail follow the active layer.
 - Verify displaced mesh appears under `Generated/HeightmapFloors`.
 - Adjust Height Scale spinner and confirm mesh updates.
 - Select Blend tool, paint blend weights on filled cells.
@@ -1469,6 +1470,7 @@ Save/Load
 
 Editor UX
 - Toggle Draw/Select/Extrude Up/Extrude Down tools and verify shortcut HUD updates.
+- With the grid readout visible, check the Draw idle, Draw height and Paint instructions at the minimum HUD width. Hover for the full shortcuts.
 - Verify mode indicator banner changes color and text per tool (Draw=blue, Select=green, etc.).
 - Start a brush drag and confirm mode indicator shows "Step 1/2: Draw base" then "Step 2/2: Set height".
 - Type "64" during drag and confirm numeric input appears in mode indicator as "[64]".

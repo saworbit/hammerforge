@@ -2017,7 +2017,7 @@ For full details, see `docs/HammerForge_Data_Portability.md`.
 For install steps, upgrade guidance, and cache reset help, see `docs/HammerForge_Install_Upgrade.md`.
 
 ## Shortcut HUD
-A single-row strip in the 3D viewport toolbar, next to the Console lamp. It updates with your current tool and mode, and shows the **primary line** for that context plus the grid size indicator; the full list for the context is on its tooltip. When a contextual hint is active it takes the row for the four seconds of its fade, because the toolbar is one row high.
+A single-row strip in the 3D viewport toolbar, next to the Console lamp. It shows the current action beside the grid size. Draw starts with **Drag to draw** and changes to **Click to place** in the height stage. Paint shows **Drag to paint**. Hover over the strip for the full shortcuts. Contextual hints briefly take the action's place.
 
 Toggle it with **Show HUD** — in the Console's Controls tab, or in the dock under Test → Settings.
 

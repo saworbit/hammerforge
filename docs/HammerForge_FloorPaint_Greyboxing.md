@@ -92,7 +92,7 @@ Live preview
 - During drag, preview writes into the layer and immediately regenerates affected chunks.
 - The viewport draws only the active footprint, raise cage, and touched connector candidates. These overlays use stroke-local data rather than scanning a whole layer and are synchronously removed on stroke end or Esc.
 - On mouse-up, a final regeneration happens.
-- Preview work consumes only dirty chunks. With region streaming enabled, every region crossed by the current stroke is pinned until release or cancel, and the starting region is loaded before the undo snapshot.
+- Preview work consumes only dirty chunks. With region streaming enabled, regions touched by the stroke stay pinned until release or cancel. A sculpt loads and pins the regions under its starting footprint before the undo snapshot and includes the extra sample Smooth reads.
 - **Inference cleanup is off by default.** Enabling it in Paint → Floor Paint wires `HFInferenceEngine` for new strokes. Its deliberately bounded pass can remove an isolated one-cell island, fill a one-cell cardinal hole or gap, and widen an inferred one-cell corridor by one row/column. Erase strokes are never rewritten, a stroke of a single cell is never denoised, and cleanup is restricted to the stroke's dirty chunks plus its one-cell local halo.
 
 ## Geometry Synthesis
@@ -145,13 +145,13 @@ Paint layers serialize into the level save:
 - `heightmap_b64` (base64-encoded raw float buffer, zstd compressed) per layer (optional, backward-compatible; a base64 PNG written by an older version still loads). Each cell's pixel is at `posmod(cell, size)`, so a build from before #2007 reads a placed image right inside it
 - `heightmap_origin`: `[x, y]`, the cell the image is placed at. Without it the image repeats from (0, 0), as in a level saved before #2007
 - `heightmap_noise`: `{type, frequency, octaves, seed}`, when the ground is noise rather than an image
-- `height_chunks`: `[{cx, cy, heights}]`, the sculpted samples, each `heights` encoded as `heightmap_b64` is. They stay in the level file when regions stream
+- `height_chunks` stores sculpted samples as `[{cx, cy, heights}]`. Each `heights` value uses the same encoding as `heightmap_b64`. Older level files with inline sculpts still load.
 - `terrain_slot_paths`, `terrain_slot_uv_scales`, `terrain_slot_tints` per layer
 - confirmed paint connector definitions
 
 Region streaming:
 - Region index stored in `.hflevel` under `terrain_regions`.
-- Per-region chunk data stored in `.hfr` files inside `<level>.hfregions/`.
+- Each `.hfr` file inside `<level>.hfregions/` stores that region's paint chunks and sculpted height chunks. A streamed level save keeps the base image or noise in the `.hflevel` and writes the sculpted samples to the sidecars.
 
 ## Pseudo-code
 
