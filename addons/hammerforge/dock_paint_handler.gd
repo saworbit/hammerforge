@@ -85,14 +85,12 @@ static func on_heightmap_import(dock: Object) -> void:
 static func on_heightmap_import_selected(dock: Object, path: String) -> void:
 	if dock == null or not dock.level_root:
 		return
-	dock.level_root.paint_system.prepare_heightmap_replacement()
 	dock._commit_state_action("Import Heightmap", "import_heightmap", [path])
 
 
 static func on_heightmap_generate(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
-	dock.level_root.paint_system.prepare_heightmap_replacement()
 	dock._commit_state_action("Generate Noise", "generate_heightmap_noise")
 
 
