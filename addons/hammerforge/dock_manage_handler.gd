@@ -796,7 +796,7 @@ static func judge_spawn(
 	return true
 
 
-static func on_quick_play(dock: Object) -> void:
+static func on_quick_play(dock: Object, show_start_hint := false) -> void:
 	if dock == null:
 		return
 	dock._log("Playtest requested")
@@ -817,7 +817,7 @@ static func on_quick_play(dock: Object) -> void:
 		dock.show_toast("Test cancelled because the level could not be baked", 2)
 		return
 	if judge_spawn(dock, spawn, mask):
-		launch_playtest(dock)
+		launch_playtest(dock, {"show_start_hint": show_start_hint})
 
 
 static func on_quick_play_from_camera(dock: Object) -> void:

@@ -45,6 +45,8 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Fixed
 
+- **13 Nov** Draw and Paint actions fit next to the grid, and the guided playtest shows how to release the mouse. (issues [#2087](https://github.com/saworbit/hammerforge/issues/2087), [#2089](https://github.com/saworbit/hammerforge/issues/2089))
+
 - **13 Nov** MCP replay keeps literal names and reports invalid recording lines and batch write failures. (issues [#2083](https://github.com/saworbit/hammerforge/issues/2083), [#2084](https://github.com/saworbit/hammerforge/issues/2084), [#2085](https://github.com/saworbit/hammerforge/issues/2085))
 
 ### Week of 26 Oct 2026

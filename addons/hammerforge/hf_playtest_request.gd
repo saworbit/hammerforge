@@ -27,7 +27,8 @@ const WINDOW_SECONDS := 600.0
 ##
 ## `overrides` is what this one run should do differently from the scene:
 ## `spawn_position` (Vector3) and `spawn_yaw_degrees` for Test from Camera,
-## `cordon` (AABB) for Test Selected Area. They travel here, and not on the
+## `cordon` (AABB) for Test Selected Area, and `show_start_hint` for the guide.
+## They travel here, and not on the
 ## level, because Godot saves the edited scene on the way into a run, and a
 ## spawn moved to the camera for the launch was written into the mapper's scene
 ## file (#822).
@@ -42,6 +43,8 @@ static func write(overrides: Dictionary = {}) -> bool:
 	if not file:
 		return false
 	var out := {"stamp": Time.get_unix_time_from_system()}
+	if overrides.get("show_start_hint") == true:
+		out["show_start_hint"] = true
 	if overrides.get("spawn_position") is Vector3:
 		var p: Vector3 = overrides["spawn_position"]
 		out["spawn_position"] = [p.x, p.y, p.z]
@@ -81,6 +84,8 @@ static func consume() -> Dictionary:
 	if stamp <= 0.0 or Time.get_unix_time_from_system() - stamp > WINDOW_SECONDS:
 		return {}
 	var request := {"stamp": stamp}
+	if raw.get("show_start_hint") == true:
+		request["show_start_hint"] = true
 	var p: Variant = raw.get("spawn_position")
 	if p is Array and (p as Array).size() == 3:
 		request["spawn_position"] = Vector3(float(p[0]), float(p[1]), float(p[2]))

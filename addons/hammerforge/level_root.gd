@@ -5364,6 +5364,7 @@ func _start_playtest(request: Dictionary = {}) -> void:
 	_run_entities_as_nodes()
 	_light_like_a_playtest_export()
 	var player := _make_playtest_player()
+	player.show_start_hint = request.get("show_start_hint", false)
 	add_child(player)
 	player.global_position = pose["position"]
 	player.rotation.y = pose["yaw"]

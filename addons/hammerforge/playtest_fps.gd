@@ -1,6 +1,9 @@
 @tool
 extends CharacterBody3D
 
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+const START_HINT_SECONDS := 6.0
+
 ## How far over `max_step_height` a riser may measure and still be that step: the
 ## noise in a contact point, and the slack Validate's stair check gives a riser.
 const STEP_SLACK := 0.005
@@ -52,6 +55,7 @@ const PUSH_STRENGTH := 60.0
 # --- Spawn (set by Quick Play before adding to scene tree) ---
 @export var player_start_position: Vector3 = Vector3.ZERO
 @export var player_start_rotation_y: float = 0.0
+var show_start_hint := false
 
 # --- State Variables ---
 var gravity: float = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
@@ -63,6 +67,7 @@ var is_crouching := false
 var _hud: CanvasLayer
 var _reticle: Control
 var _pause_overlay: Control
+var _start_hint: Control
 
 
 func _ready() -> void:
@@ -96,6 +101,8 @@ func _ready() -> void:
 
 	_ensure_hud()
 	_set_cursor_captured(true)
+	if show_start_hint:
+		_show_start_hint()
 
 
 func _ensure_hud() -> void:
@@ -133,12 +140,29 @@ func _ensure_hud() -> void:
 	_hud.add_child(_pause_overlay)
 
 
+func _show_start_hint() -> void:
+	var hint := Label.new()
+	hint.name = "StartHint"
+	hint.text = HFTranslationType.t("WASD to move. Esc to release mouse.")
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.add_theme_color_override("font_shadow_color", Color.BLACK)
+	hint.add_theme_constant_override("shadow_offset_y", 2)
+	hint.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	hint.offset_top = 28.0
+	_hud.add_child(hint)
+	_start_hint = hint
+	create_tween().tween_interval(START_HINT_SECONDS).finished.connect(hint.hide)
+
+
 func _set_cursor_captured(captured: bool) -> void:
 	Input.mouse_mode = (Input.MOUSE_MODE_CAPTURED if captured else Input.MOUSE_MODE_VISIBLE)
 	if _reticle:
 		_reticle.visible = captured
 	if _pause_overlay:
 		_pause_overlay.visible = not captured
+	if not captured and _start_hint:
+		_start_hint.hide()
 
 
 func _ensure_collider() -> void:

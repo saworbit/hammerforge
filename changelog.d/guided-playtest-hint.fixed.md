@@ -1,0 +1,1 @@
+- The guided playtest shows how to move and release the mouse while the cursor is captured. (issue [#2089](https://github.com/saworbit/hammerforge/issues/2089))

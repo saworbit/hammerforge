@@ -1169,6 +1169,10 @@ msgstr ""
 msgid "Click inside the brush face to pick a valid split point"
 msgstr ""
 
+#: addons/hammerforge/shortcut_hud.gd
+msgid "Click to place"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_radial_menu.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "Clip"
 msgstr ""
@@ -1929,6 +1933,14 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Drag in the 3D viewport to create a solid brush."
+msgstr ""
+
+#: addons/hammerforge/shortcut_hud.gd
+msgid "Drag to draw"
+msgstr ""
+
+#: addons/hammerforge/shortcut_hud.gd
+msgid "Drag to paint"
 msgstr ""
 
 #: addons/hammerforge/ui/paint_tab_builder.gd
@@ -8357,6 +8369,10 @@ msgstr ""
 
 #: addons/hammerforge/playtest_fps.gd
 msgid "WASD move\nShift sprint\nSpace jump\nCtrl crouch\nEsc capture mouse"
+msgstr ""
+
+#: addons/hammerforge/playtest_fps.gd
+msgid "WASD to move. Esc to release mouse."
 msgstr ""
 
 #: addons/hammerforge/hf_entity_def.gd

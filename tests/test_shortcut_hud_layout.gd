@@ -60,6 +60,33 @@ func test_row_shows_one_line():
 	assert_ne(hud.label.text, "")
 
 
+func test_draw_and_paint_actions_fit_next_to_the_grid():
+	var hud := _hud()
+	hud.size.x = ShortcutHUD.HUD_WIDTH
+	hud.update_grid_snap(0.125, "Y", 0.0, 30.0)
+	for ctx in [
+		{"tool": 0, "mode": 0},
+		{"tool": 0, "mode": 2},
+		{"tool": 0, "mode": 0, "paint_mode": true, "paint_target": 0},
+	]:
+		hud.update_context(ctx)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var active: Label = hud._hint_label if hud._hint_label.visible else hud.label
+		var font := active.get_theme_font("font")
+		var width := (
+			font
+			. get_string_size(
+				active.text, HORIZONTAL_ALIGNMENT_LEFT, -1, active.get_theme_font_size("font_size")
+			)
+			. x
+		)
+		assert_gte(active.size.x + 0.5, width, active.text)
+		if ctx["mode"] == 2:
+			assert_string_contains(active.text, "Click")
+			assert_string_contains(hud.tooltip_text, "Right-click: Cancel")
+
+
 func test_full_shortcut_list_stays_on_the_tooltip():
 	var hud := _hud()
 	hud.update_context({"tool": 0, "mode": 0})

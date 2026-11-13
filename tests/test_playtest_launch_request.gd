@@ -88,6 +88,16 @@ func test_a_launched_playtest_builds_a_player_though_the_property_is_off() -> vo
 		_player_of(root),
 		"Test Level asked for the playtest, so the level builds the player it did not ask for itself"
 	)
+	assert_null(_player_of(root).get_node_or_null("PlaytestHUD/StartHint"))
+
+
+func test_a_guided_playtest_carries_the_hint_into_the_running_level() -> void:
+	HFDockManageHandler.launch_playtest(_dock(), {"show_start_hint": true})
+	var root := _root()
+	await wait_for_signal(root.bake_finished, 10.0)
+	await wait_physics_frames(2)
+	assert_not_null(_player_of(root).get_node_or_null("PlaytestHUD/StartHint"))
+	assert_false(FileAccess.file_exists(HFPlaytestRequest.PATH))
 
 
 func test_the_player_a_launched_playtest_builds_carries_the_camera() -> void:
