@@ -89,6 +89,34 @@ func _exported_text(root: LevelRoot) -> String:
 	return text
 
 
+func test_export_refuses_multiline_properties_without_overwriting_the_map():
+	var root := _imported_level()
+	var existing := FileAccess.get_file_as_string(_PATH)
+	watch_signals(root)
+	for format in ["quake", "valve220"]:
+		for props in [
+			{"message": "Deck 1\nDeck 2"}, {"message": "Deck 1\rDeck 2"}, {"bad\nkey": "value"}
+		]:
+			root.map_worldspawn_properties = props
+			assert_eq(root.export_map(_PATH, format), ERR_INVALID_DATA)
+			assert_eq(FileAccess.get_file_as_string(_PATH), existing)
+			var args = get_signal_parameters(root, "user_message")
+			assert_not_null(args, "the export explains the refusal")
+			if args != null:
+				assert_string_contains(str(args[0]), str(props.keys()[0]).c_escape())
+
+
+func test_export_keeps_quotes_backslashes_and_unicode_in_both_formats():
+	var root := _imported_level()
+	var message := 'Réseau "A" \\new'
+	root.map_worldspawn_properties = {"message": message}
+	for format in ["quake", "valve220"]:
+		assert_eq(root.export_map(_PATH, format), OK)
+		assert_true(root.validate_map(_PATH)["ok"])
+		var parsed := MapIO.parse_map_text(FileAccess.get_file_as_string(_PATH))
+		assert_eq(parsed.get("worldspawn", {}).get("message"), message)
+
+
 # ===========================================================================
 # Texture names (#662)
 # ===========================================================================

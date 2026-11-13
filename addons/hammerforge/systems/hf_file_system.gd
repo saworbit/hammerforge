@@ -267,7 +267,23 @@ func read_hflevel(path: String) -> Dictionary:
 	# and a file this build cannot read correctly must not cost the open one. A
 	# missing or zero version is an older file and still loads: every key defaults,
 	# which is the direction that has always been safe.
-	var version := int(decoded.get("version", 0))
+	var value: Variant = decoded.get("version", 0)
+	# JSON numbers arrive as floats. Check their range before converting to int.
+	if not (
+		(value is int and value >= 0)
+		or (
+			value is float
+			and value >= 0.0
+			and value < 9223372036854775808.0
+			and value == floorf(value)
+		)
+	):
+		return {
+			"ok": false,
+			"error":
+			"%s has an invalid version. Expected a nonnegative whole number." % path.get_file(),
+		}
+	var version := int(value)
 	var refusal := HFFormatRecord.refusal(
 		version, decoded.get("format_pending"), HFLevelIO.FORMAT_VERSION
 	)
@@ -702,7 +718,6 @@ func export_map(
 ) -> int:
 	if path == "":
 		return ERR_INVALID_PARAMETER
-	ensure_dir_for_path(path)
 	var adapter: RefCounted
 	if format == "valve220":
 		adapter = HFMapValve220Type.new()
@@ -711,6 +726,7 @@ func export_map(
 	var text = MapIO.export_map_from_level(root, adapter, units_per_metre, convert_axes)
 	if text == "":
 		return ERR_INVALID_DATA
+	ensure_dir_for_path(path)
 	# Whole, so an export cut short leaves the last one rather than an empty file (#1758).
 	var err := HFLevelIO.write_bytes_atomic(path, text.to_utf8_buffer())
 	if err != OK:
