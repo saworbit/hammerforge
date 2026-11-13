@@ -23,10 +23,6 @@ func summary() -> String:
 	return "the plan's bands, bounds and scale with storeys, turned brushes, far levels, empty levels and one tiny brush"
 
 
-func expected_issues() -> Array[int]:
-	return [1983, 1990]
-
-
 func run() -> void:
 	await _storeys()
 	await _turned()
@@ -63,26 +59,9 @@ func _storeys() -> void:
 		if _area(outline) > 0.0:
 			flat_upper += 1
 	if upper["solids"].size() != 2:
-		known(
-			1983,
-			(
-				"the upper floor's plan (--y-min=3 --y-max=6, the guide's example) draws %d solids where the floor has 2"
-				% upper["solids"].size()
-			),
-			(
-				"the four ground floor walls end at y=3, so footprint() takes their top corners as 'in the band' (a.y >= y_min) and draws a wall that has no height in the band; the bounds grow to %s"
-				% upper["bounds"]
-			)
-		)
+		flag("the upper band should only draw its two walls", upper["solids"].size())
 	if lower["solids"].size() != 4:
-		known(
-			1983,
-			(
-				"the ground floor's plan (0..3) draws %d solids where the floor has 4"
-				% lower["solids"].size()
-			),
-			"the upper walls begin at y=3 and their bottom corners touch the band"
-		)
+		flag("the lower band should only draw its four walls", lower["solids"].size())
 	# The same band one millimetre in from each side: what a mapper means.
 	var inside: Dictionary = HFLevelPlan.shapes(root, 3.001, 5.999)
 	note("upper band 3.001..5.999: solids", inside["solids"].size())
@@ -177,21 +156,29 @@ func _empty() -> void:
 	await drop_root(root)
 
 
-## The scale bar's label and the arrow to -Z are sized off a fixed 1 m margin.
-## Measured on levels 10, 60 and 200 m across: the arrow's pixels counted in the
-## PNG's top right corner, as `test_level_plan.gd` counts them on a 10 m level,
-## and the SVG label's height when the SVG is drawn 1024 wide.
+## Read the exported SVG's view and font size and count the PNG's arrow pixels.
 func _big_level_furniture() -> void:
-	var seen := {}
+	var view_box := RegEx.create_from_string('viewBox="([^"]+)"')
+	var scale_label := RegEx.create_from_string(
+		'<text [^>]*font-size="([^"]+)"[^>]*>[^<]+ m</text>'
+	)
 	for width in [10.0, 60.0, 200.0]:
 		var root: Node3D = await fresh_root("PlanBig")
 		box(root, Vector3(width, 3, width * 0.5), Vector3(0, 1.5, 0))
 		await frame()
 		var data: Dictionary = HFLevelPlan.shapes(root)
-		var view: Rect2 = (data["bounds"] as Rect2).grow(HFLevelPlan.MARGIN)
+		var svg: String = HFLevelPlan.svg(data)
+		var view := view_box.search(svg)
+		var label := scale_label.search(svg)
+		if view == null or label == null:
+			flag("the SVG has no view box or scale label", width)
+			await drop_root(root)
+			continue
 		var picture: Image = HFLevelPlan.image(data, 1024)
-		var per_metre := float(picture.get_width()) / view.size.x
-		var corner := ceili(HFLevelPlan.MARGIN * per_metre)
+		var view_width := view.get_string(1).split(" ")[2].to_float()
+		var per_metre := float(picture.get_width()) / view_width
+		var margin := (view_width - (data["bounds"] as Rect2).size.x) * 0.5
+		var corner := ceili(margin * per_metre)
 		var arrow := 0
 		for y in mini(corner, picture.get_height()):
 			for x in range(maxi(0, picture.get_width() - corner), picture.get_width()):
@@ -199,8 +186,7 @@ func _big_level_furniture() -> void:
 				var c: Color = HFLevelPlan.COLORS["outline"]
 				if absf(p.r - c.r) < 0.01 and absf(p.g - c.g) < 0.01 and absf(p.b - c.b) < 0.01:
 					arrow += 1
-		var label_px := HFLevelPlan.MARGIN * 0.3 * per_metre
-		seen[int(width)] = [arrow, label_px]
+		var label_px := label.get_string(1).to_float() * per_metre
 		note(
 			"%d m level, 1024 px" % int(width),
 			(
@@ -208,20 +194,9 @@ func _big_level_furniture() -> void:
 				% [arrow, label_px]
 			)
 		)
+		if arrow < 20 or label_px < 4.0:
+			flag("the plan's arrow or scale label is too small", [width, arrow, label_px])
 		await drop_root(root)
-	var big: Array = seen[200]
-	if int(big[0]) < 20 or float(big[1]) < 4.0:
-		known(
-			1990,
-			(
-				"on a 200 m level the arrow to -Z is %d pixels of the 1024 PNG and the scale bar's label %.1f px tall"
-				% [big[0], big[1]]
-			),
-			(
-				"%d pixels on a 10 m level. The arrow (0.6 m), its wings and ticks (0.15 m) and both labels (0.3 m, 0.25 m) are sized off MARGIN in metres, while the line width grows with the view, so the arrow and the scale's number shrink with the level; hf_level_plan.gd _svg_scale_and_arrow / _png_scale_and_arrow"
-				% seen[10][0]
-			)
-		)
 
 
 func _count(picture: Image, colour: Color) -> int:

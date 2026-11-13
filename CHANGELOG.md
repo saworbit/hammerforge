@@ -41,6 +41,12 @@ Unreleased work is counted when it ships. For the numbers so far, run
 - The Console takes typed commands, compares the level with another version, counts entities by class, lists notes left in the level and reports a crash from the last session (#1696, #1701, #1709, #1700, #1654).
 - The interface can be translated, entity classes come from an FGD, agents get hf_measure, hf_plan and recorded sessions, and a full bake of 1,000 brushes is 12 times faster (#1702, #1721, #1649, #1705, #1645, #1589).
 
+### Week of 9 Nov 2026
+
+#### Behind the scenes
+
+- **13 Nov** Exploratory tests use the current alias, group, plan, grid and undo behavior. (issues [#2088](https://github.com/saworbit/hammerforge/issues/2088), [#2090](https://github.com/saworbit/hammerforge/issues/2090))
+
 ### Week of 26 Oct 2026
 
 #### Added

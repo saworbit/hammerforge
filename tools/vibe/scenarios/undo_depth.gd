@@ -392,11 +392,12 @@ func _undo_all_the_way_back() -> void:
 	# Ctrl+Z, forty times: restore each recorded snapshot in reverse.
 	var mismatches: Array[String] = []
 	for i in range(ops.size() - 1, -1, -1):
+		var view: Dictionary = root.visgroup_system.capture_view()
 		root.restore_state(before_states[i])
 		await frame()
 		var now: Dictionary = root.capture_state()
 		var want := before_states[i]
-		var moved := _keys_that_moved(want, now)
+		var moved := _undo_differences(want, now, view)
 		if not moved.is_empty():
 			mismatches.append("undoing '%s' left %s different" % [labels[i], moved])
 			if mismatches.size() == 1:
@@ -407,19 +408,7 @@ func _undo_all_the_way_back() -> void:
 	else:
 		for line in mismatches:
 			note("  mismatch", line)
-		known(
-			660,
-			(
-				"%s of %s undo steps do not land on the state they snapshotted"
-				% [mismatches.size(), ops.size()]
-			),
-			(
-				"the brushes and their contents come back; what does not is their order "
-				+ "and the id counter, both of which `capture_state()` records. The detail "
-				+ "is above: the same ids in a different order, and id_counter one higher "
-				+ "after each restore"
-			)
-		)
+		flag("%s of %s undo steps left unexpected changes" % [mismatches.size(), ops.size()])
 
 	note("brushes after undoing everything", root.get_live_brush_count())
 	note("entities after undoing everything", root.get_entity_count())
@@ -453,18 +442,30 @@ func _redo_all_the_way_forward() -> void:
 	for i in range(ops.size() - 1, -1, -1):
 		root.restore_state(before_states[i])
 		await frame()
+	var view: Dictionary
 	for i in range(ops.size()):
+		view = root.visgroup_system.capture_view()
 		root.restore_state(after_states[i])
 		await frame()
 	var final_state: Dictionary = root.capture_state()
-	var moved := _keys_that_moved(after_states[after_states.size() - 1], final_state)
+	var moved := _undo_differences(after_states.back(), final_state, view)
 	note("keys that differ after undoing everything and redoing everything", moved)
 	if not moved.is_empty():
-		known(
-			660,
-			"undo to the start and redo to the end does not give the level back",
-			"%s differ" % str(moved)
-		)
+		flag("undo to the start and redo to the end left unexpected changes", moved)
+
+
+## An undo keeps the current eye and lock of each group that still exists.
+func _undo_differences(want: Dictionary, got: Dictionary, view: Dictionary) -> Array[String]:
+	var expected := want.duplicate()
+	var groups: Dictionary = want.get("visgroups", {}).duplicate(true)
+	for group in groups:
+		if view["visgroups"].has(group):
+			groups[group]["visible"] = view["visgroups"][group]
+		if view["locked"].has(group):
+			groups[group]["locked"] = view["locked"][group]
+	if expected.has("visgroups"):
+		expected["visgroups"] = groups
+	return _keys_that_moved(expected, got)
 
 
 ## Which of the level's own settings a snapshot carries, read off the capture
