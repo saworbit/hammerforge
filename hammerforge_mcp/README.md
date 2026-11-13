@@ -66,15 +66,17 @@ sends the recorded changes again, in order, to the open editor, starting from a
 new starter level, so open an empty scene first. It stops at the first call
 whose outcome differs from the recording and prints both: ok where it was
 refused, another error code, or other ids made, changed or removed. A brush the
-replay makes gets a new id, and later calls that named the old one are sent the
-new one. `--until N` stops after call N, `--keep-going` reports every
-difference, and `--here` plays onto the level that is open instead.
+replay makes gets a new id. Later calls use the new id in reference fields
+and keep literal names and property values. `--until N` stops after call N,
+`--keep-going` reports every difference, and `--here` plays onto the level that
+is open instead.
 
 `replay session.jsonl --to-batch batch.jsonl` sends nothing. It writes the
 changes that built the session's level as `hf_batch` payloads of up to 100 ops,
 one per line, for a test. Refused changes, a change an undo took back and that
 undo, and bakes are left out. Within a payload a brush an earlier op placed is
-named `$N.brush_id`. The file can be replayed the same way.
+named `$N.brush_id`. The file can be replayed the same way. Invalid recording
+lines and batch write failures report the affected path and exit with status 2.
 
 The server also lists three prompts: `block_out_room`, `review_level` and
 `bake_for_playtest`.

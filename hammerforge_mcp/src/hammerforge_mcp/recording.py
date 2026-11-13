@@ -161,13 +161,58 @@ def _add(into: list, value: Any) -> None:
 def read_recording(path: Path) -> list[dict]:
     """The calls a recording holds, in order. A blank line is skipped."""
     calls: list[dict] = []
-    for number, text in enumerate(Path(path).read_text(encoding="utf-8").splitlines()):
-        if text.strip():
+    with Path(path).open(encoding="utf-8") as file:
+        for number, text in enumerate(file, 1):
+            if not text.strip():
+                continue
             try:
-                calls.append(json.loads(text))
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"line {number + 1} is not JSON: {exc}") from exc
+                call = json.loads(text)
+                _validate_call(call)
+            except (ValueError, RecursionError) as exc:
+                raise ValueError(f"line {number}: {exc}") from exc
+            calls.append(call)
     return calls
+
+
+def _validate_call(call: Any) -> None:
+    if not isinstance(call, dict):
+        raise ValueError("expected a call object")
+    _validate_tool_call(call)
+    if "n" in call and type(call["n"]) is not int:
+        raise ValueError("n must be an integer")
+    for key in ("ok", "read_only"):
+        if key in call and not isinstance(call[key], bool):
+            raise ValueError(f"{key} must be a boolean")
+    for key in ("made", "changed", "removed", "recorded_made"):
+        if key in call and not _is_id_list(call[key]):
+            raise ValueError(f"{key} must be a list of strings")
+    if "op_made" in call:
+        op_made = call["op_made"]
+        if not isinstance(op_made, list) or not all(map(_is_id_list, op_made)):
+            raise ValueError("op_made must be a list of lists of strings")
+
+
+def _is_id_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def _validate_tool_call(call: dict) -> None:
+    tool, params = call.get("tool"), call.get("params")
+    if not isinstance(tool, str) or not tool:
+        raise ValueError("tool must be a nonempty string")
+    if params is not None and not isinstance(params, dict):
+        raise ValueError("params must be an object")
+    if tool == "hf_batch":
+        ops = (params or {}).get("ops")
+        if not isinstance(ops, list):
+            raise ValueError("params.ops must be a list")
+        for index, op in enumerate(ops):
+            if not isinstance(op, dict):
+                raise ValueError(f"params.ops[{index}] must be a call object")
+            try:
+                _validate_tool_call(op)
+            except ValueError as exc:
+                raise ValueError(f"params.ops[{index}]: {exc}") from exc
 
 
 def now_ms() -> float:
