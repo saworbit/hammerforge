@@ -1,1 +1,0 @@
-- Unloaded paint regions release the memory used by their sculpted height samples. (issue [#2076](https://github.com/saworbit/hammerforge/issues/2076))

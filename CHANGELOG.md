@@ -45,10 +45,16 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Added
 
+- **13 Nov** New Seed picks a different terrain pattern to use when generating noise. (issue [#2075](https://github.com/saworbit/hammerforge/issues/2075), PR [#2096](https://github.com/saworbit/hammerforge/pull/2096))
 - **13 Nov** Generate Noise has seed, scale and detail controls for each paint layer. (issue [#2075](https://github.com/saworbit/hammerforge/issues/2075))
 
 #### Fixed
 
+- **13 Nov** The MCP setup output labels the PowerShell command and still provides JSON configuration. (issue [#2086](https://github.com/saworbit/hammerforge/issues/2086), PR [#2093](https://github.com/saworbit/hammerforge/pull/2093))
+- **13 Nov** Unloaded paint regions release the memory used by their sculpted height samples. (issue [#2076](https://github.com/saworbit/hammerforge/issues/2076), PR [#2097](https://github.com/saworbit/hammerforge/pull/2097))
+- **13 Nov** The guided playtest shows how to move and release the mouse while the cursor is captured. (issue [#2089](https://github.com/saworbit/hammerforge/issues/2089), PR [#2095](https://github.com/saworbit/hammerforge/pull/2095))
+- **13 Nov** A refused multiline property leaves the previous map export intact. (issue [#2082](https://github.com/saworbit/hammerforge/issues/2082), PR [#2092](https://github.com/saworbit/hammerforge/pull/2092))
+- **13 Nov** A failed MCP batch export leaves the existing output intact. (issue [#2085](https://github.com/saworbit/hammerforge/issues/2085), PR [#2091](https://github.com/saworbit/hammerforge/pull/2091))
 - **13 Nov** The MCP setup command keeps Windows paths literal when pasted into PowerShell. (issue [#2086](https://github.com/saworbit/hammerforge/issues/2086))
 - **13 Nov** Level loads name invalid versions and map exports refuse multiline properties before writing. (issues [#2081](https://github.com/saworbit/hammerforge/issues/2081), [#2082](https://github.com/saworbit/hammerforge/issues/2082))
 - **13 Nov** Sculpted terrain streams with its paint region and keeps its heights when loaded again. (issue [#2076](https://github.com/saworbit/hammerforge/issues/2076))
