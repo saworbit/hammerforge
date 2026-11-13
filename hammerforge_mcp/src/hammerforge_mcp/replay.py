@@ -34,6 +34,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -52,7 +53,14 @@ MADE_REF = {"hf_place_brush": "brush_id", "hf_place_entity": "entity"}
 #: and an undo or a redo is folded into what it took back or put back.
 NOT_KEPT = frozenset({"hf_bake", "hf_undo", "hf_redo"})
 
-_REF = re.compile(r"^\$(\d+)\.(\w+)$")
+_REF = re.compile(r"\$\+?(\d+)\.(brush_id|entity|generator_id)")
+_SINGLE_REFS = ("brush_id", "entity")
+_LIST_REFS = ("brush_ids", "entities")
+_COMMAND_REFS = {
+    "clip_to_face": "plane_brush_id",
+    "update_structure": "generator_id",
+    "detach_structure": "generator_id",
+}
 
 
 class ReplayError(Exception):
@@ -114,7 +122,7 @@ async def replay(
     ids: dict[str, str] = {}
     for call in changes:
         tool = call["tool"]
-        params = _mapped(call.get("params") or {}, ids)
+        params = _map_references(tool, call.get("params") or {}, ids)
         try:
             answer = await _send(bridge, tool, params)
         except BridgeError as exc:
@@ -181,15 +189,32 @@ def _outcome_text(outcome: dict) -> str:
     return "; ".join(parts)
 
 
-def _mapped(value: Any, ids: dict[str, str]) -> Any:
-    """`value` with every recorded id that has a stand-in swapped for it."""
-    if isinstance(value, str):
-        return ids.get(value, value)
-    if isinstance(value, dict):
-        return {key: _mapped(inner, ids) for key, inner in value.items()}
-    if isinstance(value, list):
-        return [_mapped(inner, ids) for inner in value]
-    return value
+def _map_references(tool: str, params: dict, ids: dict[str, str]) -> dict:
+    """Replace recorded IDs only where a tool takes an object reference."""
+
+    def replace(value: Any) -> Any:
+        return ids.get(value, value) if isinstance(value, str) else value
+
+    mapped = dict(params)
+    for key in _SINGLE_REFS:
+        if key in mapped:
+            mapped[key] = replace(mapped[key])
+    for key in _LIST_REFS:
+        if isinstance(mapped.get(key), list):
+            mapped[key] = [replace(value) for value in mapped[key]]
+    if tool == "hf_run_command" and isinstance(mapped.get("params"), dict):
+        command = mapped.get("command")
+        ref = _COMMAND_REFS.get(command) if isinstance(command, str) else None
+        if ref is not None and ref in mapped["params"]:
+            args = dict(mapped["params"])
+            args[ref] = replace(args[ref])
+            mapped["params"] = args
+    if tool == "hf_batch":
+        mapped["ops"] = [
+            dict(op, params=_map_references(op["tool"], op.get("params") or {}, ids))
+            for op in params.get("ops") or []
+        ]
+    return mapped
 
 
 def kept_changes(calls: list[dict], until: int | None = None) -> list[dict]:
@@ -262,7 +287,8 @@ def to_batch(calls: list[dict], *, until: int | None = None) -> list[dict]:
             flush()
         offset = len(ops)
         for index, op in enumerate(inner):
-            op_params = _mapped(_shifted(op.get("params") or {}, offset), refs)
+            shifted = _shifted(op.get("params") or {}, offset)
+            op_params = _map_references(op["tool"], shifted, refs)
             ops.append({"tool": op["tool"], "params": op_params})
             op_made = inner_made[index] if index < len(inner_made) else []
             made.append(op_made)
@@ -275,7 +301,7 @@ def to_batch(calls: list[dict], *, until: int | None = None) -> list[dict]:
 def _shifted(value: Any, offset: int) -> Any:
     """A batch op's params with each "$N.<ref>" moved on by `offset` ops."""
     if isinstance(value, str):
-        found = _REF.match(value)
+        found = _REF.fullmatch(value)
         if found and offset:
             return f"${int(found.group(1)) + offset}.{found.group(2)}"
         return value
@@ -284,6 +310,23 @@ def _shifted(value: Any, offset: int) -> Any:
     if isinstance(value, list):
         return [_shifted(inner, offset) for inner in value]
     return value
+
+
+def _write_batch(path: Path, lines: list[dict]) -> None:
+    """Replace the destination only after the whole batch was written."""
+    path = path.resolve()
+    pending = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, delete=False
+        ) as output:
+            pending = Path(output.name)
+            for line in lines:
+                output.write(json.dumps(line, sort_keys=True) + "\n")
+        pending.replace(path)
+    finally:
+        if pending is not None:
+            pending.unlink(missing_ok=True)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -328,10 +371,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.to_batch:
         lines = to_batch(calls, until=args.until)
-        args.to_batch.write_text(
-            "".join(json.dumps(line, sort_keys=True) + "\n" for line in lines),
-            encoding="utf-8",
-        )
+        try:
+            _write_batch(args.to_batch, lines)
+        except (OSError, RuntimeError) as exc:
+            print(f"replay: could not write {args.to_batch}: {exc}", file=sys.stderr)
+            return 2
         print(f"replay: wrote {len(lines)} calls to {args.to_batch}")
         return 0
 

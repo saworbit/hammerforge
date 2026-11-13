@@ -344,3 +344,89 @@ def test_replay_to_batch_from_the_command_line_writes_lines_replay_reads(tmp_pat
     assert server_main(["replay", str(recording), "--to-batch", str(out)]) == 0
     (line,) = read_recording(out)
     assert line["tool"] == "hf_batch"
+
+
+async def test_replay_remaps_references_and_preserves_names_and_properties():
+    ops = [
+        {"tool": "hf_place_brush", "params": {"name": "brush_old"}},
+        {
+            "tool": "hf_set_entity_properties",
+            "params": {"brush_id": "brush_old", "properties": {"message": "brush_old"}},
+        },
+        {
+            "tool": "hf_place_entity",
+            "params": {"properties": {"brush_id": "brush_old", "entity": "brush_old"}},
+        },
+    ]
+    calls = [
+        _line(0, "hf_place_brush", made=["brush_old"]),
+        _line(1, "hf_batch", {"ops": ops}),
+    ]
+    bridge = ScriptedBridge(_answer({"brush": {"brush_id": "brush_new"}}), _answer())
+    await replay(bridge, calls, here=True)
+    live_ops = bridge.sent[1][1]["ops"]
+    (batch,) = to_batch(calls)
+    batch_ops = batch["params"]["ops"][1:]
+    for replayed, reference in ((live_ops, "brush_new"), (batch_ops, "$0.brush_id")):
+        assert replayed[0] == ops[0]
+        assert replayed[1]["params"] == dict(ops[1]["params"], brush_id=reference)
+        assert replayed[2] == ops[2]
+
+
+@pytest.mark.parametrize(
+    ("record", "field"),
+    [
+        (None, "call object"),
+        ([], "call object"),
+        ({"tool": []}, "tool"),
+        ({"tool": "hf_place_brush", "n": []}, "n"),
+        ({"tool": "hf_place_brush", "params": []}, "params"),
+        ({"tool": "hf_place_brush", "made": [{}]}, "made"),
+        ({"tool": "hf_batch", "params": {"ops": [None]}}, "ops[0]"),
+        ({"tool": "hf_batch", "params": {"ops": []}, "op_made": [False]}, "op_made"),
+    ],
+)
+def test_replay_refuses_malformed_calls_before_sending_or_writing(
+    tmp_path, capsys, record, field
+):
+    path = tmp_path / "session.jsonl"
+    path.write_text(
+        json.dumps(_line(0, "hf_place_brush")) + "\n\n" + json.dumps(record) + "\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "batch.jsonl"
+    out.write_text("existing output", encoding="utf-8")
+    for args in (["--here"], ["--to-batch", str(out)]):
+        assert server_main(["replay", str(path), *args]) == 2
+        err = capsys.readouterr().err
+        assert str(path) in err and "line 3" in err and field in err
+    assert out.read_text(encoding="utf-8") == "existing output"
+
+
+@pytest.mark.parametrize("destination", ["missing/out.jsonl", "."])
+def test_replay_reports_batch_write_errors(tmp_path, capsys, destination):
+    path = tmp_path / "session.jsonl"
+    path.touch()
+    out = tmp_path / destination
+    assert server_main(["replay", str(path), "--to-batch", str(out)]) == 2
+    err = capsys.readouterr().err
+    assert str(out) in err and "write" in err
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_replay_preserves_previous_batch_if_replacing_it_fails(
+    tmp_path, monkeypatch, capsys
+):
+    path = tmp_path / "session.jsonl"
+    path.touch()
+    out = tmp_path / "batch.jsonl"
+    out.write_text("existing output", encoding="utf-8")
+
+    def deny_replace(self, target):
+        raise PermissionError("destination is locked")
+
+    monkeypatch.setattr(type(out), "replace", deny_replace)
+    assert server_main(["replay", str(path), "--to-batch", str(out)]) == 2
+    assert "destination is locked" in capsys.readouterr().err
+    assert out.read_text(encoding="utf-8") == "existing output"
+    assert set(tmp_path.iterdir()) == {path, out}
