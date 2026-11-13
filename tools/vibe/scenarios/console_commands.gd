@@ -54,10 +54,6 @@ func summary() -> String:
 	return "the command line's names, aliases, words and scripts, Report a Problem's link, and the crash journal"
 
 
-func expected_issues() -> Array[int]:
-	return [1991]
-
-
 func run() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SCRATCH))
 	_every_name()
@@ -108,28 +104,31 @@ func _every_name() -> void:
 		)
 
 
-## A project's own words, from hammerforge_presets/aliases.txt. Parsed from
-## text rather than written into res://, and offered to the line as typed.
+## Give the palette and the command line the same project aliases.
 func _project_aliases() -> void:
-	var user := HFCommandAliases.parse("shell2 = hollow\nslice = hollow\n", "vibe aliases")
+	var path := "user://vibe_aliases_%d.txt" % OS.get_process_id()
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		flag("could not write the project alias fixture", FileAccess.get_open_error())
+		return
+	file.store_string("shell2 = hollow\nslice = hollow\n")
+	file.close()
+	var previous := HFCommandLine.aliases_path
+	HFCommandLine.aliases_path = path
+	var user := HFCommandAliases.read_user(path)
 	var palette := HFCommandAliases.by_command(user)
 	note("the palette's words for hollow, with the project file", palette.get("hollow", []))
 	var line := HFCommandLine.read("shell2 0.125")
 	note("'shell2 0.125' on the line", line)
 	var slice := HFCommandLine.read("slice")
+	HFCommandLine.aliases_path = previous
+	DirAccess.remove_absolute(path)
 	note(
 		"'slice' on the line, which the project gives to hollow",
 		slice.get("id", slice.get("message"))
 	)
-	if not bool(line.get("ok", false)) or str(slice.get("id", "")) != "hollow":
-		known(
-			1991,
-			"the command line does not know the project's own aliases",
-			(
-				"the guide says the line takes a command 'by its id, its name or an alias ... as in the palette', and the palette reads hammerforge_presets/aliases.txt (HFCommandAliases.read_user), where yours win over the built in ones. HFCommandLine._names() reads only HFCommandRegistry.aliases(), so 'shell2' is no command and 'slice' still runs %s"
-				% slice.get("id", "nothing")
-			)
-		)
+	if line.get("id") != "hollow" or not line.get("ok") or slice.get("id") != "hollow":
+		flag("the command line did not use the configured aliases", [line, slice])
 
 
 func _odd_lines() -> void:
