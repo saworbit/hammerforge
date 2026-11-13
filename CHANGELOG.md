@@ -41,6 +41,12 @@ Unreleased work is counted when it ships. For the numbers so far, run
 - The Console takes typed commands, compares the level with another version, counts entities by class, lists notes left in the level and reports a crash from the last session (#1696, #1701, #1709, #1700, #1654).
 - The interface can be translated, entity classes come from an FGD, agents get hf_measure, hf_plan and recorded sessions, and a full bake of 1,000 brushes is 12 times faster (#1702, #1721, #1649, #1705, #1645, #1589).
 
+### Week of 9 Nov 2026
+
+#### Fixed
+
+- **13 Nov** MCP replay keeps literal names and reports invalid recording lines and batch write failures. (issues [#2083](https://github.com/saworbit/hammerforge/issues/2083), [#2084](https://github.com/saworbit/hammerforge/issues/2084), [#2085](https://github.com/saworbit/hammerforge/issues/2085))
+
 ### Week of 26 Oct 2026
 
 #### Added
