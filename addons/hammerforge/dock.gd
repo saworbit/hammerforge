@@ -1249,7 +1249,7 @@ func _on_tutorial_action_requested(action: String) -> void:
 		"quick_play":
 			highlight_tab("Manage")
 			show_toast("Checking, baking, and starting the level", 0)
-			call_deferred("_on_quick_play")
+			call_deferred("_on_quick_play", true)
 
 
 func _on_tutorial_dismissed(dont_show_again: bool) -> void:
@@ -4905,8 +4905,8 @@ func _can_start_bake(action_label: String) -> bool:
 	return HFDockManageHandler.can_start_bake(self, action_label)
 
 
-func _on_quick_play() -> void:
-	await HFDockManageHandler.on_quick_play(self)
+func _on_quick_play(show_start_hint := false) -> void:
+	await HFDockManageHandler.on_quick_play(self, show_start_hint)
 
 
 func _on_quick_play_from_camera() -> void:

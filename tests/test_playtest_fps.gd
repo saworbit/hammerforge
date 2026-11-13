@@ -25,6 +25,22 @@ func test_ensure_hud_creates_reticle_and_pause_overlay():
 	assert_true(pause.visible, "Pause overlay shows when the cursor is released")
 
 
+func test_guided_playtest_shows_the_release_hint_once():
+	var player := CharacterBody3D.new()
+	player.set_script(PlaytestFPS)
+	player.show_start_hint = true
+	add_child_autoqfree(player)
+	var hint := player.get_node("PlaytestHUD/StartHint") as Control
+	assert_true(hint.visible)
+	assert_eq(hint.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+	player._set_cursor_captured(false)
+	assert_false(hint.visible)
+	assert_true(player.get_node("PlaytestHUD/PauseOverlay").visible)
+	player._set_cursor_captured(true)
+	assert_false(hint.visible, "recapturing the mouse does not repeat the hint")
+	player._set_cursor_captured(false)
+
+
 # ===========================================================================
 # Stairs the plugin builds have to be walkable (#711)
 # ===========================================================================

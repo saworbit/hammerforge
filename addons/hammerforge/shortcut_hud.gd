@@ -2,6 +2,7 @@
 extends Control
 
 const HFAccessibility = preload("res://addons/hammerforge/hf_accessibility.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 @onready var label: Label = $Panel/Margin/Label
 
@@ -44,12 +45,12 @@ const MODE_HINTS := {
 	# One line. The row is one line high, and the toolbar takes its height from
 	# this HUD, so a second line here moves the whole 3D viewport down. The rest
 	# of the advice is on the tooltip with the full shortcut list.
-	"draw_idle": "Click to place corner → drag to set size → release for height",
+	"draw_idle": "Drag to draw",
 	"select": "Click to select; drag empty space for a box; drag widgets to edit",
 	"extrude_up_idle": "Click a face to start extruding upward",
 	"extrude_down_idle": "Click a face to start extruding downward",
-	"paint_floor": "Drag to paint; Alt erases, Shift locks an axis, Ctrl picks material",
-	"paint_surface": "Click brush faces to apply material",
+	"paint_floor": "Drag to paint",
+	"paint_surface": "Drag to paint",
 	"vertex_edit": "Click vertex to select, drag to move, {axis_x}/{axis_y}/{axis_z} to lock axis",
 }
 
@@ -420,7 +421,7 @@ static func into_visgroup(text: String, visgroup: String) -> String:
 
 func _draw_idle_shortcuts(axis_lock: int, sides := 0) -> String:
 	var lines := PackedStringArray()
-	lines.append("Click + Drag: Draw Base")
+	lines.append(HFTranslationType.t("Drag to draw"))
 	lines.append("Manage > Create Floor: Stable Surface")
 	lines.append("Shift: Square | Alt+Shift: Cube")
 	lines.append(_chords("{axis_x} / {axis_y} / {axis_z}: Lock Axis%s" % _axis_suffix(axis_lock)))
@@ -445,7 +446,7 @@ func _draw_base_shortcuts(axis_lock: int, sides := 0) -> String:
 
 func _draw_height_shortcuts(sides := 0) -> String:
 	var lines := PackedStringArray()
-	lines.append("-- Adjusting Height --")
+	lines.append(HFTranslationType.t("Click to place"))
 	lines.append("Move Mouse: Change Height")
 	lines.append(_chords("Hold {snap_invert_hold}: Grid Snap Off/On"))
 	lines.append("Type number + Enter: Exact height")
@@ -504,7 +505,7 @@ func _extrude_active_shortcuts(dir_label: String) -> String:
 
 func _floor_paint_shortcuts() -> String:
 	var lines := PackedStringArray()
-	lines.append("-- Floor Paint --")
+	lines.append(HFTranslationType.t("Drag to paint"))
 	lines.append("Click + Drag: Paint | Alt: Erase")
 	lines.append("Shift+Drag: Axis Lock | Ctrl+Click: Pick Material")
 	lines.append(_chords("{paint_bucket}: Brush | {paint_erase}: Erase | {paint_ramp}: Rect"))
@@ -523,7 +524,7 @@ func _floor_paint_shortcuts() -> String:
 
 func _surface_paint_shortcuts() -> String:
 	var lines := PackedStringArray()
-	lines.append("-- Surface Paint --")
+	lines.append(HFTranslationType.t("Drag to paint"))
 	lines.append("Click + Drag: Paint Surface")
 	lines.append("Alt + Drag: Erase")
 	lines.append("Radius/Strength in SurfacePaint tab")
