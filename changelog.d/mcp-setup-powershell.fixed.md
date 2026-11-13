@@ -1,0 +1,1 @@
+- The MCP setup output labels the PowerShell command and still provides JSON configuration. (issue [#2086](https://github.com/saworbit/hammerforge/issues/2086))
