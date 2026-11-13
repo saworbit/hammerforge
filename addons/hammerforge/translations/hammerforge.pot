@@ -1775,6 +1775,10 @@ msgstr ""
 msgid "Detach Structure"
 msgstr ""
 
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Detail"
+msgstr ""
+
 #: addons/hammerforge/ui/hf_hotkey_palette.gd
 msgid "Did you mean: {command}?"
 msgstr ""
@@ -2979,6 +2983,10 @@ msgstr ""
 msgid "High Contrast"
 msgstr ""
 
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Higher detail adds smaller features."
+msgstr ""
+
 #: addons/hammerforge/ui/hf_io_wiring_panel.gd
 msgid "Highlight"
 msgstr ""
@@ -3599,6 +3607,10 @@ msgstr ""
 msgid "Landing"
 msgstr ""
 
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Larger values make wider hills."
+msgstr ""
+
 #: addons/hammerforge/hf_status_board.gd
 msgid "Later"
 msgstr ""
@@ -4203,6 +4215,10 @@ msgstr ""
 msgid "New"
 msgstr ""
 
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "New Seed"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd addons/hammerforge/ui/hf_viewport_context_menu.gd
 msgid "New Visgroup"
 msgstr ""
@@ -4495,12 +4511,20 @@ msgstr ""
 msgid "Noise"
 msgstr ""
 
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Noise Scale"
+msgstr ""
+
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "Noise applied to displacement"
 msgstr ""
 
 #: addons/hammerforge/dock_brush_handler.gd
 msgid "Noise failed — face has no displacement"
+msgstr ""
+
+#: addons/hammerforge/dock_paint_handler.gd
+msgid "Noise scale must be positive."
 msgstr ""
 
 #: addons/hammerforge/hf_stairs_builder.gd
@@ -6037,6 +6061,10 @@ msgstr ""
 
 #: addons/hammerforge/dock.gd
 msgid "Searchable keyboard shortcut reference"
+msgstr ""
+
+#: addons/hammerforge/ui/paint_tab_builder.gd
+msgid "Seed"
 msgstr ""
 
 #: addons/hammerforge/hf_arch_builder.gd addons/hammerforge/hf_dome_builder.gd addons/hammerforge/hf_door_frame_builder.gd addons/hammerforge/hf_sweep_builder.gd addons/hammerforge/hf_trim_run_builder.gd

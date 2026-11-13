@@ -15,6 +15,7 @@ const HFStroke = preload("paint/hf_stroke.gd")
 const DraftBrush = preload("brush_instance.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
+const HFHeightmapIOType = preload("paint/hf_heightmap_io.gd")
 
 
 static func on_paint_layer_selected(dock: Object, index: int) -> void:
@@ -89,9 +90,21 @@ static func on_heightmap_import_selected(dock: Object, path: String) -> void:
 
 
 static func on_heightmap_generate(dock: Object) -> void:
-	if dock == null or not dock.level_root:
+	var layer := _active_paint_layer(dock)
+	if layer == null:
 		return
-	dock._commit_state_action("Generate Noise", "generate_heightmap_noise")
+	var settings := layer.get_height_noise()
+	if dock.noise_seed_spin and dock.noise_scale_spin and dock.noise_detail_spin:
+		var scale: float = dock.noise_scale_spin.value
+		if not is_finite(scale) or scale <= 0.0 or not is_finite(1.0 / scale):
+			dock.level_root.user_message.emit(
+				HFTranslationType.t("Noise scale must be positive."), 2
+			)
+			return
+		settings["seed"] = int(dock.noise_seed_spin.value)
+		settings["frequency"] = 1.0 / scale
+		settings["octaves"] = int(dock.noise_detail_spin.value)
+	dock._commit_state_action("Generate Noise", "generate_heightmap_noise", [settings])
 
 
 static func on_heightmap_convert(dock: Object) -> void:
@@ -475,6 +488,11 @@ static func refresh_layer_spins(dock: Object) -> void:
 		dock.height_scale_spin.set_value_no_signal(layer.height_scale)
 	if dock.layer_y_spin and layer.grid:
 		dock.layer_y_spin.set_value_no_signal(layer.grid.layer_y)
+	if dock.noise_seed_spin and dock.noise_scale_spin and dock.noise_detail_spin:
+		var settings := HFHeightmapIOType.noise_settings(layer.get_height_noise())
+		dock.noise_seed_spin.set_value_no_signal(settings["seed"])
+		dock.noise_scale_spin.set_value_no_signal(1.0 / float(settings["frequency"]))
+		dock.noise_detail_spin.set_value_no_signal(settings["octaves"])
 
 
 static func _active_paint_layer(dock: Object) -> HFPaintLayer:

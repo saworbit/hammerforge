@@ -5,6 +5,7 @@ extends RefCounted
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
 const FaceDataType = preload("../face_data.gd")
+const HFTranslationType = preload("../hf_translation.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -122,6 +123,25 @@ func build(parent: Control) -> void:
 	dock.heightmap_generate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hm_row.add_child(dock.heightmap_generate)
 	hmc.add_child(hm_row)
+
+	dock.noise_seed_spin = dock._make_spin(-2147483648, 2147483647, 1, 0)
+	hmc.add_child(dock._make_label_row(HFTranslationType.t("Seed"), dock.noise_seed_spin))
+	var new_seed := Button.new()
+	new_seed.text = HFTranslationType.t("New Seed")
+	hmc.add_child(new_seed)
+	new_seed.pressed.connect(
+		func(): dock.noise_seed_spin.value = randi_range(-2147483648, 2147483647)
+	)
+	dock.noise_scale_spin = dock._make_spin(0.001, 1000000.0, 0.0, 100.0)
+	dock.noise_scale_spin.allow_greater = true
+	dock.noise_scale_spin.allow_lesser = true
+	dock.noise_scale_spin.tooltip_text = HFTranslationType.t("Larger values make wider hills.")
+	hmc.add_child(dock._make_label_row(HFTranslationType.t("Noise Scale"), dock.noise_scale_spin))
+	dock.noise_detail_spin = dock._make_spin(1, 10, 1, 4)
+	dock.noise_detail_spin.tooltip_text = HFTranslationType.t(
+		"Higher detail adds smaller features."
+	)
+	hmc.add_child(dock._make_label_row(HFTranslationType.t("Detail"), dock.noise_detail_spin))
 
 	# Convert selection to heightmap
 	dock.heightmap_convert_btn = Button.new()

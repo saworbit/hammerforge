@@ -43,6 +43,10 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 ### Week of 9 Nov 2026
 
+#### Added
+
+- **13 Nov** Generate Noise has seed, scale and detail controls for each paint layer. (issue [#2075](https://github.com/saworbit/hammerforge/issues/2075))
+
 #### Fixed
 
 - **13 Nov** Level loads name invalid versions and map exports refuse multiline properties before writing. (issues [#2081](https://github.com/saworbit/hammerforge/issues/2081), [#2082](https://github.com/saworbit/hammerforge/issues/2082))
