@@ -29,7 +29,7 @@ This document makes the current tradeoffs explicit so level designers and develo
 - Floor paint is grid-based and produces axis-aligned floors and walls.
 - Heightmaps displace floors only. Walls remain flat.
 - Heightmap blending uses four slots (A-D) with per-cell blend weights for B/C/D.
-- Region streaming loads only nearby paint data; distant regions are written to their `.hfr` sidecar and then unloaded. A region whose write fails stays loaded rather than losing the paint.
+- Region streaming writes a distant region's paint and sculpted heights to its `.hfr` sidecar before unloading it. A region whose write fails stays loaded.
 
 ## Import / Export Limits
 - `.map` import/export preserves basic brush shapes and point entities. Axis-aligned brushes import as boxes, and a box thinner than 0.1 on a side is widened to 0.1. Rotated or complex brushes import as CUSTOM with face vertices rather than being forced to cylinders.

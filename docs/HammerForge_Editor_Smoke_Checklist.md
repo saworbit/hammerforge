@@ -283,6 +283,7 @@ It writes one PNG per tab under `user://console_preview/`.
 ### 3. Guided Step Flow
 - Step 1: draw an additive room brush; confirm the tutorial advances.
 - Step 2: click **Test Level Now**; confirm the guide starts the normal check, bake, spawn-validation, and play flow.
+- While the mouse is captured, confirm the playtest shows the **WASD** and **Esc** hint. Press **Esc** before it expires and confirm the controls panel replaces it. Capture the mouse again and confirm the hint stays dismissed.
 - Confirm `bake_finished(false)` does not complete the tutorial.
 - Confirm only a successful bake completes the tutorial.
 - Confirm the completion state auto-closes after the short delay.
@@ -846,6 +847,7 @@ It writes one PNG per tab under `user://console_preview/`.
 
 ### 18b. Heightmap ground that does not repeat
 - On a fresh layer, click **Generate Noise**, then paint a strip about 300 cells long. Confirm the hills along it never repeat.
+- Set two different seeds and click **Generate Noise** each time. Confirm the hills change and one undo restores the earlier terrain and its settings. Switch layers and back to check that Seed, Noise Scale and Detail follow the active layer.
 - Raise near one end of the strip with Sculpt. Confirm nothing changes 256 cells along, and that Ctrl+Z takes the hill away (#2007).
 - Paint a rectangle away from the origin and click **Import...** with a small PNG. Confirm the image lies on the rectangle from its top left corner, and that cells painted past it keep the height of its edge.
 
@@ -1037,6 +1039,7 @@ It writes one PNG per tab under `user://console_preview/`.
 
 ### 33. Grid Size Indicator and Hotkeys
 - With LevelRoot active, confirm the shortcut HUD shows the snap followed by the plane axis and position, for example "Grid: 0.5  Y 0.0".
+- With the HUD at its minimum width and the grid readout visible, check Draw idle, the Draw height stage and Paint. Confirm **Drag to draw**, **Click to place** and **Drag to paint** fit beside the grid. Hover to check the full shortcuts and confirm the toolbar keeps its height.
 - Change the grid snap via the dock SpinBox; confirm the HUD label updates and **flashes** briefly (yellow-white → fade).
 - Press **`]`**; confirm the grid doubles (e.g. 16 → 32) and the HUD flashes.
 - Set the snap to a fractional value (e.g. 0.125 via the dock SpinBox) and confirm the snap portion reads "Grid: 0.125" before the plane suffix.
@@ -1070,6 +1073,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Draw a box with `proto_arrow_up_blue` on it. Confirm the arrow points up on all four walls, and on a face set to **Cylindrical**. Open a level saved before this change that has an aligned or painted wall, and confirm that wall looks exactly as it did and that its untouched walls now point up. Export the box to Classic Quake and open it in TrenchBroom with the same texture: every face should match the viewport (#907).
 - Rotate a face's texture 30 degrees, export to Valve 220 and open the file in TrenchBroom. Confirm the texture is turned the way it is in the viewport (#899).
 - Enable region streaming with a small radius. Paint in one region, move the cursor into another so the first unloads, then return. Confirm the paint is still there.
+- Sculpt a painted region and save the level. Move away until the region unloads, then return and confirm the height is restored. Reopen the save and confirm the same sculpt loads from its region file.
 - Make the `<level>.hfregions` directory unwritable (for example put a regular file at that path) and save. Confirm the save is reported as failed rather than succeeding with missing region data.
 - Save twice in quick succession to the same path while the first write is still running. Confirm the file ends up holding the newer of the two.
 - With region streaming on and a region painted, use **Load .hflevel** on a file that is not a level (a renamed text file will do). Confirm the status line says the load failed and why, Undo has nothing new, and the file is not in recent files. Then move away until the painted region unloads, and confirm its paint lands in this level's `.hfregions` folder, not one named after the refused file (#823, #824).
