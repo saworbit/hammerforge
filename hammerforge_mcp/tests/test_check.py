@@ -1,6 +1,7 @@
 import asyncio
 import io
 import json
+import os
 import shlex
 import shutil
 import subprocess
@@ -164,6 +165,9 @@ def test_a_path_with_spaces_and_a_dollar_reads_back_whole(tmp_path):
 def test_powershell_passes_literal_project_and_discovery_paths(tmp_path):
     powershell = shutil.which("powershell")
     if powershell is None:
+        assert os.environ.get("HF_REQUIRE_POWERSHELL_TEST") != "1", (
+            "Windows CI needs PowerShell"
+        )
         pytest.skip("PowerShell is unavailable")
     project = tmp_path / "Map $HF_QA_LITERAL's"
     discovery = project / "Bridge '$HF_QA_LITERAL'.json"

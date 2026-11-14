@@ -325,8 +325,9 @@ func test_the_token_folder_is_closed_to_other_users():
 	var dir := ProjectSettings.globalize_path(DISCOVERY.get_base_dir())
 	if OS.get_name() == "Windows":
 		var output: Array = []
-		OS.execute("icacls", [dir], output, true)
+		assert_eq(OS.execute("icacls", [dir], output, true), 0, "read the token folder ACL")
 		var acl := "".join(output)
+		assert_false(acl.contains("(I)"), "the ACL does not inherit grants: %s" % acl)
 		assert_false(acl.contains("BUILTIN\\Users"), acl)
 		assert_false(acl.contains("Everyone"), acl)
 		assert_string_contains(acl, OS.get_environment("USERNAME"))
