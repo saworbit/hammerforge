@@ -5443,6 +5443,10 @@ msgstr ""
 msgid "Refresh Prototypes"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_paint_system.gd
+msgid "Region size must be a multiple of the paint chunk size."
+msgstr ""
+
 #: addons/hammerforge/dock_visgroup_handler.gd
 msgid "Rem Sel"
 msgstr ""
@@ -7743,8 +7747,16 @@ msgstr ""
 msgid "This is meant: stop listing it until what it names changes"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_paint_system.gd
+msgid "This level keeps all paint regions loaded because its region size splits chunks."
+msgstr ""
+
 #: addons/hammerforge/level_root.gd
 msgid "This level keeps only its baked geometry in the scene, and {file} is not there, so its brushes could not be loaded."
+msgstr ""
+
+#: addons/hammerforge/systems/hf_paint_system.gd
+msgid "This level's region files need their original region size."
 msgstr ""
 
 #: addons/hammerforge/ui/hf_prefab_library.gd

@@ -2815,7 +2815,9 @@ func _sync_region_settings_from_root() -> void:
 	if region_enable:
 		region_enable.button_pressed = bool(settings.get("enabled", false))
 	if region_size_spin:
-		region_size_spin.value = float(settings.get("region_size_cells", region_size_spin.value))
+		region_size_spin.set_value_no_signal(
+			float(settings.get("region_size_cells", region_size_spin.value))
+		)
 	if region_radius_spin:
 		region_radius_spin.value = float(settings.get("streaming_radius", region_radius_spin.value))
 	if region_memory_spin:

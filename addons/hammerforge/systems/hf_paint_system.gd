@@ -627,7 +627,25 @@ const MAX_MEMORY_BUDGET_MB := 8192
 
 
 func set_region_size_cells(value: int) -> void:
-	region_manager.region_size_cells = clampi(value, MIN_REGION_SIZE_CELLS, MAX_REGION_SIZE_CELLS)
+	_sync_region_manager()
+	var size := clampi(value, MIN_REGION_SIZE_CELLS, MAX_REGION_SIZE_CELLS)
+	if size == region_manager.region_size_cells:
+		return
+	if size % region_manager.chunk_size != 0:
+		root.user_message.emit(
+			HFTranslationType.t("Region size must be a multiple of the paint chunk size."), 2
+		)
+		return
+	if _region_size_splits_chunks() and not _region_ids_on_disk().is_empty():
+		root.user_message.emit(
+			HFTranslationType.t("This level's region files need their original region size."), 2
+		)
+		return
+	region_manager.region_size_cells = size
+
+
+func _region_size_splits_chunks() -> bool:
+	return region_manager.region_size_cells % region_manager.chunk_size != 0
 
 
 func set_region_streaming_radius(value: int) -> void:
@@ -658,6 +676,21 @@ func get_loaded_regions() -> Array[Vector2i]:
 func load_initial_regions() -> void:
 	if not region_streaming_enabled:
 		return
+	_sync_region_manager()
+	if _region_size_splits_chunks():
+		# Old sidecars can hold a boundary chunk on either side. Keep their
+		# coordinates and load them all before allowing any edits.
+		var saved := _region_ids_on_disk()
+		saved.sort()
+		for region_id in saved:
+			if not region_manager.is_loaded(region_id):
+				_load_region(region_id)
+		root.user_message.emit(
+			HFTranslationType.t(
+				"This level keeps all paint regions loaded because its region size splits chunks."
+			),
+			1
+		)
 	_ensure_regions_for_cell(Vector2i.ZERO)
 
 
@@ -1132,7 +1165,9 @@ func _restore_sculpt_chunks(
 
 ## Deserialize an array of chunk dictionaries into a paint layer.
 ## Returns the list of chunk IDs (Vector2i) that were loaded.
-func _deserialize_chunks_to_layer(layer: HFPaintLayer, chunks: Array) -> Array[Vector2i]:
+func _deserialize_chunks_to_layer(
+	layer: HFPaintLayer, chunks: Array, keep_loaded := false
+) -> Array[Vector2i]:
 	var loaded: Array[Vector2i] = []
 	for chunk in chunks:
 		if not (chunk is Dictionary):
@@ -1140,6 +1175,8 @@ func _deserialize_chunks_to_layer(layer: HFPaintLayer, chunks: Array) -> Array[V
 		var cx = int(chunk.get("cx", 0))
 		var cy = int(chunk.get("cy", 0))
 		var cid = Vector2i(cx, cy)
+		if keep_loaded and layer.has_chunk(cid):
+			continue
 		var bytes = chunk.get("bits", [])
 		var bits = PackedByteArray()
 		if bytes is Array:
@@ -1375,11 +1412,19 @@ func load_region_index(index_data: Dictionary, hflevel_path: String = "") -> voi
 		set_region_base_path(hflevel_path)
 	if index_data.is_empty():
 		return
-	# Through the setters, because a sidecar written by an older version or by
-	# hand is exactly the caller the clamps are for.
-	set_region_size_cells(
-		int(index_data.get("region_size_cells", region_manager.region_size_cells))
+	# Saved sidecars use this size for their coordinates. Older levels with a
+	# split chunk open with eviction paused instead of moving their boundaries.
+	region_manager.region_size_cells = clampi(
+		int(index_data.get("region_size_cells", region_manager.region_size_cells)),
+		MIN_REGION_SIZE_CELLS,
+		MAX_REGION_SIZE_CELLS
 	)
+	_sync_region_manager()
+	if _region_size_splits_chunks():
+		# Restoring inline paint may already have marked a region loaded.
+		# Its sidecar can hold other chunks that still need to be read.
+		region_manager.loaded_regions.clear()
+		region_manager.last_access.clear()
 	set_region_streaming_radius(
 		int(index_data.get("streaming_radius", region_manager.streaming_radius))
 	)
@@ -1688,6 +1733,9 @@ func _ensure_regions_for_cell(cell: Vector2i) -> void:
 	for rid in want:
 		if not region_manager.is_loaded(rid):
 			_load_region(rid)
+	if _region_size_splits_chunks():
+		_update_region_overlay()
+		return
 	var loaded = region_manager.loaded_regions.keys()
 	for rid in loaded:
 		if region_manager.is_pinned(rid):
@@ -1860,7 +1908,7 @@ func _load_region(region_id: Vector2i) -> void:
 			continue
 		var chunks = entry.get("chunks", [])
 		if chunks is Array:
-			for cid in _deserialize_chunks_to_layer(layer, chunks):
+			for cid in _deserialize_chunks_to_layer(layer, chunks, _region_size_splits_chunks()):
 				dirty_chunks[cid] = true
 		for cid in _restore_sculpt_chunks(layer, entry.get("height_chunks", []), bounds):
 			for y in range(-1, 2):
@@ -1876,7 +1924,7 @@ func _load_region(region_id: Vector2i) -> void:
 ## Streaming a region out throws away its chunks, so the paint has to reach
 ## disk first. A failed write keeps the region loaded rather than losing it.
 func _unload_region(region_id: Vector2i) -> bool:
-	if not root.paint_layers:
+	if not root.paint_layers or _region_size_splits_chunks():
 		return false
 	# A region with no paint left is written too: its file may still hold what an
 	# erase took away, which would come back as the region streams in (#1550).

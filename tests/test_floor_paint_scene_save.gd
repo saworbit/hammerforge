@@ -267,6 +267,45 @@ func test_a_streamed_level_saves_its_sculpt_in_the_region_file():
 	assert_eq(_layer(loaded, 0).get_height_sample(FAR), 0.875)
 
 
+func test_a_legacy_region_boundary_keeps_sculpts_through_crossings_and_resave():
+	var root := _fresh_root()
+	var sys := root.paint_system
+	sys.set_region_base_path(LEVEL)
+	sys.load_region_index({"region_size_cells": 65, "streaming_radius": 0})
+	sys.set_region_streaming_enabled(true)
+	root.generate_heightmap_noise({"seed": 37})
+	var boundary := Vector2i(65, 8)
+	var far_boundary := Vector2i(-66, 8)
+	sys._ensure_regions_for_cell(Vector2i(64, 8))
+	assert_true(_layer(root, 0).set_height_sample(boundary, 0.875))
+	assert_true(_layer(root, 0).set_height_sample(far_boundary, 0.625))
+	_layer(root, 0).set_cell(boundary, true)
+	sys._ensure_regions_for_cell(boundary)
+	assert_eq(_layer(root, 0).get_height_sample(boundary), 0.875, "across the boundary")
+	sys._ensure_regions_for_cell(Vector2i(64, 8))
+	assert_eq(_layer(root, 0).get_height_sample(boundary), 0.875, "and back again")
+	assert_eq(root.save_hflevel(LEVEL, true), OK)
+	await _drain_save(root)
+
+	var loaded := _fresh_root()
+	assert_true(loaded.load_hflevel(LEVEL))
+	var restored := _layer(loaded, 0)
+	assert_eq(restored.get_height_sample(far_boundary), 0.625, "a distant sidecar is loaded")
+	assert_true(restored.get_cell(boundary))
+	loaded.set_region_size_cells(64)
+	assert_eq(loaded.get_region_settings()["region_size_cells"], 65, "keep the sidecar layout")
+	loaded.paint_system._ensure_regions_for_cell(boundary)
+	assert_eq(restored.get_height_sample(boundary), 0.875)
+	assert_true(restored.set_height_sample(boundary, 0.25))
+	assert_eq(loaded.save_hflevel(LEVEL, true), OK)
+	await _drain_save(loaded)
+
+	var reopened := _fresh_root()
+	assert_true(reopened.load_hflevel(LEVEL))
+	assert_eq(_layer(reopened, 0).get_height_sample(boundary), 0.25, "no stale copy returns")
+	assert_eq(_layer(reopened, 0).get_height_sample(far_boundary), 0.625)
+
+
 ## A level that names regions it has not loaded, and has lost the folder they are
 ## in, as a scene from before #2006 reopens, refuses the save rather than
 ## clearing the folder it was given.
