@@ -1113,6 +1113,7 @@ func _ready():
 	bake_system = HFBakeSystemType.new(self)
 	bake_system.reconcile_baked_containers()
 	paint_system = HFPaintSystemType.new(self)
+	paint_tool.prepare_stroke_cell = paint_system.prepare_stroke_cell
 	file_system = HFFileSystemType.new(self)
 	autosave_scheduler = HFAutosaveSchedulerType.new(self)
 	if _should_initialize_editor_systems():
@@ -4996,6 +4997,8 @@ func _setup_paint_system() -> void:
 		add_child(paint_tool)
 		_assign_owner(paint_tool)
 	paint_tool.layer_manager = paint_layers
+	if paint_system:
+		paint_tool.prepare_stroke_cell = paint_system.prepare_stroke_cell
 	if not paint_tool.stroke_committed.is_connected(_on_paint_stroke_committed):
 		paint_tool.stroke_committed.connect(_on_paint_stroke_committed)
 	if not paint_tool.geometry:

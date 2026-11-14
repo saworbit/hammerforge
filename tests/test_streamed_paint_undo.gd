@@ -297,6 +297,100 @@ func test_a_floor_stroke_into_an_empty_region_undoes_to_empty_after_it_streams_b
 	assert_false(painted(level, CELL), "the region streams back in empty")
 
 
+func _boundary_press(level: Node, at: Vector2i) -> void:
+	var screen := screen_at(level, at)
+	level.prepare_paint_stroke(rig.camera, screen, level.paint_tool.tool)
+	HFPluginPaintInput.begin_floor_paint_undo(rig.plugin, level)
+	assert_true(
+		level.paint_tool.handle_input(
+			rig.camera, PluginRig.click(MOUSE_BUTTON_LEFT, true, screen), screen
+		)
+	)
+
+
+func _boundary_release(level: Node, at: Vector2i) -> void:
+	var screen := screen_at(level, at)
+	assert_true(
+		level.paint_tool.handle_input(
+			rig.camera, PluginRig.click(MOUSE_BUTTON_LEFT, false, screen), screen
+		)
+	)
+	HFPluginPaintInput.commit_floor_paint_undo(rig.plugin, level)
+
+
+func test_a_floor_stroke_keeps_old_and_new_paint_across_an_unloaded_boundary():
+	var level = await rig_level()
+	var sys = level.paint_system
+	var near := Vector2i(31, 40)
+	var old := Vector2i(34, 40)
+	var added := Vector2i(32, 40)
+	sys._ensure_regions_for_cell(old)
+	level.paint_layers.get_active_layer().set_cell(old, true)
+	sys._ensure_regions_for_cell(near)
+	assert_false(sys.region_manager.is_loaded(REGION))
+	level.paint_tool.brush_radius_cells = 2
+	_boundary_press(level, near)
+	_boundary_release(level, near)
+	assert_true(sys.save_loaded_regions()["ok"])
+	stream_out_and_in(level, old)
+	assert_true(painted(level, old), "the old paint survives")
+	assert_true(painted(level, added), "the stroke's new paint survives")
+	assert_true(rig.undo().press_undo())
+	sys._ensure_regions_for_cell(old)
+	assert_true(painted(level, old), "undo restores the previously unloaded paint")
+	assert_false(painted(level, added), "undo takes the new paint")
+
+
+func test_a_floor_erase_removes_the_unloaded_neighbours_last_cell():
+	var level = await rig_level()
+	var sys = level.paint_system
+	var near := Vector2i(31, 40)
+	var old := Vector2i(32, 40)
+	sys._ensure_regions_for_cell(old)
+	level.paint_layers.get_active_layer().set_cell(old, true)
+	sys._ensure_regions_for_cell(near)
+	assert_false(sys.region_manager.is_loaded(REGION))
+	level.paint_tool.brush_radius_cells = 2
+	level.paint_tool.tool = HFStroke.Tool.ERASE
+	_boundary_press(level, near)
+	_boundary_release(level, near)
+	assert_true(sys.save_loaded_regions()["ok"])
+	assert_false(FileAccess.file_exists(region_file(level, REGION)))
+	sys._ensure_regions_for_cell(old)
+	assert_false(painted(level, old), "the erased cell stays gone")
+	assert_true(rig.undo().press_undo())
+	sys._ensure_regions_for_cell(old)
+	assert_true(painted(level, old), "undo restores the erased cell")
+
+
+func test_a_floor_drag_loads_the_region_between_mouse_events_and_undo_keeps_its_old_paint():
+	var level = await rig_level()
+	var sys = level.paint_system
+	var start := Vector2i(31, 40)
+	var end := Vector2i(65, 40)
+	var old := Vector2i(40, 41)
+	var added := Vector2i(40, 40)
+	sys._ensure_regions_for_cell(old)
+	level.paint_layers.get_active_layer().set_cell(old, true)
+	sys._ensure_regions_for_cell(start)
+	_boundary_press(level, start)
+	var screen := screen_at(level, end)
+	assert_true(
+		level.paint_tool.handle_input(
+			rig.camera, PluginRig.motion(screen, MOUSE_BUTTON_MASK_LEFT), screen
+		)
+	)
+	_boundary_release(level, end)
+	assert_true(sys.save_loaded_regions()["ok"])
+	stream_out_and_in(level, old)
+	assert_true(painted(level, old))
+	assert_true(painted(level, added), "the part of the drag between mouse events survives")
+	assert_true(rig.undo().press_undo())
+	stream_out_and_in(level, old)
+	assert_true(painted(level, old), "undo keeps paint that was on disk at press")
+	assert_false(painted(level, added))
+
+
 func test_a_stamped_room_undoes_to_empty_after_its_region_streams_back_in():
 	assert_not_null(rig.plugin, rig.error())
 	if rig.plugin == null:

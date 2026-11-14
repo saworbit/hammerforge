@@ -66,6 +66,7 @@ var region_memory_budget_mb: int = 256
 var region_show_grid: bool = false
 var region_overlay_material: Material = null
 var _paint_region_pins: Dictionary = {}
+var _stroke_before: Dictionary = {}
 
 
 func _init(level_root: Node3D) -> void:
@@ -161,10 +162,48 @@ func _pin_stroke_regions(cell: Vector2i, tool_id: int) -> void:
 	var last := region_manager.region_id_from_cell(cell + extent)
 	for y in range(first.y, last.y + 1):
 		for x in range(first.x, last.x + 1):
-			var region := Vector2i(x, y)
-			_pin_paint_region(region)
-			if not region_manager.is_loaded(region):
-				_load_region(region)
+			_prepare_stroke_region(Vector2i(x, y))
+
+
+func track_stroke_undo(before: Dictionary) -> void:
+	_stroke_before = before if region_streaming_enabled else {}
+
+
+func prepare_stroke_cell(cell: Vector2i) -> void:
+	if region_streaming_enabled:
+		_prepare_stroke_region(region_manager.region_id_from_cell(cell))
+
+
+func _prepare_stroke_region(region: Vector2i) -> void:
+	if _paint_region_pins.has(region):
+		return
+	_pin_paint_region(region)
+	if not region_manager.is_loaded(region):
+		_load_region(region)
+	# A drag or flood can reach disk-only paint after the press captured undo.
+	# Take its original chunks now, while the stroke has yet to touch them.
+	if not _stroke_before.has("paint_region_files"):
+		return
+	var files: Dictionary = _stroke_before["paint_region_files"]
+	var on_disk: Array = files["on_disk"]
+	if not on_disk.has(region):
+		return
+	var sides: Array = root.state_system.capture_paint_layers(
+		true, true, _region_chunk_bounds(region)
+	)
+	var originals: Dictionary = {}
+	for entry: Dictionary in _stroke_before["paint_layers"]:
+		originals[entry["id"]] = entry
+	for side: Dictionary in sides:
+		if not originals.has(side["id"]):
+			continue
+		var original: Dictionary = originals[side["id"]]
+		for key in ["chunks", "height_chunks", "wall_heights"]:
+			if side.has(key):
+				var items: Array = original.get_or_add(key, [])
+				items.append_array(side[key])
+	on_disk.erase(region)
+	files["loaded"].append(region)
 
 
 # ---------------------------------------------------------------------------
@@ -556,6 +595,7 @@ func release_paint_region_pins() -> void:
 	for region_id: Vector2i in _paint_region_pins.keys():
 		region_manager.set_pinned(region_id, false)
 	_paint_region_pins.clear()
+	_stroke_before = {}
 
 
 func get_paint_layer_names() -> Array:

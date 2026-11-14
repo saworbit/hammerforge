@@ -20,6 +20,7 @@ var inference: HFInferenceEngine
 var geometry: HFGeometrySynth
 var reconciler: HFGeneratedReconciler
 var heightmap_synth: HFHeightmapSynth
+var prepare_stroke_cell: Callable
 @export var brush_radius_cells: int = 1
 @export var brush_shape: int = HFStroke.BrushShape.SQUARE
 @export var tool: int = HFStroke.Tool.PAINT
@@ -320,6 +321,8 @@ func _stamp_cell(cell: Vector2i) -> void:
 				continue
 			var base_target = cell + Vector2i(dx, dy)
 			for target in _mirrored_cells(base_target):
+				if prepare_stroke_cell.is_valid():
+					prepare_stroke_cell.call(target)
 				if is_blend:
 					if not layer.get_cell(target):
 						# Blend only works on filled cells — skip unfilled silently during strokes
@@ -698,6 +701,8 @@ func _apply_preview_cells(cells: Array) -> void:
 		for cell in _mirrored_cells(base_cell):
 			next_set[cell] = true
 			if not _preview_cells.has(cell):
+				if prepare_stroke_cell.is_valid():
+					prepare_stroke_cell.call(cell)
 				if not _preview_original.has(cell):
 					_preview_original[cell] = layer.get_cell(cell)
 				layer.set_cell(cell, filled)
@@ -756,6 +761,8 @@ func _bucket_fill(start: Vector2i) -> void:
 		if visited.has(cell):
 			continue
 		visited[cell] = true
+		if prepare_stroke_cell.is_valid():
+			prepare_stroke_cell.call(cell)
 		if layer.get_cell(cell) != target_filled:
 			continue
 		layer.set_cell(cell, fill_value)

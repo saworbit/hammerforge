@@ -342,6 +342,9 @@ static func begin_floor_paint_undo(plugin: Object, root: Node) -> void:
 		return
 	if root.has_method("capture_state"):
 		plugin._floor_paint_pre_state = root.capture_state()
+		var paint_system = root.get("paint_system")
+		if paint_system != null:
+			paint_system.track_stroke_undo(plugin._floor_paint_pre_state)
 
 
 static func commit_floor_paint_undo(
