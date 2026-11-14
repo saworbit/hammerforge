@@ -2587,8 +2587,7 @@ func _travel_until_met(moving: Array, along: Vector3) -> float:
 
 
 ## The brushes a moving selection can come to rest against: those the face pick
-## takes, shown and not the drag preview (#1965), and solid, so not a cut, which
-## is a hole, or a trigger, which bakes to an area nothing stands on.
+## takes, shown and not the drag preview (#1965), and solid after baking.
 func _surfaces_to_meet(moving: Array) -> Array:
 	var out: Array = []
 	for node in root._iter_pick_nodes():
@@ -2600,7 +2599,7 @@ func _surfaces_to_meet(moving: Array) -> Array:
 			continue
 		if not is_brush_node(brush) or _is_subtract_brush(brush):
 			continue
-		if HFBrushEntity.entity_class(brush).begins_with("trigger_"):
+		if HFBrushEntity.bakes_no_collision(brush):
 			continue
 		if not (root._is_pick_visible(brush) and root._is_pick_visible(mesh_inst)):
 			continue
