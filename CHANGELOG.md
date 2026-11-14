@@ -49,6 +49,9 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Fixed
 
+- **14 Nov** Older levels with misaligned paint regions keep their sculpts when crossing region boundaries. New region sizes must align with paint chunks. (issue [#2099](https://github.com/saworbit/hammerforge/issues/2099), PR [#2105](https://github.com/saworbit/hammerforge/pull/2105))
+- **14 Nov** Re-exporting an MCP batch keeps the brush and entity references used in later batches. (issue [#2100](https://github.com/saworbit/hammerforge/issues/2100), PR [#2104](https://github.com/saworbit/hammerforge/pull/2104))
+- **14 Nov** Exported MCP batches keep names and property text that look like batch references. (issue [#2101](https://github.com/saworbit/hammerforge/issues/2101), PR [#2104](https://github.com/saworbit/hammerforge/pull/2104))
 - **13 Nov** The MCP setup command keeps Windows paths literal in PowerShell. JSON setup is also available. (issue [#2086](https://github.com/saworbit/hammerforge/issues/2086), PR [#2093](https://github.com/saworbit/hammerforge/pull/2093))
 - **13 Nov** Sculpts release their memory when their paint region unloads and recover their heights when it loads again. (issue [#2076](https://github.com/saworbit/hammerforge/issues/2076), PR [#2097](https://github.com/saworbit/hammerforge/pull/2097))
 - **13 Nov** Draw and Paint actions fit beside the grid, and the guided playtest shows how to move and release the mouse. (issues [#2087](https://github.com/saworbit/hammerforge/issues/2087), [#2089](https://github.com/saworbit/hammerforge/issues/2089), PR [#2095](https://github.com/saworbit/hammerforge/pull/2095))
