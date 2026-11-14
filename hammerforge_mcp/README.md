@@ -75,7 +75,8 @@ is open instead.
 changes that built the session's level as `hf_batch` payloads of up to 100 ops,
 one per line, for a test. Refused changes, a change an undo took back and that
 undo, and bakes are left out. Within a payload a brush an earlier op placed is
-named `$N.brush_id`. The file can be replayed the same way. Invalid recording
+named `$N.brush_id`. Literal names and property text are preserved. The file
+can be replayed or exported again. Invalid recording
 lines report the path and line number. Input or batch write errors exit with
 status 2, and a failed batch write leaves the previous output file intact.
 

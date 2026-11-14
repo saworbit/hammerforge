@@ -1055,6 +1055,13 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 				"op %d: params must be an object" % i,
 				{"param": "ops", "index": i}
 			)
+		if op.has("escape_refs") and not (op["escape_refs"] is bool):
+			return _error(
+				id,
+				HFMcpProtocol.E_INVALID_ARGUMENT,
+				"op %d: escape_refs must be a boolean" % i,
+				{"param": "ops", "index": i}
+			)
 	var root := _root
 	var target_id := _target_id
 	# The whole level and the cordons, whichever tools the ops name: an op's own
@@ -1073,7 +1080,10 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 		var op: Dictionary = ops[i]
 		var refusal := {}
 		var resolved := _resolve_refs(
-			op.get("params", {}) if op.get("params") != null else {}, results, i
+			op.get("params", {}) if op.get("params") != null else {},
+			results,
+			i,
+			op.get("escape_refs", false)
 		)
 		if not resolved["ok"]:
 			refusal = resolved["error"]
@@ -1128,10 +1138,13 @@ const BATCH_REFS := {
 ## A copy of `value` with every "$N.brush_id" swapped for the brush id op N's
 ## answer carries, every "$N.entity" for the entity path, and every
 ## "$N.generator_id" for the structure op N built or changed. N has to be an
-## earlier op, and its answer has to hold that.
-func _resolve_refs(value, results: Array, index: int) -> Dictionary:
+## earlier op, and its answer has to hold that. An op can opt into "$$" for a
+## literal leading dollar so existing batches keep the meaning of their text.
+func _resolve_refs(value, results: Array, index: int, escape_refs: bool) -> Dictionary:
 	if value is String and (value as String).begins_with("$"):
 		var text := value as String
+		if escape_refs and text.begins_with("$$"):
+			return {"ok": true, "value": text.substr(1)}
 		var ref := text.get_slice(".", 1)
 		var number := text.trim_prefix("$").get_slice(".", 0)
 		if text.get_slice_count(".") != 2 or not BATCH_REFS.has(ref) or not number.is_valid_int():
@@ -1150,7 +1163,7 @@ func _resolve_refs(value, results: Array, index: int) -> Dictionary:
 	if value is Dictionary:
 		var out := {}
 		for key in value:
-			var inner := _resolve_refs(value[key], results, index)
+			var inner := _resolve_refs(value[key], results, index, escape_refs)
 			if not inner["ok"]:
 				return inner
 			out[key] = inner["value"]
@@ -1158,7 +1171,7 @@ func _resolve_refs(value, results: Array, index: int) -> Dictionary:
 	if value is Array:
 		var list: Array = []
 		for item in value:
-			var inner := _resolve_refs(item, results, index)
+			var inner := _resolve_refs(item, results, index, escape_refs)
 			if not inner["ok"]:
 				return inner
 			list.append(inner["value"])

@@ -429,10 +429,7 @@ async def test_each_batch_op_takes_what_its_tool_takes():
     assert list(BATCH_PARAMS) == _batchable_in_the_editor()
 
 
-def test_each_batch_op_is_the_class_that_used_to_be_written_out():
-    # The *Op models are made from BATCH_PARAMS (#1342). An agent only ever
-    # sees them as JSON Schema, so each must give exactly what the class it
-    # replaced gave: the same name, a tool and its params, nothing else.
+def test_each_batch_op_schema_includes_optional_literal_escaping():
     from hammerforge_mcp.server import BATCH_OPS, BATCH_PARAMS, _Params
 
     for (name, params), op in zip(BATCH_PARAMS.items(), BATCH_OPS, strict=True):
@@ -441,7 +438,12 @@ def test_each_batch_op_is_the_class_that_used_to_be_written_out():
             (_Params,),
             {
                 "__module__": op.__module__,
-                "__annotations__": {"tool": Literal[name], "params": params},
+                "__annotations__": {
+                    "tool": Literal[name],
+                    "params": params,
+                    "escape_refs": bool,
+                },
+                "escape_refs": False,
             },
         )
         assert op.__name__ == params.__name__.removesuffix("Params") + "Op"

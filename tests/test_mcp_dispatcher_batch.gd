@@ -73,6 +73,33 @@ func test_a_batch_that_changes_nothing_records_no_step():
 	assert_eq(brush_node(level, id).global_position, Vector3(0, 1, 0))
 
 
+func test_a_batch_can_escape_literal_dollars_without_disabling_references():
+	var level := make_level()
+	var first := _place(0)
+	first["escape_refs"] = true
+	first["params"]["name"] = "$$0.brush_id"
+	var legacy := _place(4)
+	legacy["params"]["name"] = "$$0.brush_id"
+	var ops := [
+		first,
+		legacy,
+		{
+			"tool": "hf_transform_brush",
+			"params": {"brush_id": "$0.brush_id", "position": [0, 5, 0]},
+			"escape_refs": true,
+		},
+	]
+	var r := await call_tool("hf_batch", {"ops": ops})
+	assert_true(r["ok"], str(r))
+	if not r["ok"]:
+		return
+	var results: Array = r["result"]["results"]
+	var brush_id: String = results[0]["result"]["brush"]["brush_id"]
+	assert_eq(str(brush_node(level, brush_id).name), "$0.brush_id".validate_node_name())
+	assert_eq(brush_node(level, brush_id).global_position, Vector3(0, 5, 0))
+	assert_eq(results[1]["result"]["brush"]["name"], "$$0.brush_id".validate_node_name())
+
+
 func test_a_failure_part_way_leaves_the_level_as_it_was():
 	var level := make_level()
 	await place_box([20, 1, 0])
