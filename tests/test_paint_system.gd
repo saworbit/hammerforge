@@ -185,6 +185,8 @@ func test_unloading_an_empty_region_still_streams_out():
 
 
 func test_save_loaded_regions_reports_a_failed_write():
+	var log := HFConsoleLog.new()
+	HFLog.set_sink(log)
 	_streaming_system()
 	_paint_cell(Vector2i(1, 1))
 	sys.region_manager.mark_loaded(Vector2i(0, 0))
@@ -195,6 +197,8 @@ func test_save_loaded_regions_reports_a_failed_write():
 	assert_false(bool(result.get("ok", true)), "A failed sidecar is not a successful save")
 	assert_eq((result.get("failed", []) as Array).size(), 1)
 	assert_push_error("could not write region")
+	HFLog.set_sink(null)
+	assert_eq(log.filtered(1 << HFConsoleLog.Level.ERROR, "paint").size(), 1)
 	DirAccess.remove_absolute("user://hf_region_stream_test.hfregions")
 
 

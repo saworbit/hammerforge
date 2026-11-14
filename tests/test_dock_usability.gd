@@ -141,9 +141,17 @@ func test_manual_save_failure_names_destination() -> void:
 	dock.connected_root = root
 	dock._connect_root_signals()
 	var path := "user://blocked/manual.hflevel"
+	var log := HFConsoleLog.new()
+	HFLog.set_sink(log)
 	root.hflevel_save_failed.emit(path, "permission denied")
+	root.autosave_failed.emit("autosave destination blocked")
+	HFLog.set_sink(null)
 	assert_true(dock.status_label.text.contains(path))
 	assert_true(dock.status_label.text.begins_with("Failed to save"))
+	var failures := log.filtered(1 << HFConsoleLog.Level.ERROR)
+	assert_eq(failures.size(), 2)
+	assert_string_contains(str(failures), path)
+	assert_string_contains(str(failures), "autosave destination blocked")
 
 
 func _is_descendant_of(node: Node, ancestor: Node) -> bool:

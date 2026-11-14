@@ -2,6 +2,7 @@ extends GutTest
 
 const HFFileSystemType = preload("res://addons/hammerforge/systems/hf_file_system.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
+const ProblemReport = preload("res://addons/hammerforge/plugin_problem_report.gd")
 
 var root: CapturingRoot
 var files: HFFileSystem
@@ -331,6 +332,29 @@ func test_region_write_failure_on_autosave_reports_as_an_autosave():
 	assert_push_error("sidecar directory is not writable")
 	assert_eq(auto.size(), 1, "An autosave failure is not a manual save failure")
 	assert_eq(manual.size(), 0)
+
+
+func test_failed_manual_and_automatic_writes_reach_problem_reports():
+	var log := HFConsoleLog.shared()
+	log.clear()
+	HFLog.set_sink(log)
+	var blocker := _save_path + ".writing"
+	assert_eq(DirAccess.make_dir_absolute(blocker), OK, "block the atomic writer")
+	for autosave in [false, true]:
+		assert_eq(files.save_hflevel(_save_path, true, autosave), OK, "queued on save worker")
+		await _drain_write()
+		await get_tree().process_frame
+		assert_push_error("Failed to write file:")
+		var category := "autosave" if autosave else "save"
+		var entries := log.filtered(1 << HFConsoleLog.Level.ERROR, category)
+		assert_true(
+			entries.any(func(entry): return entry["message"].contains("Failed to write file:"))
+		)
+	assert_string_contains("\n".join(ProblemReport.last_log_lines(10)), "Failed to write file:")
+	assert_string_contains("\n".join(ProblemReport.last_log_lines(10)), _save_path.get_file())
+	DirAccess.remove_absolute(blocker)
+	HFLog.set_sink(null)
+	log.clear()
 
 
 func test_region_write_success_lets_the_level_save_proceed():

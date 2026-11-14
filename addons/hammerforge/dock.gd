@@ -4843,7 +4843,9 @@ func _on_bake_progress(value: float, label: String) -> void:
 
 
 func _on_autosave_failed(error_message: String) -> void:
-	push_warning("HammerForge autosave failed: %s" % error_message)
+	var message := "HammerForge autosave failed: %s" % error_message
+	HFLog.record_error(message, "autosave")
+	push_warning(message)
 	show_toast(HFTranslationType.t("Autosave failed: {error}").format({"error": error_message}), 2)
 	if _autosave_warning:
 		_autosave_warning.text = "Autosave failed! Save manually."
@@ -4879,7 +4881,9 @@ func _on_hflevel_save_completed(path: String) -> void:
 
 
 func _on_hflevel_save_failed(path: String, error_message: String) -> void:
-	push_warning("HammerForge save failed for %s: %s" % [path, error_message])
+	var message := "HammerForge save failed for %s: %s" % [path, error_message]
+	HFLog.record_error(message, "save")
+	push_warning(message)
 	_set_status(
 		HFTranslationType.message("Failed to save .hflevel: {file}", {"file": path}), true, 5.0
 	)
@@ -4890,9 +4894,8 @@ func _on_root_user_message(text: String, level: int) -> void:
 	show_toast(text, level)
 	# Toasts fade. The Console's log is where the same message stays readable
 	# after the fact, which is the only place a failed bake can be reconstructed
-	# from. LevelRoot's levels are 0 info / 1 warning / 2 error, matching
-	# HFConsoleLog's first three.
-	HFConsoleLog.shared().append(clampi(level, 0, 2), text, "level")
+	# from. LevelRoot's levels are 0 info / 1 warning / 2 error.
+	HFConsoleLog.shared().append(HFConsoleLog.Level.INFO + clampi(level, 0, 2), text, "level")
 
 
 func _on_bake_finished(success: bool) -> void:

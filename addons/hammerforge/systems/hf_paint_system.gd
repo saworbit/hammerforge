@@ -2097,7 +2097,9 @@ func _save_region_file(region_id: Vector2i) -> int:
 		_note_region_file_changed(region_id)
 		_region_file_digests.erase(region_id)
 		_region_file_layers.erase(region_id)
-		push_error("HFPaint: could not write region %s (error: %d)" % [str(region_id), err])
+		HFLog.error(
+			"HFPaint: could not write region %s (error: %d)" % [str(region_id), err], "paint"
+		)
 		return err
 	# Writing again what this session last wrote there changes nothing a restore
 	# has to put right, which keeps every save from counting as a change to each
@@ -2185,7 +2187,9 @@ func _remove_region_file(region_id: Vector2i, path: String) -> int:
 			_region_file_digests.erase(region_id)
 			var removed := DirAccess.remove_absolute(file_path)
 			if removed != OK:
-				push_error("HFPaint: could not remove %s (error: %d)" % [file_path, removed])
+				HFLog.error(
+					"HFPaint: could not remove %s (error: %d)" % [file_path, removed], "paint"
+				)
 				err = removed
 	if err == OK:
 		_stale_region_files.erase(region_id)

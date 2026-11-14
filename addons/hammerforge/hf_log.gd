@@ -5,26 +5,45 @@ class_name HFLog
 const SUPPRESSED_WARNING_PATTERNS_META := "_hf_suppressed_warning_patterns"
 const CAPTURED_WARNINGS_META := "_hf_captured_warnings"
 
-## Optional mirror for everything HammerForge warns about. The Console sets
-## this to its session log so a HammerForge warning is findable on its own,
-## rather than only in Godot's Output panel among every other addon's.
-## Null outside the editor and in tests, where push_warning is the whole story.
+## The Console installs a session log. Save workers also report through it.
 static var _sink = null
+static var _sink_mutex := Mutex.new()
 
 
-## Set by the Console on install and cleared on teardown. Anything with a
-## warn(message, category) method works.
+## Set by the Console on install and cleared on teardown.
 static func set_sink(sink) -> void:
+	_sink_mutex.lock()
 	_sink = sink
+	_sink_mutex.unlock()
+
+
+static func _current_sink():
+	_sink_mutex.lock()
+	var sink = _sink
+	_sink_mutex.unlock()
+	return sink
 
 
 static func warn(message: String) -> void:
 	_capture_warning(message)
-	if _sink != null and is_instance_valid(_sink):
-		_sink.warn(message, "warning")
+	var sink = _current_sink()
+	if is_instance_valid(sink):
+		sink.warn(message, "warning")
 	if _is_suppressed(message):
 		return
 	push_warning(message)
+
+
+static func error(message: String, category := "error") -> void:
+	record_error(message, category)
+	push_error(message)
+
+
+## Record an error whose caller reports it separately in Godot's Output.
+static func record_error(message: String, category: String) -> void:
+	var sink = _current_sink()
+	if is_instance_valid(sink):
+		sink.error(message, category)
 
 
 static func begin_test_capture(suppressed_patterns: Array = []) -> void:

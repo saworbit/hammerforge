@@ -89,12 +89,12 @@ func error(message: String, category: String = "") -> void:
 ## count rather than filling the buffer — a reconcile loop that warns every
 ## frame stays readable, and stays one row.
 func append(level: int, message: String, category: String = "") -> void:
-	if muted or _appending:
-		return
 	# The bake thread pool logs, and both the entries array and the listening
 	# UI belong to the main thread. Hand the call over rather than racing.
 	if OS.get_thread_caller_id() != OS.get_main_thread_id():
 		call_deferred("append", level, message, category)
+		return
+	if muted or _appending:
 		return
 	var clamped := clampi(level, Level.DEBUG, Level.ERROR)
 	var text := message.strip_edges()
