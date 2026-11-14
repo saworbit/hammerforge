@@ -434,6 +434,7 @@ def _batch_op(name: str, params: type[BaseModel]) -> type[BaseModel]:
         __base__=_Params,
         tool=(Literal[name], ...),
         params=(params, ...),
+        escape_refs=(bool, False),
     )
 
 

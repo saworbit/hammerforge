@@ -277,11 +277,23 @@ def to_batch(calls: list[dict], *, until: int | None = None) -> list[dict]:
             flush()
             out.append({"tool": tool, "params": params})
             continue
+        if tool == "hf_batch" and "recorded_made" in call and "op_made" not in call:
+            # Compact batches have IDs for the whole payload, not for each op.
+            # Keep its original boundary and IDs so later payloads can use them.
+            flush()
+            out.append(
+                {"tool": tool, "params": params, "recorded_made": call["recorded_made"]}
+            )
+            continue
         if tool == "hf_batch":
             inner = params.get("ops") or []
             inner_made = call.get("op_made") or [[] for _ in inner]
         else:
-            inner = [{"tool": tool, "params": params}]
+            escaped = _escape_batch_literals(params)
+            op = {"tool": tool, "params": escaped}
+            if escaped != params:
+                op["escape_refs"] = True
+            inner = [op]
             inner_made = [call.get("made") or []]
         if len(ops) + len(inner) > BATCH_LIMIT:
             flush()
@@ -289,7 +301,7 @@ def to_batch(calls: list[dict], *, until: int | None = None) -> list[dict]:
         for index, op in enumerate(inner):
             shifted = _shifted(op.get("params") or {}, offset)
             op_params = _map_references(op["tool"], shifted, refs)
-            ops.append({"tool": op["tool"], "params": op_params})
+            ops.append(dict(op, params=op_params))
             op_made = inner_made[index] if index < len(inner_made) else []
             made.append(op_made)
             if op["tool"] in MADE_REF and len(op_made) == 1:
@@ -309,6 +321,17 @@ def _shifted(value: Any, offset: int) -> Any:
         return {key: _shifted(inner, offset) for key, inner in value.items()}
     if isinstance(value, list):
         return [_shifted(inner, offset) for inner in value]
+    return value
+
+
+def _escape_batch_literals(value: Any) -> Any:
+    """Keep dollar-prefixed strings from an originally unbatched call literal."""
+    if isinstance(value, str) and value.startswith("$"):
+        return "$" + value
+    if isinstance(value, dict):
+        return {key: _escape_batch_literals(inner) for key, inner in value.items()}
+    if isinstance(value, list):
+        return [_escape_batch_literals(inner) for inner in value]
     return value
 
 
