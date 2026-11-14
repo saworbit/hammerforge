@@ -209,6 +209,8 @@ def _validate_tool_call(call: dict) -> None:
         for index, op in enumerate(ops):
             if not isinstance(op, dict):
                 raise ValueError(f"params.ops[{index}] must be a call object")
+            if "escape_refs" in op and not isinstance(op["escape_refs"], bool):
+                raise ValueError(f"params.ops[{index}].escape_refs must be a boolean")
             try:
                 _validate_tool_call(op)
             except ValueError as exc:

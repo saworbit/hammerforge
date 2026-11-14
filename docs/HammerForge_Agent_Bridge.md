@@ -471,7 +471,8 @@ that match an old ID keep their literal values.
   session's level as `hf_batch` payloads of up to 100 ops, one per line, for a
   test. Refused changes, a change an undo took back and that undo, and bakes are
   left out. Within a payload, a brush an earlier op placed is named
-  `$N.brush_id`. `replay` plays this file back as well.
+  `$N.brush_id`. Exported batches preserve names and property text even when
+  they contain reference tokens. You can replay or re-export the batch file.
 
 Replay validates the recording before sending changes. Malformed calls report
 the file and line number. An input or batch output error exits with status 2.

@@ -346,6 +346,81 @@ def test_replay_to_batch_from_the_command_line_writes_lines_replay_reads(tmp_pat
     assert line["tool"] == "hf_batch"
 
 
+async def test_reexport_keeps_brush_and_entity_ids_across_compact_batches(tmp_path):
+    source, first, second = (
+        tmp_path / f"{name}.jsonl" for name in ("source", "first", "second")
+    )
+    calls = [
+        _line(0, "hf_place_brush", made=["old_brush"]),
+        _line(1, "hf_place_entity", made=["old_entity"]),
+        *(_line(n, "hf_set_spawn", {"position": [n, 0, 0]}) for n in range(2, 100)),
+        _line(100, "hf_delete_brush", {"brush_id": "old_brush"}),
+        _line(101, "hf_delete_entity", {"entity": "old_entity"}),
+    ]
+    source.write_text(
+        "".join(json.dumps(call) + "\n" for call in calls), encoding="utf-8"
+    )
+    assert server_main(["replay", str(source), "--to-batch", str(first)]) == 0
+    assert server_main(["replay", str(first), "--to-batch", str(second)]) == 0
+    assert second.read_bytes() == first.read_bytes()
+
+    placed = _answer(
+        {
+            "results": [
+                {
+                    "tool": "hf_place_brush",
+                    "result": {"brush": {"brush_id": "new_brush"}},
+                },
+                {
+                    "tool": "hf_place_entity",
+                    "result": {"entity": {"entity": "new_entity"}},
+                },
+            ]
+        }
+    )
+    bridge = ScriptedBridge(placed, _answer())
+    report = await replay(bridge, read_recording(second), here=True)
+    assert report.differences == []
+    assert [op["params"] for op in bridge.sent[1][1]["ops"]] == [
+        {"brush_id": "new_brush"},
+        {"entity": "new_entity"},
+    ]
+
+
+def test_to_batch_escapes_literal_text_and_keeps_generated_and_shifted_references():
+    calls = [
+        _line(0, "hf_place_brush", {"name": "$0.brush_id"}, made=["old_brush"]),
+        _line(
+            1,
+            "hf_set_entity_properties",
+            {"brush_id": "old_brush", "properties": {"message": "$0.brush_id"}},
+        ),
+        _line(
+            2,
+            "hf_batch",
+            {
+                "ops": [
+                    {
+                        "tool": "hf_place_brush",
+                        "params": {"name": "$$$0.brush_id"},
+                        "escape_refs": True,
+                    },
+                    {"tool": "hf_delete_brush", "params": {"brush_id": "$0.brush_id"}},
+                ]
+            },
+        ),
+    ]
+    (batch,) = to_batch(calls)
+    first, edit, third, delete = batch["params"]["ops"]
+    assert first["escape_refs"] and first["params"]["name"] == "$$0.brush_id"
+    assert edit["escape_refs"] and edit["params"] == {
+        "brush_id": "$0.brush_id",
+        "properties": {"message": "$$0.brush_id"},
+    }
+    assert third == calls[2]["params"]["ops"][0]
+    assert delete["params"]["brush_id"] == "$2.brush_id"
+
+
 async def test_replay_remaps_references_and_preserves_names_and_properties():
     ops = [
         {"tool": "hf_place_brush", "params": {"name": "brush_old"}},
