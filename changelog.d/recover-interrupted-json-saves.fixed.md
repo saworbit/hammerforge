@@ -1,1 +1,0 @@
-- Prefabs and shared settings recover the latest complete save after an interruption, like levels do. (issue [#2113](https://github.com/saworbit/hammerforge/issues/2113))
