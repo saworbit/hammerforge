@@ -1,1 +1,0 @@
-- Older levels with misaligned paint regions keep their sculpts when crossing region boundaries. New region sizes must align with paint chunks. (issue [#2099](https://github.com/saworbit/hammerforge/issues/2099))

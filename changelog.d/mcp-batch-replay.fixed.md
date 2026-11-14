@@ -1,2 +1,0 @@
-- Re-exporting an MCP batch keeps the brush and entity references used in later batches. (issue [#2100](https://github.com/saworbit/hammerforge/issues/2100))
-- Exported MCP batches keep names and property text that look like batch references. (issue [#2101](https://github.com/saworbit/hammerforge/issues/2101))
