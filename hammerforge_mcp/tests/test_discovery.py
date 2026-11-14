@@ -72,6 +72,18 @@ def test_pid_alive():
     assert not pid_alive(0)
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows process handles")
+def test_windows_pid_check_tracks_the_same_child_until_it_exits():
+    with subprocess.Popen(
+        [sys.executable, "-c", "import sys; sys.stdin.read()"],
+        stdin=subprocess.PIPE,
+    ) as child:
+        assert pid_alive(child.pid)
+        child.communicate(timeout=10)
+        assert child.returncode == 0
+        assert not pid_alive(child.pid)
+
+
 def test_the_token_is_not_in_repr(tmp_path):
     project = make_project(tmp_path)
     write_discovery(project, 4321)

@@ -1,0 +1,3 @@
+# The MCP suite also runs on the server's minimum supported Python.
+mcp==2.3.0
+pytest==9.2.0
