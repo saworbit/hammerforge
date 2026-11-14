@@ -64,6 +64,22 @@ func test_each_end_is_attached_to_the_corner_it_lies_on():
 	assert_almost_eq(HFDimensions.measure(root, dimension)["length"], 1.5, 0.0001)
 
 
+func test_solid_replacements_keep_dimensions_on_surviving_corners(
+	operation = use_parameters(["merge", "intersect", "hull"])
+):
+	_box("first", Vector3(0, 1, 0), Vector3(2, 2, 2))
+	var second_x := 0.5 if operation == "intersect" else 2.0
+	_box("second", Vector3(second_x, 1, 0), Vector3(2, 2, 2))
+	var corner := Vector3(1, 0, 1) if operation == "intersect" else Vector3(-1, 0, 1)
+	var dimension := HFPluginDimensions.keep(root, corner, corner + Vector3.UP * 2, undo)
+	assert_false(HFDimensions.measure(root, dimension)["detached"], "fixture: attached")
+	var result: HFOpResult = root.call(operation + "_brushes_by_ids", ["first", "second"])
+	assert_true(result.ok, result.message)
+	var measured := HFDimensions.measure(root, dimension)
+	assert_false(measured["detached"], "the replacement still has this corner")
+	assert_almost_eq(measured["a"], corner, Vector3.ONE * 0.0001)
+
+
 func test_a_kept_dimension_saves_with_the_level_and_comes_back():
 	_doorway(1.5)
 	assert_eq(root.save_hflevel(LEVEL, true), OK)

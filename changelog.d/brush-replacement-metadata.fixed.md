@@ -1,0 +1,1 @@
+- Carve refits linked textures, and Merge, Intersect and Hull keep dimension ends attached to surviving features. (issue [#2111](https://github.com/saworbit/hammerforge/issues/2111))

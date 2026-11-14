@@ -51,7 +51,7 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 
 	root.tag_full_reconcile()
 	var cuts: Array = plan["cuts"]
-	var total_pieces := 0
+	var made: Array = []
 	var hidden := hidden_overlaps(brush_id)
 	var locked := locked_overlaps(brush_id)
 
@@ -67,25 +67,13 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 		# the target for its material, visgroups, group and brush entity.
 		var infos: Array = root.brush_system._piece_infos_from_faces(target_draft, pieces)
 
-		# The pieces are made before the target is deleted, as Merge makes its
-		# brush. Deleting a group's last brush dropped the group, and every wire
-		# aimed at its entity, so pieces made after lost both (#1975). A target
-		# that gave no pieces stays where it was.
-		var made: Array = []
-		for info in infos:
-			var piece = root.brush_system.create_brush_from_info(info)
-			if piece:
-				made.append(piece)
-		if not made.is_empty():
-			# A dimension's end goes to the piece that keeps its corner (#2003).
-			HFDimensions.carry_to_pieces(root, target_draft, made)
-			root.brush_system.delete_brush_by_id(target_id)
-		total_pieces += made.size()
+		made.append_array(root.brush_system.replace_with_made([target_draft], infos, false))
 
 	# Delete the carver brush
 	root.brush_system.delete_brush_by_id(brush_id)
+	root.brush_system.refit_texture_groups(made)
 
-	var msg := "Carve: carved %d brush(es), created %d pieces" % [cuts.size(), total_pieces]
+	var msg := "Carve: carved %d brush(es), created %d pieces" % [cuts.size(), made.size()]
 	if hidden > 0:
 		msg += ", left %d hidden brush(es) alone" % hidden
 	if locked > 0:
@@ -354,10 +342,8 @@ func intersect_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	if as_slots:
 		info.erase("material")
 	root.tag_full_reconcile()
-	if root.brush_system.create_brush_from_info(info) == null:
+	if root.brush_system.replace_with_made(drafts, [info]).is_empty():
 		return _op_fail("Intersect: produced no geometry")
-	for draft in drafts:
-		root.brush_system.delete_brush(draft)
 
 	var msg := "Intersect: kept the volume %d brushes share" % drafts.size()
 	root._log(msg)
@@ -595,10 +581,8 @@ func hull_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	if as_slots:
 		info.erase("material")
 	root.tag_full_reconcile()
-	if root.brush_system.create_brush_from_info(info) == null:
+	if root.brush_system.replace_with_made(drafts, [info]).is_empty():
 		return _op_fail("Hull: produced no geometry")
-	for draft in drafts:
-		root.brush_system.delete_brush(draft)
 	var msg := "Hull: wrapped %d brushes in one" % drafts.size()
 	if lost > 0:
 		msg += ", and %d sculpt%s could not follow" % [lost, "" if lost == 1 else "s"]
