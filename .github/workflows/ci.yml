@@ -381,16 +381,12 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-godot # zizmor: ignore[self-repository] actionlint 1.7.12 cannot parse $/
-        id: godot
 
       - name: Import project
-        env:
-          GODOT: ${{ steps.godot.outputs.executable }}
-        run: '"$GODOT" --headless --import --path . 2>&1'
+        run: godot --headless --import --path . 2>&1
 
       - name: Run this shard of the suite
         env:
-          GODOT: ${{ steps.godot.outputs.executable }}
           SHARD: ${{ matrix.shard }}
         run: |
           set -o pipefail
@@ -401,7 +397,7 @@ jobs:
           # suite, four times the work, and nothing anywhere saying so. The two
           # hooks are what the config would have named: the run's own clipboard
           # and prefab folder, which test_run_scratch.gd checks for.
-          "$GODOT" --headless -s res://addons/gut/gut_cmdln.gd --path . \
+          godot --headless -s res://addons/gut/gut_cmdln.gd --path . \
             -gconfig= -gexit -glog=1 -gjunit_xml_file="$PWD/gut-shard-${SHARD}.xml" \
             -gpre_run_script=res://tests/support/gut_pre_run.gd \
             -gpost_run_script=res://tests/support/gut_post_run.gd \
@@ -450,9 +446,7 @@ jobs:
 
       - name: Run the MCP bridge smoke test
         if: matrix.shard == 1
-        env:
-          GODOT: ${{ steps.godot.outputs.executable }}
-        run: python3 tools/mcp_bridge_smoke.py --godot "$GODOT"
+        run: python3 tools/mcp_bridge_smoke.py --godot godot
 
       # The MCP vibe sweep's headless scenarios, against the real editor and the
       # real server. A change to a tool's arguments or answers that breaks one
@@ -461,9 +455,7 @@ jobs:
       # finding or a scenario that cannot run fails (#1054). About a minute.
       - name: Run the MCP vibe sweep
         if: matrix.shard == 1
-        env:
-          GODOT: ${{ steps.godot.outputs.executable }}
-        run: python3 tools/vibe/mcp/run_mcp_vibe.py --godot "$GODOT"
+        run: python3 tools/vibe/mcp/run_mcp_vibe.py --godot godot
 
       # The five vibe scenarios that cover what a pull request most often
       # changes: a Validate check, a Controls switch kept in the preferences, a
@@ -475,8 +467,6 @@ jobs:
       # runs.
       - name: Run the quick vibe scenarios
         if: matrix.shard == 2
-        env:
-          GODOT: ${{ steps.godot.outputs.executable }}
         run: >-
           python3 tools/vibe/run_vibe.py --log-dir vibe-logs
           validate-own-output examples-integrity reference-map console-controls docs-truth

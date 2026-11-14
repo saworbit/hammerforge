@@ -47,19 +47,14 @@ jobs:
       # The same download as ci.yml's shards, retries and all: see the reasons
       # written beside it there.
       - uses: ./.github/actions/setup-godot # zizmor: ignore[self-repository] actionlint 1.7.12 cannot parse $/
-        id: godot
 
       - name: Import project
-        env:
-          GODOT: ${{ steps.godot.outputs.executable }}
-        run: '"$GODOT" --headless --import --path . 2>&1'
+        run: godot --headless --import --path . 2>&1
 
       # Exits 1 when a scenario flags something new, times out or cannot run. A
       # scenario that only reproduces a defect already filed, with its number,
       # stays quiet, as it does by hand.
       - name: Run every vibe scenario
-        env:
-          GODOT: ${{ steps.godot.outputs.executable }}
         run: python3 tools/vibe/run_vibe.py --log-dir vibe-logs
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -79,21 +74,16 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-godot # zizmor: ignore[self-repository] actionlint 1.7.12 cannot parse $/
-        id: godot
 
       - name: Import project
-        env:
-          GODOT: ${{ steps.godot.outputs.executable }}
-        run: '"$GODOT" --headless --import --path . 2>&1'
+        run: godot --headless --import --path . 2>&1
 
       # -gconfig= for the reason ci.yml gives: with .gutconfig.json in play the
       # whole suite would be collected on top of this folder.
       - name: Run tests/nightly
-        env:
-          GODOT: ${{ steps.godot.outputs.executable }}
         run: |
           set -o pipefail
-          "$GODOT" --headless -s res://addons/gut/gut_cmdln.gd --path . \
+          godot --headless -s res://addons/gut/gut_cmdln.gd --path . \
             -gconfig= -gexit -glog=1 -gdir=res://tests/nightly -gprefix=test_ -gsuffix=.gd \
             -gpre_run_script=res://tests/support/gut_pre_run.gd \
             -gpost_run_script=res://tests/support/gut_post_run.gd \
@@ -122,22 +112,18 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-godot # zizmor: ignore[self-repository] actionlint 1.7.12 cannot parse $/
-        id: godot
 
       - name: Import project
-        env:
-          GODOT: ${{ steps.godot.outputs.executable }}
-        run: '"$GODOT" --headless --import --path . 2>&1'
+        run: godot --headless --import --path . 2>&1
 
       # -gconfig= for the reason ci.yml gives: with .gutconfig.json in play the
       # whole suite would be collected on top of this folder.
       - name: Run tests/nightly_matrix
         env:
-          GODOT: ${{ steps.godot.outputs.executable }}
           HF_MATRIX_SHARD: ${{ matrix.shard }}/4
         run: |
           set -o pipefail
-          "$GODOT" --headless -s res://addons/gut/gut_cmdln.gd --path . \
+          godot --headless -s res://addons/gut/gut_cmdln.gd --path . \
             -gconfig= -gexit -glog=1 -gdir=res://tests/nightly_matrix -gprefix=test_ -gsuffix=.gd \
             -gpre_run_script=res://tests/support/gut_pre_run.gd \
             -gpost_run_script=res://tests/support/gut_post_run.gd \

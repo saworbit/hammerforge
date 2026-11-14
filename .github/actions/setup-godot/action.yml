@@ -3,14 +3,13 @@ description: Install the pinned Godot editor from a verified release archive.
 
 outputs:
   executable:
-    description: Absolute path to the Godot console executable.
-    value: ${{ steps.linux.outputs.executable || steps.windows.outputs.executable }}
+    description: Absolute path to the Windows Godot console executable.
+    value: ${{ steps.windows.outputs.executable }}
 
 runs:
   using: composite
   steps:
     - name: Install Godot on Linux
-      id: linux
       if: runner.os == 'Linux'
       shell: bash
       env:
@@ -25,9 +24,7 @@ runs:
           "https://github.com/godotengine/godot/releases/download/$GODOT_VERSION/$asset.zip"
         printf '%s  %s\n' "$GODOT_SHA256" "$archive" | sha256sum --check
         unzip -q "$archive" -d "$dir"
-        mv "$dir/$asset" "$dir/godot"
-        chmod +x "$dir/godot"
-        printf 'executable=%s\n' "$dir/godot" >> "$GITHUB_OUTPUT"
+        install -m 0755 "$dir/$asset" /usr/local/bin/godot
 
     - name: Install Godot on Windows
       id: windows
