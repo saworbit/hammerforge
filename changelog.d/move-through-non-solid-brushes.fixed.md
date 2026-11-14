@@ -1,1 +1,0 @@
-- Move to Floor and Move to Ceiling pass through illusionary brushes and stop at solid surfaces. (issue [#2112](https://github.com/saworbit/hammerforge/issues/2112))

@@ -49,6 +49,10 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Fixed
 
+- **14 Nov** Carve refits linked textures, and Merge, Intersect and Hull keep dimension ends attached to surviving features. (issue [#2111](https://github.com/saworbit/hammerforge/issues/2111), PR [#2118](https://github.com/saworbit/hammerforge/pull/2118))
+- **14 Nov** Prefabs and shared settings recover the latest complete save after an interruption, like levels do. (issue [#2113](https://github.com/saworbit/hammerforge/issues/2113), PR [#2117](https://github.com/saworbit/hammerforge/pull/2117))
+- **14 Nov** Floor paint loads the regions a stroke reaches so new cells and erases survive saving, streaming and undo. (issue [#2110](https://github.com/saworbit/hammerforge/issues/2110), PR [#2116](https://github.com/saworbit/hammerforge/pull/2116))
+- **14 Nov** Move to Floor and Move to Ceiling pass through illusionary brushes and stop at solid surfaces. (issue [#2112](https://github.com/saworbit/hammerforge/issues/2112), PR [#2115](https://github.com/saworbit/hammerforge/pull/2115))
 - **14 Nov** Older levels with misaligned paint regions keep their sculpts when crossing region boundaries. New region sizes must align with paint chunks. (issue [#2099](https://github.com/saworbit/hammerforge/issues/2099), PR [#2105](https://github.com/saworbit/hammerforge/pull/2105))
 - **14 Nov** Re-exporting an MCP batch keeps the brush and entity references used in later batches. (issue [#2100](https://github.com/saworbit/hammerforge/issues/2100), PR [#2104](https://github.com/saworbit/hammerforge/pull/2104))
 - **14 Nov** Exported MCP batches keep names and property text that look like batch references. (issue [#2101](https://github.com/saworbit/hammerforge/issues/2101), PR [#2104](https://github.com/saworbit/hammerforge/pull/2104))
