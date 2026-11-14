@@ -161,6 +161,19 @@ func test_a_cut_or_a_trigger_does_not_stop_the_drop():
 	assert_almost_eq(_bottom(over_trigger), 0.0, 0.001, "through the trigger to the floor")
 
 
+func test_floor_and_ceiling_moves_pass_through_an_illusionary_brush():
+	_box(Vector3(20, 1, 20), Vector3(0, -0.5, 0))
+	_box(Vector3(20, 1, 20), Vector3(0, 10.5, 0))
+	var illusion := _box(Vector3(8, 1, 8), Vector3(0, 4.5, 0))
+	illusion.set_meta(HFBrushEntity.CLASS_META, "func_illusionary")
+	var box := _box(Vector3.ONE, Vector3(0, 7, 0))
+	root.move_brushes_to_floor([_id(box)])
+	assert_almost_eq(_bottom(box), 0.0, 0.001, "through the illusion to the floor")
+	box.position.y = 2.0
+	root.move_brushes_to_ceiling([_id(box)])
+	assert_almost_eq(_top(box), 10.0, 0.001, "through the illusion to the ceiling")
+
+
 func test_a_brush_beside_another_drops_past_its_edge():
 	# Flush against the side of a step: the two only meet along a line seen from
 	# above, so the box goes down past the step's edge to the floor. The same for
