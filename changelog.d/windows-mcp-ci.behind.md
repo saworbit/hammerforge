@@ -1,1 +1,0 @@
-- CI checks the MCP server on Windows and Python 3.10, including PowerShell setup, editor PID checks and token folder permissions. (issue [#2108](https://github.com/saworbit/hammerforge/issues/2108))

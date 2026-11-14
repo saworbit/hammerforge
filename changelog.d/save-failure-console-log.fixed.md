@@ -1,1 +1,0 @@
-- Save, autosave and streamed paint write failures stay in the Console log and appear in problem reports. (issue [#2106](https://github.com/saworbit/hammerforge/issues/2106))
