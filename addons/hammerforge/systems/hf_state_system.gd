@@ -1443,7 +1443,9 @@ func restore_sun_info(info: Dictionary) -> void:
 	sun.light_energy = info.get("light_energy", 1.0)
 
 
-func capture_paint_layers(include_chunks: bool = true, include_sculpts := true) -> Array:
+func capture_paint_layers(
+	include_chunks: bool = true, include_sculpts := true, bounds := Rect2i()
+) -> Array:
 	var out: Array = []
 	if not root.paint_layers:
 		return out
@@ -1468,7 +1470,12 @@ func capture_paint_layers(include_chunks: bool = true, include_sculpts := true) 
 		entry["terrain_slot_paths"] = layer.terrain_slot_paths.duplicate()
 		entry["terrain_slot_uv_scales"] = layer.terrain_slot_uv_scales.duplicate()
 		entry["terrain_slot_tints"] = layer.terrain_slot_tints.duplicate()
-		entry["wall_heights"] = layer.get_wall_height_entries()
+		var wall_heights: Array = layer.get_wall_height_entries()
+		if bounds.has_area():
+			wall_heights = wall_heights.filter(
+				func(wall): return bounds.has_point(layer._cell_to_chunk(Vector2i(wall.x, wall.y)))
+			)
+		entry["wall_heights"] = wall_heights
 		# Every layer's, not only one with a heightmap. Set before an import, it
 		# went back to 10 at the next undo or reopen, and the import took 10 (#2030).
 		entry["height_scale"] = layer.height_scale
@@ -1484,12 +1491,16 @@ func capture_paint_layers(include_chunks: bool = true, include_sculpts := true) 
 		var sculpts: Array = []
 		if include_sculpts:
 			for cid in layer.get_height_chunk_ids():
+				if bounds.has_area() and not bounds.has_point(cid):
+					continue
 				var heights := HFHeightmapIO.encode_to_base64(layer.get_height_chunk(cid))
 				sculpts.append({"cx": cid.x, "cy": cid.y, "heights": heights})
 		if not sculpts.is_empty():
 			entry["height_chunks"] = sculpts
 		if include_chunks:
 			for cid in layer.get_chunk_ids():
+				if bounds.has_area() and not bounds.has_point(cid):
+					continue
 				# An all-zero chunk describes nothing. Serializing one writes its
 				# bits, material ids and three blend weight arrays into every save
 				# and every undo snapshot for paint that is not there. set_cell()

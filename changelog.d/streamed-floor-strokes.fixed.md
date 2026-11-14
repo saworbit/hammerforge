@@ -1,0 +1,1 @@
+- Floor paint loads the regions a stroke reaches so new cells and erases survive saving, streaming and undo. (issue [#2110](https://github.com/saworbit/hammerforge/issues/2110))
