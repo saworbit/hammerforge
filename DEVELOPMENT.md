@@ -719,6 +719,10 @@ gh run download <run id> --pattern 'gut-shard-*' --dir shard-logs
 python tools/shard_tests.py --durations-from shard-logs/*/gut-shard-*.xml
 ```
 When a shard fails, the `GUT Unit Tests` summary names the failing tests.
+The same merge check requires the MCP Python jobs on Linux and Windows and the
+Godot listener tests on Windows. The Python matrix includes the supported 3.10
+minimum. The Windows tests exercise PowerShell setup, process checks, and the
+listener's token directory permissions.
 
 The same job fails when GUT ends a run with orphans or warnings, and names
 the script and test (#923). One warning is only annotated: "Test script has
