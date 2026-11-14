@@ -20,6 +20,7 @@ const HFSettingsFile = preload("res://addons/hammerforge/hf_settings_file.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFDimensions = preload("res://addons/hammerforge/hf_dimensions.gd")
 const HFFormatRecord = preload("res://addons/hammerforge/hf_format_record.gd")
+const HFTranslationType = preload("res://addons/hammerforge/hf_translation.gd")
 
 ## The record key that says which piece of the prefab a record is, so a placed
 ## copy pairs each of its pieces with the record it was placed from through a
@@ -304,9 +305,11 @@ func instantiate(
 	if b_infos.is_empty() and e_infos.is_empty():
 		return result
 	if format_refusal != "" and root.has_signal("user_message"):
-		root.user_message.emit(
-			"Prefab '%s' %s. Some settings may be missing." % [prefab_name, format_refusal], 1
+		var message := HFTranslationType.message(
+			"Prefab '{name}' {reason}. Some settings may be missing.",
+			{"name": prefab_name, "reason": format_refusal}
 		)
+		root.user_message.emit(message, 1)
 
 	# Batch signals to avoid flooding
 	if root.has_method("begin_signal_batch"):

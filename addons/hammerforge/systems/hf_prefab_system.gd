@@ -1057,7 +1057,13 @@ func push_instance_to_source(instance_id: String) -> bool:
 		return false
 	var prefab = HFPrefabType.load_from_file(rec.source_path)
 	if prefab and prefab.format_refusal != "":
-		_report("Cannot push to %s: the prefab %s." % [rec.source_path, prefab.format_refusal], 2)
+		_report(
+			HFTranslationType.message(
+				"Cannot push to {file}: the prefab {reason}.",
+				{"file": rec.source_path, "reason": prefab.format_refusal}
+			),
+			2
+		)
 		return false
 	if not prefab:
 		prefab = HFPrefabType.new()
