@@ -19,6 +19,7 @@ const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
 const HFSettingsFile = preload("res://addons/hammerforge/hf_settings_file.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFDimensions = preload("res://addons/hammerforge/hf_dimensions.gd")
+const HFFormatRecord = preload("res://addons/hammerforge/hf_format_record.gd")
 
 ## The record key that says which piece of the prefab a record is, so a placed
 ## copy pairs each of its pieces with the record it was placed from through a
@@ -30,6 +31,7 @@ const PIECE := "prefab_piece"
 var prefab_name: String = ""
 var brush_infos: Array = []  # Array[Dictionary]  — from get_brush_info_from_node()
 var entity_infos: Array = []  # Array[Dictionary] — from capture_entity_info()
+var format_refusal: String = ""
 
 # Variants — keyed by variant name.  Each value is {brush_infos, entity_infos}.
 # "base" always mirrors the top-level brush_infos/entity_infos.
@@ -301,6 +303,10 @@ func instantiate(
 
 	if b_infos.is_empty() and e_infos.is_empty():
 		return result
+	if format_refusal != "" and root.has_signal("user_message"):
+		root.user_message.emit(
+			"Prefab '%s' %s. Some settings may be missing." % [prefab_name, format_refusal], 1
+		)
 
 	# Batch signals to avoid flooding
 	if root.has_method("begin_signal_batch"):
@@ -629,6 +635,8 @@ func add_variant_from_selection(
 ## Serialize to a dictionary suitable for JSON storage.
 func to_dict() -> Dictionary:
 	var data := {
+		"version": HFLevelIO.FORMAT_VERSION,
+		"format_pending": Array(HFFormatRecord.pending_names()),
 		"prefab_name": prefab_name,
 		"brush_infos": HFLevelIO.encode_variant(brush_infos),
 		"entity_infos": HFLevelIO.encode_variant(entity_infos),
@@ -720,6 +728,7 @@ static func _dictionary_entries(raw, what: String) -> Array:
 
 static func from_dict(data: Dictionary) -> HFPrefab:
 	var prefab = HFPrefab.new()
+	prefab.format_refusal = _format_refusal(data)
 	prefab.prefab_name = str(data.get("prefab_name", ""))
 	var raw_brushes = HFLevelIO.decode_variant(data.get("brush_infos", []))
 	var raw_entities = HFLevelIO.decode_variant(data.get("entity_infos", []))
@@ -772,11 +781,31 @@ static func from_dict(data: Dictionary) -> HFPrefab:
 ## Save prefab to a .hfprefab JSON file, whole: a save cut short leaves the old
 ## file, as the settings files do, not an empty one every linked copy reads (#1758).
 func save_to_file(path: String) -> int:
+	var refusal := format_refusal if format_refusal != "" else destination_format_refusal(path)
+	if refusal != "":
+		HFLog.warn("HFPrefab: cannot save %s because the prefab %s" % [path, refusal])
+		return ERR_UNAVAILABLE
 	var json_text := JSON.stringify(to_dict(), "\t")
 	var err := HFSettingsFile.write_text(path, json_text)
 	if err == OK:
 		_remember_session_materials(path, json_text)
 	return err
+
+
+static func destination_format_refusal(path: String) -> String:
+	var source := HFSettingsFile.readable_path(path, _holds_prefab)
+	if source == "":
+		return ""
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(source)) != OK or not (json.data is Dictionary):
+		return ""
+	return _format_refusal(json.data)
+
+
+static func _format_refusal(data: Dictionary) -> String:
+	return HFFormatRecord.refusal(
+		data.get("version", 0), data.get("format_pending"), HFLevelIO.FORMAT_VERSION
+	)
 
 
 func _remember_session_materials(path: String, text: String) -> void:

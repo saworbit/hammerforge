@@ -1,5 +1,7 @@
 extends GutTest
 
+const HFFormatRecord = preload("res://addons/hammerforge/hf_format_record.gd")
+
 ## Copy and paste (#703).
 ##
 ## `hf_keymap.gd` bound `duplicate` to Ctrl+D and nothing to Ctrl+C or Ctrl+V,
@@ -93,6 +95,9 @@ func test_copying_a_selection_fills_the_clipboard():
 	var held = root.prefab_system.clipboard_contents()
 	assert_not_null(held)
 	assert_eq(held.brush_infos.size(), 3, "all three went on it")
+	var data = JSON.parse_string(FileAccess.get_file_as_string(HFPrefabSystemType.clipboard_path))
+	assert_eq(int(data.get("version", -1)), HFLevelIO.FORMAT_VERSION)
+	assert_eq(PackedStringArray(data.get("format_pending", [])), HFFormatRecord.pending_names())
 
 
 func test_copying_changes_nothing_in_the_level():

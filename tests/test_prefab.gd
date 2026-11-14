@@ -509,6 +509,30 @@ func test_a_pushed_copy_and_the_copies_it_propagates_to_keep_their_names():
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
+func test_a_newer_prefab_can_be_placed_but_cannot_be_written_back():
+	var level := _a_level()
+	var path := "user://hf_test_prefab_newer.hfprefab"
+	var prefab := _gate_prefab(level, path)
+	var data := prefab.to_dict()
+	data["version"] = HFLevelIO.FORMAT_VERSION + 1
+	data["brush_infos"][0]["future_brush_setting"] = "keep on disk"
+	var original := JSON.stringify(data)
+	assert_eq(HFSettingsFile.write_text(path, original), OK)
+	var newer := HFPrefabType.load_from_file(path)
+	assert_not_null(newer)
+	if newer:
+		var messages: Array[String] = []
+		level.user_message.connect(func(message, _severity): messages.append(message))
+		var instance := _register(level, newer, path, Vector3(10, 0, 0))
+		assert_false(instance.is_empty(), "placement still works")
+		assert_true(messages.any(func(message): return message.contains("newer build")))
+		assert_false(level.prefab_system.push_instance_to_source(instance))
+		assert_eq(newer.save_to_file(path), ERR_UNAVAILABLE)
+	assert_eq(prefab.save_to_file(path), ERR_UNAVAILABLE, "fresh capture cannot overwrite")
+	assert_eq(FileAccess.get_file_as_string(path), original)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
 func test_a_name_a_variant_adds_takes_a_free_one():
 	var level := _a_level()
 	var path := "user://hf_test_prefab_variant_adds_a_name.hfprefab"

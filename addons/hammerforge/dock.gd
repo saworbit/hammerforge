@@ -3938,7 +3938,9 @@ func _on_prefab_variant_remove_requested(prefab_path: String, variant_name: Stri
 	if not prefab.remove_variant(variant_name):
 		show_toast('"%s" is not a variant that can be removed' % variant_name, 2)
 		return
-	prefab.save_to_file(prefab_path)
+	if prefab.save_to_file(prefab_path) != OK:
+		show_toast("Cannot save prefab %s" % prefab_path.get_file(), 2)
+		return
 	if _prefab_library:
 		_prefab_library.on_prefab_saved()
 	show_toast('Removed variant "%s"' % variant_name, 0)
@@ -3962,7 +3964,9 @@ func _on_prefab_variant_add_requested(prefab_path: String, variant_name: String)
 		split["brushes"],
 		split["entities"]
 	)
-	prefab.save_to_file(prefab_path)
+	if prefab.save_to_file(prefab_path) != OK:
+		show_toast("Cannot save prefab %s" % prefab_path.get_file(), 2)
+		return
 	if _prefab_library:
 		_prefab_library.on_prefab_saved()
 

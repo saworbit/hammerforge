@@ -421,8 +421,10 @@ func _show_tags_dialog(prefab_path: String) -> void:
 				var t: String = part.strip_edges().to_lower()
 				if t != "":
 					new_tags.append(t)
+			var old_tags: PackedStringArray = prefab.tags
 			prefab.tags = new_tags
-			prefab.save_to_file(prefab_path)
+			if prefab.save_to_file(prefab_path) != OK:
+				prefab.tags = old_tags
 			refresh()
 			dialog.queue_free()
 	)
