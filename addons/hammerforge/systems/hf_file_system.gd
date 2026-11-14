@@ -154,7 +154,7 @@ func _write_hflevel(target: String, force: bool, autosave: bool) -> int:
 			# The index would claim region data that is missing or stale, and the
 			# level write would still report success. Stop here instead.
 			var message := str(regions.get("error", "region write failed"))
-			push_error("HFLevel: %s" % message)
+			HFLog.error("HFLevel: %s" % message, "autosave" if autosave else "save")
 			# Report it as the kind of save it actually was, the way the worker
 			# results are reported in _process_hflevel_saves.
 			if autosave:
@@ -879,7 +879,7 @@ func _hflevel_thread_encode_and_write(job: Dictionary) -> Dictionary:
 	var err := HFLevelIO.write_bytes_atomic(path, payload)
 	if err != OK:
 		var msg := "HFLevel: Failed to write file: %s (error: %d)" % [path, err]
-		push_error(msg)
+		HFLog.error(msg, "autosave" if autosave else "save")
 		return {
 			"error": msg,
 			"hash": hash_value,
@@ -929,7 +929,7 @@ func _write_autosave_rotation(
 		attempt += 1
 	var hist_err := HFLevelIO.write_bytes_atomic(history_path, payload)
 	if hist_err != OK:
-		push_warning("HFLevel: Failed to write autosave history file: %s" % history_path)
+		HFLog.error("HFLevel: Failed to write autosave history file: %s" % history_path, "autosave")
 		return
 	_prune_autosave_history(history_dir, keep, base_name)
 

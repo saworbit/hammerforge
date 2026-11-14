@@ -490,12 +490,19 @@ static func write_bytes_atomic(path: String, payload: PackedByteArray) -> int:
 	var tmp_path := path + ".writing"
 	var file = FileAccess.open(tmp_path, FileAccess.WRITE)
 	if not file:
+		HFLog.record_error(
+			(
+				"HFLevelIO: could not open %s for writing (%s)"
+				% [tmp_path, error_string(FileAccess.get_open_error())]
+			),
+			"save"
+		)
 		return ERR_CANT_OPEN
 	file.store_buffer(payload)
 	var err = file.get_error()
 	file.close()
 	if err != OK:
-		push_error("HFLevelIO: store_buffer failed for %s (error: %d)" % [tmp_path, err])
+		HFLog.error("HFLevelIO: store_buffer failed for %s (error: %d)" % [tmp_path, err], "save")
 		DirAccess.remove_absolute(tmp_path)
 		return err
 	return _replace_file_atomic(path, tmp_path)
@@ -511,7 +518,9 @@ static func _replace_file_atomic(path: String, tmp_path: String) -> int:
 		else:
 			var first_rename := DirAccess.rename_absolute(tmp_path, path)
 			if first_rename != OK:
-				push_error("HFLevelIO: rename failed for %s (error: %d)" % [path, first_rename])
+				HFLog.error(
+					"HFLevelIO: rename failed for %s (error: %d)" % [path, first_rename], "save"
+				)
 				DirAccess.remove_absolute(tmp_path)
 			return first_rename
 	if FileAccess.file_exists(backup_path):
@@ -520,7 +529,7 @@ static func _replace_file_atomic(path: String, tmp_path: String) -> int:
 			return stale_err
 	var backup_err := DirAccess.copy_absolute(path, backup_path)
 	if backup_err != OK:
-		push_error("HFLevelIO: backup failed for %s (error: %d)" % [path, backup_err])
+		HFLog.error("HFLevelIO: backup failed for %s (error: %d)" % [path, backup_err], "save")
 		DirAccess.remove_absolute(tmp_path)
 		return backup_err
 	var remove_err := DirAccess.remove_absolute(path)
@@ -530,14 +539,15 @@ static func _replace_file_atomic(path: String, tmp_path: String) -> int:
 		return remove_err
 	var renamed := DirAccess.rename_absolute(tmp_path, path)
 	if renamed != OK:
-		push_error("HFLevelIO: rename failed for %s (error: %d)" % [path, renamed])
+		HFLog.error("HFLevelIO: rename failed for %s (error: %d)" % [path, renamed], "save")
 		var restore_err := DirAccess.rename_absolute(backup_path, path)
 		if restore_err != OK:
-			push_error(
+			HFLog.error(
 				(
 					"HFLevelIO: restore failed for %s; previous file remains at %s (error: %d)"
 					% [path, backup_path, restore_err]
-				)
+				),
+				"save"
 			)
 		DirAccess.remove_absolute(tmp_path)
 		return renamed
@@ -577,7 +587,7 @@ static func recover_cut_short(path: String, is_whole: Callable) -> String:
 	var source := writing if FileAccess.file_exists(writing) and is_whole.call(writing) else backup
 	var err := DirAccess.rename_absolute(source, path)
 	if err != OK:
-		push_error("HFLevelIO: recovery failed for %s (error: %d)" % [path, err])
+		HFLog.error("HFLevelIO: recovery failed for %s (error: %d)" % [path, err], "save")
 		return source
 	if source == writing:
 		DirAccess.remove_absolute(backup)
