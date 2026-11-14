@@ -269,25 +269,8 @@ func read_hflevel(path: String) -> Dictionary:
 	# and a file this build cannot read correctly must not cost the open one. A
 	# missing or zero version is an older file and still loads: every key defaults,
 	# which is the direction that has always been safe.
-	var value: Variant = decoded.get("version", 0)
-	# JSON numbers arrive as floats. Check their range before converting to int.
-	if not (
-		(value is int and value >= 0)
-		or (
-			value is float
-			and value >= 0.0
-			and value < 9223372036854775808.0
-			and value == floorf(value)
-		)
-	):
-		return {
-			"ok": false,
-			"error":
-			"%s has an invalid version. Expected a nonnegative whole number." % path.get_file(),
-		}
-	var version := int(value)
 	var refusal := HFFormatRecord.refusal(
-		version, decoded.get("format_pending"), HFLevelIO.FORMAT_VERSION
+		decoded.get("version", 0), decoded.get("format_pending"), HFLevelIO.FORMAT_VERSION
 	)
 	if refusal != "":
 		return {"ok": false, "error": "%s %s" % [path.get_file(), refusal]}

@@ -7,6 +7,7 @@ extends GutTest
 
 const HFFormatRecord = preload("res://addons/hammerforge/hf_format_record.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
+const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 const FullLevel = preload("res://tests/support/full_feature_level.gd")
 const DockScene = preload("res://addons/hammerforge/dock.tscn")
 
@@ -96,6 +97,32 @@ func test_a_file_this_build_writes_names_its_fragments():
 	var bundle: Dictionary = _level().state_system.capture_hflevel_payload()
 	assert_eq(int(bundle["version"]), HFLevelIO.FORMAT_VERSION)
 	assert_eq(PackedStringArray(bundle["format_pending"]), HFFormatRecord.pending_names())
+
+
+func test_prefab_round_trip_keeps_brush_format_keys_and_uses_the_same_stamp():
+	var level := _level()
+	await FullLevel.fill(level, get_tree())
+	var brushes: Array = level.get_all_draft_brushes()
+	var prefab := HFPrefabType.capture_from_selection(
+		level.brush_system, level.entity_system, brushes, []
+	)
+	var data := prefab.to_dict()
+	assert_eq(data["version"], HFLevelIO.FORMAT_VERSION)
+	assert_eq(PackedStringArray(data["format_pending"]), HFFormatRecord.pending_names())
+	assert_false(data["brush_infos"].is_empty())
+	var round_trip := HFPrefabType.from_dict(JSON.parse_string(JSON.stringify(data)))
+	var before := HFFormatRecord.census({"state": {"brushes": data["brush_infos"]}})
+	var after := HFFormatRecord.census({"state": {"brushes": round_trip.to_dict()["brush_infos"]}})
+	assert_eq(after, before, "captured brush and face fields survive the prefab file")
+	assert_eq(_unknown(before), [], "the same format record covers prefab brush fields")
+	data.erase("version")
+	data.erase("format_pending")
+	assert_eq(HFPrefabType.from_dict(data).format_refusal, "", "legacy prefab")
+	data["version"] = HFLevelIO.FORMAT_VERSION
+	data["format_pending"] = ["9999-other-branch"]
+	assert_string_contains(HFPrefabType.from_dict(data).format_refusal, "9999-other-branch")
+	data["version"] = "invalid"
+	assert_string_contains(HFPrefabType.from_dict(data).format_refusal, "invalid version")
 
 
 func _write(version: int, names: Array) -> void:

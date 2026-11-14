@@ -260,6 +260,7 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - Data encoding uses the same `HFLevelIO.encode_variant()` / `decode_variant()` pipeline as `.hflevel` (handles Vector3, Transform3D, Basis, etc.).
 - Prefab files are saved to `res://prefabs/` by default. The directory is created automatically on first save.
 - A prefab is written whole, as a level is: to a `.writing` file first, with the old one kept as `.previous` until the new one is in place. When the destination is missing after an interruption, prefabs and shared settings recover a valid `.writing` file first and fall back to `.previous` ([#2113](https://github.com/saworbit/hammerforge/issues/2113)). The `.map` export and Settings Export also write their output whole (#1758).
+- Prefabs and the cross-level clipboard use the level format number and pending format fragments. Unstamped prefabs still load. If a prefab was written by a newer build, placing it warns that some settings may be missing, and this build refuses to save over its source or push changes back to it ([#2107](https://github.com/saworbit/hammerforge/issues/2107)).
 - Prefabs are portable between projects — just copy `.hfprefab` files to another project's `res://prefabs/` folder.
 
 ## Autosave Safety

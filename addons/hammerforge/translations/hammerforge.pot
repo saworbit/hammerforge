@@ -965,6 +965,14 @@ msgstr ""
 msgid "Cannot merge solid brushes and cuts together"
 msgstr ""
 
+#: addons/hammerforge/systems/hf_prefab_system.gd
+msgid "Cannot push to {file}: the prefab {reason}."
+msgstr ""
+
+#: addons/hammerforge/dock.gd
+msgid "Cannot save prefab {file}"
+msgstr ""
+
 #: addons/hammerforge/hf_command_registry.gd
 msgid "Carry the faces picked in Face Select along a straight run, an arc or an S bend, as a run of brushes."
 msgstr ""
@@ -5087,6 +5095,10 @@ msgstr ""
 
 #: addons/hammerforge/ui/hf_console_controls.gd
 msgid "Power-user overlays"
+msgstr ""
+
+#: addons/hammerforge/hf_prefab.gd
+msgid "Prefab '{name}' {reason}. Some settings may be missing."
 msgstr ""
 
 #: addons/hammerforge/systems/hf_prefab_system.gd

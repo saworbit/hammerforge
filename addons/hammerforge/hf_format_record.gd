@@ -127,7 +127,19 @@ static func _walk(
 
 ## Why a file written with `version` and `names` cannot be read by this build, or
 ## "": a newer number, or the same number with a fragment this build lacks.
-static func refusal(version: int, names: Variant, own_version: int) -> String:
+static func refusal(version_value: Variant, names: Variant, own_version: int) -> String:
+	# JSON reads numbers as floats. Validate the range before converting to int.
+	if not (
+		(version_value is int and version_value >= 0)
+		or (
+			version_value is float
+			and version_value >= 0.0
+			and version_value < 9223372036854775808.0
+			and version_value == floorf(version_value)
+		)
+	):
+		return "has an invalid version. Expected a nonnegative whole number."
+	var version := int(version_value)
 	if version > own_version:
 		return (
 			"was written by a newer build (format %d, this build reads %d)" % [version, own_version]
