@@ -72,6 +72,27 @@ func test_a_prefab_save_cut_short_leaves_the_old_prefab_to_load():
 		assert_eq(loaded.prefab_name, "door")
 
 
+func test_interrupted_prefab_save_prefers_the_complete_writing_file():
+	assert_eq(_prefab("door").save_to_file(PREFAB_PATH + ".previous"), OK)
+	assert_eq(_prefab("gate").save_to_file(PREFAB_PATH + ".writing"), OK)
+	var loaded := HFPrefabType.load_from_file(PREFAB_PATH)
+	assert_not_null(loaded)
+	if loaded:
+		assert_eq(loaded.prefab_name, "gate")
+	assert_true(FileAccess.file_exists(PREFAB_PATH))
+
+
+func test_interrupted_prefab_save_ignores_truncated_json():
+	assert_eq(_prefab("door").save_to_file(PREFAB_PATH + ".previous"), OK)
+	var file := FileAccess.open(PREFAB_PATH + ".writing", FileAccess.WRITE)
+	file.store_string('{"prefab_name": "gate",')
+	file.close()
+	var loaded := HFPrefabType.load_from_file(PREFAB_PATH)
+	assert_not_null(loaded)
+	if loaded:
+		assert_eq(loaded.prefab_name, "door")
+
+
 func test_a_map_export_that_cannot_finish_leaves_the_old_file():
 	var root := LevelRootType.new()
 	root.auto_spawn_player = false

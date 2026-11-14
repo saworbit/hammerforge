@@ -806,7 +806,7 @@ func _take_back_session_materials(path: String, text: String) -> void:
 ## Load prefab from a .hfprefab JSON file, or from the copy a save cut short left
 ## beside it when the file itself is gone.
 static func load_from_file(path: String) -> HFPrefab:
-	var source := HFSettingsFile.readable_path(path)
+	var source := HFSettingsFile.readable_path(path, _holds_prefab)
 	if source == "":
 		HFLog.warn("HFPrefab: file not found: %s" % path)
 		return null
@@ -822,3 +822,16 @@ static func load_from_file(path: String) -> HFPrefab:
 	var prefab := from_dict(parsed)
 	prefab._take_back_session_materials(path, text)
 	return prefab
+
+
+static func _holds_prefab(path: String) -> bool:
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(path)) != OK:
+		return false
+	var data = json.data
+	return (
+		data is Dictionary
+		and data.get("prefab_name") is String
+		and data.get("brush_infos") is Array
+		and data.get("entity_infos") is Array
+	)

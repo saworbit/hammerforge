@@ -554,28 +554,34 @@ static func save_to_path(path: String, data: Dictionary, compress: bool = true) 
 static func load_from_path(path: String) -> Dictionary:
 	if path == "":
 		return {}
-	if not FileAccess.file_exists(path) and FileAccess.file_exists(path + ".previous"):
-		# A write stopped after the old file was taken away and before the new one
-		# took its name leaves both beside it. The new one is whole, since it was
-		# written before the old one was copied aside, so it is the one put back:
-		# the save that finished writing is not lost (#1642). The check is for a
-		# `.writing` that is not a level, which no such stop leaves.
-		var source := path + ".previous"
-		if _holds_level(path + ".writing"):
-			source = path + ".writing"
-		var recover_err := DirAccess.rename_absolute(source, path)
-		if recover_err != OK:
-			push_error("HFLevelIO: recovery failed for %s (error: %d)" % [path, recover_err])
-			return {}
-		if source.ends_with(".writing"):
-			DirAccess.remove_absolute(path + ".previous")
-	if not FileAccess.file_exists(path):
+	var source := recover_cut_short(path, _holds_level)
+	if source == "":
 		return {}
-	var file = FileAccess.open(path, FileAccess.READ)
+	var file = FileAccess.open(source, FileAccess.READ)
 	if not file:
 		return {}
 	var payload = file.get_buffer(file.get_length())
 	return parse_payload(payload)
+
+
+## The old file is copied aside only after the new one is written in full.
+## When the destination is missing and the backup exists, put the whole new
+## save in place if it still validates, or fall back to the backup (#1642).
+static func recover_cut_short(path: String, is_whole: Callable) -> String:
+	if FileAccess.file_exists(path):
+		return path
+	var backup := path + ".previous"
+	if not FileAccess.file_exists(backup):
+		return ""
+	var writing := path + ".writing"
+	var source := writing if FileAccess.file_exists(writing) and is_whole.call(writing) else backup
+	var err := DirAccess.rename_absolute(source, path)
+	if err != OK:
+		push_error("HFLevelIO: recovery failed for %s (error: %d)" % [path, err])
+		return source
+	if source == writing:
+		DirAccess.remove_absolute(backup)
+	return path
 
 
 static func _holds_level(path: String) -> bool:
