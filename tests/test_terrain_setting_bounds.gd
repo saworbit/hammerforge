@@ -95,6 +95,12 @@ func test_a_region_size_in_range_is_kept():
 	assert_eq(int(_region_settings()["region_size_cells"]), 256)
 
 
+func test_a_region_size_that_splits_a_chunk_is_refused():
+	root.set_region_size_cells(64)
+	root.set_region_size_cells(65)
+	assert_eq(int(_region_settings()["region_size_cells"]), 64)
+
+
 func test_a_memory_budget_is_clamped_at_both_ends():
 	root.set_region_memory_budget_mb(1)
 	assert_gte(int(_region_settings()["memory_budget_mb"]), 32)

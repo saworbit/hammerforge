@@ -521,6 +521,7 @@ static func on_region_size_changed(dock: Object, value: float) -> void:
 	if not dock.level_root:
 		return
 	dock.level_root.set_region_size_cells(int(value))
+	dock._sync_region_settings_from_root()
 
 
 static func on_region_radius_changed(dock: Object, value: float) -> void:
