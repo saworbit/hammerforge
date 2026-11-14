@@ -188,6 +188,7 @@ jobs:
             ${{ runner.temp }}/release-tree.tar
             ${{ runner.temp }}/hammerforge-*.zip
           if-no-files-found: error
+          overwrite: true
           retention-days: 7
 
   publish:

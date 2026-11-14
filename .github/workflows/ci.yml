@@ -349,7 +349,8 @@ jobs:
   unit-test-shard:
     name: GUT Shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Allow for the full suite and download retries on a slow runner.
+    timeout-minutes: 25
     permissions:
       contents: read
     strategy:
