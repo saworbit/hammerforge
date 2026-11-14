@@ -470,6 +470,30 @@ func test_a_clipped_linked_panel_stays_part_of_the_surface():
 	_assert_fitted(fronts, "fitted as before")
 
 
+func test_carving_a_linked_wall_refits_the_texture_across_the_pieces():
+	_linked_fitted_wall()
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"brush_id": "carver",
+				"size": Vector3(200, 40, 20),
+				"center": Vector3(32, 32, 0),
+			}
+		)
+	)
+	assert_true(root.carve_with_brush("carver").ok, "the carver takes the top of the wall")
+	var fronts: Array = []
+	for brush in root.get_all_draft_brushes():
+		if _front(brush) != null and _front(brush).uv_group != 0:
+			fronts.append(brush)
+	assert_eq(fronts.size(), 3)
+	if fronts.size() == 3:
+		_assert_one_mapping(fronts, "after Carve")
+		_assert_fitted(fronts, "refitted after Carve")
+
+
 func test_group_ids_survive_a_save_and_reload():
 	var panels := _linked_fitted_wall()
 	var group_id := _front(panels[0]).uv_group

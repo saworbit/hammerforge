@@ -2502,14 +2502,8 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	if src_group_id != "":
 		merged_info["group_id"] = src_group_id
 
-	# Made before the brushes it replaces are deleted, as Intersect makes its own.
-	# Deleting a group's last brushes drops the group, and each group round it that
-	# is left empty, so a merged brush made after named a group the level no longer
-	# had (#1975). A brush that could not be made leaves every source where it was.
-	if create_brush_from_info(merged_info) == null:
+	if replace_with_made(brushes, [merged_info]).is_empty():
 		return _op_fail("Merge: produced no geometry")
-	for brush in brushes:
-		delete_brush(brush)
 
 	var count: int = brushes.size()
 	root._log("Merge: combined %d brushes into one" % count)
@@ -2989,32 +2983,36 @@ func _piece_infos_from_faces(draft: DraftBrush, face_sets: Array) -> Array:
 	return infos
 
 
-## Put the pieces of a brush in its place and delete it.
-##
-## The pieces are made first, as Intersect makes its brush. Deleting a group's
-## last brush drops the group, and each group round it that is left empty, so
-## pieces made after named a group the level no longer had (#1975). Pieces that
-## could not be made leave the brush where it was.
 func _replace_brush_with_pieces(
 	brush_id: String, infos: Array, op_name: String, piece_noun: String = "pieces"
 ) -> HFOpResult:
+	var created := replace_with_made([_find_brush_by_id(brush_id)], infos)
+	if created.is_empty():
+		return _op_fail(
+			HFTranslationType.message("{operation}: produced no geometry", {"operation": op_name})
+		)
+	var message := "%s: %d %s" % [op_name, created.size(), piece_noun]
+	root._log(message)
+	return HFOpResult.success(message)
+
+
+## Make replacements before deleting the sources, so their groups and wires
+## still exist (#1975). Keep dimension ends on surviving features (#2003).
+func replace_with_made(sources: Array, infos: Array, refit := true) -> Array:
 	var created: Array = []
 	for info in infos:
 		var piece = create_brush_from_info(info)
 		if piece:
 			created.append(piece)
 	if created.is_empty():
-		return _op_fail(
-			HFTranslationType.message("{operation}: produced no geometry", {"operation": op_name})
-		)
-	# A dimension's end goes to the piece that keeps its corner (#2003).
-	HFDimensions.carry_to_pieces(root, _find_brush_by_id(brush_id), created)
-	delete_brush_by_id(brush_id)
-	# A piece of a face in a texture group is still that surface (#1437).
-	refit_texture_groups(created)
-	var message := "%s: %d %s" % [op_name, created.size(), piece_noun]
-	root._log(message)
-	return HFOpResult.success(message)
+		return created
+	for source in sources:
+		HFDimensions.carry_to_pieces(root, source, created)
+	for source in sources:
+		delete_brush(source)
+	if refit:
+		refit_texture_groups(created)
+	return created
 
 
 ## Tie brushes to an entity class, and optionally give them a name.
