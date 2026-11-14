@@ -4843,7 +4843,9 @@ func _on_bake_progress(value: float, label: String) -> void:
 
 
 func _on_autosave_failed(error_message: String) -> void:
-	HFLog.error("HammerForge autosave failed: %s" % error_message, "autosave")
+	var message := "HammerForge autosave failed: %s" % error_message
+	HFLog.record_error(message, "autosave")
+	push_warning(message)
 	show_toast(HFTranslationType.t("Autosave failed: {error}").format({"error": error_message}), 2)
 	if _autosave_warning:
 		_autosave_warning.text = "Autosave failed! Save manually."
@@ -4879,7 +4881,9 @@ func _on_hflevel_save_completed(path: String) -> void:
 
 
 func _on_hflevel_save_failed(path: String, error_message: String) -> void:
-	HFLog.error("HammerForge save failed for %s: %s" % [path, error_message], "save")
+	var message := "HammerForge save failed for %s: %s" % [path, error_message]
+	HFLog.record_error(message, "save")
+	push_warning(message)
 	_set_status(
 		HFTranslationType.message("Failed to save .hflevel: {file}", {"file": path}), true, 5.0
 	)

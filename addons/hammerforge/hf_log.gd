@@ -39,7 +39,7 @@ static func error(message: String, category := "error") -> void:
 	push_error(message)
 
 
-## Record an error whose caller already reports it in Godot's Output.
+## Record an error whose caller reports it separately in Godot's Output.
 static func record_error(message: String, category: String) -> void:
 	var sink = _current_sink()
 	if is_instance_valid(sink):
