@@ -9,7 +9,8 @@ extends RefCounted
 ## editor did not finish, killed or out of power, left an empty or partial file,
 ## and every preset or profile in it was gone (#1663). An atomic write leaves the
 ## old file or the new one. A write cut short between the two leaves the old one
-## beside it as `.previous`, which a read takes when the file itself is gone.
+## beside it as `.previous`. When the destination is missing, a read recovers
+## a complete `.writing` first and falls back to the backup.
 
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -27,7 +28,7 @@ static var _said_unreadable: Dictionary = {}
 ## The `key` section of the file at `path`, as it holds it, unchecked. A missing
 ## file is none. One that is not such a file is said once, as `label`, and is none.
 static func read(path: String, key: String, label: String) -> Dictionary:
-	var source := readable_path(path)
+	var source := readable_path(path, _has_section.bind(key))
 	if source == "":
 		return {}
 	var section: Variant = _section_in(source, key)
@@ -44,7 +45,7 @@ static func read(path: String, key: String, label: String) -> Dictionary:
 ## whole file from what it read, and what it read of this one is nothing, so it
 ## asks this first rather than writing one item over every shared one (#1006).
 static func unreadable(path: String, key: String) -> bool:
-	var source := readable_path(path)
+	var source := readable_path(path, _has_section.bind(key))
 	return source != "" and _section_in(source, key) == null
 
 
@@ -67,12 +68,12 @@ static func write_text(path: String, text: String) -> int:
 
 ## The file to read for `path`: itself, or the copy an atomic write cut short left
 ## beside it when it is gone, or "" when there is neither.
-static func readable_path(path: String) -> String:
-	if FileAccess.file_exists(path):
-		return path
-	if FileAccess.file_exists(path + ".previous"):
-		return path + ".previous"
-	return ""
+static func readable_path(path: String, is_whole: Callable) -> String:
+	return HFLevelIO.recover_cut_short(path, is_whole)
+
+
+static func _has_section(path: String, key: String) -> bool:
+	return _section_in(path, key) != null
 
 
 ## The `key` section of the file at `path`, or null when it is not such a file. A

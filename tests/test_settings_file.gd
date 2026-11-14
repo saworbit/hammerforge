@@ -38,6 +38,21 @@ func test_a_write_cut_short_leaves_the_old_file_to_read():
 	assert_false(HFSettingsFile.unreadable(PATH, "presets"))
 
 
+func test_interrupted_settings_save_prefers_a_complete_writing_file():
+	assert_true(HFSettingsFile.write(PATH + ".previous", "presets", {"version": "old"}, "T"))
+	assert_true(HFSettingsFile.write(PATH + ".writing", "presets", {"version": "new"}, "T"))
+	assert_eq(HFSettingsFile.read(PATH, "presets", "T"), {"version": "new"})
+	assert_true(FileAccess.file_exists(PATH))
+	assert_false(FileAccess.file_exists(PATH + ".previous"))
+
+
+func test_interrupted_settings_save_ignores_a_writing_file_without_its_section():
+	assert_true(HFSettingsFile.write(PATH + ".previous", "presets", {"version": "old"}, "T"))
+	assert_true(HFSettingsFile.write(PATH + ".writing", "profiles", {}, "T"))
+	assert_eq(HFSettingsFile.read(PATH, "presets", "T"), {"version": "old"})
+	assert_true(FileAccess.file_exists(PATH))
+
+
 func _said(text: String) -> int:
 	return HFLog.get_captured_warnings().filter(func(w): return str(w).contains(text)).size()
 
