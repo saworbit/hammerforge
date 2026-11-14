@@ -18,7 +18,9 @@ concurrency:
 jobs:
   draft:
     name: Update the draft release
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       # Writes the draft release itself.
       contents: write

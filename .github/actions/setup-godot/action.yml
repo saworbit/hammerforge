@@ -1,0 +1,50 @@
+name: Set up Godot
+description: Install the pinned Godot editor from a verified release archive.
+
+outputs:
+  executable:
+    description: Absolute path to the Godot console executable.
+    value: ${{ steps.linux.outputs.executable || steps.windows.outputs.executable }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Godot on Linux
+      id: linux
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        GODOT_VERSION: "4.7-stable"
+        GODOT_SHA256: 0b1a6c54c2c619c12e169fe9241edda4b81080b519451cec2984bf0d2c6cb73c
+      run: |
+        asset="Godot_v${GODOT_VERSION}_linux.x86_64"
+        dir="$(mktemp -d "$RUNNER_TEMP/godot.XXXXXX")"
+        archive="$dir/godot.zip"
+        curl --fail --silent --show-error --location --retry 4 --retry-all-errors \
+          --connect-timeout 15 --max-time 120 --output "$archive" \
+          "https://github.com/godotengine/godot/releases/download/$GODOT_VERSION/$asset.zip"
+        printf '%s  %s\n' "$GODOT_SHA256" "$archive" | sha256sum --check
+        unzip -q "$archive" -d "$dir"
+        mv "$dir/$asset" "$dir/godot"
+        chmod +x "$dir/godot"
+        printf 'executable=%s\n' "$dir/godot" >> "$GITHUB_OUTPUT"
+
+    - name: Install Godot on Windows
+      id: windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        GODOT_VERSION: "4.7-stable"
+        GODOT_SHA256: 02a5312236f4e0209c78bcb2f52135b1963e6b8888c873c9cee81459e60bcd71
+      run: |
+        $dir = Join-Path $env:RUNNER_TEMP "godot"
+        $archive = Join-Path $env:RUNNER_TEMP "godot.zip"
+        $asset = "Godot_v$($env:GODOT_VERSION)_win64"
+        $url = "https://github.com/godotengine/godot/releases/download/$env:GODOT_VERSION/$asset.exe.zip"
+        Invoke-WebRequest -Uri $url -OutFile $archive -MaximumRetryCount 3 -RetryIntervalSec 5 -TimeoutSec 120
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash -ne $env:GODOT_SHA256) {
+          throw "Godot download did not match the pinned SHA-256 digest"
+        }
+        Expand-Archive -LiteralPath $archive -DestinationPath $dir
+        $godot = Join-Path $dir "${asset}_console.exe"
+        "executable=$godot" >> $env:GITHUB_OUTPUT

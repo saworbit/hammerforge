@@ -1,6 +1,6 @@
 version: 2
 
-# Godot itself is pinned in ci.yml and cannot be tracked here. Everything that
+# Godot is pinned in .github/actions/setup-godot/action.yml. Everything that
 # can be is below: the actions the workflows call, and the Python tooling that
 # CI and the docs build install.
 #
