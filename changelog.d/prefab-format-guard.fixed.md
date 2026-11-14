@@ -1,1 +1,0 @@
-- Prefabs record their format and protect newer source files from edits or Push to Source in an older build. (issue [#2107](https://github.com/saworbit/hammerforge/issues/2107))

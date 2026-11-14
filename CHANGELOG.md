@@ -49,6 +49,8 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Fixed
 
+- **14 Nov** Prefabs record their format and protect newer source files from edits or Push to Source in an older build. (issue [#2107](https://github.com/saworbit/hammerforge/issues/2107), PR [#2122](https://github.com/saworbit/hammerforge/pull/2122))
+- **14 Nov** Save, autosave and streamed paint write failures stay in the Console log and appear in problem reports. (issue [#2106](https://github.com/saworbit/hammerforge/issues/2106), PR [#2121](https://github.com/saworbit/hammerforge/pull/2121))
 - **14 Nov** Carve refits linked textures, and Merge, Intersect and Hull keep dimension ends attached to surviving features. (issue [#2111](https://github.com/saworbit/hammerforge/issues/2111), PR [#2118](https://github.com/saworbit/hammerforge/pull/2118))
 - **14 Nov** Prefabs and shared settings recover the latest complete save after an interruption, like levels do. (issue [#2113](https://github.com/saworbit/hammerforge/issues/2113), PR [#2117](https://github.com/saworbit/hammerforge/pull/2117))
 - **14 Nov** Floor paint loads the regions a stroke reaches so new cells and erases survive saving, streaming and undo. (issue [#2110](https://github.com/saworbit/hammerforge/issues/2110), PR [#2116](https://github.com/saworbit/hammerforge/pull/2116))
@@ -64,6 +66,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 #### Behind the scenes
 
+- **14 Nov** CI checks the MCP server on Windows and Python 3.10, including PowerShell setup, editor PID checks and token folder permissions. (issue [#2108](https://github.com/saworbit/hammerforge/issues/2108), PR [#2120](https://github.com/saworbit/hammerforge/pull/2120))
 - **13 Nov** Exploratory tests use the current alias, group, plan, grid and undo behavior. (issues [#2088](https://github.com/saworbit/hammerforge/issues/2088), [#2090](https://github.com/saworbit/hammerforge/issues/2090), PR [#2094](https://github.com/saworbit/hammerforge/pull/2094))
 
 ### Week of 26 Oct 2026
