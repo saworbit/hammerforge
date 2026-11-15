@@ -474,6 +474,12 @@ that match an old ID keep their literal values.
   `$N.brush_id`. Exported batches preserve names and property text even when
   they contain reference tokens. You can replay or re-export the batch file.
 
+When writing an `hf_batch` payload by hand, set `"escape_refs": true` on any
+operation that needs literal text starting with `$`, then add one leading `$`
+to each such value. `"$$0.brush_id"` is passed to the tool as the literal
+`"$0.brush_id"`. A value of `"$0.brush_id"` resolves to the first operation's
+brush ID as usual, even in the same operation.
+
 Replay validates the recording before sending changes. Malformed calls report
 the file and line number. An input or batch output error exits with status 2.
 A failed batch write leaves any existing output file intact.

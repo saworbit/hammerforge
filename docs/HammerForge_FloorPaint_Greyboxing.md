@@ -92,7 +92,7 @@ Live preview
 - During drag, preview writes into the layer and immediately regenerates affected chunks.
 - The viewport draws only the active footprint, raise cage, and touched connector candidates. These overlays use stroke-local data rather than scanning a whole layer and are synchronously removed on stroke end or Esc.
 - On mouse-up, a final regeneration happens.
-- Preview work consumes only dirty chunks. With region streaming enabled, regions touched by the stroke stay pinned until release or cancel. A sculpt loads and pins the regions under its starting footprint before the undo snapshot and includes the extra sample Smooth reads.
+- Preview work consumes only dirty chunks. With region streaming enabled, HammerForge loads and pins each region the stroke reaches before editing it. That includes mirrored cells, the full Line and Rect previews, and the cells reached by Bucket. The regions stay pinned until the stroke ends or is cancelled. Undo can restore the previous paint in regions loaded partway through the stroke. A sculpt also loads and pins its starting footprint and the extra sample Smooth reads before taking its undo snapshot.
 - **Inference cleanup is off by default.** Enabling it in Paint → Floor Paint wires `HFInferenceEngine` for new strokes. Its deliberately bounded pass can remove an isolated one-cell island, fill a one-cell cardinal hole or gap, and widen an inferred one-cell corridor by one row/column. Erase strokes are never rewritten, a stroke of a single cell is never denoised, and cleanup is restricted to the stroke's dirty chunks plus its one-cell local halo.
 
 ## Geometry Synthesis

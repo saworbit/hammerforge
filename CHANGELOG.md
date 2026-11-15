@@ -50,6 +50,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 #### Changed
 
 - **15 Nov** Pull requests must pass the strict documentation build before merge. (PR [#2124](https://github.com/saworbit/hammerforge/pull/2124))
+- **15 Nov** Tagged releases must come from `main`. Publishing refuses to move the Asset Library's `release` branch back to an older source commit. (PR [#2124](https://github.com/saworbit/hammerforge/pull/2124))
 
 #### Fixed
 

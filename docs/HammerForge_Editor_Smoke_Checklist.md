@@ -46,7 +46,7 @@ Then open `res://samples/hf_editor_smoke_start.tscn` with the plugin enabled.
 - Draw a box brush. Drag one of its resize handles, the dots on each face; the box resizes and it is one undo step. Ctrl+Z on the drawn brush leaves nothing in its place (#1388).
 - Click that brush in the 3D viewport. The 3D view is still what you are looking at. (#592: a plugin that declares a main screen and also handles the selected object gets switched to by Godot.)
 - Select a `Camera3D`. The dock stays connected to the existing `LevelRoot` and no brush behind the camera is selected.
-- Bake. The **Bake** status row goes green and names how long the bake took. Do not look for it in the Console Log: `HFLog` only has `warn()`, so a clean bake writes nothing there and the Log should stay at 0 warnings and 0 errors.
+- Bake. The **Bake** status row goes green and names how long the bake took. After a clean bake, the Console Log should stay at 0 warnings and 0 errors.
 - **Test Level** launches a playtest and the player spawns on the geometry.
 - Save the scene, restart Godot, reopen it. The `LevelRoot` and the brushes come back.
 - Disable and re-enable the plugin. The switcher entry, the viewport lamp and the dock tab icon all come back, and nothing is left behind.
