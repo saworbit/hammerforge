@@ -47,6 +47,10 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 - **13 Nov** Generate Noise has seed, scale and detail controls for each paint layer. New Seed picks a new pattern. (issue [#2075](https://github.com/saworbit/hammerforge/issues/2075), PR [#2096](https://github.com/saworbit/hammerforge/pull/2096))
 
+#### Changed
+
+- **15 Nov** Pull requests must pass the strict documentation build before merge. (PR [#2124](https://github.com/saworbit/hammerforge/pull/2124))
+
 #### Fixed
 
 - **14 Nov** Prefabs record their format and protect newer source files from edits or Push to Source in an older build. (issue [#2107](https://github.com/saworbit/hammerforge/issues/2107), PR [#2122](https://github.com/saworbit/hammerforge/pull/2122))
@@ -63,6 +67,10 @@ Unreleased work is counted when it ships. For the numbers so far, run
 - **13 Nov** Draw and Paint actions fit beside the grid, and the guided playtest shows how to move and release the mouse. (issues [#2087](https://github.com/saworbit/hammerforge/issues/2087), [#2089](https://github.com/saworbit/hammerforge/issues/2089), PR [#2095](https://github.com/saworbit/hammerforge/pull/2095))
 - **13 Nov** Level loads name invalid versions. Map exports refuse multiline properties and preserve the previous file. (issues [#2081](https://github.com/saworbit/hammerforge/issues/2081), [#2082](https://github.com/saworbit/hammerforge/issues/2082), PR [#2092](https://github.com/saworbit/hammerforge/pull/2092))
 - **13 Nov** MCP replay keeps literal names, reports bad input, and preserves existing output when a batch write fails. (issues [#2083](https://github.com/saworbit/hammerforge/issues/2083), [#2084](https://github.com/saworbit/hammerforge/issues/2084), [#2085](https://github.com/saworbit/hammerforge/issues/2085), PR [#2091](https://github.com/saworbit/hammerforge/pull/2091))
+
+#### Security
+
+- **15 Nov** CI verifies Godot and actionlint downloads, GitHub Actions requires commit SHA pins, and release dry runs use read-only permissions. (PR [#2124](https://github.com/saworbit/hammerforge/pull/2124))
 
 #### Behind the scenes
 

@@ -8,8 +8,9 @@ description: "The short release gate that is run before a HammerForge release, a
 
 Two things, and they are not the same.
 
-The **Release gate** below is short, and it is run. `.github/workflows/release.yml`
-refuses to ship a version that is not recorded here as having passed it.
+Run the **Release gate** below and record the passing version before tagging.
+The tagged Release workflow checks that record before it can publish. A
+branch dry run checks the install archives.
 
 The **Checklist** after it is a reference. It is not run end to end, it has never
 been run end to end, and at its present length it never will be. Treat any step

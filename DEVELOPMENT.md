@@ -122,6 +122,13 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    it. Then run `python tools/check_changelog.py --summary` and paste the new
    release's row into At a glance. `python tools/check_changelog.py` fails
    until the row matches.
+
+   Before tagging, build and verify the installation archives by running
+   `gh workflow run release.yml --ref <release-pr-branch>`. In the run, check
+   **Build and verify release packages**. The branch dispatch uses read-only
+   permissions. Record the manual editor smoke result on the release PR
+   before tagging.
+
 2. Make the GitHub Release yourself, on the commit the release pull request
    merged as. That makes the tag too, and the tag starts the workflow:
 
@@ -144,11 +151,17 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    is a bot's too: leave it unpublished, and delete it once the release is out.
    The workflow reads and uploads to the published release by its id, so the
    draft on the same tag can stay until then (#1737).
-3. `.github/workflows/release.yml` checks the release tree and the archives
-   users install. Run it from the Actions tab on the release PR branch for a
-   read-only dry run. A tag run requires the recorded editor smoke gate and a
-   tagged commit on `main`. It attaches both zips to the published GitHub
-   Release before pushing the tested tree to `release`.
+3. The tag run checks the recorded editor smoke gate and requires the tagged
+   commit to be on `main`. When the head of `release` records its source
+   commit, the tag must identify that commit or a descendant. The publish
+   job attaches both ZIPs to the GitHub Release, then pushes the tested tree
+   to `release`.
+
+   If publishing fails after packaging passes, inspect the published assets
+   and rerun the failed jobs with `gh run rerun <run-id> --failed`. Confirm
+   both ZIPs are present after the retry. The package artifact is kept for
+   seven days. Once it expires, dispatch `release.yml` again on the tag.
+
 4. The run summary prints the new `release` commit hash. Paste it into the
    Asset Library entry's **Download Commit** field. There is an API for that,
    `POST /asset/{id}`, but its token comes from a username and password and the
@@ -695,11 +708,11 @@ addons/hammerforge/
 
 ### CI
 
-`.github/workflows/ci.yml` runs on push and pull request to `main`. What it will
-fail you on, in three jobs:
+`.github/workflows/ci.yml` runs on pushes and pull requests to `main`. It
+reports three required checks:
 - **GDScript Lint & Format** -- gdformat and gdlint, then the Python guards in `tools/`. Three kinds: checks on the tree, selftests each proving that a detector which runs elsewhere still detects, and one that reads `ci.yml` and fails in both directions: when a step of either lint job is not accounted for in the local runner, and when a script in `tools/` carries a `--selftest` that no step runs. No number here on purpose. The one that used to be here said nine on a job that ran ten, and was wrong on the commit that wrote it, which was the commit adding the guard it left out (#809). The step names inside the job are the list.
 - **Workflow & Tooling Lint** -- `ruff check` and `ruff format --check` over `tools/`, actionlint with shellcheck, zizmor, and a schema check on `.github/dependabot.yml`.
-- **GUT unit + integration tests** -- 6,064 tests across 334 test scripts (6,057 passing plus seven intentional no-assert safety tests; 37,085 assertions; verified in CI on October 21, 2026; runs Godot headless)
+- **GUT Unit Tests** checks the four headless Godot shards and the MCP platform jobs. The October 21, 2026 release snapshot records 6,064 tests across 334 scripts, with 6,057 passes, seven intentional no-assert safety tests, and 37,085 assertions.
 
 `.github/workflows/changelog-fragment.yml` runs one more check on a pull
 request, **Changelog Fragment**: a change to the addon or the server adds a
@@ -707,12 +720,18 @@ fragment, or carries the `no-changelog` label. It is a workflow of its own so
 that a label change runs it again in seconds, without running CI (#1447).
 
 **Docs Build** runs `mkdocs build --strict` on each pull request and push to
-`main`. GitHub Pages deploys the artifact built on `main`.
+`main`. The Pages deployment runs on `main` and consumes that run's artifact.
+The [main ruleset](https://github.com/saworbit/hammerforge/rules/22602958)
+requires all five checks from GitHub Actions. Update the ruleset alongside
+any required job name change.
 
 CI and nightly tests use the Godot release pinned in
 `.github/actions/setup-godot/action.yml`. When upgrading Godot, update the
 version and SHA-256 for both platforms from the upstream release. Update the
 SHA-256 beside `ACTIONLINT_VERSION` in `ci.yml` when upgrading actionlint.
+Pin external actions to full commit SHAs. The repository enforces that
+setting. Dependabot can queue auto-merge for patch and minor updates from its
+own repository branch at the event's head commit. Check major updates in a PR.
 
 The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
 four; that is the one the branch ruleset requires. `tools/shard_tests.py` packs
@@ -724,7 +743,8 @@ JUnit files each shard uploads beside its log, and commit it:
 gh run download <run id> --pattern 'gut-shard-*' --dir shard-logs
 python tools/shard_tests.py --durations-from shard-logs/*/gut-shard-*.xml
 ```
-When a shard fails, the `GUT Unit Tests` summary names the failing tests.
+When JUnit artifacts are available, the `GUT Unit Tests` summary names the
+failing tests. Open the failing shard's job log if the artifact is missing.
 The same merge check requires the MCP Python jobs on Linux and Windows and the
 Godot listener tests on Windows. The Python matrix includes the supported 3.10
 minimum. The Windows tests exercise PowerShell setup, process checks, and the
