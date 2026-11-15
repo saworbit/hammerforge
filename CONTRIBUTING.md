@@ -230,22 +230,28 @@ zizmor .
 install that version and put ShellCheck on your PATH.
 
 ### CI
-Pull requests to `main` run **GDScript Lint & Format**, **Workflow & Tooling
-Lint**, **GUT Unit Tests**, **Changelog Fragment**, and **Docs Build**. The GUT
-check also covers the MCP platform tests. Changes reach `main` through a
-pull request.
+The `main` ruleset requires five GitHub Actions checks on pull requests.
+**GDScript Lint & Format**, **Workflow & Tooling Lint**, and **GUT Unit Tests**
+come from CI. **Changelog Fragment** and **Docs Build** run in their own
+workflows. The GUT check also covers the MCP platform tests.
+
+Build the documentation locally with the same strict checks as **Docs Build**.
+
+```sh
+python -m pip install -r requirements-docs.txt
+mkdocs build --strict
+```
 
 CI does not write to your branch. The published test counts are refreshed when
 a release is cut, so leave them alone.
 
-If you are waiting on the checks before merging, wait on the commit, never the
-branch: the newest run on a branch is often the previous one. `python
-tools/wait_for_ci.py <pr>` does this properly and exits non-zero if the run
-fails, times out, or never appears.
+Run `python tools/wait_for_ci.py <pr>` to wait for the **CI** workflow on the
+pull request's head commit. Then use `gh pr checks <pr> --required` to confirm
+all five names above are present and passing.
 
-That job reads the shard logs as artifacts, and they are kept for three days. To
-re-run a pull request whose shards ran longer ago than that, re-run the whole
-workflow. Re-running only the failed job finds no logs.
+The GUT summary reads JUnit and log artifacts kept for three days. If it
+cannot name a failing test, open the failing shard's job log. Once the
+artifacts have expired, rerun the whole CI workflow to regenerate them.
 
 ## Communication
 - Be clear about tradeoffs and known limitations.

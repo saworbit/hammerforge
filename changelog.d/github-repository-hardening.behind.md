@@ -1,1 +1,0 @@
-- Verify Godot and actionlint downloads in CI, build the docs on every pull request, and run release packaging with read-only permissions.
