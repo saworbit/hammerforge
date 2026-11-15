@@ -7,10 +7,10 @@ gdtoolkit==4.5.0
 
 # Static analysis of this repository's own workflows: token scope, injection
 # through ${{ }} into run blocks, unpinned third-party actions.
-zizmor==1.31.1
+zizmor==1.32.0
 
 # Lint and format check for tools/*.py and hammerforge_mcp/.
-ruff==0.17.3
+ruff==0.17.4
 
 # hammerforge_mcp/: the MCP SDK its server is built on, and the test runner for
 # its tests. pyproject.toml there says mcp>=2.3,<3; CI pins the exact one.
