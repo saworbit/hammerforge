@@ -761,6 +761,10 @@ merged brush and a rotated anything are all fair game. Carve asks to confirm onl
 when a selected carver cuts something; when none does it says why and leaves
 nothing in the undo history (#1267).
 
+Carve refits linked textures across the surviving pieces. Merge, Intersect and
+Hull keep a dimension end attached when the corner, edge or face it measured
+still exists on a replacement brush.
+
 | Key | Action |
 |-----|--------|
 | `Shift+X` | Clip the selected brush across its middle, level with the floor |
@@ -2081,8 +2085,8 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Intersect | Ctrl+Shift+I | Keep only the volume the selected brushes share |
 | Save Selection as Prefab | Ctrl+Shift+P | Save the selected brushes and entities as a prefab |
 | Cycle Prefab Variant | Ctrl+Shift+V | Switch the selected prefab instance to its next variant |
-| Move to Floor | Ctrl+Shift+F | Snap to nearest surface below |
-| Move to Ceiling | Ctrl+Shift+C | Snap to nearest surface above |
+| Move to Floor | Ctrl+Shift+F | Snap to the nearest solid surface below, passing through illusionary brushes and triggers |
+| Move to Ceiling | Ctrl+Shift+C | Snap to the nearest solid surface above, passing through illusionary brushes and triggers |
 | Snap to Grid | Ctrl+B | Put each selected brush's bounds corner, or entity's origin, on the grid |
 | Rotate CCW | R | Turn the selection counterclockwise |
 | Rotate CW | Shift+R | Turn the selection clockwise |
