@@ -14,10 +14,8 @@ name: Release
 # The `release` branch must already exist; it is created once, by hand, and
 # never merged into or from.
 #
-# Run by hand (workflow_dispatch) on a branch, this is a dry run: it builds and
-# checks everything and pushes nothing. Only a tag publishes (#919), whether the
-# tag's own push starts the run or `gh workflow run release.yml --ref vX.Y.Z`
-# does.
+# A branch dispatch builds and checks the packages with a read-only token.
+# Only a tag can publish, whether started by a push or a manual dispatch.
 #
 # It never makes the GitHub Release. The person cutting the release does, so the
 # release page names them and not github-actions (DEVELOPMENT.md, Cutting a
@@ -31,19 +29,17 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: release
-  cancel-in-progress: false
-
 jobs:
-  release:
+  package:
+    name: Build and verify release packages
     runs-on: ubuntu-latest
-    # Pushes the release branch and uploads the zip to the GitHub Release.
-    permissions:
-      contents: write
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      # Every step below authenticates with an explicit GH_TOKEN, so the
-      # checkout does not need the token left behind in .git/config.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -51,64 +47,27 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Check the tag names the version being shipped
+      - name: Read and validate the package version
+        id: version
         # plugin.cfg names the zips and the release branch commit, and the smoke
         # gate below reads it too. A tag pushed before the bump would pass every
         # check and ship the new code under the old version's name (#919).
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
-          VERSION="$(python -c "import sys; sys.path.insert(0,'tools'); import build_release_tree as b; print(b.plugin_version())")"
-          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match plugin.cfg version $VERSION"
-            echo "Bump version= in addons/hammerforge/plugin.cfg to match, then delete"
-            echo "the release and its tag (gh release delete $GITHUB_REF_NAME --cleanup-tag)"
-            echo "and make them again on the commit that has the bump."
+          version="$(python -c "import sys; sys.path.insert(0,'tools'); import build_release_tree as b; print(b.plugin_version())")"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::plugin.cfg must contain a release or development version"
             exit 1
           fi
-          echo "tag $GITHUB_REF_NAME matches plugin.cfg"
-
-      - name: Check a person made the GitHub Release
-        # This workflow used to make the release when the tag had none (#775),
-        # and a release made with the workflow's token names github-actions as
-        # its author: 0.4.0 shipped that way and was made again by hand. Release
-        # Drafter's drafts are github-actions' too. Checked before anything is
-        # built, so a refusal leaves nothing half done.
-        #
-        # `gh release view <tag>` looks up the published release and a draft on
-        # the tag at once and takes whichever answers first, and Release
-        # Drafter keeps a draft on the next tag. The releases/tags endpoint
-        # answers with the published release only. Its id goes to the upload
-        # below, so the zips land on this release and not on the draft (#1737).
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # A 404 prints its body on stdout, so the exit status decides.
-          if ! FOUND="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq '[.author.login, .id] | @tsv' 2>/dev/null)"; then
-            FOUND=""
+          if [[ "$GITHUB_REF_TYPE" == 'tag' && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match plugin.cfg version $version"
+            exit 1
           fi
-          AUTHOR="$(printf '%s' "$FOUND" | cut -f1)"
-          RELEASE_ID="$(printf '%s' "$FOUND" | cut -f2)"
-          case "$AUTHOR" in
-            "")
-              echo "::error::there is no published GitHub Release for $GITHUB_REF_NAME"
-              ;;
-            *"[bot]" | github-actions)
-              echo "::error::the $GITHUB_REF_NAME release was made by $AUTHOR, not a person"
-              ;;
-            *)
-              echo "$GITHUB_REF_NAME release $RELEASE_ID made by $AUTHOR"
-              echo "RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
-              exit 0
-              ;;
-          esac
-          echo "Make it yourself, then start this run on the tag:"
-          echo "  gh release create $GITHUB_REF_NAME --verify-tag --prerelease --latest=false --title $GITHUB_REF_NAME --notes-file notes.md"
-          echo "  gh workflow run release.yml --ref $GITHUB_REF_NAME"
-          echo "A bot's release has to be deleted first (gh release delete $GITHUB_REF_NAME)."
-          exit 1
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
       - name: Editor smoke gate
+        if: github.ref_type == 'tag'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         # The smoke checklist is 599 steps and nobody runs it end to end (#593).
         # So the top of it is a short gate that someone does run, and this step
         # is what makes "does run" true instead of aspirational. It fails the
@@ -116,7 +75,6 @@ jobs:
         # thing being fixed.
         run: |
           DOC=docs/HammerForge_Editor_Smoke_Checklist.md
-          VERSION="$(python -c "import sys; sys.path.insert(0,'tools'); import build_release_tree as b; print(b.plugin_version())")"
           RECORDED="$(sed -n 's/^Gate passed:[[:space:]]*//p' "$DOC" | sed 's/[[:space:]]*$//' | head -n 1)"
           if [ "$RECORDED" != "$VERSION" ]; then
             echo "::error::the editor smoke gate has not been recorded for $VERSION"
@@ -159,11 +117,11 @@ jobs:
           echo "release tree: $(find . -type f | wc -l) files"
 
       - name: Package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="$(python -c "import sys; sys.path.insert(0,'tools'); \
-            import build_release_tree as b; print(b.plugin_version())")"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           cd "$RUNNER_TEMP/release"
+          tar -cf "$RUNNER_TEMP/release-tree.tar" .
           zip -qr "$RUNNER_TEMP/hammerforge-$VERSION.zip" .
 
           # The one most people want: the plugin and nothing else, carrying the
@@ -174,47 +132,16 @@ jobs:
 
           # Checked here rather than assumed, because this is the archive a
           # mapper extracts over their own project.
-          unzip -Z1 "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" |
-            cut -d/ -f1 | sort -u > "$RUNNER_TEMP/addon_roots.txt"
+          unzip -Z1 "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" > "$RUNNER_TEMP/addon_paths.txt"
+          cut -d/ -f1 "$RUNNER_TEMP/addon_paths.txt" | sort -u > "$RUNNER_TEMP/addon_roots.txt"
           echo addons > "$RUNNER_TEMP/addon_expected.txt"
           if ! diff -u "$RUNNER_TEMP/addon_expected.txt" "$RUNNER_TEMP/addon_roots.txt"; then
             echo "::error::the addon zip is not addons/ alone"
             exit 1
           fi
-          unzip -Z1 "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" |
-            grep -qx "addons/hammerforge/plugin.cfg" || {
+          grep -Fxq "addons/hammerforge/plugin.cfg" "$RUNNER_TEMP/addon_paths.txt" || {
               echo "::error::the addon zip has no plugin.cfg in it"; exit 1; }
-          echo "addon zip: $(unzip -Z1 "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" | wc -l) entries under addons/"
-
-      - name: Build the release branch commit
-        # Committed here and pushed only after the archive check below, so a
-        # tree that fails it never becomes the branch the Asset Library serves.
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          WORK="$RUNNER_TEMP/relbranch"
-          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if ! git clone --depth 1 --branch release "$REMOTE" "$WORK" 2>/dev/null; then
-            echo "::error::the 'release' branch does not exist; create it once by hand"
-            exit 1
-          fi
-          # Replace the contents wholesale rather than copying over the top, so
-          # a file dropped from the ship list disappears instead of lingering.
-          find "$WORK" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          cp -a "$RUNNER_TEMP/release/." "$WORK/"
-          cd "$WORK"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "release branch already matches; nothing to push"
-            echo "RELEASE_CHANGED=false" >> "$GITHUB_ENV"
-          else
-            git -c user.name="github-actions[bot]" \
-                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-                commit -m "HammerForge $VERSION" \
-                       -m "Built from ${GITHUB_SHA} by .github/workflows/release.yml."
-            echo "RELEASE_CHANGED=true" >> "$GITHUB_ENV"
-          fi
-          echo "RELEASE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "addon zip: $(wc -l < "$RUNNER_TEMP/addon_paths.txt") entries under addons/"
 
       - name: Check what the Asset Library will download
         # The Asset Library serves this branch as a *git archive*, so
@@ -226,8 +153,10 @@ jobs:
         # .gitattributes that is supposed to produce it, for the same reason
         # "Refuse to ship development tooling" checks the built tree.
         run: |
-          cd "$RUNNER_TEMP/relbranch"
-          git archive HEAD | tar -t > "$RUNNER_TEMP/archive.txt"
+          cd "$RUNNER_TEMP/release"
+          git init -q
+          git add -A
+          git archive "$(git write-tree)" | tar -t > "$RUNNER_TEMP/archive.txt"
           cut -d/ -f1 "$RUNNER_TEMP/archive.txt" | sort -u > "$RUNNER_TEMP/roots.txt"
           {
             echo LICENSE
@@ -251,6 +180,118 @@ jobs:
           }
           echo "installing this gives a project addons/ and LICENSE, and nothing else"
 
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.ref_type == 'tag'
+        with:
+          name: release-packages
+          path: |
+            ${{ runner.temp }}/release-tree.tar
+            ${{ runner.temp }}/hammerforge-*.zip
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+
+  publish:
+    name: Publish release packages and Asset Library tree
+    needs: package
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: release-publish
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.package.outputs.version }}
+    steps:
+      - name: Require a release commit from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$GITHUB_SHA...main" --jq .status)"
+          if [[ "$status" != 'ahead' && "$status" != 'identical' ]]; then
+            echo "::error::The tagged release commit must be on main"
+            exit 1
+          fi
+
+      - name: Check a person made the GitHub Release
+        # This workflow used to make the release when the tag had none (#775),
+        # and a release made with the workflow's token names github-actions as
+        # its author: 0.4.0 shipped that way and was made again by hand. Release
+        # Drafter's drafts are github-actions' too. Check before publishing.
+        #
+        # `gh release view <tag>` looks up the published release and a draft on
+        # the tag at once and takes whichever answers first, and Release
+        # Drafter keeps a draft on the next tag. The releases/tags endpoint
+        # answers with the published release only. Its id goes to the upload
+        # below, so the zips land on this release and not on the draft (#1737).
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A 404 prints its body on stdout, so the exit status decides.
+          if ! FOUND="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq '[.author.login, .id] | @tsv' 2>/dev/null)"; then
+            FOUND=""
+          fi
+          AUTHOR="$(printf '%s' "$FOUND" | cut -f1)"
+          RELEASE_ID="$(printf '%s' "$FOUND" | cut -f2)"
+          case "$AUTHOR" in
+            "")
+              echo "::error::there is no published GitHub Release for $GITHUB_REF_NAME"
+              ;;
+            *"[bot]" | github-actions)
+              echo "::error::the $GITHUB_REF_NAME release was made by $AUTHOR, not a person"
+              ;;
+            *)
+              echo "$GITHUB_REF_NAME release $RELEASE_ID made by $AUTHOR"
+              echo "RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
+              exit 0
+              ;;
+          esac
+          echo "Make it yourself, then start this run on the tag:"
+          echo "  gh release create $GITHUB_REF_NAME --verify-tag --prerelease --latest=false --title $GITHUB_REF_NAME --notes-file notes.md"
+          echo "  gh workflow run release.yml --ref $GITHUB_REF_NAME"
+          echo "A bot's release has to be deleted first (gh release delete $GITHUB_REF_NAME)."
+          exit 1
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-packages
+          path: ${{ runner.temp }}/release-packages
+
+      - name: Prepare the release branch commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          work="$RUNNER_TEMP/relbranch"
+          git clone --depth 1 --branch release "https://github.com/$GITHUB_REPOSITORY.git" "$work"
+          cd "$work"
+          # A rerun of an older tag must not replace a newer installation tree.
+          previous="$(git show -s --format=%B HEAD | sed -nE 's/^Built from ([0-9a-f]{40}) by .*/\1/p')"
+          if [[ -n "$previous" && "$previous" != "$GITHUB_SHA" ]]; then
+            status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$previous...$GITHUB_SHA" --jq .status)"
+            if [[ "$status" != 'ahead' ]]; then
+              echo "::error::The tagged release must descend from the release branch's current source"
+              exit 1
+            fi
+          fi
+          # Replace the tree so removed files cannot linger in the installation.
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
+          tar -xf "$RUNNER_TEMP/release-packages/release-tree.tar"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "HammerForge $VERSION" \
+                       -m "Built from ${GITHUB_SHA} by .github/workflows/release.yml."
+            echo "RELEASE_CHANGED=true" >> "$GITHUB_ENV"
+          fi
+          echo "RELEASE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
       - name: Attach the zip to the GitHub Release
         # Into the release the person made; "Check a person made the GitHub
         # Release" above has already refused a run without one. Before the
@@ -259,11 +300,14 @@ jobs:
         # that step found, since `gh release upload <tag>` can pick Release
         # Drafter's draft on the same tag (#1737). An asset of the same name is
         # replaced, as --clobber did.
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for ZIP in "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" "$RUNNER_TEMP/hammerforge-$VERSION.zip"; do
+          cd "$RUNNER_TEMP/release-packages"
+          for ZIP in "hammerforge-$VERSION-addon.zip" "hammerforge-$VERSION.zip"; do
+            test -f "$ZIP"
+          done
+          for ZIP in "hammerforge-$VERSION-addon.zip" "hammerforge-$VERSION.zip"; do
             NAME="$(basename "$ZIP")"
             OLD="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq ".[] | select(.name == \"$NAME\") | .id")"
             if [ -n "$OLD" ]; then
@@ -277,13 +321,14 @@ jobs:
       - name: Push the release branch
         # Last, after the zip is attached, so nothing the Asset Library serves
         # can exist without the zip beside it.
-        if: startsWith(github.ref, 'refs/tags/') && env.RELEASE_CHANGED == 'true'
+        if: env.RELEASE_CHANGED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           cd "$RUNNER_TEMP/relbranch"
           git push origin release
 
       - name: Asset Library commit
-        if: startsWith(github.ref, 'refs/tags/')
         # Printed rather than submitted. There is an API for updating an entry,
         # despite what this comment used to say: POST /asset/{id}. Its token
         # comes from POST /login, which takes a username and password and

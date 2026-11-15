@@ -22,6 +22,7 @@ jobs:
   static-checks:
     name: GDScript Lint & Format
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -31,7 +32,9 @@ jobs:
         with:
           python-version: "3.x"
           cache: pip
-          cache-dependency-path: requirements-ci.txt
+          cache-dependency-path: |
+            requirements-ci.txt
+            requirements-mcp-ci.txt
 
       - name: Install gdtoolkit
         run: |
@@ -220,6 +223,7 @@ jobs:
   tooling-checks:
     name: Workflow & Tooling Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -229,7 +233,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements-ci.txt
+          cache-dependency-path: |
+            requirements-ci.txt
+            requirements-mcp-ci.txt
 
       - name: Install tooling
         run: python -m pip install -r requirements-ci.txt
@@ -256,11 +262,15 @@ jobs:
       - name: Lint workflow syntax
         env:
           ACTIONLINT_VERSION: "1.7.12"
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        shell: bash
         run: |
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors -o actionlint.tar.gz \
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors -o "$archive" \
             "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
-          tar -xzf actionlint.tar.gz actionlint
-          ./actionlint -color
+          printf '%s  %s\n' "$ACTIONLINT_SHA256" "$archive" | sha256sum --check --status
+          tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color
 
       # Token scope, credential persistence, expression injection into run
       # blocks, and actions with known advisories. Needs the token only to look
@@ -281,6 +291,7 @@ jobs:
   mcp-python:
     name: MCP Python (${{ matrix.os }}, ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -313,23 +324,20 @@ jobs:
   mcp-windows-listener:
     name: MCP listener ACL (Windows)
     runs-on: windows-latest
-    env:
-      GODOT_VERSION: "4.7-stable"
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
-      - name: Download Godot and test the listener
+      - uses: ./.github/actions/setup-godot # zizmor: ignore[self-repository] actionlint 1.7.12 cannot parse $/
+        id: godot
+      - name: Test the Windows listener
         shell: pwsh
+        env:
+          GODOT: ${{ steps.godot.outputs.executable }}
         run: |
-          $archive = Join-Path $env:RUNNER_TEMP "godot-mcp.zip"
-          $godotDir = Join-Path $env:RUNNER_TEMP "godot-mcp"
-          $asset = "Godot_v$($env:GODOT_VERSION)_win64"
-          $url = "https://github.com/godotengine/godot/releases/download/$env:GODOT_VERSION/$asset.exe.zip"
-          Invoke-WebRequest -Uri $url -OutFile $archive -MaximumRetryCount 3 -RetryIntervalSec 5
-          Expand-Archive -LiteralPath $archive -DestinationPath $godotDir
-          $godot = Join-Path $godotDir "$($asset)_console.exe"
+          $godot = $env:GODOT
           & $godot --headless --import --path .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $godot --headless --path . -s res://addons/gut/gut_cmdln.gd -gconfig= -gexit -glog=1 `
@@ -341,6 +349,8 @@ jobs:
   unit-test-shard:
     name: GUT Shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
+    # Allow for the full suite and download retries on a slow runner.
+    timeout-minutes: 25
     permissions:
       contents: read
     strategy:
@@ -351,7 +361,6 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     env:
-      GODOT_VERSION: "4.7-stable"
       # The shard count is stated three times: matrix.shard above, this
       # SHARDS, and the aggregate job's own SHARDS below. That duplication is
       # safe only because the aggregate's "every shard reported" guard counts
@@ -371,38 +380,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # One GET, no retry, and -q hid the reason it failed. On d1b6ca5 the
-      # release host answered this shard with an error while the other three
-      # fetched the same URL a second apart and got it, so main went red on a
-      # run where no test had been executed. Four shards each fetch this, so
-      # every run carries four chances to lose the merge gate to someone else's
-      # bad second.
-      #
-      # wget does not retry an HTTP error response on its own: --tries treats
-      # one as fatal, which is why that attempt gave up in half a second. The
-      # listed codes are the transient ones. The loop around it covers what the
-      # list cannot: a code that is not on it, and a zip that arrives short with
-      # a 200 on it. -S is what puts the status line in the log, because -q was
-      # swallowing it, and -nv alone prints the URL again per retry without
-      # saying what came back.
-      - name: Download Godot
-        run: |
-          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
-          for attempt in 1 2 3; do
-            if wget -nv -S --tries=3 --waitretry=5 --retry-connrefused \
-                --retry-on-http-error=429,500,502,503,504 "$url" -O godot.zip \
-                && unzip -qt godot.zip; then
-              break
-            fi
-            if [ "$attempt" = 3 ]; then
-              echo "Godot ${GODOT_VERSION} would not download after 3 attempts"
-              exit 1
-            fi
-            sleep $((attempt * 15))
-          done
-          unzip -q godot.zip
-          mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
-          chmod +x /usr/local/bin/godot
+      - uses: ./.github/actions/setup-godot # zizmor: ignore[self-repository] actionlint 1.7.12 cannot parse $/
 
       - name: Import project
         run: godot --headless --import --path . 2>&1
@@ -458,7 +436,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements-ci.txt
+          cache-dependency-path: |
+            requirements-ci.txt
+            requirements-mcp-ci.txt
 
       - name: Install the MCP SDK
         if: matrix.shard == 1
@@ -487,8 +467,6 @@ jobs:
       # runs.
       - name: Run the quick vibe scenarios
         if: matrix.shard == 2
-        env:
-          GODOT: godot
         run: >-
           python3 tools/vibe/run_vibe.py --log-dir vibe-logs
           validate-own-output examples-integrity reference-map console-controls docs-truth
@@ -499,6 +477,7 @@ jobs:
   unit-tests:
     name: GUT Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [unit-test-shard, mcp-python, mcp-windows-listener]
     # Runs even when a shard failed, so this reports a red X. Without always()
     # it would be *skipped* instead, and a skipped required check never reports

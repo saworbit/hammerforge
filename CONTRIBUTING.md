@@ -226,14 +226,14 @@ ruff format --check tools/
 zizmor .
 ```
 
-`actionlint` is downloaded by the workflow rather than pinned in the requirements
-file, so grab the release binary if you want it locally. It runs shellcheck over
-every `run:` block, which is usually what catches things.
+`ci.yml` pins the actionlint release and its SHA-256 digest. For local checks,
+install that version and put ShellCheck on your PATH.
 
 ### CI
-Three jobs run on every push and pull request to `main`: **GDScript Lint and
-Format**, **Workflow and Tooling Lint**, and **GUT Unit Tests**. All three have to
-pass before anything can merge, and `main` takes no direct pushes from anyone.
+Pull requests to `main` run **GDScript Lint & Format**, **Workflow & Tooling
+Lint**, **GUT Unit Tests**, **Changelog Fragment**, and **Docs Build**. The GUT
+check also covers the MCP platform tests. Changes reach `main` through a
+pull request.
 
 CI does not write to your branch. The published test counts are refreshed when
 a release is cut, so leave them alone.

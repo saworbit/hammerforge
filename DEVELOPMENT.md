@@ -144,13 +144,11 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    is a bot's too: leave it unpublished, and delete it once the release is out.
    The workflow reads and uploads to the published release by its id, so the
    draft on the same tag can stay until then (#1737).
-3. `.github/workflows/release.yml` builds the tree, checks the built output for
-   the excluded paths rather than trusting the list that produced it, commits it
-   over the contents of `release`, checks the archive that commit would serve,
-   attaches the two zips to your release, and only then pushes `release`. Run
-   by hand from the Actions tab on a branch, the same workflow is a dry run that
-   pushes nothing; run the dry run on the release pull request's branch once
-   the gate is recorded, before you make the release.
+3. `.github/workflows/release.yml` checks the release tree and the archives
+   users install. Run it from the Actions tab on the release PR branch for a
+   read-only dry run. A tag run requires the recorded editor smoke gate and a
+   tagged commit on `main`. It attaches both zips to the published GitHub
+   Release before pushing the tested tree to `release`.
 4. The run summary prints the new `release` commit hash. Paste it into the
    Asset Library entry's **Download Commit** field. There is an API for that,
    `POST /asset/{id}`, but its token comes from a username and password and the
@@ -707,6 +705,14 @@ fail you on, in three jobs:
 request, **Changelog Fragment**: a change to the addon or the server adds a
 fragment, or carries the `no-changelog` label. It is a workflow of its own so
 that a label change runs it again in seconds, without running CI (#1447).
+
+**Docs Build** runs `mkdocs build --strict` on each pull request and push to
+`main`. GitHub Pages deploys the artifact built on `main`.
+
+CI and nightly tests use the Godot release pinned in
+`.github/actions/setup-godot/action.yml`. When upgrading Godot, update the
+version and SHA-256 for both platforms from the upstream release. Update the
+SHA-256 beside `ACTIONLINT_VERSION` in `ci.yml` when upgrading actionlint.
 
 The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
 four; that is the one the branch ruleset requires. `tools/shard_tests.py` packs

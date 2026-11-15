@@ -1,13 +1,18 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
 
-# Preserve the upstream MCP bundle verbatim and keep its legacy whitespace
-# from obscuring first-party diff checks.
-addons/godot_mcp/** -whitespace linguist-vendored
+# GUT is a vendored upstream snapshot.
+/addons/gut/** linguist-vendored
 
-# The reference map is a compressed .hflevel. text=auto guesses, and a wrong
-# guess would mangle line endings inside the payload on checkout. An
-# uncompressed .hflevel is JSON and stays diffable, so this names the one file
-# rather than the extension.
-addons/hammerforge/data/reference_map.hflevel binary
-tests/levels/reference_map/level.hflevel binary
+*.png binary
+*.gif binary
+*.ttf binary
+*.mp4 binary
+
+# Compressed Godot assets need byte-for-byte checkouts.
+/addons/hammerforge/data/reference_map.hflevel binary
+/tests/levels/0.3.2/level.hflevel binary
+/tests/levels/0.4.0/level.hflevel binary
+/tests/levels/reference_map/level.hflevel binary
+
+# Uncompressed .hflevel files use the normal text detection for JSON diffs.

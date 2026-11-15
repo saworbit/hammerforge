@@ -33,7 +33,6 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  GODOT_VERSION: "4.7-stable"
 
 jobs:
   vibe:
@@ -47,24 +46,7 @@ jobs:
 
       # The same download as ci.yml's shards, retries and all: see the reasons
       # written beside it there.
-      - name: Download Godot
-        run: |
-          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
-          for attempt in 1 2 3; do
-            if wget -nv -S --tries=3 --waitretry=5 --retry-connrefused \
-                --retry-on-http-error=429,500,502,503,504 "$url" -O godot.zip \
-                && unzip -qt godot.zip; then
-              break
-            fi
-            if [ "$attempt" = 3 ]; then
-              echo "Godot ${GODOT_VERSION} would not download after 3 attempts"
-              exit 1
-            fi
-            sleep $((attempt * 15))
-          done
-          unzip -q godot.zip
-          mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
-          chmod +x /usr/local/bin/godot
+      - uses: ./.github/actions/setup-godot # zizmor: ignore[self-repository] actionlint 1.7.12 cannot parse $/
 
       - name: Import project
         run: godot --headless --import --path . 2>&1
@@ -73,8 +55,6 @@ jobs:
       # scenario that only reproduces a defect already filed, with its number,
       # stays quiet, as it does by hand.
       - name: Run every vibe scenario
-        env:
-          GODOT: godot
         run: python3 tools/vibe/run_vibe.py --log-dir vibe-logs
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -93,24 +73,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Download Godot
-        run: |
-          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
-          for attempt in 1 2 3; do
-            if wget -nv -S --tries=3 --waitretry=5 --retry-connrefused \
-                --retry-on-http-error=429,500,502,503,504 "$url" -O godot.zip \
-                && unzip -qt godot.zip; then
-              break
-            fi
-            if [ "$attempt" = 3 ]; then
-              echo "Godot ${GODOT_VERSION} would not download after 3 attempts"
-              exit 1
-            fi
-            sleep $((attempt * 15))
-          done
-          unzip -q godot.zip
-          mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
-          chmod +x /usr/local/bin/godot
+      - uses: ./.github/actions/setup-godot # zizmor: ignore[self-repository] actionlint 1.7.12 cannot parse $/
 
       - name: Import project
         run: godot --headless --import --path . 2>&1
@@ -148,24 +111,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Download Godot
-        run: |
-          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
-          for attempt in 1 2 3; do
-            if wget -nv -S --tries=3 --waitretry=5 --retry-connrefused \
-                --retry-on-http-error=429,500,502,503,504 "$url" -O godot.zip \
-                && unzip -qt godot.zip; then
-              break
-            fi
-            if [ "$attempt" = 3 ]; then
-              echo "Godot ${GODOT_VERSION} would not download after 3 attempts"
-              exit 1
-            fi
-            sleep $((attempt * 15))
-          done
-          unzip -q godot.zip
-          mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
-          chmod +x /usr/local/bin/godot
+      - uses: ./.github/actions/setup-godot # zizmor: ignore[self-repository] actionlint 1.7.12 cannot parse $/
 
       - name: Import project
         run: godot --headless --import --path . 2>&1
@@ -197,6 +143,7 @@ jobs:
     # says nothing on the issue.
     if: always() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       issues: write
     steps:

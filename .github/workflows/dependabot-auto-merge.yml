@@ -2,7 +2,9 @@ name: Dependabot auto-merge
 
 # Patch and minor bumps that pass CI merge themselves. A major bump waits for a
 # human, because that is the one where reading the changelog is the work.
-on: pull_request
+on:
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -11,7 +13,11 @@ jobs:
   auto-merge:
     name: Auto-merge patch and minor bumps
     runs-on: ubuntu-latest
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    timeout-minutes: 5
+    if: >-
+      github.event.sender.id == 49699333 &&
+      github.event.pull_request.user.id == 49699333 &&
+      github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: write
       pull-requests: write
@@ -23,10 +29,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Queue the merge
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
         # --auto queues behind the required status checks rather than merging
         # now, so a bump that breaks the suite never lands.
-        run: gh pr merge --auto --squash "$PR_URL"
+        run: gh pr merge --auto --squash --match-head-commit "$PR_HEAD_SHA" "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

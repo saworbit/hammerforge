@@ -2,3 +2,17 @@ root = true
 
 [*]
 charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+
+[*.{gd,gdshader}]
+indent_style = tab
+tab_width = 4
+
+[*.{py,toml,ps1}]
+indent_style = space
+indent_size = 4
+
+[*.{yaml,yml}]
+indent_style = space
+indent_size = 2
