@@ -10,7 +10,7 @@ gdtoolkit==4.5.0
 zizmor==1.32.0
 
 # Lint and format check for tools/*.py and hammerforge_mcp/.
-ruff==0.17.4
+ruff==0.17.5
 
 # hammerforge_mcp/: the MCP SDK its server is built on, and the test runner for
 # its tests. pyproject.toml there says mcp>=2.3,<3; CI pins the exact one.
